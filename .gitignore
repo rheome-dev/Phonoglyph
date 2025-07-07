@@ -1,0 +1,51 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Python
+venv/
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# macOS
+.DS_Store
+
+# Output/Build/Audio
+output_stems/
+test_audio/
+
+# Environment files
+.env
+.env.*
+
+# VSCode/IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Coverage
+coverage/
+*.lcov
+
+# Next.js/React
+.next/
+out/
+.cache/
+
+# Misc
+*.swp
+*.swo
+
+# Ignore Cursor and GitHub workflow files (if you want to keep them local)
+.cursor/
+.github/
