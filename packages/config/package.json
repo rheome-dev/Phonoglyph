@@ -1,0 +1,17 @@
+{
+  "name": "@midiviz/config",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared configurations for the MidiViz monorepo",
+  "main": "index.js",
+  "files": [
+    "eslint",
+    "typescript"
+  ],
+  "devDependencies": {
+    "typescript": "5.3.3",
+    "eslint": "^8.56.0",
+    "@typescript-eslint/eslint-plugin": "^6.19.0",
+    "@typescript-eslint/parser": "^6.19.0"
+  }
+} 

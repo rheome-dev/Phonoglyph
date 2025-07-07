@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stem-worker
+  labels:
+    app: stem-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: stem-worker
+  template:
+    metadata:
+      labels:
+        app: stem-worker
+    spec:
+      containers:
+        - name: stem-worker
+          image: <IMAGE>
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: NEXT_PUBLIC_SUPABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: stem-worker-secrets
+                  key: NEXT_PUBLIC_SUPABASE_URL
+            - name: SUPABASE_SERVICE_ROLE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: stem-worker-secrets
+                  key: SUPABASE_SERVICE_ROLE_KEY
+            - name: CLOUDFLARE_ACCOUNT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: stem-worker-secrets
+                  key: CLOUDFLARE_ACCOUNT_ID
+            - name: CLOUDFLARE_R2_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: stem-worker-secrets
+                  key: CLOUDFLARE_R2_ACCESS_KEY_ID
+            - name: CLOUDFLARE_R2_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: stem-worker-secrets
+                  key: CLOUDFLARE_R2_SECRET_ACCESS_KEY
+            - name: CLOUDFLARE_R2_BUCKET
+              valueFrom:
+                secretKeyRef:
+                  name: stem-worker-secrets
+                  key: CLOUDFLARE_R2_BUCKET
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "1000m"
+          volumeMounts:
+            - name: docker-socket
+              mountPath: /var/run/docker.sock
+            - name: temp-storage
+              mountPath: /tmp/stems
+      volumes:
+        - name: docker-socket
+          hostPath:
+            path: /var/run/docker.sock
+        - name: temp-storage
+          emptyDir: {}
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: stem-worker-secrets
+type: Opaque
+data:
+  NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL_BASE64}
+  SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY_BASE64}
+  CLOUDFLARE_ACCOUNT_ID: ${CLOUDFLARE_ACCOUNT_ID_BASE64}
+  CLOUDFLARE_R2_ACCESS_KEY_ID: ${CLOUDFLARE_R2_ACCESS_KEY_ID_BASE64}
+  CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${CLOUDFLARE_R2_SECRET_ACCESS_KEY_BASE64}
+  CLOUDFLARE_R2_BUCKET: ${CLOUDFLARE_R2_BUCKET_BASE64} 

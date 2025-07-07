@@ -1,0 +1,40 @@
+# Use Node.js 18 as base image
+FROM node:18-slim
+
+# Install Docker CLI (needed for Spleeter)
+RUN apt-get update && apt-get install -y \
+    apt-transport-https \
+    ca-certificates \
+    curl \
+    gnupg \
+    lsb-release \
+    && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg \
+    && echo \
+    "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian \
+    $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null \
+    && apt-get update \
+    && apt-get install -y docker-ce-cli \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app directory
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+COPY apps/api/package*.json ./apps/api/
+
+# Install dependencies
+RUN npm ci --only=production
+
+# Copy source code
+COPY apps/api/src ./apps/api/src
+COPY apps/api/tsconfig.json ./apps/api/
+
+# Build TypeScript code
+RUN npm run build -w apps/api
+
+# Create directory for temporary files
+RUN mkdir -p /tmp/stems
+
+# Start queue worker
+CMD ["npm", "run", "queue:worker", "-w", "apps/api"] 

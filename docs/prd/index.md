@@ -1,0 +1,21 @@
+# MidiViz Product Requirements Document (PRD)
+
+## Table of Contents
+
+- [MidiViz Product Requirements Document (PRD)](#table-of-contents)
+  - [Goals and Background Context](./goals-and-background-context.md)
+    - [Goals](./goals-and-background-context.md#goals)
+    - [Background Context](./goals-and-background-context.md#background-context)
+    - [Change Log](./goals-and-background-context.md#change-log)
+  - [Requirements](./requirements.md)
+    - [Functional](./requirements.md#functional)
+    - [Non Functional](./requirements.md#non-functional)
+  - [User Interface Design Goals](./user-interface-design-goals.md)
+    - [Overall UX Vision](./user-interface-design-goals.md#overall-ux-vision)
+    - [Core Screens and Views](./user-interface-design-goals.md#core-screens-and-views)
+    - [Target Device and Platforms](./user-interface-design-goals.md#target-device-and-platforms)
+  - [Technical Assumptions](./technical-assumptions.md)
+    - [Repository Structure: Monorepo](./technical-assumptions.md#repository-structure-monorepo)
+    - [Service Architecture: Microservices-oriented](./technical-assumptions.md#service-architecture-microservices-oriented)
+    - [Testing requirements: Unit and Integration tests for backend services; Component and E2E tests for the frontend.](./technical-assumptions.md#testing-requirements-unit-and-integration-tests-for-backend-services-component-and-e2e-tests-for-the-frontend)
+  - [Epics](./epics.md)
