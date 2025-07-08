@@ -1,7 +1,7 @@
 # Unified Project Structure
 
 ```plaintext
-midiviz-monorepo/
+phonoglyph-monorepo/
 ├── apps/
 │   ├── web/                    # Next.js Frontend
 │   │   ├── src/

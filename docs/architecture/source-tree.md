@@ -3,7 +3,7 @@
 ## Project Structure Overview
 
 ```plaintext
-midiviz-monorepo/
+phonoglyph-monorepo/
 ├── .github/                     # GitHub Actions workflows
 │   └── workflows/
 │       ├── ci.yml              # Continuous integration

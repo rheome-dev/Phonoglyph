@@ -13,8 +13,8 @@
         "s3:GetBucketVersioning"
       ],
       "Resource": [
-        "arn:aws:s3:::midiviz-uploads",
-        "arn:aws:s3:::midiviz-uploads-*"
+        "arn:aws:s3:::phonoglyph-uploads",
+        "arn:aws:s3:::phonoglyph-uploads-*"
       ]
     },
     {
@@ -29,5 +29,8 @@
         "s3:PutObjectAcl"
       ],
       "Resource": [
-        "arn:aws:s3:::midiviz-uploads/*",
- 
+        "arn:aws:s3:::phonoglyph-uploads/*"
+      ]
+    }
+  ]
+}

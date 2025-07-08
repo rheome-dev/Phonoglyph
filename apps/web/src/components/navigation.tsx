@@ -40,7 +40,7 @@ const Navigation = React.forwardRef<HTMLElement, NavigationProps>(
                 whileHover={{ scale: 1.05 }}
                 transition={{ type: "spring", stiffness: 400, damping: 10 }}
               >
-                MidiViz
+                Phonoglyph
               </motion.div>
             </Link>
 

@@ -7,7 +7,7 @@
 
 ## Epic Goal
 
-Transform MidiViz into a hybrid video composition platform that combines user video/photo assets with existing Three.js effects using Remotion's React-based video framework, enabling musicians to create professional promotional content.
+Transform Phonoglyph into a hybrid video composition platform that combines user video/photo assets with existing Three.js effects using Remotion's React-based video framework, enabling musicians to create professional promotional content.
 
 ## Epic Description
 

@@ -1,4 +1,4 @@
-# MidiViz - MIDI Visualization Platform
+# Phonoglyph - MIDI Visualization Platform
 
 Transform your MIDI files into stunning visual experiences with our full-stack web application.
 
@@ -15,7 +15,7 @@ Transform your MIDI files into stunning visual experiences with our full-stack w
 1. **Clone the repository:**
    ```bash
    git clone <repository-url>
-   cd midiViz
+   cd Phonoglyph
    ```
 
 2. **Install dependencies:**
@@ -34,7 +34,7 @@ Transform your MIDI files into stunning visual experiences with our full-stack w
 4. **Set up the database:**
    ```bash
    # Make sure PostgreSQL is running
-   # Create database: midiviz
+   # Create database: phonoglyph
    
    # Run migrations and seed data
    npm run db:setup -w apps/api
@@ -54,7 +54,7 @@ Transform your MIDI files into stunning visual experiences with our full-stack w
 ### Monorepo Structure
 
 ```
-midiViz/
+Phonoglyph/
 ├── apps/
 │   ├── web/          # Next.js Frontend (TypeScript)
 │   ├── api/          # Express.js Backend (TypeScript)
@@ -132,10 +132,10 @@ npm run test:coverage -w apps/web
 ```
 NODE_ENV=development
 PORT=3001
-DATABASE_URL=postgresql://username:password@localhost:5432/midiviz
+DATABASE_URL=postgresql://username:password@localhost:5432/phonoglyph
 DB_HOST=localhost
 DB_PORT=5432
-DB_NAME=midiviz
+DB_NAME=phonoglyph
 DB_USER=username
 DB_PASSWORD=password
 ```
@@ -166,4 +166,4 @@ If you encounter any issues, please check the troubleshooting section or create 
 
 ---
 
-Made with ❤️ by the MidiViz Team 🎵 
+Made with ❤️ by the Phonoglyph Team 🎵 
