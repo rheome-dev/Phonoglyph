@@ -1,6 +1,6 @@
 import React from 'react';
 import { interpolate, useCurrentFrame, useVideoConfig } from 'remotion';
-import { VideoEffect } from '../../../web/src/lib/video/effectTriggers';
+import { VideoEffect } from '../../types/effects';
 
 interface TransitionProps {
   effect: VideoEffect;
