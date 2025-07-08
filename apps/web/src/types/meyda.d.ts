@@ -16,6 +16,12 @@ declare module 'meyda' {
     perceptualSpread: number;
     spectralFlux: number;
     buffer: Float32Array;
+    // Enhanced features for visualization
+    mfcc?: number[];
+    chromaVector?: number[];
+    amplitudeSpectrum?: Float32Array;
+    powerSpectrum?: Float32Array;
+    energy?: number;
   }
 
   export interface MeydaOptions {
