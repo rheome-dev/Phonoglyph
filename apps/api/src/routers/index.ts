@@ -7,6 +7,7 @@ import { projectRouter } from './project';
 import { fileRouter } from './file';
 import { midiRouter } from './midi';
 import { stemRouter } from './stem';
+import { exportRouter } from './export';
 
 export const appRouter = router({
   health: healthRouter,
@@ -17,6 +18,7 @@ export const appRouter = router({
   file: fileRouter,
   midi: midiRouter,
   stem: stemRouter,
+  export: exportRouter,
 });
 
 export type AppRouter = typeof appRouter; 
