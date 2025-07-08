@@ -61,7 +61,7 @@ app.get('/health', (req, res) => {
 
 // Basic route
 app.get('/', (req, res) => {
-  res.json({ message: 'MidiViz API Server is running! 🎵' })
+  res.json({ message: 'Phonoglyph API Server is running! 🎵' })
 })
 
 // Start server

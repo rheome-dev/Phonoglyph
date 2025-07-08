@@ -9,7 +9,7 @@
 
 ## Background Context
 
-MidiViz is a web-based SaaS platform designed for musicians and content creators. The core problem it solves is the difficulty and high technical barrier required to create engaging, music-synced visuals for social media. While professional tools exist, they have a steep learning curve. MidiViz will offer a curated set of high-quality visualization styles ("Data Viz", "Gradient Flow", "Light Waves") and color schemes that users can apply to their MIDI files instantly, with a real-time preview editor and a backend rendering pipeline for high-quality video output.
+Phonoglyph is a web-based SaaS platform designed for musicians and content creators. The core problem it solves is the difficulty and high technical barrier required to create engaging, music-synced visuals for social media. While professional tools exist, they have a steep learning curve. Phonoglyph will offer a curated set of high-quality visualization styles ("Data Viz", "Gradient Flow", "Light Waves") and color schemes that users can apply to their MIDI files instantly, with a real-time preview editor and a backend rendering pipeline for high-quality video output.
 
 ## Change Log
 

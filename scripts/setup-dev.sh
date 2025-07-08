@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# MidiViz Development Setup Script
-# This script sets up the development environment for the MidiViz project
+# Phonoglyph Development Setup Script
+# This script sets up the development environment for the Phonoglyph project
 
 set -e
 
-echo "🎵 Setting up MidiViz Development Environment..."
+echo "🎵 Setting up Phonoglyph Development Environment..."
 
 # Check if Node.js is installed
 if ! command -v node &> /dev/null; then
@@ -57,11 +57,11 @@ echo "🔍 Checking database connection..."
 if ! npm run db:migrate -w apps/api &> /dev/null; then
     echo "⚠️  Database migration failed. Please ensure:"
     echo "   1. PostgreSQL is running"
-    echo "   2. Database 'midiviz' exists"
+    echo "   2. Database 'phonoglyph' exists"
     echo "   3. Database credentials in apps/api/.env are correct"
     echo ""
     echo "   To create the database, run:"
-    echo "   createdb midiviz"
+    echo "   createdb phonoglyph"
     exit 1
 fi
 

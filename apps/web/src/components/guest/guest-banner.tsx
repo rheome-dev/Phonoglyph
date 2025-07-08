@@ -58,7 +58,7 @@ export function GuestBanner({ showLimitations = true, compact = false }: GuestBa
             </div>
             
             <p className="text-amber-800 mb-4">
-              You're using midiViz as a guest. Your data is stored locally and will be lost when you clear your browser data.
+              You're using Phonoglyph as a guest. Your data is stored locally and will be lost when you clear your browser data.
             </p>
 
             {showLimitations && (

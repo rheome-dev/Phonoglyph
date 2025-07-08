@@ -7,7 +7,7 @@ import { TRPCProvider } from '@/components/providers/trpc-provider'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata = {
-  title: 'MidiViz - MIDI Visualization Platform',
+  title: 'Phonoglyph - MIDI Visualization Platform',
   description: 'Transform MIDI files into stunning visual experiences',
 }
 
