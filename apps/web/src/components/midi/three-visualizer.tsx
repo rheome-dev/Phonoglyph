@@ -12,6 +12,8 @@ import { MidiHudEffect } from '@/lib/visualizer/effects/MidiHudEffect';
 import { ParticleNetworkEffect } from '@/lib/visualizer/effects/ParticleNetworkEffect';
 import { MIDIData, VisualizationSettings } from '@/types/midi';
 import { VisualizerConfig, LiveMIDIData, AudioAnalysisData, VisualEffect } from '@/types/visualizer';
+import { AudioFeatures } from '@/lib/audio-to-midi-adapter';
+import { StemType } from '@/types/stem-visualization';
 import { DraggableModal } from '@/components/ui/draggable-modal';
 import { EffectCarousel } from '@/components/ui/effect-carousel';
 import { Slider } from '@/components/ui/slider';
@@ -19,7 +21,12 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 
 interface ThreeVisualizerProps {
-  midiData: MIDIData;
+  // Add support for audio features
+  audioFeatures?: Record<StemType, AudioFeatures>;
+  // Keep existing MIDI support
+  midiData?: MIDIData;
+  // Source type flag
+  dataSource: 'midi' | 'audio' | 'hybrid';
   settings: VisualizationSettings;
   currentTime: number;
   isPlaying: boolean;
@@ -30,7 +37,9 @@ interface ThreeVisualizerProps {
 }
 
 export function ThreeVisualizer({
+  audioFeatures,
   midiData,
+  dataSource,
   settings,
   currentTime,
   isPlaying,
