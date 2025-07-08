@@ -9,6 +9,7 @@ import { useLayerStore, VideoLayer, EffectLayer } from '@/lib/stores/layerStore'
 import { LayerItem } from './LayerItem';
 import { LayerControls } from './LayerControls';
 import { AddLayerMenu } from './AddLayerMenu';
+import { MIDIBindingPanel } from '../midi/MIDIBindingPanel';
 
 export const LayerStack: React.FC = () => {
   const { 
@@ -16,7 +17,11 @@ export const LayerStack: React.FC = () => {
     selectedLayerIds, 
     reorderLayers,
     addLayer,
-    setDraggedLayer
+    setDraggedLayer,
+    addMIDIBinding,
+    removeMIDIBinding,
+    updateMIDIBinding,
+    getMIDIBindings
   } = useLayerStore();
   
   // Add demo layers if empty
@@ -112,50 +117,71 @@ export const LayerStack: React.FC = () => {
     }
   };
   
+  const selectedLayer = selectedLayerIds.length === 1 ? layers.find(l => l.id === selectedLayerIds[0]) : null;
+  const selectedLayerBindings = selectedLayer ? getMIDIBindings(selectedLayer.id) : [];
+
   return (
-    <Card className="bg-stone-200/90 backdrop-blur-md border-stone-400 w-80 flex flex-col">
-      <CardHeader className="pb-2 flex-shrink-0">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-stone-700 uppercase tracking-wide text-sm">
-            Layers
-          </CardTitle>
-          <AddLayerMenu onAddLayer={addLayer} />
-        </div>
-        
-        {/* Layer Controls */}
-        <LayerControls selectedLayerIds={selectedLayerIds} />
-      </CardHeader>
-      
-      <CardContent className="flex-1 min-h-0 overflow-hidden">
-        <div className="space-y-1 max-h-full overflow-y-auto">
-          <DndContext 
-            sensors={sensors} 
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext 
-              items={sortedLayers.map(l => l.id)} 
-              strategy={verticalListSortingStrategy}
-            >
-              {sortedLayers.map((layer) => (
-                <LayerItem 
-                  key={layer.id} 
-                  layer={layer}
-                  isSelected={selectedLayerIds.includes(layer.id)}
-                />
-              ))}
-            </SortableContext>
-          </DndContext>
+    <div className="w-80 space-y-4">
+      {/* Layer Stack */}
+      <Card className="bg-stone-200/90 backdrop-blur-md border-stone-400 flex flex-col">
+        <CardHeader className="pb-2 flex-shrink-0">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-stone-700 uppercase tracking-wide text-sm">
+              Layers
+            </CardTitle>
+            <AddLayerMenu onAddLayer={addLayer} />
+          </div>
           
-          {layers.length === 0 && (
-            <div className="text-center text-stone-600 py-8">
-              <div className="text-4xl mb-4">🎬</div>
-              <p className="text-sm mb-2">No layers yet</p>
-              <p className="text-xs text-stone-500">Add video, image, or effect layers to begin</p>
-            </div>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+          {/* Layer Controls */}
+          <LayerControls selectedLayerIds={selectedLayerIds} />
+        </CardHeader>
+        
+        <CardContent className="flex-1 min-h-0 overflow-hidden">
+          <div className="space-y-1 max-h-full overflow-y-auto">
+            <DndContext 
+              sensors={sensors} 
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext 
+                items={sortedLayers.map(l => l.id)} 
+                strategy={verticalListSortingStrategy}
+              >
+                {sortedLayers.map((layer) => (
+                  <LayerItem 
+                    key={layer.id} 
+                    layer={layer}
+                    isSelected={selectedLayerIds.includes(layer.id)}
+                  />
+                ))}
+              </SortableContext>
+            </DndContext>
+            
+            {layers.length === 0 && (
+              <div className="text-center text-stone-600 py-8">
+                <div className="text-4xl mb-4">🎬</div>
+                <p className="text-sm mb-2">No layers yet</p>
+                <p className="text-xs text-stone-500">Add video, image, or effect layers to begin</p>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+      
+      {/* MIDI Binding Panel - Only show when a single layer is selected */}
+      {selectedLayer && (
+        <MIDIBindingPanel
+          layerId={selectedLayer.id}
+          bindings={selectedLayerBindings}
+          onAddBinding={(binding) => addMIDIBinding(selectedLayer.id, binding)}
+          onUpdateBinding={(bindingId, updates) => updateMIDIBinding(selectedLayer.id, bindingId, updates)}
+          onRemoveBinding={(bindingId) => removeMIDIBinding(selectedLayer.id, bindingId)}
+          onTestBinding={(bindingId) => {
+            // Test binding functionality - would trigger a demo value
+            console.log(`Testing binding ${bindingId} for layer ${selectedLayer.id}`);
+          }}
+        />
+      )}
+    </div>
   );
 };

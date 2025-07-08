@@ -62,19 +62,53 @@ export interface VisualizationSettings {
   [key: string]: any;
 }
 
+// Enhanced MIDI binding interface
 export interface MIDIBinding {
   id: string;
-  midiCC: number;
-  targetProperty: string;
-  minValue: number;
-  maxValue: number;
-  curve: 'linear' | 'exponential' | 'logarithmic';
+  name: string;
+  layerId: string;
+  targetProperty: VideoProperty;
+  midiSource: MIDISource;
+  mapping: ParameterMapping;
+  curve: CurveType;
+  enabled: boolean;
+  weight: number;
+  blendMode: BindingBlendMode;
 }
+
+export interface MIDISource {
+  type: 'note_velocity' | 'note_on_off' | 'cc' | 'pitch_bend' | 'channel_pressure' | 'aftertouch';
+  channel?: number;
+  note?: number;
+  controller?: number;
+  trackIndex?: number;
+}
+
+export interface VideoProperty {
+  type: 'transform' | 'visual' | 'timing';
+  property: string;
+  component?: string;
+}
+
+export interface ParameterMapping {
+  inputMin: number;
+  inputMax: number;
+  outputMin: number;
+  outputMax: number;
+  clamp: boolean;
+  invert: boolean;
+}
+
+export type CurveType = 'linear' | 'exponential' | 'logarithmic' | 'smooth' | 'steps' | 'custom';
+export type BindingBlendMode = 'replace' | 'add' | 'multiply' | 'max' | 'min' | 'average';
 
 interface LayerStore {
   layers: Layer[];
   selectedLayerIds: string[];
   draggedLayerId: string | null;
+  
+  // MIDI bindings
+  midiBindings: Map<string, MIDIBinding[]>; // layerId -> bindings[]
   
   // Layer CRUD
   addLayer: (layer: Omit<Layer, 'id' | 'zIndex'>) => string;
@@ -112,6 +146,12 @@ interface LayerStore {
   
   // Drag state
   setDraggedLayer: (layerId: string | null) => void;
+  
+  // MIDI binding management
+  addMIDIBinding: (layerId: string, binding: Omit<MIDIBinding, 'id'>) => string;
+  removeMIDIBinding: (layerId: string, bindingId: string) => void;
+  updateMIDIBinding: (layerId: string, bindingId: string, updates: Partial<MIDIBinding>) => void;
+  getMIDIBindings: (layerId: string) => MIDIBinding[];
 }
 
 // Helper functions
@@ -159,6 +199,7 @@ export const useLayerStore = create<LayerStore>()(
       layers: [],
       selectedLayerIds: [],
       draggedLayerId: null,
+      midiBindings: new Map(),
       
       addLayer: (layerData) => {
         const id = generateLayerId();
@@ -342,6 +383,48 @@ export const useLayerStore = create<LayerStore>()(
       
       setDraggedLayer: (layerId) => {
         set({ draggedLayerId: layerId });
+      },
+      
+      // MIDI binding methods
+      addMIDIBinding: (layerId, bindingData) => {
+        const id = `binding_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const newBinding = { ...bindingData, id, layerId };
+        
+        set((state) => {
+          const newBindings = new Map(state.midiBindings);
+          const layerBindings = newBindings.get(layerId) || [];
+          layerBindings.push(newBinding);
+          newBindings.set(layerId, layerBindings);
+          return { midiBindings: newBindings };
+        });
+        
+        return id;
+      },
+      
+      removeMIDIBinding: (layerId, bindingId) => {
+        set((state) => {
+          const newBindings = new Map(state.midiBindings);
+          const layerBindings = newBindings.get(layerId) || [];
+          const filteredBindings = layerBindings.filter(b => b.id !== bindingId);
+          newBindings.set(layerId, filteredBindings);
+          return { midiBindings: newBindings };
+        });
+      },
+      
+      updateMIDIBinding: (layerId, bindingId, updates) => {
+        set((state) => {
+          const newBindings = new Map(state.midiBindings);
+          const layerBindings = newBindings.get(layerId) || [];
+          const updatedBindings = layerBindings.map(binding =>
+            binding.id === bindingId ? { ...binding, ...updates } : binding
+          );
+          newBindings.set(layerId, updatedBindings);
+          return { midiBindings: newBindings };
+        });
+      },
+      
+      getMIDIBindings: (layerId) => {
+        return get().midiBindings.get(layerId) || [];
       }
     }),
     { 
