@@ -13,6 +13,8 @@ import { trpc } from '@/lib/trpc';
 import { CollapsibleSidebar } from '@/components/layout/collapsible-sidebar';
 import { ProjectPickerModal } from '@/components/projects/project-picker-modal';
 import { ProjectCreationModal } from '@/components/projects/project-creation-modal';
+import { LayerStack } from '@/components/video/LayerStack';
+import { useLayerKeyboardShortcuts } from '@/hooks/useLayerKeyboardShortcuts';
 
 // Sample MIDI data for demonstration
 const createSampleMIDIData = (): MIDIData => {
@@ -152,6 +154,9 @@ export default function CreativeVisualizerPage() {
 
   const [showPicker, setShowPicker] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+
+  // Enable keyboard shortcuts for layer management
+  useLayerKeyboardShortcuts();
 
   useEffect(() => {
     const fileId = searchParams.get('fileId');
@@ -372,6 +377,11 @@ export default function CreativeVisualizerPage() {
               )}
           </div>
         </main>
+        
+        {/* Layer Management Sidebar */}
+        <div className="w-80 bg-stone-900/50 border-l border-white/10 p-4">
+          <LayerStack />
+        </div>
       </div>
     </>
   );
