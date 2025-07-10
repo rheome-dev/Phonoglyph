@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Play, Pause, Settings, Maximize, Download } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, debugLog } from '@/lib/utils';
 import { VisualizerManager } from '@/lib/visualizer/core/VisualizerManager';
 import { MetaballsEffect } from '@/lib/visualizer/effects/MetaballsEffect';
 import { MidiHudEffect } from '@/lib/visualizer/effects/MidiHudEffect';
@@ -27,6 +27,8 @@ interface ThreeVisualizerProps {
   onSettingsChange: (settings: VisualizationSettings) => void;
   onFpsUpdate?: (fps: number) => void;
   className?: string;
+  selectedEffects: Record<string, boolean>; // NEW PROP
+  audioAnalysisData?: any; // Enhanced audio analysis data
 }
 
 export function ThreeVisualizer({
@@ -37,7 +39,9 @@ export function ThreeVisualizer({
   onPlayPause,
   onSettingsChange,
   onFpsUpdate,
-  className
+  className,
+  selectedEffects, // NEW PROP
+  audioAnalysisData // Enhanced audio analysis data
 }: ThreeVisualizerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const visualizerRef = useRef<VisualizerManager | null>(null);
@@ -96,23 +100,34 @@ export function ThreeVisualizer({
     };
 
     try {
-      console.log('🎬 Initializing Three.js visualizer...', { width: mobileWidth, height: mobileHeight });
+      debugLog.log('🎬 Initializing Three.js visualizer...', { width: mobileWidth, height: mobileHeight });
       visualizerRef.current = new VisualizerManager(canvas, config);
-      console.log('✅ VisualizerManager created (blank)');
+      debugLog.log('✅ VisualizerManager created');
       
-      // Start the visualizer but don't add any effects yet
+      // Add all available effects to the visualizer
+      const metaballs = new MetaballsEffect();
+      const hud = new MidiHudEffect();
+      const particles = new ParticleNetworkEffect();
+      
+      visualizerRef.current.addEffect(metaballs);
+      visualizerRef.current.addEffect(hud);
+      visualizerRef.current.addEffect(particles);
+      
+      debugLog.log('🎨 Effects added to visualizer');
+      
+      // Start the visualizer
       visualizerRef.current.play();
-      console.log('▶️ Animation started (blank scene)');
+      debugLog.log('▶️ Animation started');
       
       setIsInitialized(true);
-      console.log('✅ Visualizer initialization complete (blank)');
+      debugLog.log('✅ Visualizer initialization complete');
     } catch (error) {
-      console.error('❌ Failed to initialize visualizer:', error);
+      debugLog.error('❌ Failed to initialize visualizer:', error);
       setError(error instanceof Error ? error.message : 'Unknown error occurred');
       
       // Try to recover after a delay
       setTimeout(() => {
-        console.log('🔄 Attempting to recover WebGL context...');
+        debugLog.log('🔄 Attempting to recover WebGL context...');
         setError(null);
         // Clear existing canvas context
         if (canvasRef.current) {
@@ -194,16 +209,18 @@ export function ThreeVisualizer({
     };
   }, [convertToLiveMIDI]);
 
-  // Update visualizer with MIDI data
+  // Update visualizer with MIDI data and enhanced audio analysis
   useEffect(() => {
     if (!visualizerRef.current || !isInitialized) return;
 
     const liveMIDI = convertToLiveMIDI(midiData, currentTime);
-    const audioData = generateAudioData(midiData, currentTime);
+    
+    // Use enhanced audio analysis data if available, otherwise fall back to generated data
+    const audioData = audioAnalysisData || generateAudioData(midiData, currentTime);
     
     visualizerRef.current.updateMIDIData(liveMIDI);
     visualizerRef.current.updateAudioData(audioData);
-  }, [midiData, currentTime, isInitialized, convertToLiveMIDI, generateAudioData]);
+  }, [midiData, currentTime, isInitialized, audioAnalysisData, convertToLiveMIDI, generateAudioData]);
 
   // Handle play/pause
   useEffect(() => {
@@ -261,40 +278,25 @@ export function ThreeVisualizer({
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const toggleEffect = (effectId: string) => {
+  // Effect enabling/disabling logic
+  useEffect(() => {
     if (!visualizerRef.current) return;
-
-    const isEnabling = !effectsEnabled[effectId as keyof typeof effectsEnabled];
-    setEffectsEnabled(prev => ({ ...prev, [effectId]: isEnabling }));
-
-    if (isEnabling) {
-        let effect;
-        switch (effectId) {
-          case 'metaballs':
-            effect = new MetaballsEffect({
-              trailLength: 10,
-              baseRadius: 0.15,
-              smoothingFactor: 0.1,
-              colorPalette: ['#6644AA', '#4488AA', '#AA6644'],
-              animationSpeed: 1.2,
-              noiseIntensity: 0.8
-            });
-            break;
-          case 'midiHud':
-            effect = new MidiHudEffect();
-            break;
-          case 'particleNetwork':
-            effect = new ParticleNetworkEffect();
-            break;
-        }
-
-        if (effect) {
-          visualizerRef.current.addEffect(effect);
-        }
-    } else {
-      visualizerRef.current.removeEffect(effectId);
-    }
-  };
+    
+    const allEffects = visualizerRef.current.getAllEffects();
+    debugLog.log('🎨 Effect carousel selection changed:', selectedEffects);
+    debugLog.log('🎨 Available effects:', allEffects.map(e => ({ id: e.id, name: e.name, enabled: e.enabled })));
+    
+    allEffects.forEach(effect => {
+      const shouldBeEnabled = selectedEffects[effect.id];
+      debugLog.log(`🎨 Effect ${effect.id}: ${effect.enabled ? 'enabled' : 'disabled'} -> ${shouldBeEnabled ? 'enabling' : 'disabling'}`);
+      
+      if (shouldBeEnabled) {
+        visualizerRef.current!.enableEffect(effect.id);
+      } else {
+        visualizerRef.current!.disableEffect(effect.id);
+      }
+    });
+  }, [selectedEffects]);
 
   const toggleModal = (effectId: string) => {
     // Always toggle the modal state immediately
@@ -304,7 +306,7 @@ export function ThreeVisualizer({
     }));
     
     // Also toggle the effect
-    toggleEffect(effectId);
+    // toggleEffect(effectId); // This line is removed as per the new_code
   };
 
   const handleParameterChange = (effectId: string, paramName: string, value: any) => {
@@ -480,13 +482,7 @@ export function ThreeVisualizer({
       </div>
 
       {/* Effects Library */}
-      <div className="max-w-6xl mx-auto" style={{ marginTop: '16px' }}>
-        <EffectCarousel
-          effects={availableEffects}
-          selectedEffects={effectsEnabled}
-          onSelectEffect={toggleModal}
-        />
-      </div>
+      {/* Removed duplicate EffectCarousel to prevent double rendering in creative visualizer */}
     </div>
   );
 }
