@@ -82,7 +82,7 @@ export const fileRouter = router({
             mime_type: input.mimeType,
             file_size: input.fileSize,
             s3_key: s3Key,
-            s3_bucket: process.env.CLOUDFLARE_R2_BUCKET || 'midiviz-uploads',
+            s3_bucket: process.env.CLOUDFLARE_R2_BUCKET || 'phonoglyph-uploads',
             processing_status: MediaProcessor.requiresProcessing(validation.fileType) ? 'pending' : 'completed',
           })
 

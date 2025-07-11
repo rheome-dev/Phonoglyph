@@ -12,7 +12,7 @@ export async function seedDevelopmentData() {
         name = EXCLUDED.name, 
         image = EXCLUDED.image
       RETURNING id
-    `, ['Test User', 'test@midiviz.com', 'https://via.placeholder.com/150'])
+    `, ['Test User', 'test@phonoglyph.com', 'https://via.placeholder.com/150'])
 
     const userId = userResult.rows[0].id
     console.log(`✅ Test user created/updated: ${userId}`)

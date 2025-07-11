@@ -1,4 +1,4 @@
--- Initial schema for MidiViz application
+-- Initial schema for Phonoglyph application
 -- Migration: 001_initial_schema
 
 -- Enable UUID extension

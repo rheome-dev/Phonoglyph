@@ -3,7 +3,7 @@ const nextConfig = {
   experimental: {
     appDir: true,
   },
-  transpilePackages: ["@midiviz/config"],
+  transpilePackages: ["@phonoglyph/config"],
 }
 
 module.exports = nextConfig 

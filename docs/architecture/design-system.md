@@ -5,7 +5,7 @@
 ### Core Design Philosophy
 **"Technical Minimalism with Experimental Typography"**
 
-Based on aesthetic references, MidiViz embraces a **technical brutalist** approach with **scientific documentation** precision, incorporating **retro computing** elements and **bold typographic experiments**.
+Based on aesthetic references, Phonoglyph embraces a **technical brutalist** approach with **scientific documentation** precision, incorporating **retro computing** elements and **bold typographic experiments**.
 
 ### Design Principles
 1. **Utilitarian Clarity**: Function-first design with purposeful visual hierarchy

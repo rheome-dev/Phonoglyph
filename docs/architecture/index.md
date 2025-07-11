@@ -1,8 +1,8 @@
-# MidiViz Fullstack Architecture Document
+# Phonoglyph Fullstack Architecture Document
 
 ## Table of Contents
 
-- [MidiViz Fullstack Architecture Document](#table-of-contents)
+- [Phonoglyph Fullstack Architecture Document](#table-of-contents)
   - [Introduction](./introduction.md)
     - [Starter Template or Existing Project](./introduction.md#starter-template-or-existing-project)
     - [Change Log](./introduction.md#change-log)
