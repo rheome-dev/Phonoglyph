@@ -1,5 +1,6 @@
 import Meyda, { MeydaAnalyzer, MeydaFeatures } from 'meyda';
 import { AudioAnalysisData } from '@/types/visualizer';
+import { AudioAnalysisFetcher } from './audio-analysis-fetcher';
 
 export class AudioAnalyzer {
   private context: AudioContext;
@@ -8,9 +9,14 @@ export class AudioAnalyzer {
   private features: Set<string>;
   private bufferSize: number = 512;
   private lastFeatures: MeydaFeatures | null = null;
+  private analysisFetcher: AudioAnalysisFetcher | null = null;
+  private usePrecomputedAnalysis: boolean = false;
+  private currentStemKey: string | null = null;
+  private audioStartTime: number = 0;
 
-  constructor(audioContext: AudioContext) {
+  constructor(audioContext: AudioContext, analysisFetcher?: AudioAnalysisFetcher) {
     this.context = audioContext;
+    this.analysisFetcher = analysisFetcher || null;
     this.features = new Set([
       'rms',
       'zcr',
@@ -132,5 +138,86 @@ export class AudioAnalyzer {
     if (this.context.state !== 'closed') {
       this.context.close();
     }
+  }
+
+  /**
+   * Enable precomputed analysis mode
+   */
+  public enablePrecomputedAnalysis(stemKey: string): void {
+    this.usePrecomputedAnalysis = true;
+    this.currentStemKey = stemKey;
+    this.audioStartTime = Date.now() / 1000; // Start time in seconds
+    console.log('🎵 Switched to precomputed analysis mode for stem:', stemKey);
+  }
+
+  /**
+   * Disable precomputed analysis mode (fallback to real-time)
+   */
+  public disablePrecomputedAnalysis(): void {
+    this.usePrecomputedAnalysis = false;
+    this.currentStemKey = null;
+    console.log('🎵 Switched to real-time analysis mode');
+  }
+
+  /**
+   * Get current analysis data (precomputed or real-time)
+   */
+  public getCurrentAnalysisData(): AudioAnalysisData | null {
+    if (this.usePrecomputedAnalysis && this.analysisFetcher && this.currentStemKey) {
+      const currentTime = (Date.now() / 1000) - this.audioStartTime;
+      return this.analysisFetcher.getInterpolatedAnalysisData(this.currentStemKey, currentTime);
+    }
+    
+    // Fallback to real-time analysis
+    if (this.lastFeatures) {
+      return this.createAnalysisData(this.lastFeatures);
+    }
+    
+    return null;
+  }
+
+  /**
+   * Start precomputed analysis playback
+   */
+  public startPrecomputedAnalysis(stemKey: string): void {
+    this.enablePrecomputedAnalysis(stemKey);
+    
+    // Start a timer to emit analysis data
+    const updateInterval = setInterval(() => {
+      if (!this.usePrecomputedAnalysis) {
+        clearInterval(updateInterval);
+        return;
+      }
+      
+      const analysisData = this.getCurrentAnalysisData();
+      if (analysisData) {
+        this.onAnalysis(analysisData);
+      }
+    }, 16); // ~60fps
+  }
+
+  /**
+   * Preload analysis data for a stem
+   */
+  public async preloadAnalysisData(stemKey: string): Promise<boolean> {
+    if (!this.analysisFetcher) {
+      console.warn('No analysis fetcher available');
+      return false;
+    }
+    
+    try {
+      const analysis = await this.analysisFetcher.fetchStemAnalysis(stemKey);
+      return analysis !== null;
+    } catch (error) {
+      console.error('Failed to preload analysis data:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Check if precomputed analysis is available for a stem
+   */
+  public async isPrecomputedAnalysisAvailable(stemKey: string): Promise<boolean> {
+    return this.preloadAnalysisData(stemKey);
   }
 } 

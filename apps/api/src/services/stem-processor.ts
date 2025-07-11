@@ -5,6 +5,7 @@ import { spawn } from 'child_process';
 import { randomUUID } from 'crypto';
 import path from 'path';
 import fs from 'fs';
+import { ServerAudioAnalyzer, AudioAnalysisResult } from './server-audio-analyzer';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -20,6 +21,12 @@ export interface StemProcessingResult {
     bass: string;
     vocals: string;
     other: string;
+  };
+  analysisResults?: {
+    drums?: { analysisResult: AudioAnalysisResult; s3Key: string };
+    bass?: { analysisResult: AudioAnalysisResult; s3Key: string };
+    vocals?: { analysisResult: AudioAnalysisResult; s3Key: string };
+    other?: { analysisResult: AudioAnalysisResult; s3Key: string };
   };
   processingDuration?: number;
 }
@@ -82,6 +89,18 @@ export class StemProcessor {
       // Upload stems to R2
       const stems = await this.uploadStems(processingDir, userId);
 
+      // Perform audio analysis on stems
+      const stemPaths = {
+        drums: path.join(processingDir, 'input', 'drums.wav'),
+        bass: path.join(processingDir, 'input', 'bass.wav'),
+        vocals: path.join(processingDir, 'input', 'vocals.wav'),
+        other: path.join(processingDir, 'input', 'other.wav')
+      };
+
+      console.log('🎵 Starting audio analysis for stems...');
+      const analysisResults = await ServerAudioAnalyzer.batchAnalyzeStems(stemPaths, userId);
+      console.log('✅ Audio analysis completed for', Object.keys(analysisResults).length, 'stems');
+
       // Update stem separation record
       const { error: updateError } = await supabase
         .from('stem_separations')
@@ -105,6 +124,7 @@ export class StemProcessor {
       return {
         success: true,
         stems,
+        analysisResults,
         processingDuration
       };
 
