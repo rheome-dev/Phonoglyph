@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,7 +18,13 @@ import { CollapsibleSidebar } from '@/components/layout/collapsible-sidebar';
 import { ProjectPickerModal } from '@/components/projects/project-picker-modal';
 import { ProjectCreationModal } from '@/components/projects/project-creation-modal';
 import { useStemAudioController } from '@/hooks/use-stem-audio-controller';
+import { useCachedStemAnalysis } from '@/hooks/use-cached-stem-analysis';
+import { StemWaveformPanel } from '@/components/stem-visualization/stem-waveform-panel';
 import { DEFAULT_PRESETS } from '@/lib/default-visualization-mappings';
+import { DraggableModal } from '@/components/ui/draggable-modal';
+import { Slider } from '@/components/ui/slider';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 
 // Sample MIDI data for demonstration
 const createSampleMIDIData = (): MIDIData => {
@@ -132,11 +138,11 @@ export default function CreativeVisualizerPage() {
   const [settings, setSettings] = useState<VisualizationSettings>(DEFAULT_VISUALIZATION_SETTINGS);
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [showTechnicalInfo, setShowTechnicalInfo] = useState(true);
   const [fps, setFps] = useState(60);
   const playbackIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [isMapMode, setIsMapMode] = useState(false);
   const [currentPreset, setCurrentPreset] = useState<VisualizationPreset>(DEFAULT_PRESETS[0]);
+  const [performanceMode, setPerformanceMode] = useState<'master-only' | 'all-stems'>('master-only');
 
   // Effects carousel state
   const [selectedEffects, setSelectedEffects] = useState<Record<string, boolean>>({
@@ -145,14 +151,26 @@ export default function CreativeVisualizerPage() {
     'particleNetwork': true
   });
 
+  // Visualizer aspect ratio toggle state
+  const [visualizerAspectRatio, setVisualizerAspectRatio] = useState<'mobile' | 'youtube'>('mobile');
+
+  // Effect parameter modal state
+  const [openEffectModals, setOpenEffectModals] = useState<Record<string, boolean>>({
+    'metaballs': false,
+    'midiHud': false,
+    'particleNetwork': false
+  });
+
   const [sampleMidiData] = useState<MIDIData>(createSampleMIDIData());
   const stemAudio = useStemAudioController();
+  const cachedStemAnalysis = useCachedStemAnalysis();
   
   // Enhanced audio analysis data
   const [audioAnalysisData, setAudioAnalysisData] = useState<any>(null);
   
   const [showPicker, setShowPicker] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const isLoadingStemsRef = useRef(false);
 
   // Get download URL mutation
   const getDownloadUrlMutation = trpc.file.getDownloadUrl.useMutation();
@@ -222,7 +240,9 @@ export default function CreativeVisualizerPage() {
 
   // Load stems when project files are available
   useEffect(() => {
-    if (!isInitialized || !projectFiles?.files || !currentProjectId) return;
+    if (!isInitialized || !projectFiles?.files || !currentProjectId || isLoadingStemsRef.current || stemAudio.stemsLoaded) {
+      return;
+    }
 
     const audioFiles = projectFiles.files.filter(file => 
       file.file_type === 'audio' && file.upload_status === 'completed'
@@ -230,37 +250,126 @@ export default function CreativeVisualizerPage() {
 
     if (audioFiles.length > 0) {
       let cancelled = false;
+      isLoadingStemsRef.current = true;
+      
       const loadStemsWithUrls = async () => {
         try {
-          const stems = await Promise.all(
-            audioFiles.map(async (file) => {
-              const downloadUrlResult = await getDownloadUrlMutation.mutateAsync({ fileId: file.id });
-              return {
-                id: file.file_name.toLowerCase().replace(/\.[^/.]+$/, ''),
-                url: downloadUrlResult.downloadUrl,
-                label: file.file_name
-              };
-            })
-          );
-          if (!cancelled) {
-            await stemAudio.loadStems(stems);
-            console.log('🎵 Advanced audio analysis system loaded stems');
+          // Add delay to prevent rapid successive calls
+          await new Promise(resolve => setTimeout(resolve, 200));
+          
+          if (cancelled) {
+            return;
+          }
+
+          // Process files sequentially with retry logic to avoid overwhelming the API
+          const stems: Array<{ id: string; url: string; label: string }> = [];
+          
+          // Sort files to prioritize master track (usually contains "master" or "mix" in filename)
+          const sortedFiles = [...audioFiles].sort((a, b) => {
+            const aName = a.file_name.toLowerCase();
+            const bName = b.file_name.toLowerCase();
+            
+            // Master track gets priority
+            if (aName.includes('master') || aName.includes('mix') || aName.includes('full')) return -1;
+            if (bName.includes('master') || bName.includes('mix') || bName.includes('full')) return 1;
+            
+            return 0;
+          });
+          
+          // In performance mode, only load the first (master) track
+          const filesToProcess = performanceMode === 'master-only' ? sortedFiles.slice(0, 1) : sortedFiles;
+          
+          for (const file of filesToProcess) {
+            if (cancelled) {
+              break;
+            }
+            
+            // Skip if we already have this stem loaded
+            const stemId = file.file_name.toLowerCase().replace(/\.[^/.]+$/, '');
+            if (stems.some(s => s.id === stemId)) {
+              continue;
+            }
+            
+            let retryCount = 0;
+            const maxRetries = 3;
+            
+            while (retryCount < maxRetries && !cancelled) {
+              try {
+                const downloadUrlResult = await getDownloadUrlMutation.mutateAsync({ fileId: file.id });
+                
+                stems.push({
+                  id: file.file_name.toLowerCase().replace(/\.[^/.]+$/, ''),
+                  url: downloadUrlResult.downloadUrl,
+                  label: file.file_name
+                });
+                break; // Success, exit retry loop
+              } catch (error) {
+                retryCount++;
+                
+                if (retryCount >= maxRetries) {
+                  console.error(`Failed to get download URL for file ${file.file_name} after ${maxRetries} attempts`);
+                  // Don't add to stems array, continue with next file
+                } else {
+                  // Wait before retry with exponential backoff
+                  const waitTime = Math.pow(2, retryCount) * 1000;
+                  await new Promise(resolve => setTimeout(resolve, waitTime));
+                }
+              }
+            }
+          }
+          
+          if (!cancelled && stems.length > 0) {
+            try {
+              await stemAudio.loadStems(stems);
+            } catch (stemError) {
+              console.error('Failed to load stems into audio controller:', stemError);
+            }
+          } else if (stems.length === 0) {
+            console.warn('No valid stems could be loaded');
+          } else if (cancelled) {
+            console.log('Stem loading was cancelled');
           }
         } catch (error) {
-          if (!cancelled) console.error('Failed to load stems:', error);
+          if (!cancelled) {
+            console.error('Failed to load stems:', error);
+          }
+        } finally {
+          if (!cancelled) {
+            isLoadingStemsRef.current = false;
+          }
         }
       };
+      
       loadStemsWithUrls();
-      return () => { cancelled = true; };
+      return () => { 
+        cancelled = true; 
+        isLoadingStemsRef.current = false;
+      };
     }
-  }, [projectFiles, currentProjectId, isInitialized, stemAudio, getDownloadUrlMutation]);
+  }, [projectFiles?.files, currentProjectId, isInitialized, performanceMode]); // Removed cachedAnalysis from dependencies
 
-  // Update audio analysis data from stem audio controller
+  // Load cached analysis after stems are loaded
   useEffect(() => {
-    if (stemAudio.visualizationData) {
+    if (stemAudio.stemsLoaded && projectFiles?.files) {
+      const audioFiles = projectFiles.files.filter(file => 
+        file.file_type === 'audio' && file.upload_status === 'completed'
+      );
+      
+      if (audioFiles.length > 0) {
+        cachedStemAnalysis.loadAnalysis(audioFiles.map(stem => stem.id));
+      }
+    }
+  }, [stemAudio.stemsLoaded, projectFiles?.files]);
+
+  // Update audio analysis data from cached analysis
+  useEffect(() => {
+    const cachedData = cachedStemAnalysis.cachedAnalysis;
+    if (cachedData) {
+      setAudioAnalysisData(cachedData);
+    } else if (stemAudio.visualizationData) {
       setAudioAnalysisData(stemAudio.visualizationData);
     }
-  }, [stemAudio.visualizationData]);
+  }, [cachedStemAnalysis.cachedAnalysis, stemAudio.visualizationData]);
 
 
 
@@ -278,7 +387,7 @@ export default function CreativeVisualizerPage() {
     router.push(`/creative-visualizer?${params.toString()}`, { scroll: false });
   };
 
-  const handleDemoModeChange = (demoMode: boolean) => {
+  const handleDemoModeChange = useCallback((demoMode: boolean) => {
     setUseDemoData(demoMode);
     setCurrentTime(0);
     setIsPlaying(false);
@@ -289,9 +398,9 @@ export default function CreativeVisualizerPage() {
       const newUrl = params.toString() ? `/creative-visualizer?${params.toString()}` : '/creative-visualizer';
       router.push(newUrl, { scroll: false });
     }
-  };
+  }, [searchParams, router]);
 
-  const handlePlayPause = () => {
+  const handlePlayPause = async () => {
     // Control both MIDI visualization and stem audio
     if (isPlaying) {
       stemAudio.pause();
@@ -299,11 +408,14 @@ export default function CreativeVisualizerPage() {
     } else {
       // Only start if we have stems loaded
       if (hasStems) {
-        stemAudio.play();
-        setIsPlaying(true);
-        console.log('🎵 Starting stem audio playback');
+        try {
+          await stemAudio.play();
+          setIsPlaying(true);
+        } catch (error) {
+          console.error('Failed to start audio playback:', error);
+          setIsPlaying(false);
+        }
       } else {
-        console.log('⚠️ No stems loaded, starting visualizer only');
         setIsPlaying(true);
       }
     }
@@ -337,7 +449,20 @@ export default function CreativeVisualizerPage() {
     file.file_type === 'audio' && file.upload_status === 'completed'
   ) || [];
 
-  const hasStems = availableStems.length > 0;
+
+  // Load all analyses when stems are available
+  useEffect(() => {
+    if (availableStems.length > 0) {
+      const stemIds = availableStems.map(stem => stem.id);
+      cachedStemAnalysis.loadAnalysis(stemIds);
+    }
+  }, [availableStems.length, availableStems.map(stem => stem.id).join(',')]);
+
+  // Check if stems are actually loaded in the audio controller, not just available in the project
+  const hasStems = availableStems.length > 0 && stemAudio.stemsLoaded;
+  
+  // Check if we're currently loading stems
+  const stemLoadingState = availableStems.length > 0 && !stemAudio.stemsLoaded;
 
   // Effects data for carousel
   const effects = [
@@ -347,9 +472,23 @@ export default function CreativeVisualizerPage() {
   ];
 
   const handleSelectEffect = (effectId: string) => {
+    // Toggle the effect selection
     setSelectedEffects(prev => ({
       ...prev,
       [effectId]: !prev[effectId]
+    }));
+    
+    // Open the parameter modal for this effect
+    setOpenEffectModals(prev => ({
+      ...prev,
+      [effectId]: true
+    }));
+  };
+
+  const handleCloseEffectModal = (effectId: string) => {
+    setOpenEffectModals(prev => ({
+      ...prev,
+      [effectId]: false
     }));
   };
 
@@ -371,12 +510,12 @@ export default function CreativeVisualizerPage() {
 
   const handleStemMute = (stemType: string, muted: boolean) => {
     // Handle stem muting
-    console.log(`Stem ${stemType} ${muted ? 'muted' : 'unmuted'}`);
+    // TODO: Implement stem muting functionality
   };
 
   const handleStemSolo = (stemType: string, solo: boolean) => {
     // Handle stem solo
-    console.log(`Stem ${stemType} ${solo ? 'soloed' : 'unsoloed'}`);
+    // TODO: Implement stem solo functionality
   };
 
 
@@ -398,7 +537,7 @@ export default function CreativeVisualizerPage() {
         />
       )}
       {/* Main visualizer UI */}
-      <div className="flex h-screen bg-stone-800 text-white">
+      <div className="flex h-screen bg-stone-800 text-white min-w-0">
         <CollapsibleSidebar>
           <FileSelector 
             onFileSelected={handleFileSelected}
@@ -409,7 +548,7 @@ export default function CreativeVisualizerPage() {
             projectName={projectData?.name}
           />
         </CollapsibleSidebar>
-        <main className="flex-1 flex flex-col overflow-hidden">
+        <main className="flex-1 flex flex-col overflow-hidden min-w-0">
           {/* Project Header */}
           {projectData && (
             <div className="px-4 py-3 bg-stone-950/80 border-b border-white/5">
@@ -442,67 +581,137 @@ export default function CreativeVisualizerPage() {
           )}
           {/* Top Control Bar */}
           <div className="p-4 bg-stone-900/50 border-b border-white/10">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <Button onClick={handlePlayPause} size="lg" className="font-sans text-sm uppercase tracking-wider px-6 py-3 transition-all duration-300 bg-stone-700 hover:bg-stone-600">
-                  {isPlaying ? <Pause className="h-4 w-4 mr-2" /> : <Play className="h-4 w-4 mr-2" />}
-                  {isPlaying ? 'PAUSE' : 'PLAY'}
+            <div className="flex items-center justify-between min-w-0">
+              <div className="flex items-center gap-3 min-w-0 overflow-hidden">
+                <Button 
+                  onClick={handlePlayPause} 
+                  size="lg" 
+                  disabled={stemLoadingState}
+                  className={`font-sans text-sm uppercase tracking-wider px-6 py-3 transition-all duration-300 ${
+                    stemLoadingState 
+                      ? 'bg-stone-600 text-stone-400 cursor-not-allowed' 
+                      : 'bg-stone-700 hover:bg-stone-600'
+                  }`}
+                >
+                  {stemLoadingState ? (
+                    <>
+                      <div className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-stone-400 border-t-transparent" />
+                      LOADING AUDIO
+                    </>
+                  ) : (
+                    <>
+                      {isPlaying ? <Pause className="h-4 w-4 mr-2" /> : <Play className="h-4 w-4 mr-2" />}
+                      {isPlaying ? 'PAUSE' : 'PLAY'}
+                    </>
+                  )}
                 </Button>
-                <Button variant="outline" onClick={handleReset} className="bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  disabled={stemLoadingState}
+                  onClick={() => stemAudio.setLooping(!stemAudio.isLooping)}
+                  className={`bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 font-sans text-xs uppercase tracking-wider ${
+                    stemLoadingState 
+                      ? 'opacity-50 cursor-not-allowed' 
+                      : stemAudio.isLooping ? 'bg-emerald-900/20 border-emerald-600 text-emerald-300' : ''
+                  }`}
+                  style={{ borderRadius: '8px' }}
+                >
+                  🔄 {stemAudio.isLooping ? 'LOOP ON' : 'LOOP OFF'}
+                </Button>
+                <Button 
+                  variant="outline" 
+                  disabled={stemLoadingState}
+                  onClick={handleReset} 
+                  className={`bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 ${
+                    stemLoadingState ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
+                >
                   <RotateCcw className="h-4 w-4 mr-2" />
                   RESET
                 </Button>
-                <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                  {currentTime.toFixed(1)}S / {(midiData || sampleMidiData).file.duration.toFixed(1)}S
-                </div>
-                <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                  FPS: {fps}
-                </div>
-                {stemAudio.performanceMetrics && (
+                
+                {/* Stats Section - Compact layout */}
+                <div className="flex items-center gap-1 overflow-hidden">
                   <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                    LAT: {stemAudio.performanceMetrics.analysisLatency.toFixed(1)}ms
+                    {currentTime.toFixed(1)}S / {(midiData || sampleMidiData).file.duration.toFixed(1)}S
                   </div>
-                )}
-                {stemAudio.deviceProfile && (
                   <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                    {stemAudio.deviceProfile.toUpperCase()}
+                    FPS: {fps}
                   </div>
-                )}
-                <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                  NOTES: {(midiData || sampleMidiData).tracks.reduce((sum, track) => sum + track.notes.length, 0)}
+                  {stemAudio.performanceMetrics && (
+                    <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                      LAT: {stemAudio.performanceMetrics.analysisLatency.toFixed(1)}ms
+                    </div>
+                  )}
+                  {stemAudio.deviceProfile && (
+                    <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                      {stemAudio.deviceProfile.toUpperCase()}
+                    </div>
+                  )}
+                  <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                    NOTES: {(midiData || sampleMidiData).tracks.reduce((sum, track) => sum + track.notes.length, 0)}
+                  </div>
+                  {hasStems && (
+                    <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                      STEMS: {availableStems.length}
+                    </div>
+                  )}
+                  <Badge className="bg-emerald-900/80 text-emerald-200 text-xs uppercase tracking-wide px-3 py-1 border border-emerald-700">
+                    <span className="mr-2 h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    LIVE
+                  </Badge>
                 </div>
-                {hasStems && (
-                  <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                    STEMS: {availableStems.length}
-                  </div>
-                )}
-                <Badge className="bg-emerald-900/80 text-emerald-200 text-xs uppercase tracking-wide px-3 py-1 border border-emerald-700">
-                  <span className="mr-2 h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                  LIVE
-                </Badge>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setPerformanceMode(performanceMode === 'master-only' ? 'all-stems' : 'master-only')}
+                  disabled={stemLoadingState}
+                  className={`bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 font-sans text-xs uppercase tracking-wider px-2 py-1 ${
+                    performanceMode === 'master-only' ? 'bg-amber-900/20 border-amber-600 text-amber-300' : ''
+                  }`}
+                  style={{ borderRadius: '6px' }}
+                >
+                  ⚡ {performanceMode === 'master-only' ? 'MASTER' : 'ALL'}
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setVisualizerAspectRatio(visualizerAspectRatio === 'mobile' ? 'youtube' : 'mobile')}
+                  className="bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 font-sans text-xs uppercase tracking-wider px-2 py-1"
+                  style={{ borderRadius: '6px' }}
+                >
+                  📱 {visualizerAspectRatio === 'mobile' ? 'MOB' : 'YT'}
+                </Button>
                 <Button 
                   variant="outline" 
                   size="sm" 
                   onClick={() => setIsMapMode(!isMapMode)} 
                   disabled={!hasStems}
-                  className="bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 font-sans text-xs uppercase tracking-wider" 
-                  style={{ borderRadius: '8px' }}
+                  className="bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 font-sans text-xs uppercase tracking-wider px-2 py-1" 
+                  style={{ borderRadius: '6px' }}
                 >
-                  {isMapMode ? <Zap className="h-4 w-4 mr-1" /> : <Zap className="h-4 w-4 mr-1" />}
-                  {isMapMode ? 'EXIT MAP' : 'MAP'}
+                  {isMapMode ? <Zap className="h-3 w-3 mr-1" /> : <Zap className="h-3 w-3 mr-1" />}
+                  {isMapMode ? 'EXIT' : 'MAP'}
                 </Button>
               </div>
             </div>
           </div>
           {/* Visualizer Area */}
-          <div className="flex-1 overflow-y-auto bg-stone-900 relative">
-              <div className="h-full flex flex-col">
-                <div className="flex-1">
-                  <ThreeVisualizer
+          <div className="flex-1 overflow-hidden bg-stone-900 relative">
+              <div className="h-full overflow-y-auto px-4">
+                <div className="min-w-0 w-full">
+                  <div 
+                    className={`relative mx-auto bg-stone-900 rounded-lg overflow-hidden shadow-lg flex items-center justify-center ${
+                      visualizerAspectRatio === 'mobile' ? 'max-w-md' : 'max-w-4xl'
+                    }`}
+                    style={{ height: '400px' }}
+                  >
+                    <ThreeVisualizer
                       midiData={midiData || sampleMidiData}
-                      settings={visualizationSettings}
+                      settings={settings}
                       currentTime={currentTime}
                       isPlaying={isPlaying}
                       onPlayPause={handlePlayPause}
@@ -510,35 +719,186 @@ export default function CreativeVisualizerPage() {
                       onFpsUpdate={setFps}
                       selectedEffects={selectedEffects}
                       audioAnalysisData={audioAnalysisData}
-                  />
-                </div>
-                {/* Effects Carousel */}
-                <div className="p-4 border-t border-white/10">
-                  <EffectCarousel 
-                    effects={effects}
-                    selectedEffects={selectedEffects}
-                    onSelectEffect={handleSelectEffect}
-                  />
-                </div>
-              </div>
-
-              {/* Mapping Editor Modal */}
-              {isMapMode && (
-                <div className="absolute inset-0 bg-black/80 z-50 flex">
-                  <div className="w-1/3 bg-stone-900 border-l border-white/10 overflow-y-auto">
-                    <MappingEditor
-                      currentPreset={currentPreset}
-                      onPresetChange={handlePresetChange}
-                      onMappingUpdate={handleMappingUpdate}
-                      onStemMute={handleStemMute}
-                      onStemSolo={handleStemSolo}
-                      isPlaying={isPlaying}
-                      className="h-full"
+                      aspectRatio={visualizerAspectRatio}
                     />
                   </div>
-                  <div className="flex-1" />
+
+                  <div className="mt-4">
+                    <StemWaveformPanel
+                      stems={availableStems}
+                      currentTime={stemAudio.currentTime}
+                      isPlaying={stemAudio.isPlaying}
+                      onSeek={stemAudio.setCurrentTime}
+                      className="bg-gray-800/50 border border-gray-700"
+                    />
+                  </div>
+
+                  {/* Effects Carousel */}
+                  <div className="mt-4 pb-4">
+                    <h3 className="text-lg font-semibold mb-2 text-gray-300">Visual Effects Library</h3>
+                    <p className="text-sm text-gray-400 mb-4">
+                      Drag or scroll to explore effects → Select effects to configure and activate
+                    </p>
+                    <EffectCarousel
+                      effects={effects}
+                      onSelectEffect={handleSelectEffect}
+                      selectedEffects={selectedEffects}
+                    />
+                  </div>
+
+                  {/* Effect Parameter Modals */}
+                  {effects.map((effect, index) => {
+                    const initialPos = {
+                      x: 100 + (index * 50),
+                      y: 100 + (index * 50)
+                    };
+                    
+                    return (
+                      <DraggableModal
+                        key={effect.id}
+                        title={effect.name.replace(' Effect', '')}
+                        isOpen={openEffectModals[effect.id]}
+                        onClose={() => handleCloseEffectModal(effect.id)}
+                        initialPosition={initialPos}
+                      >
+                        <div className="space-y-4">
+                          <div className="text-sm text-gray-300 mb-4">
+                            {effect.description}
+                          </div>
+                          
+                          {/* Effect-specific parameters */}
+                          {effect.id === 'metaballs' && (
+                            <>
+                              <div className="space-y-2">
+                                <Label className="text-white/80 text-xs font-mono">Base Radius</Label>
+                                <Slider
+                                  defaultValue={[0.5]}
+                                  min={0.1}
+                                  max={1.0}
+                                  step={0.1}
+                                  className="w-full"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label className="text-white/80 text-xs font-mono">Animation Speed</Label>
+                                <Slider
+                                  defaultValue={[1.0]}
+                                  min={0.1}
+                                  max={2.0}
+                                  step={0.1}
+                                  className="w-full"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label className="text-white/80 text-xs font-mono">Glow Intensity</Label>
+                                <Slider
+                                  defaultValue={[1.5]}
+                                  min={0.5}
+                                  max={3.0}
+                                  step={0.1}
+                                  className="w-full"
+                                />
+                              </div>
+                            </>
+                          )}
+                          
+                          {effect.id === 'midiHud' && (
+                            <>
+                              <div className="flex items-center justify-between">
+                                <Label className="text-white/80 text-xs font-mono">Show Track Info</Label>
+                                <Switch defaultChecked={true} />
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <Label className="text-white/80 text-xs font-mono">Show Velocity</Label>
+                                <Switch defaultChecked={true} />
+                              </div>
+                              <div className="space-y-2">
+                                <Label className="text-white/80 text-xs font-mono">HUD Opacity</Label>
+                                <Slider
+                                  defaultValue={[0.8]}
+                                  min={0.1}
+                                  max={1.0}
+                                  step={0.1}
+                                  className="w-full"
+                                />
+                              </div>
+                            </>
+                          )}
+                          
+                          {effect.id === 'particleNetwork' && (
+                            <>
+                              <div className="space-y-2">
+                                <Label className="text-white/80 text-xs font-mono">Max Particles</Label>
+                                <Slider
+                                  defaultValue={[100]}
+                                  min={50}
+                                  max={200}
+                                  step={10}
+                                  className="w-full"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label className="text-white/80 text-xs font-mono">Connection Distance</Label>
+                                <Slider
+                                  defaultValue={[2.0]}
+                                  min={1.0}
+                                  max={5.0}
+                                  step={0.1}
+                                  className="w-full"
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label className="text-white/80 text-xs font-mono">Particle Size</Label>
+                                <Slider
+                                  defaultValue={[20]}
+                                  min={10}
+                                  max={50}
+                                  step={5}
+                                  className="w-full"
+                                />
+                              </div>
+                            </>
+                          )}
+                          
+                          {/* Common controls */}
+                          <div className="pt-4 border-t border-gray-600">
+                            <div className="flex items-center justify-between">
+                              <Label className="text-white/80 text-xs font-mono">Effect Enabled</Label>
+                              <Switch 
+                                checked={selectedEffects[effect.id]}
+                                onCheckedChange={(checked) => {
+                                  setSelectedEffects(prev => ({
+                                    ...prev,
+                                    [effect.id]: checked
+                                  }));
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </DraggableModal>
+                    );
+                  })}
                 </div>
-              )}
+
+                {/* Mapping Editor Modal */}
+                {isMapMode && (
+                  <div className="fixed inset-0 bg-black/80 z-50 flex">
+                    <div className="w-1/3 bg-stone-900 border-l border-white/10 overflow-y-auto">
+                      <MappingEditor
+                        currentPreset={currentPreset}
+                        onPresetChange={handlePresetChange}
+                        onMappingUpdate={handleMappingUpdate}
+                        onStemMute={handleStemMute}
+                        onStemSolo={handleStemSolo}
+                        isPlaying={isPlaying}
+                        className="h-full"
+                      />
+                    </div>
+                    <div className="flex-1" />
+                  </div>
+                )}
+              </div>
           </div>
         </main>
       </div>
