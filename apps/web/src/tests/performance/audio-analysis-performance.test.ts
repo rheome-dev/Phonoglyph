@@ -53,7 +53,6 @@ const mockTestFramework: TestFramework = {
 
 const { describe, it, expect, beforeEach, afterEach, vi } = mockTestFramework;
 import { AudioProcessor } from '@/lib/audio-processor';
-import { AudioAnalyzer } from '@/lib/audio-analyzer';
 import { AudioWorkerManager } from '@/lib/audio-worker-manager';
 import { VisualizationFeaturePipeline } from '@/lib/visualization-feature-pipeline';
 import { PerformanceMonitor } from '@/lib/performance-monitor';
@@ -272,7 +271,7 @@ describe('Audio Analysis Performance Tests', () => {
     });
 
     it('should achieve <33ms latency (2 frames @ 60fps)', async () => {
-      const analyzer = new AudioAnalyzer(audioContext, 'high');
+      const processor = new AudioProcessor(audioContext, 'high');
       const mockBuffer = createMockAudioBuffer(1); // 1 second
       
       const latencies: number[] = [];
@@ -282,7 +281,7 @@ describe('Audio Analysis Performance Tests', () => {
         const start = performance.now();
         
         try {
-          await analyzer.analyzeStem(mockBuffer as any);
+          await processor.setupProcessing(mockBuffer as any);
         } catch {
           // Mock implementation may throw, that's OK for latency testing
         }
@@ -297,7 +296,7 @@ describe('Audio Analysis Performance Tests', () => {
       expect(avgLatency).toBeLessThan(33); // Average under 33ms
       expect(maxLatency).toBeLessThan(50); // Peak under 50ms
       
-      analyzer.dispose();
+      processor.dispose();
     });
   });
 

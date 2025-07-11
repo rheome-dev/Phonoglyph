@@ -34,40 +34,45 @@ interface UseStemAudioController {
   deviceProfile: string;
   fallbackState: any;
   visualizationData: AudioAnalysisData | null;
+  stemsLoaded: boolean;
+  isLooping: boolean;
+  setLooping: (looping: boolean) => void;
 }
 
 export function useStemAudioController(): UseStemAudioController {
-  const audioContextRef = useRef<AudioContext | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [featuresByStem, setFeaturesByStem] = useState<StemFeatures>({});
   const [currentTime, setCurrentTime] = useState(0);
-  const [performanceMetrics, setPerformanceMetrics] = useState<PerformanceMetrics>({
-    fps: 0,
-    analysisLatency: 0,
-    memoryUsage: 0,
-    cpuUsage: 0,
-    frameDrops: 0
-  });
   const [visualizationData, setVisualizationData] = useState<AudioAnalysisData | null>(null);
-  const [deviceProfile, setDeviceProfile] = useState<string>('medium');
-  const [fallbackState, setFallbackState] = useState<any>({});
-
-  // Advanced audio analysis components
-  const audioProcessorRef = useRef<AudioProcessor | null>(null);
-  const workerManagerRef = useRef<AudioWorkerManager | null>(null);
-  const performanceMonitorRef = useRef<PerformanceMonitor | null>(null);
-  const deviceOptimizerRef = useRef<DeviceOptimizer | null>(null);
-  const fallbackSystemRef = useRef<FallbackSystem | null>(null);
-  const featurePipelineRef = useRef<VisualizationFeaturePipeline | null>(null);
   
-  // Audio playback components
-  const audioSourcesRef = useRef<Record<string, AudioBufferSourceNode>>({});
-  const audioBuffersRef = useRef<Record<string, AudioBuffer>>({});
-  const gainNodesRef = useRef<Record<string, GainNode>>({});
-  const startTimeRef = useRef<number>(0);
-  const pausedTimeRef = useRef<number>(0);
+  // Add state to track if stems are already loaded and worker is set up
+  const [stemsLoaded, setStemsLoaded] = useState(false);
+  const [workerSetupComplete, setWorkerSetupComplete] = useState(false);
+  const loadingRef = useRef(false);
+  const [isLooping, setIsLooping] = useState(true); // Default to looping
+  
+  // Track which stems have finished playing
+  const finishedStemsRef = useRef<Set<string>>(new Set());
 
-  // Initialize advanced audio analysis system
+  // Refs for audio context and buffers
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const audioBuffersRef = useRef<Record<string, AudioBuffer>>({});
+  const audioSourcesRef = useRef<Record<string, AudioBufferSourceNode>>({});
+  const gainNodesRef = useRef<Record<string, GainNode>>({});
+  const startTimeRef = useRef(0);
+  const pausedTimeRef = useRef(0);
+  const timeUpdateIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isIntentionallyStoppingRef = useRef(false);
+
+  // Remove all advanced system refs
+  // const audioProcessorRef = useRef<AudioProcessor | null>(null);
+  // const workerManagerRef = useRef<AudioWorkerManager | null>(null);
+  // const performanceMonitorRef = useRef<PerformanceMonitor | null>(null);
+  // const fallbackSystemRef = useRef<FallbackSystem | null>(null);
+  // const featurePipelineRef = useRef<VisualizationFeaturePipeline | null>(null);
+  // const deviceOptimizerRef = useRef<DeviceOptimizer | null>(null);
+
+  // Remove advanced audio system initialization
   useEffect(() => {
     const initializeAudioSystem = async () => {
       try {
@@ -75,48 +80,48 @@ export function useStemAudioController(): UseStemAudioController {
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
         
         // Initialize device optimizer
-        deviceOptimizerRef.current = new DeviceOptimizer();
-        const deviceConfig = deviceOptimizerRef.current.getOptimizedConfig();
-        setDeviceProfile(deviceOptimizerRef.current.getCurrentProfile().name);
+        // deviceOptimizerRef.current = new DeviceOptimizer(); // This line was removed
+        // const deviceConfig = deviceOptimizerRef.current.getOptimizedConfig(); // This line was removed
+        // setDeviceProfile(deviceOptimizerRef.current.getCurrentProfile().name); // This line was removed
         
-        // Initialize audio processor with device-optimized config
-        audioProcessorRef.current = new AudioProcessor(audioContextRef.current, deviceConfig);
+        // Initialize audio processor with device-optimized config // This line was removed
+        // audioProcessorRef.current = new AudioProcessor(audioContextRef.current, deviceConfig); // This line was removed
         
-        // Initialize worker manager
-        workerManagerRef.current = new AudioWorkerManager();
+        // Initialize worker manager // This line was removed
+        // workerManagerRef.current = new AudioWorkerManager(); // This line was removed
         
-        // Initialize performance monitor
-        performanceMonitorRef.current = new PerformanceMonitor();
+        // Initialize performance monitor // This line was removed
+        // performanceMonitorRef.current = new PerformanceMonitor(); // This line was removed
         
-        // Initialize fallback system
-        fallbackSystemRef.current = new FallbackSystem();
+        // Initialize fallback system // This line was removed
+        // fallbackSystemRef.current = new FallbackSystem(); // This line was removed
         
-        // Initialize feature pipeline
-        featurePipelineRef.current = new VisualizationFeaturePipeline();
+        // Initialize feature pipeline // This line was removed
+        // featurePipelineRef.current = new VisualizationFeaturePipeline(); // This line was removed
         
-        // Set up performance monitoring callbacks
-        performanceMonitorRef.current.updateMetrics = (metrics) => {
-          setPerformanceMetrics(prev => ({ ...prev, ...metrics }));
-        };
+        // Set up performance monitoring callbacks // This line was removed
+        // performanceMonitorRef.current.updateMetrics = (metrics) => { // This line was removed
+        //   // setPerformanceMetrics(prev => ({ ...prev, ...metrics })); // This line was removed
+        // }; // This line was removed
         
-        // Set up worker manager callbacks
-        if (workerManagerRef.current) {
-          workerManagerRef.current.setStemAnalysisCallback((stemType, analysis) => {
-            setFeaturesByStem(prev => ({ ...prev, [stemType]: analysis }));
-          });
+        // Set up worker manager callbacks // This line was removed
+        // if (workerManagerRef.current) { // This line was removed
+        //   workerManagerRef.current.setStemAnalysisCallback((stemType, analysis) => { // This line was removed
+        //     setFeaturesByStem(prev => ({ ...prev, [stemType]: analysis })); // This line was removed
+        //   }); // This line was removed
           
-          workerManagerRef.current.setPerformanceCallback((metrics) => {
-            setPerformanceMetrics(metrics);
-            if (performanceMonitorRef.current) {
-              performanceMonitorRef.current.updateMetrics(metrics);
-            }
-          });
-        }
+        //   workerManagerRef.current.setPerformanceCallback((metrics) => { // This line was removed
+        //     // setPerformanceMetrics(metrics); // This line was removed
+        //     if (performanceMonitorRef.current) { // This line was removed
+        //       // performanceMonitorRef.current.updateMetrics(metrics); // This line was removed
+        //     } // This line was removed
+        //   }); // This line was removed
+        // } // This line was removed
         
-        // Set up fallback system monitoring
-        if (fallbackSystemRef.current) {
-          setFallbackState(fallbackSystemRef.current.getFallbackState());
-        }
+        // Set up fallback system monitoring // This line was removed
+        // if (fallbackSystemRef.current) { // This line was removed
+        //   // setFallbackState(fallbackSystemRef.current.getFallbackState()); // This line was removed
+        // } // This line was removed
         
         console.log('🎵 Advanced audio analysis system initialized');
         
@@ -129,252 +134,225 @@ export function useStemAudioController(): UseStemAudioController {
 
     // Cleanup on unmount
     return () => {
-      if (audioProcessorRef.current) audioProcessorRef.current.dispose();
-      if (workerManagerRef.current) workerManagerRef.current.dispose();
-      if (performanceMonitorRef.current) performanceMonitorRef.current.dispose();
-      if (fallbackSystemRef.current) fallbackSystemRef.current.dispose();
-      if (featurePipelineRef.current) featurePipelineRef.current.reset();
+      // if (audioProcessorRef.current) audioProcessorRef.current.dispose(); // This line was removed
+      // if (workerManagerRef.current) workerManagerRef.current.dispose(); // This line was removed
+      // if (performanceMonitorRef.current) performanceMonitorRef.current.dispose(); // This line was removed
+      // if (fallbackSystemRef.current) fallbackSystemRef.current.dispose(); // This line was removed
+      // if (featurePipelineRef.current) featurePipelineRef.current.reset(); // This line was removed
       if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
         audioContextRef.current.close();
       }
     };
   }, []);
 
+  // In loadStems, remove all worker/processor/feature pipeline logic, just load and decode audio buffers for playback
   const loadStems = useCallback(async (stems: Stem[]) => {
     if (stems.length === 0) return;
-    
+    if (loadingRef.current || stemsLoaded) {
+      console.log('⚠️ Stems already loading or loaded, skipping duplicate request');
+      return;
+    }
+    loadingRef.current = true;
     try {
-      // Use fallback system for robust stem loading
-      if (!fallbackSystemRef.current) {
-        throw new Error('Fallback system not initialized');
-      }
-
-      // Convert stems to ArrayBuffer format for processing
-      const stemBuffers: Record<string, ArrayBuffer> = {};
-      
-      for (const stem of stems) {
-        const buffer = await fallbackSystemRef.current.executeWithFallback(
-          `load_stem_${stem.id}`,
-          async () => {
-            const resp = await fetch(stem.url);
-            if (!resp.ok) {
-              throw new Error(`Failed to load stem ${stem.id}: ${resp.status}`);
-            }
-            return await resp.arrayBuffer();
-          },
-          async () => {
-            // Fallback: create mock audio buffer
-            console.warn(`Using fallback audio buffer for ${stem.id}`);
-            return createMockAudioBuffer(10);
-          }
-        );
-        
-        stemBuffers[stem.id] = buffer;
-      }
-
-      // Setup processing with advanced audio processor
-      if (audioProcessorRef.current) {
-        await audioProcessorRef.current.setupProcessing(stemBuffers);
-      }
-
-      // Setup worker-based analysis if available
-      if (workerManagerRef.current && workerManagerRef.current.isWorkerReady()) {
-        for (const [stemType, buffer] of Object.entries(stemBuffers)) {
-          await workerManagerRef.current.setupStemAnalysis(stemType, buffer, {
-            bufferSize: 512,
-            analysisResolution: 1
-          });
-        }
-      }
-
-      // Initialize feature pipeline (no specific initialization needed)
-      if (featurePipelineRef.current) {
-        featurePipelineRef.current.reset();
-      }
-
-      // Decode audio buffers for playback
+      console.log(`🎵 Starting to load ${stems.length} stems...`);
+      // Only fetch and decode audio buffers
       const decodedBuffers: Record<string, AudioBuffer> = {};
-      for (const [stemId, buffer] of Object.entries(stemBuffers)) {
+      for (const stem of stems) {
         try {
+          const resp = await fetch(stem.url);
+          if (!resp.ok) throw new Error(`Failed to load stem ${stem.id}: ${resp.status}`);
+          const buffer = await resp.arrayBuffer();
           const audioBuffer = await audioContextRef.current!.decodeAudioData(buffer);
-          decodedBuffers[stemId] = audioBuffer;
-          
+          decodedBuffers[stem.id] = audioBuffer;
           // Create gain node for volume control
           const gainNode = audioContextRef.current!.createGain();
-          gainNode.gain.value = 0.7; // Default volume
-          gainNodesRef.current[stemId] = gainNode;
-          
-          console.log(`🎵 Decoded audio buffer for ${stemId}: ${audioBuffer.duration.toFixed(2)}s`);
+          gainNode.gain.value = 0.7;
+          gainNodesRef.current[stem.id] = gainNode;
+          console.log(`🎵 Decoded audio buffer for ${stem.id}: ${audioBuffer.duration.toFixed(2)}s`);
         } catch (error) {
-          console.error(`❌ Failed to decode audio buffer for ${stemId}:`, error);
+          console.error(`❌ Failed to decode audio buffer for ${stem.id}:`, error);
         }
       }
-      
       audioBuffersRef.current = decodedBuffers;
-
+      setStemsLoaded(true);
       setFeaturesByStem(Object.fromEntries(stems.map(s => [s.id, null])));
-      console.log(`🎵 Loaded ${stems.length} stems with advanced analysis and playback`);
-      
+      console.log(`🎵 Successfully loaded ${stems.length} stems for playback`);
+      console.log('📊 Loaded audio buffers:', Object.keys(decodedBuffers).map(id => ({
+        id,
+        duration: decodedBuffers[id].duration.toFixed(2) + 's',
+        sampleRate: decodedBuffers[id].sampleRate,
+        numberOfChannels: decodedBuffers[id].numberOfChannels
+      })));
     } catch (error) {
       console.error('❌ Failed to load stems:', error);
+      setStemsLoaded(false);
+    } finally {
+      loadingRef.current = false;
     }
-  }, []);
+  }, [stemsLoaded]);
 
-  const startAnalysis = useCallback(() => {
-    try {
-      // Start audio processor analysis
-      if (audioProcessorRef.current) {
-        audioProcessorRef.current.startAnalysis();
-      }
+  // Remove startAnalysis and stopAnalysis logic
 
-      // Start worker-based analysis
-      if (workerManagerRef.current && workerManagerRef.current.isWorkerReady()) {
-        workerManagerRef.current.startAnalysis();
-      }
-
-      // Start performance monitoring (monitoring starts automatically)
-      if (performanceMonitorRef.current) {
-        // Monitoring is handled internally by the PerformanceMonitor
-      }
-
-      console.log('🎵 Advanced audio analysis started');
-    } catch (error) {
-      console.error('❌ Failed to start analysis:', error);
+  const play = useCallback(async () => {
+    if (!audioContextRef.current || !stemsLoaded) {
+      console.warn('⚠️ Cannot play: AudioContext not ready or stems not loaded');
+      return;
     }
-  }, []);
 
-  const stopAnalysis = useCallback(() => {
     try {
-      // Stop audio processor analysis
-      if (audioProcessorRef.current) {
-        audioProcessorRef.current.stopAnalysis();
-      }
-
-      // Stop worker-based analysis
-      if (workerManagerRef.current) {
-        workerManagerRef.current.stopAnalysis();
-      }
-
-      // Stop performance monitoring (handled by dispose)
-      if (performanceMonitorRef.current) {
-        // Monitoring stops when PerformanceMonitor is disposed
-      }
-
-      console.log('🎵 Advanced audio analysis stopped');
-    } catch (error) {
-      console.error('❌ Failed to stop analysis:', error);
-    }
-  }, []);
-
-  const play = useCallback(() => {
-    if (!audioContextRef.current) return;
-    
-    try {
-      setIsPlaying(true);
-      startAnalysis();
-      
       // Resume audio context if suspended
       if (audioContextRef.current.state === 'suspended') {
-        audioContextRef.current.resume();
+        await audioContextRef.current.resume();
       }
-      
-      // Start audio playback for all loaded stems
-      const currentTime = audioContextRef.current.currentTime;
-      const offset = pausedTimeRef.current;
-      
-      Object.entries(audioBuffersRef.current).forEach(([stemId, buffer]) => {
-        try {
-          // Stop existing source if any
-          if (audioSourcesRef.current[stemId]) {
-            audioSourcesRef.current[stemId].stop();
-          }
-          
-          // Create new source
-          const source = audioContextRef.current!.createBufferSource();
-          source.buffer = buffer;
-          
-          // Connect to gain node and destination
-          const gainNode = gainNodesRef.current[stemId];
-          source.connect(gainNode);
-          gainNode.connect(audioContextRef.current!.destination);
-          
-          // Start playback
-          source.start(0, offset);
-          audioSourcesRef.current[stemId] = source;
-          
-          console.log(`🎵 Started playback for ${stemId}`);
-        } catch (error) {
-          console.error(`❌ Failed to start playback for ${stemId}:`, error);
-        }
-      });
-      
-      startTimeRef.current = currentTime - offset;
-      console.log('▶️ Advanced audio playback started');
-    } catch (error) {
-      console.error('❌ Failed to start playback:', error);
-      setIsPlaying(false);
-    }
-  }, [startAnalysis]);
 
-  const pause = useCallback(() => {
-    try {
-      setIsPlaying(false);
-      stopAnalysis();
-      
-      // Stop all audio sources and record current position
-      Object.entries(audioSourcesRef.current).forEach(([stemId, source]) => {
+      // Stop any currently playing sources
+      Object.values(audioSourcesRef.current).forEach(source => {
         try {
           source.stop();
-          console.log(`⏸️ Stopped playback for ${stemId}`);
-        } catch (error) {
-          console.error(`❌ Failed to stop playback for ${stemId}:`, error);
+        } catch (e) {
+          // Source might already be stopped
         }
       });
-      
-      // Record current playback position for resume
-      if (audioContextRef.current) {
-        pausedTimeRef.current = audioContextRef.current.currentTime - startTimeRef.current;
-      }
-      
-      console.log('⏸️ Advanced audio playback paused');
+      audioSourcesRef.current = {};
+
+      // Reset finished stems tracking
+      finishedStemsRef.current.clear();
+      isIntentionallyStoppingRef.current = false;
+
+      // Create and start new audio sources
+      const startTime = audioContextRef.current.currentTime;
+      startTimeRef.current = startTime;
+
+      Object.entries(audioBuffersRef.current).forEach(([stemId, buffer]) => {
+        const source = audioContextRef.current!.createBufferSource();
+        const gainNode = gainNodesRef.current[stemId];
+        
+        source.buffer = buffer;
+        source.connect(gainNode);
+        gainNode.connect(audioContextRef.current!.destination);
+        
+        // Set up loop handling
+        source.onended = () => {
+          if (!isIntentionallyStoppingRef.current && isLooping) {
+            finishedStemsRef.current.add(stemId);
+            
+            // If all stems have finished, restart them
+            if (finishedStemsRef.current.size === Object.keys(audioBuffersRef.current).length) {
+              console.log('🔄 All stems finished, restarting...');
+              finishedStemsRef.current.clear();
+              play(); // Restart playback
+            }
+          }
+        };
+        
+        source.start(startTime);
+        audioSourcesRef.current[stemId] = source;
+      });
+
+      setIsPlaying(true);
+      console.log('🎵 Audio playback started');
+
+      // Start time updates
+      timeUpdateIntervalRef.current = setInterval(() => {
+        if (audioContextRef.current && isPlaying) {
+          const currentTime = audioContextRef.current.currentTime - startTimeRef.current;
+          setCurrentTime(Math.max(0, currentTime));
+        }
+      }, 16); // ~60fps
+
+      // DISABLED: Real-time audio analysis
+      // if (audioProcessorRef.current) {
+      //   audioProcessorRef.current.startAnalysis();
+      // }
+      // if (workerManagerRef.current && workerManagerRef.current.isWorkerReady()) {
+      //   workerManagerRef.current.startAnalysis();
+      // }
+
     } catch (error) {
-      console.error('❌ Failed to pause playback:', error);
+      console.error('❌ Failed to start audio playback:', error);
+      setIsPlaying(false);
     }
-  }, [stopAnalysis]);
+  }, [stemsLoaded, isLooping]);
+
+  const pause = useCallback(() => {
+    isIntentionallyStoppingRef.current = true;
+    
+    // Stop all audio sources
+    Object.values(audioSourcesRef.current).forEach(source => {
+      try {
+        source.stop();
+      } catch (e) {
+        // Source might already be stopped
+      }
+    });
+    audioSourcesRef.current = {};
+
+    // Clear time update interval
+    if (timeUpdateIntervalRef.current) {
+      clearInterval(timeUpdateIntervalRef.current);
+      timeUpdateIntervalRef.current = null;
+    }
+
+    // Store current time for resume
+    pausedTimeRef.current = currentTime;
+    setIsPlaying(false);
+    console.log('⏸️ Audio playback paused');
+
+    // DISABLED: Real-time audio analysis
+    // if (audioProcessorRef.current) {
+    //   audioProcessorRef.current.stopAnalysis();
+    // }
+    // if (workerManagerRef.current) {
+    //   workerManagerRef.current.stopAnalysis();
+    // }
+  }, [currentTime]);
 
   const stop = useCallback(() => {
     try {
       setIsPlaying(false);
-      stopAnalysis();
+      // stopAnalysis(); // This line was removed
       
-      // Stop all audio sources
+      // Set flag to indicate intentional stopping
+      isIntentionallyStoppingRef.current = true;
+      
+      // Stop all audio sources and clear them
       Object.entries(audioSourcesRef.current).forEach(([stemId, source]) => {
         try {
           source.stop();
-          console.log(`⏹️ Stopped playback for ${stemId}`);
         } catch (error) {
           console.error(`❌ Failed to stop playback for ${stemId}:`, error);
         }
       });
+      
+      // Clear all audio sources to prevent layering
+      audioSourcesRef.current = {};
+      
+      // Reset the flag after a short delay
+      setTimeout(() => {
+        isIntentionallyStoppingRef.current = false;
+      }, 100);
       
       // Reset playback position
       setCurrentTime(0);
       pausedTimeRef.current = 0;
       startTimeRef.current = 0;
-      
-      console.log('⏹️ Advanced audio playback stopped');
     } catch (error) {
       console.error('❌ Failed to stop playback:', error);
     }
-  }, [stopAnalysis]);
+  }, []); // This line was removed
 
   const clearStems = useCallback(() => {
     try {
       setIsPlaying(false);
-      stopAnalysis();
+      // stopAnalysis(); // This line was removed
       setCurrentTime(0);
       setFeaturesByStem({});
       setVisualizationData(null);
+      
+      // Reset loading state
+      setStemsLoaded(false);
+      setWorkerSetupComplete(false);
+      loadingRef.current = false;
       
       // Stop and clear all audio sources
       Object.entries(audioSourcesRef.current).forEach(([stemId, source]) => {
@@ -393,55 +371,55 @@ export function useStemAudioController(): UseStemAudioController {
       startTimeRef.current = 0;
       
       // Clear audio processor
-      if (audioProcessorRef.current) {
-        audioProcessorRef.current.dispose();
-      }
+      // if (audioProcessorRef.current) { // This line was removed
+      //   audioProcessorRef.current.dispose(); // This line was removed
+      // } // This line was removed
       
       console.log('🗑️ Advanced audio analysis and playback cleared');
     } catch (error) {
       console.error('❌ Failed to clear stems:', error);
     }
-  }, [stopAnalysis]);
+  }, []); // This line was removed
 
-  // Real-time visualization data processing
-  useEffect(() => {
-    if (!isPlaying || !featurePipelineRef.current) return;
+  // DISABLED: Real-time visualization data processing (now using cached analysis)
+  // useEffect(() => {
+  //   if (!isPlaying || !featurePipelineRef.current) return;
 
-    const processVisualizationData = () => {
-      try {
-        // Get current features from all stems
-        const allFeatures = Object.values(featuresByStem).filter(Boolean) as StemAnalysis[];
+  //   const processVisualizationData = () => {
+  //     try {
+  //       // Get current features from all stems
+  //       const allFeatures = Object.values(featuresByStem).filter(Boolean) as StemAnalysis[];
         
-        if (allFeatures.length > 0) {
-          // Convert array to record format for processing
-          const featuresRecord: Record<string, StemAnalysis> = {};
-          allFeatures.forEach((analysis, index) => {
-            featuresRecord[`stem_${index}`] = analysis;
-          });
+  //       if (allFeatures.length > 0) {
+  //         // Convert array to record format for processing
+  //         const featuresRecord: Record<string, StemAnalysis> = {};
+  //         allFeatures.forEach((analysis, index) => {
+  //           featuresRecord[`stem_${index}`] = analysis;
+  //         });
           
-          // Process features through visualization pipeline
-          const visualizationParams = featurePipelineRef.current!.processFeatures(featuresRecord);
+  //         // Process features through visualization pipeline
+  //         const visualizationParams = featurePipelineRef.current!.processFeatures(featuresRecord);
           
-          // Convert VisualizationParameters to AudioAnalysisData
-          const audioAnalysisData: AudioAnalysisData = {
-            frequencies: new Float32Array(256).fill(visualizationParams.energy),
-            timeData: new Float32Array(256).fill(visualizationParams.brightness),
-            volume: visualizationParams.energy,
-            bass: visualizationParams.color.warmth,
-            mid: visualizationParams.movement.speed,
-            treble: visualizationParams.scale
-          };
+  //         // Convert VisualizationParameters to AudioAnalysisData
+  //         const audioAnalysisData: AudioAnalysisData = {
+  //           frequencies: new Array(256).fill(visualizationParams.energy),
+  //           timeData: new Array(256).fill(visualizationParams.brightness),
+  //           volume: visualizationParams.energy,
+  //           bass: visualizationParams.color.warmth,
+  //           mid: visualizationParams.movement.speed,
+  //           treble: visualizationParams.scale
+  //         };
           
-          setVisualizationData(audioAnalysisData);
-        }
-      } catch (error) {
-        console.error('❌ Failed to process visualization data:', error);
-      }
-    };
+  //         setVisualizationData(audioAnalysisData);
+  //       }
+  //     } catch (error) {
+  //       console.error('❌ Failed to process visualization data:', error);
+  //     }
+  //   };
 
-    const interval = setInterval(processVisualizationData, 16); // ~60fps
-    return () => clearInterval(interval);
-  }, [isPlaying, featuresByStem]);
+  //   const interval = setInterval(processVisualizationData, 16); // ~60fps
+  //   return () => clearInterval(interval);
+  // }, [isPlaying, featuresByStem]);
 
   // Real-time time tracking for audio playback
   useEffect(() => {
@@ -462,23 +440,23 @@ export function useStemAudioController(): UseStemAudioController {
 
   // Adaptive performance optimization
   useEffect(() => {
-    if (!deviceOptimizerRef.current || !performanceMonitorRef.current) return;
+    // if (!deviceOptimizerRef.current || !performanceMonitorRef.current) return; // This line was removed
 
-    const optimizePerformance = () => {
-      try {
-        const metrics = performanceMonitorRef.current!.getCurrentMetrics();
-        deviceOptimizerRef.current!.updatePerformanceMetrics(
-          metrics.fps,
-          metrics.analysisLatency,
-          metrics.memoryUsage
-        );
-      } catch (error) {
-        console.error('❌ Failed to optimize performance:', error);
-      }
-    };
+    // const optimizePerformance = () => { // This line was removed
+    //   try { // This line was removed
+    //     const metrics = performanceMonitorRef.current!.getCurrentMetrics(); // This line was removed
+    //     deviceOptimizerRef.current!.updatePerformanceMetrics( // This line was removed
+    //       metrics.fps, // This line was removed
+    //       metrics.analysisLatency, // This line was removed
+    //       metrics.memoryUsage // This line was removed
+    //     ); // This line was removed
+    //   } catch (error) { // This line was removed
+    //     console.error('❌ Failed to optimize performance:', error); // This line was removed
+    //   } // This line was removed
+    // }; // This line was removed
 
-    const interval = setInterval(optimizePerformance, 1000); // Every second
-    return () => clearInterval(interval);
+    // const interval = setInterval(optimizePerformance, 1000); // Every second // This line was removed
+    // return () => clearInterval(interval); // This line was removed
   }, []);
 
   const setStemVolume = useCallback((stemId: string, volume: number) => {
@@ -494,6 +472,12 @@ export function useStemAudioController(): UseStemAudioController {
     return gainNode ? gainNode.gain.value : 0.7;
   }, []);
 
+  // Helper function to get the maximum duration of all loaded stems
+  const getMaxDuration = useCallback((): number => {
+    const durations = Object.values(audioBuffersRef.current).map(buffer => buffer.duration);
+    return Math.max(...durations, 0);
+  }, []);
+
   return {
     play,
     pause,
@@ -506,10 +490,19 @@ export function useStemAudioController(): UseStemAudioController {
     clearStems,
     setStemVolume,
     getStemVolume,
-    performanceMetrics,
-    deviceProfile,
-    fallbackState,
+    performanceMetrics: { // This line was removed
+      fps: 0,
+      analysisLatency: 0,
+      memoryUsage: 0,
+      cpuUsage: 0,
+      frameDrops: 0
+    },
+    deviceProfile: 'medium', // This line was removed
+    fallbackState: {}, // This line was removed
     visualizationData,
+    stemsLoaded,
+    isLooping,
+    setLooping: setIsLooping,
   };
 }
 

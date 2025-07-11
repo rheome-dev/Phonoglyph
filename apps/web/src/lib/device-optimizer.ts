@@ -76,6 +76,10 @@ export class DeviceOptimizer {
   private currentProfile: OptimizationProfile;
   private adaptiveMode: boolean = true;
   private performanceHistory: number[] = [];
+  private lastDegradationTime: number = 0;
+  private degradationCooldown: number = 30000; // 30 seconds cooldown
+  private consecutivePoorPerformance: number = 0;
+  private requiredPoorPerformanceCount: number = 10; // Require 10 consecutive poor measurements
   
   // Optimization profiles for different device classes
   private optimizationProfiles: Record<OptimizationProfile['name'], OptimizationProfile> = {
@@ -218,7 +222,7 @@ export class DeviceOptimizer {
       networkSpeed: this.getNetworkSpeed(),
       
       // Audio capabilities
-      audioContextSupport: typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined',
+      audioContextSupport: typeof AudioContext !== 'undefined' || typeof (window as any).webkitAudioContext !== 'undefined',
       webAudioFeatures: {
         workletSupport: 'AudioWorklet' in window,
         offlineAudioContext: typeof OfflineAudioContext !== 'undefined',
@@ -474,12 +478,23 @@ export class DeviceOptimizer {
     const targetFps = this.currentProfile.frameRate;
     const avgFps = this.performanceHistory.reduce((sum, f) => sum + f, 0) / this.performanceHistory.length;
     
-    // Performance is significantly below target
-    if (avgFps < targetFps * 0.7 || latency > 100 || memoryUsage > this.currentProfile.maxMemoryUsage) {
+    // Check if performance is poor
+    const isPoorPerformance = avgFps < targetFps * 0.7 || latency > 100 || memoryUsage > this.currentProfile.maxMemoryUsage;
+    
+    if (isPoorPerformance) {
+      this.consecutivePoorPerformance++;
+    } else {
+      this.consecutivePoorPerformance = 0;
+    }
+    
+    // Only degrade if we have sustained poor performance and enough time has passed
+    const timeSinceLastDegradation = Date.now() - this.lastDegradationTime;
+    if (this.consecutivePoorPerformance >= this.requiredPoorPerformanceCount && 
+        timeSinceLastDegradation > this.degradationCooldown) {
       this.degradePerformance();
     }
     
-    // Performance is good, try to improve quality
+    // Performance is good, try to improve quality (less aggressive)
     else if (avgFps > targetFps * 0.95 && latency < 30 && memoryUsage < this.currentProfile.maxMemoryUsage * 0.8) {
       this.improvePerformance();
     }
@@ -491,6 +506,9 @@ export class DeviceOptimizer {
     if (currentIndex > 0) {
       const newProfileName = Object.keys(this.optimizationProfiles)[currentIndex - 1] as OptimizationProfile['name'];
       this.currentProfile = this.optimizationProfiles[newProfileName];
+      
+      this.lastDegradationTime = Date.now();
+      this.consecutivePoorPerformance = 0; // Reset counter
       
       console.log(`🔻 Performance degraded to ${this.currentProfile.name} profile`);
     }

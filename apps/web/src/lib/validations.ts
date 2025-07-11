@@ -34,6 +34,7 @@ export const createProjectSchema = z.object({
   privacy_setting: z.enum(['private', 'unlisted', 'public']).default('private'),
   upload_method: z.enum(['single-audio', 'audio-stems', 'midi-stems']).optional(),
   midi_file_path: z.string().optional(),
+  stems_files: z.array(z.instanceof(File)).optional(),
 })
 
 export const updateProjectSchema = z.object({

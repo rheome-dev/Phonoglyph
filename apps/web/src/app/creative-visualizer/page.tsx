@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Play, Pause, RotateCcw, Zap, Palette, Settings2, Eye, EyeOff, Info, Map } from 'lucide-react';
 import { ThreeVisualizer } from '@/components/midi/three-visualizer';
-import { EffectCarousel } from '@/components/ui/effect-carousel';
+import { EffectsLibrarySidebar, EffectUIData } from '@/components/ui/EffectsLibrarySidebar';
+import { CollapsibleEffectsSidebar } from '@/components/layout/collapsible-effects-sidebar';
 import { MappingEditor } from '@/components/stem-visualization/mapping-editor';
 import { FileSelector } from '@/components/midi/file-selector';
 import { MIDIData, VisualizationSettings, DEFAULT_VISUALIZATION_SETTINGS } from '@/types/midi';
@@ -160,6 +161,8 @@ export default function CreativeVisualizerPage() {
     'midiHud': false,
     'particleNetwork': false
   });
+
+
 
   const [sampleMidiData] = useState<MIDIData>(createSampleMIDIData());
   const stemAudio = useStemAudioController();
@@ -464,11 +467,29 @@ export default function CreativeVisualizerPage() {
   // Check if we're currently loading stems
   const stemLoadingState = availableStems.length > 0 && !stemAudio.stemsLoaded;
 
-  // Effects data for carousel
-  const effects = [
-    { id: 'metaballs', name: 'Metaballs Effect', description: 'Organic, fluid-like visualizations that respond to audio intensity' },
-    { id: 'midiHud', name: 'HUD Effect', description: 'Technical overlay displaying real-time audio analysis and MIDI data' },
-    { id: 'particleNetwork', name: 'Particle Effect', description: 'Dynamic particle systems that react to rhythm and pitch' }
+  // Effects data for new sidebar (with categories and rarity)
+  const effects: EffectUIData[] = [
+    { 
+      id: 'metaballs', 
+      name: 'Metaballs Effect', 
+      description: 'Organic, fluid-like visualizations that respond to audio intensity',
+      category: 'Generative',
+      rarity: 'Rare'
+    },
+    { 
+      id: 'midiHud', 
+      name: 'HUD Effect', 
+      description: 'Technical overlay displaying real-time audio analysis and MIDI data',
+      category: 'Overlays',
+      rarity: 'Common'
+    },
+    { 
+      id: 'particleNetwork', 
+      name: 'Particle Effect', 
+      description: 'Dynamic particle systems that react to rhythm and pitch',
+      category: 'Generative',
+      rarity: 'Mythic'
+    }
   ];
 
   const handleSelectEffect = (effectId: string) => {
@@ -484,6 +505,8 @@ export default function CreativeVisualizerPage() {
       [effectId]: true
     }));
   };
+
+
 
   const handleCloseEffectModal = (effectId: string) => {
     setOpenEffectModals(prev => ({
@@ -548,166 +571,144 @@ export default function CreativeVisualizerPage() {
             projectName={projectData?.name}
           />
         </CollapsibleSidebar>
-        <main className="flex-1 flex flex-col overflow-hidden min-w-0">
-          {/* Project Header */}
-          {projectData && (
-            <div className="px-4 py-3 bg-stone-950/80 border-b border-white/5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => router.push('/dashboard')}
-                    className="text-stone-400 hover:text-white hover:bg-stone-800/50"
+        <main className="flex-1 flex overflow-hidden min-w-0">
+          {/* Main Content Area */}
+          <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+            {/* Top Control Bar */}
+            <div className="p-4 bg-stone-900/50 border-b border-white/10">
+              <div className="flex items-center justify-between min-w-0">
+                <div className="flex items-center gap-3 min-w-0 overflow-hidden">
+                  <Button 
+                    onClick={handlePlayPause} 
+                    size="lg" 
+                    disabled={stemLoadingState}
+                    className={`font-sans text-sm uppercase tracking-wider px-6 py-3 transition-all duration-300 ${
+                      stemLoadingState 
+                        ? 'bg-stone-600 text-stone-400 cursor-not-allowed' 
+                        : 'bg-stone-700 hover:bg-stone-600'
+                    }`}
                   >
-                    ← Back to Dashboard
+                    {stemLoadingState ? (
+                      <>
+                        <div className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-stone-400 border-t-transparent" />
+                        LOADING AUDIO
+                      </>
+                    ) : (
+                      <>
+                        {isPlaying ? <Pause className="h-4 w-4 mr-2" /> : <Play className="h-4 w-4 mr-2" />}
+                        {isPlaying ? 'PAUSE' : 'PLAY'}
+                      </>
+                    )}
                   </Button>
-                  <div className="h-4 w-px bg-stone-600" />
-                  <h1 className="text-lg font-semibold text-white">{projectData.name}</h1>
-                  {projectData.description && (
-                    <span className="text-sm text-stone-400">- {projectData.description}</span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge 
+                  <Button 
                     variant="outline" 
-                    className="text-xs uppercase tracking-wide border-stone-600 text-stone-300"
+                    size="sm" 
+                    disabled={stemLoadingState}
+                    onClick={() => stemAudio.setLooping(!stemAudio.isLooping)}
+                    className={`bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 font-sans text-xs uppercase tracking-wider ${
+                      stemLoadingState 
+                        ? 'opacity-50 cursor-not-allowed' 
+                        : stemAudio.isLooping ? 'bg-emerald-900/20 border-emerald-600 text-emerald-300' : ''
+                    }`}
+                    style={{ borderRadius: '8px' }}
                   >
-                    {projectData.privacy_setting}
-                  </Badge>
+                    🔄 {stemAudio.isLooping ? 'LOOP ON' : 'LOOP OFF'}
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    disabled={stemLoadingState}
+                    onClick={handleReset} 
+                    className={`bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 ${
+                      stemLoadingState ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}
+                  >
+                    <RotateCcw className="h-4 w-4 mr-2" />
+                    RESET
+                  </Button>
+                  
+                  {/* Stats Section - Compact layout */}
+                  <div className="flex items-center gap-1 overflow-hidden">
+                    <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                      {currentTime.toFixed(1)}S / {(midiData || sampleMidiData).file.duration.toFixed(1)}S
+                    </div>
+                    <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                      FPS: {fps}
+                    </div>
+                    {stemAudio.performanceMetrics && (
+                      <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                        LAT: {stemAudio.performanceMetrics.analysisLatency.toFixed(1)}ms
+                      </div>
+                    )}
+                    {stemAudio.deviceProfile && (
+                      <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                        {stemAudio.deviceProfile.toUpperCase()}
+                      </div>
+                    )}
+                    <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                      NOTES: {(midiData || sampleMidiData).tracks.reduce((sum, track) => sum + track.notes.length, 0)}
+                    </div>
+                    {hasStems && (
+                      <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                        STEMS: {availableStems.length}
+                      </div>
+                    )}
+                    <Badge className="bg-emerald-900/80 text-emerald-200 text-xs uppercase tracking-wide px-3 py-1 border border-emerald-700">
+                      <span className="mr-2 h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                      LIVE
+                    </Badge>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => setPerformanceMode(performanceMode === 'master-only' ? 'all-stems' : 'master-only')}
+                    disabled={stemLoadingState}
+                    className={`bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 font-sans text-xs uppercase tracking-wider px-2 py-1 ${
+                      performanceMode === 'master-only' ? 'bg-amber-900/20 border-amber-600 text-amber-300' : ''
+                    }`}
+                    style={{ borderRadius: '6px' }}
+                  >
+                    ⚡ {performanceMode === 'master-only' ? 'MASTER' : 'ALL'}
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => setVisualizerAspectRatio(visualizerAspectRatio === 'mobile' ? 'youtube' : 'mobile')}
+                    className="bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 font-sans text-xs uppercase tracking-wider px-2 py-1"
+                    style={{ borderRadius: '6px' }}
+                  >
+                    📱 {visualizerAspectRatio === 'mobile' ? 'MOB' : 'YT'}
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => setIsMapMode(!isMapMode)} 
+                    disabled={!hasStems}
+                    className="bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 font-sans text-xs uppercase tracking-wider px-2 py-1" 
+                    style={{ borderRadius: '6px' }}
+                  >
+                    {isMapMode ? <Zap className="h-3 w-3 mr-1" /> : <Zap className="h-3 w-3 mr-1" />}
+                    {isMapMode ? 'EXIT' : 'MAP'}
+                  </Button>
+                  
                 </div>
               </div>
             </div>
-          )}
-          {/* Top Control Bar */}
-          <div className="p-4 bg-stone-900/50 border-b border-white/10">
-            <div className="flex items-center justify-between min-w-0">
-              <div className="flex items-center gap-3 min-w-0 overflow-hidden">
-                <Button 
-                  onClick={handlePlayPause} 
-                  size="lg" 
-                  disabled={stemLoadingState}
-                  className={`font-sans text-sm uppercase tracking-wider px-6 py-3 transition-all duration-300 ${
-                    stemLoadingState 
-                      ? 'bg-stone-600 text-stone-400 cursor-not-allowed' 
-                      : 'bg-stone-700 hover:bg-stone-600'
-                  }`}
-                >
-                  {stemLoadingState ? (
-                    <>
-                      <div className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-stone-400 border-t-transparent" />
-                      LOADING AUDIO
-                    </>
-                  ) : (
-                    <>
-                      {isPlaying ? <Pause className="h-4 w-4 mr-2" /> : <Play className="h-4 w-4 mr-2" />}
-                      {isPlaying ? 'PAUSE' : 'PLAY'}
-                    </>
-                  )}
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  disabled={stemLoadingState}
-                  onClick={() => stemAudio.setLooping(!stemAudio.isLooping)}
-                  className={`bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 font-sans text-xs uppercase tracking-wider ${
-                    stemLoadingState 
-                      ? 'opacity-50 cursor-not-allowed' 
-                      : stemAudio.isLooping ? 'bg-emerald-900/20 border-emerald-600 text-emerald-300' : ''
-                  }`}
-                  style={{ borderRadius: '8px' }}
-                >
-                  🔄 {stemAudio.isLooping ? 'LOOP ON' : 'LOOP OFF'}
-                </Button>
-                <Button 
-                  variant="outline" 
-                  disabled={stemLoadingState}
-                  onClick={handleReset} 
-                  className={`bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 ${
-                    stemLoadingState ? 'opacity-50 cursor-not-allowed' : ''
-                  }`}
-                >
-                  <RotateCcw className="h-4 w-4 mr-2" />
-                  RESET
-                </Button>
-                
-                {/* Stats Section - Compact layout */}
-                <div className="flex items-center gap-1 overflow-hidden">
-                  <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                    {currentTime.toFixed(1)}S / {(midiData || sampleMidiData).file.duration.toFixed(1)}S
-                  </div>
-                  <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                    FPS: {fps}
-                  </div>
-                  {stemAudio.performanceMetrics && (
-                    <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                      LAT: {stemAudio.performanceMetrics.analysisLatency.toFixed(1)}ms
-                    </div>
-                  )}
-                  {stemAudio.deviceProfile && (
-                    <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                      {stemAudio.deviceProfile.toUpperCase()}
-                    </div>
-                  )}
-                  <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                    NOTES: {(midiData || sampleMidiData).tracks.reduce((sum, track) => sum + track.notes.length, 0)}
-                  </div>
-                  {hasStems && (
-                    <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                      STEMS: {availableStems.length}
-                    </div>
-                  )}
-                  <Badge className="bg-emerald-900/80 text-emerald-200 text-xs uppercase tracking-wide px-3 py-1 border border-emerald-700">
-                    <span className="mr-2 h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                    LIVE
-                  </Badge>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => setPerformanceMode(performanceMode === 'master-only' ? 'all-stems' : 'master-only')}
-                  disabled={stemLoadingState}
-                  className={`bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 font-sans text-xs uppercase tracking-wider px-2 py-1 ${
-                    performanceMode === 'master-only' ? 'bg-amber-900/20 border-amber-600 text-amber-300' : ''
-                  }`}
-                  style={{ borderRadius: '6px' }}
-                >
-                  ⚡ {performanceMode === 'master-only' ? 'MASTER' : 'ALL'}
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => setVisualizerAspectRatio(visualizerAspectRatio === 'mobile' ? 'youtube' : 'mobile')}
-                  className="bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 font-sans text-xs uppercase tracking-wider px-2 py-1"
-                  style={{ borderRadius: '6px' }}
-                >
-                  📱 {visualizerAspectRatio === 'mobile' ? 'MOB' : 'YT'}
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => setIsMapMode(!isMapMode)} 
-                  disabled={!hasStems}
-                  className="bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 font-sans text-xs uppercase tracking-wider px-2 py-1" 
-                  style={{ borderRadius: '6px' }}
-                >
-                  {isMapMode ? <Zap className="h-3 w-3 mr-1" /> : <Zap className="h-3 w-3 mr-1" />}
-                  {isMapMode ? 'EXIT' : 'MAP'}
-                </Button>
-              </div>
-            </div>
-          </div>
-          {/* Visualizer Area */}
-          <div className="flex-1 overflow-hidden bg-stone-900 relative">
-              <div className="h-full overflow-y-auto px-4">
-                <div className="min-w-0 w-full">
+            
+            {/* Visualizer Area - Full Height Layout */}
+            <div className="flex-1 flex flex-col overflow-hidden bg-stone-900 relative">
+              <div className="flex-1 flex flex-col min-h-0 px-4">
+                {/* Visualizer Container - Takes calculated space */}
+                <div className="flex-shrink-0">
                   <div 
                     className={`relative mx-auto bg-stone-900 rounded-lg overflow-hidden shadow-lg flex items-center justify-center ${
                       visualizerAspectRatio === 'mobile' ? 'max-w-md' : 'max-w-4xl'
                     }`}
-                    style={{ height: '400px' }}
+                    style={{ 
+                      height: 'min(calc(100vh - 350px), 70vh)', // Account for control bar + stem tracks, with max limit
+                      minHeight: '250px'
+                    }}
                   >
                     <ThreeVisualizer
                       midiData={midiData || sampleMidiData}
@@ -722,184 +723,183 @@ export default function CreativeVisualizerPage() {
                       aspectRatio={visualizerAspectRatio}
                     />
                   </div>
-
-                  <div className="mt-4">
-                    <StemWaveformPanel
-                      stems={availableStems}
-                      currentTime={stemAudio.currentTime}
-                      isPlaying={stemAudio.isPlaying}
-                      onSeek={stemAudio.setCurrentTime}
-                      className="bg-gray-800/50 border border-gray-700"
-                    />
-                  </div>
-
-                  {/* Effects Carousel */}
-                  <div className="mt-4 pb-4">
-                    <h3 className="text-lg font-semibold mb-2 text-gray-300">Visual Effects Library</h3>
-                    <p className="text-sm text-gray-400 mb-4">
-                      Drag or scroll to explore effects → Select effects to configure and activate
-                    </p>
-                    <EffectCarousel
-                      effects={effects}
-                      onSelectEffect={handleSelectEffect}
-                      selectedEffects={selectedEffects}
-                    />
-                  </div>
-
-                  {/* Effect Parameter Modals */}
-                  {effects.map((effect, index) => {
-                    const initialPos = {
-                      x: 100 + (index * 50),
-                      y: 100 + (index * 50)
-                    };
-                    
-                    return (
-                      <DraggableModal
-                        key={effect.id}
-                        title={effect.name.replace(' Effect', '')}
-                        isOpen={openEffectModals[effect.id]}
-                        onClose={() => handleCloseEffectModal(effect.id)}
-                        initialPosition={initialPos}
-                      >
-                        <div className="space-y-4">
-                          <div className="text-sm text-gray-300 mb-4">
-                            {effect.description}
-                          </div>
-                          
-                          {/* Effect-specific parameters */}
-                          {effect.id === 'metaballs' && (
-                            <>
-                              <div className="space-y-2">
-                                <Label className="text-white/80 text-xs font-mono">Base Radius</Label>
-                                <Slider
-                                  defaultValue={[0.5]}
-                                  min={0.1}
-                                  max={1.0}
-                                  step={0.1}
-                                  className="w-full"
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label className="text-white/80 text-xs font-mono">Animation Speed</Label>
-                                <Slider
-                                  defaultValue={[1.0]}
-                                  min={0.1}
-                                  max={2.0}
-                                  step={0.1}
-                                  className="w-full"
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label className="text-white/80 text-xs font-mono">Glow Intensity</Label>
-                                <Slider
-                                  defaultValue={[1.5]}
-                                  min={0.5}
-                                  max={3.0}
-                                  step={0.1}
-                                  className="w-full"
-                                />
-                              </div>
-                            </>
-                          )}
-                          
-                          {effect.id === 'midiHud' && (
-                            <>
-                              <div className="flex items-center justify-between">
-                                <Label className="text-white/80 text-xs font-mono">Show Track Info</Label>
-                                <Switch defaultChecked={true} />
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <Label className="text-white/80 text-xs font-mono">Show Velocity</Label>
-                                <Switch defaultChecked={true} />
-                              </div>
-                              <div className="space-y-2">
-                                <Label className="text-white/80 text-xs font-mono">HUD Opacity</Label>
-                                <Slider
-                                  defaultValue={[0.8]}
-                                  min={0.1}
-                                  max={1.0}
-                                  step={0.1}
-                                  className="w-full"
-                                />
-                              </div>
-                            </>
-                          )}
-                          
-                          {effect.id === 'particleNetwork' && (
-                            <>
-                              <div className="space-y-2">
-                                <Label className="text-white/80 text-xs font-mono">Max Particles</Label>
-                                <Slider
-                                  defaultValue={[100]}
-                                  min={50}
-                                  max={200}
-                                  step={10}
-                                  className="w-full"
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label className="text-white/80 text-xs font-mono">Connection Distance</Label>
-                                <Slider
-                                  defaultValue={[2.0]}
-                                  min={1.0}
-                                  max={5.0}
-                                  step={0.1}
-                                  className="w-full"
-                                />
-                              </div>
-                              <div className="space-y-2">
-                                <Label className="text-white/80 text-xs font-mono">Particle Size</Label>
-                                <Slider
-                                  defaultValue={[20]}
-                                  min={10}
-                                  max={50}
-                                  step={5}
-                                  className="w-full"
-                                />
-                              </div>
-                            </>
-                          )}
-                          
-                          {/* Common controls */}
-                          <div className="pt-4 border-t border-gray-600">
-                            <div className="flex items-center justify-between">
-                              <Label className="text-white/80 text-xs font-mono">Effect Enabled</Label>
-                              <Switch 
-                                checked={selectedEffects[effect.id]}
-                                onCheckedChange={(checked) => {
-                                  setSelectedEffects(prev => ({
-                                    ...prev,
-                                    [effect.id]: checked
-                                  }));
-                                }}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </DraggableModal>
-                    );
-                  })}
                 </div>
 
-                {/* Mapping Editor Modal */}
-                {isMapMode && (
-                  <div className="fixed inset-0 bg-black/80 z-50 flex">
-                    <div className="w-1/3 bg-stone-900 border-l border-white/10 overflow-y-auto">
-                      <MappingEditor
-                        currentPreset={currentPreset}
-                        onPresetChange={handlePresetChange}
-                        onMappingUpdate={handleMappingUpdate}
-                        onStemMute={handleStemMute}
-                        onStemSolo={handleStemSolo}
-                        isPlaying={isPlaying}
-                        className="h-full"
-                      />
-                    </div>
-                    <div className="flex-1" />
-                  </div>
-                )}
+                {/* Stem Waveforms - Fixed bottom area */}
+                <div className="flex-shrink-0 mt-4">
+                  <StemWaveformPanel
+                    stems={availableStems}
+                    currentTime={stemAudio.currentTime}
+                    isPlaying={stemAudio.isPlaying}
+                    onSeek={stemAudio.setCurrentTime}
+                    className="bg-gray-800/50 border border-gray-700"
+                  />
+                </div>
               </div>
+            </div>
           </div>
+
+          {/* Right Effects Sidebar */}
+          <CollapsibleEffectsSidebar>
+            <EffectsLibrarySidebar
+              effects={effects}
+              selectedEffects={selectedEffects}
+              onEffectToggle={handleSelectEffect}
+              isVisible={true}
+            />
+          </CollapsibleEffectsSidebar>
+
+          {/* Effect Parameter Modals */}
+            {effects.map((effect, index) => {
+              const initialPos = {
+                x: 100 + (index * 50),
+                y: 100 + (index * 50)
+              };
+              
+              return (
+                <DraggableModal
+                  key={effect.id}
+                  title={effect.name.replace(' Effect', '')}
+                  isOpen={openEffectModals[effect.id]}
+                  onClose={() => handleCloseEffectModal(effect.id)}
+                  initialPosition={initialPos}
+                >
+                  <div className="space-y-4">
+                    <div className="text-sm text-gray-300 mb-4">
+                      {effect.description}
+                    </div>
+                    
+                    {/* Effect-specific parameters */}
+                    {effect.id === 'metaballs' && (
+                      <>
+                        <div className="space-y-2">
+                          <Label className="text-white/80 text-xs font-mono">Base Radius</Label>
+                          <Slider
+                            defaultValue={[0.5]}
+                            min={0.1}
+                            max={1.0}
+                            step={0.1}
+                            className="w-full"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-white/80 text-xs font-mono">Animation Speed</Label>
+                          <Slider
+                            defaultValue={[1.0]}
+                            min={0.1}
+                            max={2.0}
+                            step={0.1}
+                            className="w-full"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-white/80 text-xs font-mono">Glow Intensity</Label>
+                          <Slider
+                            defaultValue={[1.5]}
+                            min={0.5}
+                            max={3.0}
+                            step={0.1}
+                            className="w-full"
+                          />
+                        </div>
+                      </>
+                    )}
+                    
+                    {effect.id === 'midiHud' && (
+                      <>
+                        <div className="flex items-center justify-between">
+                          <Label className="text-white/80 text-xs font-mono">Show Track Info</Label>
+                          <Switch defaultChecked={true} />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <Label className="text-white/80 text-xs font-mono">Show Velocity</Label>
+                          <Switch defaultChecked={true} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-white/80 text-xs font-mono">HUD Opacity</Label>
+                          <Slider
+                            defaultValue={[0.8]}
+                            min={0.1}
+                            max={1.0}
+                            step={0.1}
+                            className="w-full"
+                          />
+                        </div>
+                      </>
+                    )}
+                    
+                    {effect.id === 'particleNetwork' && (
+                      <>
+                        <div className="space-y-2">
+                          <Label className="text-white/80 text-xs font-mono">Max Particles</Label>
+                          <Slider
+                            defaultValue={[100]}
+                            min={50}
+                            max={200}
+                            step={10}
+                            className="w-full"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-white/80 text-xs font-mono">Connection Distance</Label>
+                          <Slider
+                            defaultValue={[2.0]}
+                            min={1.0}
+                            max={5.0}
+                            step={0.1}
+                            className="w-full"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-white/80 text-xs font-mono">Particle Size</Label>
+                          <Slider
+                            defaultValue={[20]}
+                            min={10}
+                            max={50}
+                            step={5}
+                            className="w-full"
+                          />
+                        </div>
+                      </>
+                    )}
+                    
+                    {/* Common controls */}
+                    <div className="pt-4 border-t border-gray-600">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-white/80 text-xs font-mono">Effect Enabled</Label>
+                        <Switch 
+                          checked={selectedEffects[effect.id]}
+                          onCheckedChange={(checked) => {
+                            setSelectedEffects(prev => ({
+                              ...prev,
+                              [effect.id]: checked
+                            }));
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </DraggableModal>
+              );
+            })}
+
+            {/* Mapping Editor Modal */}
+            {isMapMode && (
+              <div className="fixed inset-0 bg-black/80 z-50 flex">
+                <div className="w-1/3 bg-stone-900 border-l border-white/10 overflow-y-auto">
+                  <MappingEditor
+                    currentPreset={currentPreset}
+                    onPresetChange={handlePresetChange}
+                    onMappingUpdate={handleMappingUpdate}
+                    onStemMute={handleStemMute}
+                    onStemSolo={handleStemSolo}
+                    isPlaying={isPlaying}
+                    className="h-full"
+                  />
+                </div>
+                <div className="flex-1" />
+              </div>
+            )}
         </main>
       </div>
     </>

@@ -11,8 +11,9 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { Badge } from "@/components/ui/badge"
 import { createProjectSchema, type CreateProjectInput } from "@/lib/validations"
 import { useToast } from "@/hooks/use-toast"
-import { trpc } from "@/lib/trpc"
+import { useUpload } from "@/hooks/use-upload"
 import { useRouter } from "next/navigation"
+import { trpc } from "@/lib/trpc"
 import { 
   Music, 
   FileAudio, 
@@ -85,14 +86,24 @@ const uploadOptions: UploadOption[] = [
   }
 ]
 
-function StemsUpload({ isLoading, errors }: { isLoading: boolean; errors: any }) {
+function StemsUpload({ 
+  isLoading, 
+  errors, 
+  onFilesChange 
+}: { 
+  isLoading: boolean; 
+  errors: any; 
+  onFilesChange: (files: File[]) => void;
+}) {
   const [files, setFiles] = React.useState<File[]>([]);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [isDragActive, setIsDragActive] = React.useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      setFiles(Array.from(e.target.files));
+      const newFiles = Array.from(e.target.files);
+      setFiles(newFiles);
+      onFilesChange(newFiles);
     }
   };
 
@@ -100,7 +111,9 @@ function StemsUpload({ isLoading, errors }: { isLoading: boolean; errors: any })
     e.preventDefault();
     setIsDragActive(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      setFiles(Array.from(e.dataTransfer.files));
+      const newFiles = Array.from(e.dataTransfer.files);
+      setFiles(newFiles);
+      onFilesChange(newFiles);
     }
   };
 
@@ -263,8 +276,10 @@ export function ProjectCreationModal({ isOpen, onClose, defaultMidiFilePath }: P
   const [selectedMethod, setSelectedMethod] = useState<UploadMethod | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [showProjectForm, setShowProjectForm] = useState(false)
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const { toast } = useToast()
   const router = useRouter()
+  const { addAndUploadFiles } = useUpload()
 
   const {
     register,
@@ -278,6 +293,7 @@ export function ProjectCreationModal({ isOpen, onClose, defaultMidiFilePath }: P
     defaultValues: {
       privacy_setting: 'private' as const,
       midi_file_path: defaultMidiFilePath || '',
+      stems_files: [] as File[],
     }
   })
 
@@ -304,14 +320,96 @@ export function ProjectCreationModal({ isOpen, onClose, defaultMidiFilePath }: P
     }
   })
 
+  const uploadFileMutation = trpc.file.uploadFile.useMutation({
+    onSuccess: (result) => {
+      console.log('File uploaded successfully:', result.fileId)
+    },
+    onError: (error) => {
+      console.error('Upload error:', error)
+      throw error
+    }
+  })
+
+  // Get tRPC utils for query invalidation
+  const utils = trpc.useUtils()
+
   const onSubmit = async (data: any) => {
     try {
       setIsLoading(true)
       console.log('Form submission data:', data)
-      await createProjectMutation.mutateAsync(data as CreateProjectInput)
+      
+      // Create project first
+      const project = await createProjectMutation.mutateAsync(data as CreateProjectInput)
+      console.log('Project created:', project.id)
+      
+      // Upload files if stems method is selected
+      if (selectedMethod === 'stems' && selectedFiles.length > 0) {
+        // Upload files using tRPC mutation with project ID
+        const uploadPromises = selectedFiles.map(async (file) => {
+          // Convert file to base64
+          const base64Data = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = () => {
+              const result = reader.result as string
+              // Remove the data URL prefix
+              const base64 = result.split(',')[1]
+              resolve(base64)
+            }
+            reader.onerror = reject
+            reader.readAsDataURL(file)
+          })
+          
+          // Determine file type
+          const extension = file.name.toLowerCase().split('.').pop()
+          let fileType: 'midi' | 'audio' | 'video' | 'image'
+          
+          if (['mid', 'midi'].includes(extension || '')) {
+            fileType = 'midi'
+          } else if (['mp3', 'wav', 'ogg', 'm4a', 'aac'].includes(extension || '')) {
+            fileType = 'audio'
+          } else if (['mp4', 'mov', 'avi', 'mkv', 'webm'].includes(extension || '')) {
+            fileType = 'video'
+          } else if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(extension || '')) {
+            fileType = 'image'
+          } else {
+            throw new Error(`Unsupported file type: ${extension}`)
+          }
+          
+          return uploadFileMutation.mutateAsync({
+            fileName: file.name,
+            fileType,
+            mimeType: file.type || 'application/octet-stream',
+            fileSize: file.size,
+            fileData: base64Data,
+            projectId: project.id // Pass the project ID
+          })
+        })
+
+        try {
+          const uploadResults = await Promise.all(uploadPromises)
+          const fileIds = uploadResults.map(result => result.fileId)
+          
+          // Invalidate file queries to refresh the sidebar
+          utils.file.getUserFiles.invalidate()
+          
+        } catch (uploadError) {
+          console.error('Upload error:', uploadError)
+          toast({
+            title: "Upload Failed",
+            description: "Some files failed to upload. Please try again.",
+            variant: "destructive",
+          })
+          return
+        }
+      }
+      
     } catch (error) {
       console.error('Form submission error:', error)
-      // Error handled in mutation onError
+      toast({
+        title: "Upload Failed",
+        description: error instanceof Error ? error.message : "Failed to upload files or create project.",
+        variant: "destructive",
+      })
     }
   }
 
@@ -499,9 +597,16 @@ export function ProjectCreationModal({ isOpen, onClose, defaultMidiFilePath }: P
               {selectedMethod === 'single-audio' && (
                 <SingleAudioUpload isLoading={isLoading} onFileChange={() => {}} />
               )}
-              {selectedMethod === 'stems' && (
-                <StemsUpload isLoading={isLoading} errors={errors} />
-              )}
+                              {selectedMethod === 'stems' && (
+                  <StemsUpload 
+                    isLoading={isLoading} 
+                    errors={errors} 
+                    onFilesChange={(files) => {
+                      setSelectedFiles(files);
+                      setValue('stems_files', files);
+                    }} 
+                  />
+                )}
 
               {/* Form Actions */}
               <div className="flex gap-3 pt-4">

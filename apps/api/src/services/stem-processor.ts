@@ -5,6 +5,7 @@ import { spawn } from 'child_process';
 import { randomUUID } from 'crypto';
 import path from 'path';
 import fs from 'fs';
+import { logger } from '../lib/logger';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -148,7 +149,7 @@ export class StemProcessor {
       let errorOutput = '';
 
       spleeter.stdout.on('data', (data) => {
-        console.log(`Spleeter output: ${data}`);
+        logger.log(`Spleeter output: ${data}`);
       });
 
       spleeter.stderr.on('data', (data) => {

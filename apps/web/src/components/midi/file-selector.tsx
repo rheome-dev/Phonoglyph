@@ -228,13 +228,14 @@ export function FileSelector({
   const userFiles = filesData?.files || [];
 
   return (
-    <div className="bg-stone-800/50 p-4 rounded-lg border border-white/10 h-full flex flex-col">
-      <div className="flex items-center justify-between mb-4">
+    <div className="bg-stone-800/50 p-4 rounded-lg border border-white/10 h-full flex flex-col min-h-0">
+      <div className="flex items-center justify-between mb-4 flex-shrink-0">
         <h3 className="text-sm font-semibold uppercase tracking-wider flex items-center gap-2">
             <Users className="h-4 w-4" />
             {projectName ? `${projectName} - Files` : 'File Library'}
         </h3>
-        <div className="flex items-center gap-2">
+        {/* Hidden demo toggle - keep for debugging but don't show */}
+        <div className="hidden items-center gap-2">
             <Switch 
             checked={useDemoData}
             onCheckedChange={onDemoModeChange}
@@ -246,81 +247,94 @@ export function FileSelector({
         </div>
       </div>
 
-      {/* File List */}
-      <div className="flex-1 space-y-2 overflow-y-auto pr-2">
-        {filesLoading && <p className="text-stone-400 text-xs">Loading files...</p>}
-        {filesError && <p className="text-red-400 text-xs">Error loading files.</p>}
-        
-        {!useDemoData && userFiles.length === 0 && !filesLoading && (
-          <div className="text-center py-8 text-stone-400">
-            <FileMusic className="h-8 w-8 mx-auto mb-2 opacity-50" />
-            <p className="text-sm">
-              {projectId ? 'No files in this project yet' : 'No files uploaded yet'}
-            </p>
-            <p className="text-xs mt-1">Upload files to get started</p>
-          </div>
-        )}
-        
-        {!useDemoData && userFiles.map((file: FileMetadata) => (
-          <div
-            key={file.id}
-            className={`p-2 rounded-md cursor-pointer transition-colors ${selectedFileId === file.id ? 'bg-stone-600/80' : 'hover:bg-stone-700/50'}`}
-            onClick={() => file.file_type === 'midi' && onFileSelected(file.id)}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                {getFileIcon(file.file_type)}
-                <span className="font-bold text-sm text-stone-200">{file.file_name}</span>
-              </div>
-              <StatusBadge file={file} />
-              <button onClick={(e) => { e.stopPropagation(); setDeleteFileId(file.id); }} className="ml-2 text-red-500 hover:text-red-700"><Trash2 size={16} /></button>
+      {/* File List with proper scrolling */}
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <div className="h-full overflow-y-auto space-y-2 pr-2">
+          {filesLoading && <p className="text-stone-400 text-xs">Loading files...</p>}
+          {filesError && <p className="text-red-400 text-xs">Error loading files.</p>}
+          
+          {!useDemoData && userFiles.length === 0 && !filesLoading && (
+            <div className="text-center py-8 text-stone-400">
+              <FileMusic className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">
+                {projectId ? 'No files in this project yet' : 'No files uploaded yet'}
+              </p>
+              <p className="text-xs mt-1">Upload files to get started</p>
             </div>
-            <div className="text-xs text-stone-400 mt-1">
-              <span>{formatFileSize(file.file_size)}</span> | <span className="capitalize">{file.file_type}</span> | <span>{file.mime_type}</span>
-            </div>
-          </div>
-        ))}
-        {useDemoData && (
-            <div className={`p-2 rounded-md ${useDemoData ? 'bg-stone-600/80' : ''}`}>
+          )}
+          
+          {!useDemoData && userFiles.map((file: FileMetadata) => (
+            <div
+              key={file.id}
+              className={`p-2 rounded-md cursor-pointer transition-colors flex-shrink-0 ${selectedFileId === file.id ? 'bg-stone-600/80' : 'hover:bg-stone-700/50'}`}
+              onClick={() => file.file_type === 'midi' && onFileSelected(file.id)}
+            >
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <FileMusic className="h-4 w-4" />
-                  <span className="font-bold text-sm text-stone-200">Creative Demo.mid</span>
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  {getFileIcon(file.file_type)}
+                  <span className="font-bold text-sm text-stone-200 truncate">{file.file_name}</span>
                 </div>
-                <div className="parsing-status completed">
-                  <CheckCircle2 className="h-3 w-3" />
-                  Ready
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <StatusBadge file={file} />
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); setDeleteFileId(file.id); }} 
+                    className="text-red-500 hover:text-red-700 transition-colors"
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 </div>
               </div>
-              <div className="text-xs text-stone-400 mt-1">
-                <span>1 KB</span> | <span>MIDI</span> | <span>3 Tracks</span> | <span>29 Notes</span>
+              <div className="text-xs text-stone-400 mt-1 truncate">
+                <span>{formatFileSize(file.file_size)}</span> | <span className="capitalize">{file.file_type}</span> | <span>{file.mime_type}</span>
               </div>
             </div>
-        )}
+          ))}
+          
+          {/* Demo data - only show when useDemoData is true */}
+          {useDemoData && (
+              <div className={`p-2 rounded-md flex-shrink-0 ${useDemoData ? 'bg-stone-600/80' : ''}`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <FileMusic className="h-4 w-4" />
+                    <span className="font-bold text-sm text-stone-200">Creative Demo.mid</span>
+                  </div>
+                  <div className="parsing-status completed">
+                    <CheckCircle2 className="h-3 w-3" />
+                    Ready
+                  </div>
+                </div>
+                <div className="text-xs text-stone-400 mt-1">
+                  <span>1 KB</span> | <span>MIDI</span> | <span>3 Tracks</span> | <span>29 Notes</span>
+                </div>
+              </div>
+          )}
+        </div>
       </div>
 
       {/* Upload Zone */}
       {!useDemoData && (
-        <div 
-          className="mt-4 p-4 border-2 border-dashed border-stone-600 rounded-lg text-center cursor-pointer hover:border-stone-500 hover:bg-stone-700/30 transition-colors"
-          onClick={() => document.getElementById('file-upload-input')?.click()}
-        >
-          <Upload className="h-6 w-6 mx-auto text-stone-500 mb-2" />
-          <h4 className="text-sm font-semibold text-stone-300">Upload Files</h4>
-          <p className="text-xs text-stone-500">MIDI, audio, video, or images</p>
-          <input
-            id="file-upload-input"
-            type="file"
-            multiple
-            accept=".mid,.midi,.mp3,.wav,.ogg,.m4a,.aac,.mp4,.mov,.avi,.mkv,.webm,.jpg,.jpeg,.png,.gif,.bmp,.webp"
-            className="hidden"
-            onChange={(e) => {
-              const files = Array.from(e.target.files || []);
-              if (files.length > 0) {
-                handleFileUpload(files);
-              }
-            }}
-          />
+        <div className="mt-4 flex-shrink-0">
+          <div 
+            className="p-4 border-2 border-dashed border-stone-600 rounded-lg text-center cursor-pointer hover:border-stone-500 hover:bg-stone-700/30 transition-colors"
+            onClick={() => document.getElementById('file-upload-input')?.click()}
+          >
+            <Upload className="h-6 w-6 mx-auto text-stone-500 mb-2" />
+            <h4 className="text-sm font-semibold text-stone-300">Upload Files</h4>
+            <p className="text-xs text-stone-500">MIDI, audio, video, or images</p>
+            <input
+              id="file-upload-input"
+              type="file"
+              multiple
+              accept=".mid,.midi,.mp3,.wav,.ogg,.m4a,.aac,.mp4,.mov,.avi,.mkv,.webm,.jpg,.jpeg,.png,.gif,.bmp,.webp"
+              className="hidden"
+              onChange={(e) => {
+                const files = Array.from(e.target.files || []);
+                if (files.length > 0) {
+                  handleFileUpload(files);
+                }
+              }}
+            />
+          </div>
         </div>
       )}
 

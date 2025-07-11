@@ -204,6 +204,26 @@ export const fileRouter = router({
           })
         }
 
+        // Trigger audio analysis and caching for audio files
+        if (validation.fileType === 'audio') {
+          try {
+            const { AudioAnalyzer } = await import('../services/audio-analyzer');
+            const audioAnalyzer = new AudioAnalyzer();
+            // Use the file name (without extension) as the stem type
+            const stemType = sanitizedFileName.replace(/\.[^/.]+$/, '');
+            await audioAnalyzer.analyzeAndCache(
+              data.id,
+              userId,
+              stemType,
+              fileBuffer
+            );
+            console.log(`✅ Audio analysis and caching complete for file ${sanitizedFileName} (stemType: ${stemType})`);
+          } catch (analysisError) {
+            console.error(`❌ Failed to analyze and cache audio file ${sanitizedFileName}:`, analysisError);
+            // Do not throw, allow upload to succeed even if analysis fails
+          }
+        }
+
         // Process video/image files for metadata and thumbnails
         if (MediaProcessor.requiresProcessing(validation.fileType) && (validation.fileType === 'video' || validation.fileType === 'image')) {
           try {

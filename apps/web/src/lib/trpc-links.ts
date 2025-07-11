@@ -2,6 +2,7 @@ import { httpLink, TRPCLink } from '@trpc/client';
 import type { AppRouter } from '../../../api/src/routers';
 import { supabase } from './supabase';
 import { observable } from '@trpc/server/observable';
+import { guestUserService } from './guest-user';
 
 // Global session cache to avoid multiple calls
 let sessionCache: any = null;
@@ -51,6 +52,12 @@ const authLink: TRPCLink<AppRouter> = () => {
           // Add Authorization header if session exists
           if (session?.access_token) {
             headers['Authorization'] = `Bearer ${session.access_token}`;
+          } else {
+            // If no authenticated session, try to add guest session header
+            const guestUser = guestUserService.getCurrentGuestUser();
+            if (guestUser?.sessionId) {
+              headers['x-guest-session'] = guestUser.sessionId;
+            }
           }
           
           const newOp = {
@@ -63,6 +70,7 @@ const authLink: TRPCLink<AppRouter> = () => {
           
           next(newOp).subscribe(observer);
         } catch (error) {
+          console.warn('Auth link error, attempting request without auth:', error);
           // If there's an error, still try to make the request without auth
           const newOp = { ...op, context: op.context };
           next(newOp).subscribe(observer);
@@ -87,24 +95,42 @@ export const trpcLinks = [
   httpLink({
     url: 'http://localhost:3001/api/trpc',
     fetch: async (url, options) => {
-      // Get the current session
-      const session = await getSession();
-      
-      // Create headers
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        ...(options?.headers as Record<string, string> || {}),
-      };
-      
-      // Add Authorization header if session exists
-      if (session?.access_token) {
-        headers['Authorization'] = `Bearer ${session.access_token}`;
+      try {
+        // Get the current session
+        const session = await getSession();
+        
+        // Create headers
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+          ...(options?.headers as Record<string, string> || {}),
+        };
+        
+        // Add Authorization header if session exists
+        if (session?.access_token) {
+          headers['Authorization'] = `Bearer ${session.access_token}`;
+        } else {
+          // If no authenticated session, try to add guest session header
+          const guestUser = guestUserService.getCurrentGuestUser();
+          if (guestUser?.sessionId) {
+            headers['x-guest-session'] = guestUser.sessionId;
+          }
+        }
+        
+        const response = await fetch(url, { 
+          ...(options || {}), 
+          headers
+        });
+        
+        // Check if the response is ok
+        if (!response.ok) {
+          console.warn(`HTTP ${response.status}: ${response.statusText} for ${url}`);
+        }
+        
+        return response;
+      } catch (error) {
+        console.error('Network error in tRPC request:', error);
+        throw error;
       }
-      
-      return fetch(url, { 
-        ...(options || {}), 
-        headers
-      });
     }
   })
 ];
