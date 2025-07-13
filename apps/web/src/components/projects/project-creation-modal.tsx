@@ -93,17 +93,39 @@ function StemsUpload({
 }: { 
   isLoading: boolean; 
   errors: any; 
-  onFilesChange: (files: File[]) => void;
+  onFilesChange: (files: File[], masterFileName: string | null, stemTypes: Record<string, string>) => void;
 }) {
   const [files, setFiles] = React.useState<File[]>([]);
+  const [masterFileName, setMasterFileName] = React.useState<string | null>(null);
+  const [stemTypes, setStemTypes] = React.useState<Record<string, string>>({});
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [isDragActive, setIsDragActive] = React.useState(false);
+
+  const stemTypeOptions = [
+    { value: 'drums', label: 'Drums' },
+    { value: 'bass', label: 'Bass' },
+    { value: 'vocals', label: 'Vocals' },
+    { value: 'melody', label: 'Melody' },
+  ];
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const newFiles = Array.from(e.target.files);
       setFiles(newFiles);
-      onFilesChange(newFiles);
+      // Auto-select master if only one file
+      if (newFiles.length === 1) setMasterFileName(newFiles[0].name);
+      // Reset stem types for new files
+      const newStemTypes: Record<string, string> = {};
+      newFiles.forEach(f => {
+        // Try to guess stem type from file name
+        const lower = f.name.toLowerCase();
+        if (lower.includes('drum')) newStemTypes[f.name] = 'drums';
+        else if (lower.includes('bass')) newStemTypes[f.name] = 'bass';
+        else if (lower.includes('vocal')) newStemTypes[f.name] = 'vocals';
+        else newStemTypes[f.name] = 'melody';
+      });
+      setStemTypes(newStemTypes);
+      onFilesChange(newFiles, masterFileName, newStemTypes);
     }
   };
 
@@ -113,7 +135,19 @@ function StemsUpload({
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const newFiles = Array.from(e.dataTransfer.files);
       setFiles(newFiles);
-      onFilesChange(newFiles);
+      // Auto-select master if only one file
+      if (newFiles.length === 1) setMasterFileName(newFiles[0].name);
+      // Reset stem types for new files
+      const newStemTypes: Record<string, string> = {};
+      newFiles.forEach(f => {
+        const lower = f.name.toLowerCase();
+        if (lower.includes('drum')) newStemTypes[f.name] = 'drums';
+        else if (lower.includes('bass')) newStemTypes[f.name] = 'bass';
+        else if (lower.includes('vocal')) newStemTypes[f.name] = 'vocals';
+        else newStemTypes[f.name] = 'melody';
+      });
+      setStemTypes(newStemTypes);
+      onFilesChange(newFiles, masterFileName, newStemTypes);
     }
   };
 
@@ -129,6 +163,15 @@ function StemsUpload({
 
   const handleBrowseClick = () => {
     fileInputRef.current?.click();
+  };
+
+  // When masterFileName or stemTypes change, notify parent
+  React.useEffect(() => {
+    onFilesChange(files, masterFileName, stemTypes);
+  }, [files, masterFileName, stemTypes]);
+
+  const handleStemTypeChange = (fileName: string, type: string) => {
+    setStemTypes(prev => ({ ...prev, [fileName]: type }));
   };
 
   return (
@@ -174,15 +217,50 @@ function StemsUpload({
       <ul className="mt-2 space-y-1">
         {files.map((file) => (
           <li key={file.name} className="flex items-center gap-2 text-sm">
-            {file.type.startsWith('audio/') ? '🎵' : (file.name.endsWith('.mid') || file.name.endsWith('.midi')) ? '🎹' : '📄'}
-            {file.name}
+            <input
+              type="radio"
+              name="master-file"
+              checked={masterFileName === file.name}
+              onChange={() => setMasterFileName(file.name)}
+              className="accent-emerald-500"
+              disabled={isLoading}
+            />
+            <span className={masterFileName === file.name ? 'font-bold text-emerald-400' : ''}>
+              {file.type.startsWith('audio/') ? '🎵' : (file.name.endsWith('.mid') || file.name.endsWith('.midi')) ? '🎹' : '📄'}
+              {file.name}
+              {masterFileName === file.name && <span className="ml-2 px-2 py-0.5 bg-emerald-600 text-xs rounded text-white">MASTER</span>}
+            </span>
+            {masterFileName !== file.name && (
+              <>
+                <select
+                  value={stemTypes[file.name] || 'melody'}
+                  onChange={e => handleStemTypeChange(file.name, e.target.value)}
+                  className="ml-2 px-2 py-1 rounded border border-stone-600 bg-stone-900 text-stone-200 text-xs focus:outline-none focus:ring-emerald-400"
+                  disabled={isLoading}
+                >
+                  {stemTypeOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+                <span className="ml-1 text-xs text-stone-400">{stemTypes[file.name] ? stemTypeOptions.find(o => o.value === stemTypes[file.name])?.label : 'Melody'}</span>
+              </>
+            )}
           </li>
         ))}
       </ul>
       <p className="text-xs text-stone-400">You can upload audio stems, MIDI stems, or both.</p>
-      <p className="text-xs text-stone-400">At least two files are required (one stem and the full track)</p>
+      <p className="text-xs text-stone-400">
+        <span className="font-bold text-emerald-400">Step 1:</span> Select the master track with the radio button. <br/>
+        <span className="font-bold text-emerald-400">Step 2:</span> Categorize all other files as stems.
+      </p>
       {errors && errors["stems-files"] && (
         <p className="text-sm text-red-600">{errors["stems-files"].message}</p>
+      )}
+      {!masterFileName && files.length > 0 && (
+        <p className="text-sm text-red-500">Please select a master track.</p>
+      )}
+      {Object.values(stemTypes).filter(Boolean).length !== files.length && files.length > 0 && (
+        <p className="text-sm text-red-500">Please tag each file with a stem type.</p>
       )}
     </div>
   );
@@ -277,6 +355,8 @@ export function ProjectCreationModal({ isOpen, onClose, defaultMidiFilePath }: P
   const [isLoading, setIsLoading] = useState(false)
   const [showProjectForm, setShowProjectForm] = useState(false)
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+  const [masterFileName, setMasterFileName] = useState<string | null>(null)
+  const [stemTypes, setStemTypes] = useState<Record<string, string>>({})
   const { toast } = useToast()
   const router = useRouter()
   const { addAndUploadFiles } = useUpload()
@@ -334,6 +414,14 @@ export function ProjectCreationModal({ isOpen, onClose, defaultMidiFilePath }: P
   const utils = trpc.useUtils()
 
   const onSubmit = async (data: any) => {
+    if (selectedMethod === 'stems' && (!masterFileName || selectedFiles.length < 2 || Object.values(stemTypes).filter(Boolean).length !== selectedFiles.length)) {
+      toast({
+        title: "Missing Tags",
+        description: "You must select a master track, upload at least two files, and tag each file with a stem type.",
+        variant: "destructive",
+      });
+      return;
+    }
     try {
       setIsLoading(true)
       console.log('Form submission data:', data)
@@ -381,7 +469,9 @@ export function ProjectCreationModal({ isOpen, onClose, defaultMidiFilePath }: P
             mimeType: file.type || 'application/octet-stream',
             fileSize: file.size,
             fileData: base64Data,
-            projectId: project.id // Pass the project ID
+            projectId: project.id, // Pass the project ID
+            isMaster: file.name === masterFileName, // Tag master file
+            stemType: stemTypes[file.name] || 'melody' // Tag stem type
           })
         })
 
@@ -598,15 +688,17 @@ export function ProjectCreationModal({ isOpen, onClose, defaultMidiFilePath }: P
                 <SingleAudioUpload isLoading={isLoading} onFileChange={() => {}} />
               )}
                               {selectedMethod === 'stems' && (
-                  <StemsUpload 
-                    isLoading={isLoading} 
-                    errors={errors} 
-                    onFilesChange={(files) => {
-                      setSelectedFiles(files);
-                      setValue('stems_files', files);
-                    }} 
-                  />
-                )}
+                <StemsUpload 
+                  isLoading={isLoading} 
+                  errors={errors} 
+                  onFilesChange={(files, master, types) => {
+                    setSelectedFiles(files);
+                    setMasterFileName(master);
+                    setStemTypes(types);
+                    setValue('stems_files', files);
+                  }} 
+                />
+              )}
 
               {/* Form Actions */}
               <div className="flex gap-3 pt-4">

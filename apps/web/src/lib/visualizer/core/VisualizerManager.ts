@@ -22,6 +22,7 @@ export class VisualizerManager {
   // Audio analysis
   private audioContext: AudioContext | null = null;
   private audioSources: AudioBufferSourceNode[] = [];
+  private currentAudioBuffer: AudioBuffer | null = null;
   
   // Bloom post-processing
   private bloomEffect: BloomEffect | null = null;
@@ -377,14 +378,9 @@ export class VisualizerManager {
   private animate = () => {
     if (!this.isPlaying) return;
     
-    // Debug first few frames
-    if (this.frameCount < 5) {
-      debugLog.log(`🎬 Animate called - frame ${this.frameCount}, effects: ${this.effects.size}, playing: ${this.isPlaying}`);
-    }
-    
     this.animationId = requestAnimationFrame(this.animate);
     
-    // Implement 30fps cap by skipping frames
+    // IMPLEMENT 30FPS CAP - Much more reasonable for audio-visual sync
     const now = performance.now();
     const elapsed = now - this.lastTime;
     const targetFrameTime = 1000 / 30; // 33.33ms for 30fps
@@ -393,11 +389,10 @@ export class VisualizerManager {
       return; // Skip this frame to maintain 30fps cap
     }
     
-    // Emergency performance check - skip frame if last frame took too long
+    // Only skip frames if we're severely behind (emergency performance protection)
     const frameTime = elapsed;
-    if (frameTime > 50) { // If frame takes more than 50ms (20fps), skip next frame
+    if (frameTime > 100) { // If frame takes more than 100ms (10fps), skip next frame
       this.consecutiveSlowFrames++;
-      debugLog.warn(`⚠️ Long frame detected: ${frameTime.toFixed(1)}ms (${this.consecutiveSlowFrames}/${this.maxSlowFrames}), skipping to prevent freeze`);
       
       // Emergency pause if too many consecutive slow frames
       if (this.consecutiveSlowFrames >= this.maxSlowFrames) {
@@ -419,13 +414,6 @@ export class VisualizerManager {
     const deltaTime = Math.min(this.clock.getDelta(), 0.1); // Cap delta time to prevent large jumps
     const currentTime = now;
     
-    // Debug every 120 frames (roughly 4 seconds at 30fps)
-    if (this.frameCount % 120 === 0) {
-      debugLog.log(`🎬 Frame ${this.frameCount}: ${this.effects.size} effects, ${this.scene.children.length} scene children`);
-      debugLog.log(`🎬 Effects map keys:`, Array.from(this.effects.keys()));
-      debugLog.log(`🎬 Effects enabled status:`, Array.from(this.effects.values()).map(e => `${e.name}: ${e.enabled}`));
-    }
-    
     // Update FPS counter
     this.frameCount++;
     if (currentTime - this.lastFPSUpdate > 1000) {
@@ -442,9 +430,9 @@ export class VisualizerManager {
       }
     }
     
-    // Update all enabled effects with throttling for performance
+    // Update all enabled effects with improved performance
     let activeEffectCount = 0;
-    const maxEffectsPerFrame = 3; // Limit concurrent effect updates
+    const maxEffectsPerFrame = 3; // Reduced back to 3 for 30fps
     let updatedEffects = 0;
     
     this.effects.forEach(effect => {
@@ -468,11 +456,6 @@ export class VisualizerManager {
       }
     });
     
-    // Log if we have no active effects (reduced frequency)
-    if (activeEffectCount === 0 && this.frameCount % 120 === 0) {
-      console.warn('⚠️ No active effects found!');
-    }
-    
     // Update bloom effect
     if (this.bloomEffect) {
       const audioData: AudioAnalysisData = this.createMockAudioData();
@@ -491,8 +474,8 @@ export class VisualizerManager {
   
   // Mock data generators (will be replaced with real data)
   private createMockAudioData(): AudioAnalysisData {
-    const frequencies = new Float32Array(256);
-    const timeData = new Float32Array(256);
+    const frequencies = new Array(256);
+    const timeData = new Array(256);
     
     // Generate more realistic frequency data
     for (let i = 0; i < 256; i++) {
@@ -538,12 +521,20 @@ export class VisualizerManager {
   updateEffectParameter(effectId: string, paramName: string, value: any): void {
     const effect = this.effects.get(effectId);
     if (effect && effect.parameters.hasOwnProperty(paramName)) {
+      const oldValue = (effect.parameters as any)[paramName];
       (effect.parameters as any)[paramName] = value;
-      debugLog.log(`🎛️ Updated ${effectId}.${paramName} = ${value}`);
       
+      // REMOVED VERBOSE LOGGING - Only log significant changes or errors
       // If the effect has an updateParameter method, call it for immediate updates
       if (typeof (effect as any).updateParameter === 'function') {
         (effect as any).updateParameter(paramName, value);
+      }
+    } else {
+      // Only log errors, not every parameter update
+      if (!effect) {
+        console.warn(`⚠️ Effect ${effectId} not found`);
+      } else if (!effect.parameters.hasOwnProperty(paramName)) {
+        console.warn(`⚠️ Parameter ${paramName} not found in effect ${effectId}`);
       }
     }
   }

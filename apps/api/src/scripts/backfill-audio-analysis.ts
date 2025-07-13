@@ -49,13 +49,15 @@ async function backfillAudioAnalysis() {
       }
       const arrayBuffer = await fileBuffer.arrayBuffer();
       const nodeBuffer = Buffer.from(arrayBuffer);
-      // Remove this line:
-      // await audioAnalyzer.analyzeAndCache(
-      //   file.id,
-      //   file.user_id,
-      //   'master', // or use file.file_name or another label if needed
-      //   nodeBuffer
-      // );
+      // Analyze and cache the file
+      const { AudioAnalyzer } = await import('../services/audio-analyzer');
+      const audioAnalyzer = new AudioAnalyzer();
+      await audioAnalyzer.analyzeAndCache(
+        file.id,
+        file.user_id,
+        'master', // or use file.file_name or another label if needed
+        nodeBuffer
+      );
       analyzedCount++;
       console.log(`✅ Backfilled analysis for file ${file.file_name} (${file.id})`);
     } catch (err) {

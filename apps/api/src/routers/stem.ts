@@ -64,7 +64,7 @@ export const stemRouter = router({
             const updatedJob = StemSeparator.getJob(initialJob.id);
             if (!updatedJob?.results) return;
 
-            // Upload stems to R2 and analyze them
+            // Upload stems to R2, create file metadata, and analyze them
             const stemUploads = Object.entries(updatedJob.results.stems).map(async ([stemName, stemPath]) => {
               const stemKey = generateS3Key(userId, `${stemName}.${input.config.quality.outputFormat}`, 'audio');
               const uploadUrl = await generateUploadUrl(stemKey, `audio/${input.config.quality.outputFormat}`);
@@ -79,10 +79,39 @@ export const stemRouter = router({
                 },
               });
 
+              // Create file metadata record for the stem
+              const { data: stemFileData, error: stemFileError } = await ctx.supabase
+                .from('file_metadata')
+                .insert({
+                  user_id: userId,
+                  file_name: `${stemName}.${input.config.quality.outputFormat}`,
+                  file_type: 'audio',
+                  mime_type: `audio/${input.config.quality.outputFormat}`,
+                  file_size: stemBuffer.length,
+                  s3_key: stemKey,
+                  s3_bucket: process.env.R2_BUCKET_NAME || 'phonoglyph-storage',
+                  upload_status: 'completed',
+                  processing_status: 'completed',
+                  project_id: fileData.project_id, // Associate with same project
+                })
+                .select('id')
+                .single();
+
+              if (stemFileError) {
+                console.error(`Failed to create file metadata for ${stemName} stem:`, stemFileError);
+                return { [stemName]: stemKey };
+              }
+
               // Analyze the stem and cache the results
               try {
-                // The AudioAnalyzer import was removed, so this block is now empty.
-                // If audio analysis is still needed, it must be re-added or handled differently.
+                const { AudioAnalyzer } = await import('../services/audio-analyzer');
+                const audioAnalyzer = new AudioAnalyzer();
+                await audioAnalyzer.analyzeAndCache(
+                  stemFileData.id, // Use the new stem file metadata ID
+                  userId,
+                  stemName,
+                  stemBuffer
+                );
                 console.log(`✅ Analyzed and cached ${stemName} stem`);
               } catch (analysisError) {
                 console.error(`❌ Failed to analyze ${stemName} stem:`, analysisError);
@@ -197,6 +226,86 @@ export const stemRouter = router({
         );
       } catch (error) {
         console.error('Failed to get batch cached analysis:', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    }),
+
+  // Cache analysis data generated on the client
+  cacheClientSideAnalysis: protectedProcedure
+    .input(z.object({
+      fileMetadataId: z.string(),
+      stemType: z.string(),
+      analysisData: z.record(z.string(), z.array(z.number())),
+      waveformData: z.object({
+        points: z.array(z.number()),
+        sampleRate: z.number(),
+        duration: z.number(),
+        markers: z.array(z.object({
+          time: z.number(),
+          type: z.enum(['beat', 'onset', 'peak', 'drop']),
+          intensity: z.number(),
+          frequency: z.number().optional(),
+        })),
+      }),
+      metadata: z.object({
+        sampleRate: z.number(),
+        duration: z.number(),
+        bufferSize: z.number(),
+        featuresExtracted: z.array(z.string()),
+      }),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { fileMetadataId, stemType, analysisData, waveformData, metadata } = input;
+      const userId = ctx.user.id;
+      const startTime = Date.now();
+
+      try {
+        const { data: existing, error: existingError } = await ctx.supabase
+          .from('audio_analysis_cache')
+          .select('id')
+          .eq('file_metadata_id', fileMetadataId)
+          .eq('stem_type', stemType)
+          .single();
+
+        if (existingError && existingError.code !== 'PGRST116') { // Ignore 'not found' error
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `Error checking for existing analysis: ${existingError.message}` });
+        }
+
+        if (existing) {
+          console.log(`Analysis for file ${fileMetadataId} and stem ${stemType} already exists. Skipping cache.`);
+          return { success: true, cached: false, message: "Analysis already cached." };
+        }
+
+        const { data: cachedAnalysis, error } = await ctx.supabase
+          .from('audio_analysis_cache')
+          .insert({
+            user_id: userId,
+            file_metadata_id: fileMetadataId,
+            stem_type: stemType,
+            analysis_version: '1.1-client', // Mark as client-generated
+            sample_rate: metadata.sampleRate,
+            duration: metadata.duration,
+            buffer_size: metadata.bufferSize,
+            features_extracted: metadata.featuresExtracted,
+            analysis_data: analysisData,
+            waveform_data: waveformData,
+            analysis_duration: Date.now() - startTime,
+          })
+          .select()
+          .single();
+
+        if (error) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `Failed to cache client-side analysis: ${error.message}` });
+        }
+        
+        return { success: true, cached: true, data: cachedAnalysis };
+
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        console.error('Failed to cache client-side analysis:', error);
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: error instanceof Error ? error.message : 'Unknown error',

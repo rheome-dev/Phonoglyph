@@ -126,6 +126,8 @@ export const fileRouter = router({
       fileSize: z.number(),
       fileData: z.string(), // Base64 encoded file data
       projectId: z.string().optional(), // NEW: Associate with project
+      isMaster: z.boolean().optional(), // NEW: Tag as master track
+      stemType: z.string().optional(), // NEW: Tag stem type
     }))
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.user.id
@@ -192,6 +194,8 @@ export const fileRouter = router({
             upload_status: 'completed',
             processing_status: MediaProcessor.requiresProcessing(validation.fileType) ? 'pending' : 'completed',
             project_id: input.projectId, // NEW: Associate with project
+            is_master: input.isMaster || false, // NEW: Store master tag
+            stem_type: input.stemType || null, // NEW: Store stem type
           })
           .select('id')
           .single();
@@ -206,21 +210,20 @@ export const fileRouter = router({
 
         // Trigger audio analysis and caching for audio files
         if (validation.fileType === 'audio') {
-          try {
-            const { AudioAnalyzer } = await import('../services/audio-analyzer');
-            const audioAnalyzer = new AudioAnalyzer();
-            // Use the file name (without extension) as the stem type
-            const stemType = sanitizedFileName.replace(/\.[^/.]+$/, '');
-            await audioAnalyzer.analyzeAndCache(
-              data.id,
-              userId,
-              stemType,
-              fileBuffer
-            );
-            console.log(`✅ Audio analysis and caching complete for file ${sanitizedFileName} (stemType: ${stemType})`);
-          } catch (analysisError) {
-            console.error(`❌ Failed to analyze and cache audio file ${sanitizedFileName}:`, analysisError);
-            // Do not throw, allow upload to succeed even if analysis fails
+          // Instead of synchronous analysis, create a job for the queue worker
+          const { error: jobError } = await ctx.supabase
+            .from('audio_analysis_jobs')
+            .insert({
+              user_id: userId,
+              file_metadata_id: data.id,
+              status: 'pending',
+            });
+
+          if (jobError) {
+            // Log the error but don't block the upload from completing
+            console.error(`❌ Failed to create audio analysis job for file ${sanitizedFileName}:`, jobError);
+          } else {
+            console.log(`✅ Audio analysis job queued for file ${sanitizedFileName}`);
           }
         }
 
@@ -356,7 +359,68 @@ export const fileRouter = router({
       }
     }),
 
-  // List user's files - EXTENDED
+  // Save audio analysis data from the client-side worker
+  saveAudioAnalysis: protectedProcedure
+    .input(z.object({
+      fileId: z.string(),
+      analysisData: z.any(), // In a real app, this should be a strict Zod schema
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { fileId, analysisData } = input;
+      const userId = ctx.user.id;
+
+      try {
+        // First, verify that the user has access to this file
+        const { data: file, error: fileError } = await ctx.supabase
+          .from('file_metadata')
+          .select('id, user_id, stem_type')
+          .eq('id', fileId)
+          .single();
+
+        if (fileError || !file) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found.' });
+        }
+
+        if (file.user_id !== userId) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'You do not have access to this file.' });
+        }
+
+        // Save the analysis data
+        const { error: saveError } = await ctx.supabase
+          .from('audio_analysis_cache')
+          .insert({
+            file_metadata_id: fileId,
+            user_id: userId,
+            stem_type: file.stem_type || 'master',
+            analysis_data: analysisData,
+            // Add other relevant fields from your analysis data
+          });
+
+        if (saveError) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: `Failed to save analysis data: ${saveError.message}`,
+          });
+        }
+        
+        // Update the file's processing status
+        await ctx.supabase
+          .from('file_metadata')
+          .update({ processing_status: 'completed' })
+          .eq('id', fileId);
+
+        return { success: true };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+        console.error('Error saving audio analysis:', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'An unexpected error occurred while saving the analysis.',
+        });
+      }
+    }),
+
+  // Get a list of files for the current user
   getUserFiles: protectedProcedure
     .input(z.object({
       fileType: z.enum(['midi', 'audio', 'video', 'image', 'all']).optional().default('all'), // EXTENDED

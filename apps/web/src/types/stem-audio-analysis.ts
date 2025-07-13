@@ -66,3 +66,13 @@ export interface AnalysisConfig {
   quality: 'low' | 'medium' | 'high';
   enableCrossStemAnalysis: boolean;
 }
+
+/**
+ * Represents the detailed, time-series audio analysis data for a single track.
+ * This is typically generated on the client-side by an analysis worker.
+ * The keys are feature names (e.g., "rms", "spectralCentroid", "mfcc_0").
+ * The values are Float32Array containing the value of that feature for each analysis frame.
+ */
+export interface AudioAnalysisDataForTrack {
+  [feature: string]: Float32Array;
+}

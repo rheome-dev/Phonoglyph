@@ -327,7 +327,15 @@ export class MetaballsEffect implements VisualEffect {
 
   update(deltaTime: number, audioData: AudioAnalysisData, midiData: LiveMIDIData): void {
     if (!this.uniforms) return;
-    
+
+    // Generic: sync all parameters to uniforms
+    for (const key in this.parameters) {
+      const uniformKey = 'u' + key.charAt(0).toUpperCase() + key.slice(1);
+      if (this.uniforms[uniformKey]) {
+        this.uniforms[uniformKey].value = this.parameters[key];
+      }
+    }
+
     // Update time
     this.uniforms.uTime.value += deltaTime * this.parameters.animationSpeed;
 

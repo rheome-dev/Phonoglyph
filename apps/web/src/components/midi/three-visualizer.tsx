@@ -12,11 +12,12 @@ import { MidiHudEffect } from '@/lib/visualizer/effects/MidiHudEffect';
 import { ParticleNetworkEffect } from '@/lib/visualizer/effects/ParticleNetworkEffect';
 import { MIDIData, VisualizationSettings } from '@/types/midi';
 import { VisualizerConfig, LiveMIDIData, AudioAnalysisData, VisualEffect } from '@/types/visualizer';
-import { DraggableModal } from '@/components/ui/draggable-modal';
+import { PortalModal } from '@/components/ui/portal-modal';
 import { EffectCarousel } from '@/components/ui/effect-carousel';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { DroppableParameter } from '@/components/ui/droppable-parameter';
 
 interface ThreeVisualizerProps {
   midiData: MIDIData;
@@ -27,9 +28,19 @@ interface ThreeVisualizerProps {
   onSettingsChange: (settings: VisualizationSettings) => void;
   onFpsUpdate?: (fps: number) => void;
   className?: string;
-  selectedEffects: Record<string, boolean>; // NEW PROP
-  audioAnalysisData?: any; // Enhanced audio analysis data
-  aspectRatio?: 'mobile' | 'youtube'; // NEW PROP
+  selectedEffects: Record<string, boolean>;
+  onSelectedEffectsChange: (updater: (prev: Record<string, boolean>) => Record<string, boolean>) => void;
+  aspectRatio?: 'mobile' | 'youtube';
+  // Modal and mapping props
+  openEffectModals: Record<string, boolean>;
+  onCloseEffectModal: (effectId: string) => void;
+  mappings: Record<string, string | null>;
+  featureNames: Record<string, string>;
+  onMapFeature: (parameterId: string, featureId: string) => void;
+  onUnmapFeature: (parameterId: string) => void;
+  activeSliderValues: Record<string, number>;
+  setActiveSliderValues: React.Dispatch<React.SetStateAction<Record<string, number>>>;
+  visualizerRef?: React.RefObject<any>;
 }
 
 export function ThreeVisualizer({
@@ -41,14 +52,34 @@ export function ThreeVisualizer({
   onSettingsChange,
   onFpsUpdate,
   className,
-  selectedEffects, // NEW PROP
-  audioAnalysisData, // Enhanced audio analysis data
-  aspectRatio // NEW PROP
+  selectedEffects,
+  onSelectedEffectsChange,
+  aspectRatio,
+  openEffectModals,
+  onCloseEffectModal,
+  mappings,
+  featureNames,
+  onMapFeature,
+  onUnmapFeature,
+  activeSliderValues,
+  setActiveSliderValues,
+  visualizerRef: externalVisualizerRef
 }: ThreeVisualizerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const visualizerRef = useRef<VisualizerManager | null>(null);
+  const internalVisualizerRef = useRef<VisualizerManager | null>(null);
+  
   const [isInitialized, setIsInitialized] = useState(false);
+  
+  // Forward the ref to parent component
+  React.useImperativeHandle(externalVisualizerRef, () => {
+    console.log('🎛️ Visualizer ref requested:', {
+      hasInternalRef: !!internalVisualizerRef.current,
+      isInitialized,
+      availableEffects: internalVisualizerRef.current?.getAllEffects?.()?.map((e: any) => e.id) || []
+    });
+    return internalVisualizerRef.current;
+  }, [isInitialized]);
   const [fps, setFPS] = useState(60);
   const [showControls, setShowControls] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -60,23 +91,15 @@ export function ThreeVisualizer({
     waveforms: false
   });
 
-  const [openModals, setOpenModals] = useState<Record<string, boolean>>({
-    metaballs: false,
-    midiHud: false,
-    particleNetwork: false,
-  });
-
   const [availableEffects] = useState([
     { id: 'metaballs', name: 'Metaballs Effect', description: 'Ray marching-based fluid spheres that respond to MIDI notes with organic morphing and droplet-like behavior using SDFs.' },
     { id: 'midiHud', name: 'MIDI HUD Effect', description: 'Visual effects react to note velocity, track activity, and frequency content for dynamic color and motion responses.' },
     { id: 'particleNetwork', name: 'Particle Network Effect', description: 'Plugin-based architecture allows infinite visual effects to be added as creative coding modules and shaders.' }
   ]);
 
-  const [activeSliderValues, setActiveSliderValues] = useState<Record<string, number>>({});
-
   // Initialize Three.js visualizer
   const initializeVisualizer = useCallback(() => {
-    if (!canvasRef.current || !containerRef.current || visualizerRef.current) return;
+    if (!canvasRef.current || !containerRef.current || internalVisualizerRef.current) return;
 
     const canvas = canvasRef.current;
     const container = containerRef.current;
@@ -132,7 +155,7 @@ export function ThreeVisualizer({
         canvasWidth: Math.round(canvasWidth), 
         canvasHeight: Math.round(canvasHeight) 
       });
-      visualizerRef.current = new VisualizerManager(canvas, config);
+      internalVisualizerRef.current = new VisualizerManager(canvas, config);
       debugLog.log('✅ VisualizerManager created');
       
       // Add all available effects to the visualizer
@@ -140,15 +163,20 @@ export function ThreeVisualizer({
       const hud = new MidiHudEffect();
       const particles = new ParticleNetworkEffect();
       
-      visualizerRef.current.addEffect(metaballs);
-      visualizerRef.current.addEffect(hud);
-      visualizerRef.current.addEffect(particles);
+      internalVisualizerRef.current.addEffect(metaballs);
+      internalVisualizerRef.current.addEffect(hud);
+      internalVisualizerRef.current.addEffect(particles);
       
       debugLog.log('🎨 Effects added to visualizer');
       
       // Don't start the visualizer immediately - wait for play button
       setIsInitialized(true);
       debugLog.log('✅ Visualizer initialization complete');
+      console.log('🎛️ Visualizer initialized successfully:', {
+        hasRef: !!internalVisualizerRef.current,
+        availableEffects: internalVisualizerRef.current?.getAllEffects?.()?.map((e: any) => e.id) || [],
+        canvasSize: { width: canvas.width, height: canvas.height }
+      });
 
       // Force an initial resize so the renderer matches the container dimensions
       setTimeout(() => {
@@ -244,34 +272,34 @@ export function ThreeVisualizer({
 
   // Update visualizer with MIDI data and enhanced audio analysis
   useEffect(() => {
-    if (!visualizerRef.current || !isInitialized) return;
+    if (!internalVisualizerRef.current || !isInitialized) return;
 
     const liveMIDI = convertToLiveMIDI(midiData, currentTime);
     
-    // Use enhanced audio analysis data if available, otherwise fall back to generated data
-    const audioData = audioAnalysisData || generateAudioData(midiData, currentTime);
+    // Fall back to generated data, as real-time analysis is now handled by the parent page
+    const audioData = generateAudioData(midiData, currentTime);
     
-    visualizerRef.current.updateMIDIData(liveMIDI);
-    visualizerRef.current.updateAudioData(audioData);
-  }, [midiData, currentTime, isInitialized, audioAnalysisData, convertToLiveMIDI, generateAudioData]);
+    internalVisualizerRef.current.updateMIDIData(liveMIDI);
+    internalVisualizerRef.current.updateAudioData(audioData);
+  }, [midiData, currentTime, isInitialized, generateAudioData, convertToLiveMIDI]);
 
   // Handle play/pause
   useEffect(() => {
-    if (!visualizerRef.current) return;
+    if (!internalVisualizerRef.current) return;
 
     if (isPlaying) {
-      visualizerRef.current.play();
+      internalVisualizerRef.current.play();
     } else {
-      visualizerRef.current.pause();
+      internalVisualizerRef.current.pause();
     }
   }, [isPlaying]);
 
   // Monitor FPS (reduced frequency)
   useEffect(() => {
-    if (!visualizerRef.current) return;
+    if (!internalVisualizerRef.current) return;
 
     const interval = setInterval(() => {
-              const currentFps = visualizerRef.current?.getFPS() || 0;
+              const currentFps = internalVisualizerRef.current?.getFPS() || 0;
         setFPS(currentFps);
         onFpsUpdate?.(currentFps);
     }, 2000); // Reduced from 1000ms to 2000ms
@@ -287,37 +315,26 @@ export function ThreeVisualizer({
 
   // Effect enabling/disabling logic
   useEffect(() => {
-    if (!visualizerRef.current) return;
+    if (!internalVisualizerRef.current) return;
     
-    const allEffects = visualizerRef.current.getAllEffects();
+    const allEffects = internalVisualizerRef.current.getAllEffects();
     debugLog.log('🎨 Effect carousel selection changed:', selectedEffects);
-    debugLog.log('🎨 Available effects:', allEffects.map(e => ({ id: e.id, name: e.name, enabled: e.enabled })));
+    debugLog.log('🎨 Available effects:', allEffects.map((e: any) => ({ id: e.id, name: e.name, enabled: e.enabled })));
     
-    allEffects.forEach(effect => {
+    allEffects.forEach((effect: any) => {
       const shouldBeEnabled = selectedEffects[effect.id];
       debugLog.log(`🎨 Effect ${effect.id}: ${effect.enabled ? 'enabled' : 'disabled'} -> ${shouldBeEnabled ? 'enabling' : 'disabling'}`);
       
       if (shouldBeEnabled) {
-        visualizerRef.current!.enableEffect(effect.id);
+        internalVisualizerRef.current!.enableEffect(effect.id);
       } else {
-        visualizerRef.current!.disableEffect(effect.id);
+        internalVisualizerRef.current!.disableEffect(effect.id);
       }
     });
   }, [selectedEffects]);
 
-  const toggleModal = (effectId: string) => {
-    // Always toggle the modal state immediately
-    setOpenModals(prev => ({
-      ...prev,
-      [effectId]: !prev[effectId]
-    }));
-    
-    // Also toggle the effect
-    // toggleEffect(effectId); // This line is removed as per the new_code
-  };
-
   const handleParameterChange = (effectId: string, paramName: string, value: any) => {
-    visualizerRef.current?.updateEffectParameter(effectId, paramName, value);
+    internalVisualizerRef.current?.updateEffectParameter(effectId, paramName, value);
     if (typeof value === 'number') {
       const paramKey = `${effectId}-${paramName}`;
       setActiveSliderValues(prev => ({...prev, [paramKey]: value}));
@@ -344,138 +361,124 @@ export function ThreeVisualizer({
   return (
     <div className={cn("relative w-full h-full", className)} ref={containerRef}>
       <canvas ref={canvasRef} className="absolute top-0 left-0 w-full h-full" />
-      
-      {/* Modals are now rendered within the full-width edit canvas */}
-      {availableEffects.map((effect, index) => {
-        // Center the modals with slight offsets so they don't overlap
-        const positions = [
-          { x: 50, y: 100 },   // Metaballs - top left
-          { x: 400, y: 100 },  // MIDI HUD - top right  
-          { x: 200, y: 300 },  // Particle Network - center
-        ];
-        const initialPos = positions[index % positions.length];
-        
-        return (
-          <DraggableModal
-            key={effect.id}
-            title={effect.name.replace('MIDI ', '').replace(' Overlay', '').replace(' Effect', '')}
-            isOpen={openModals[effect.id]}
-            onClose={() => toggleModal(effect.id)}
-            initialPosition={initialPos}
-          >
-            <div className="space-y-4">
-              {(() => {
-                const activeEffect = visualizerRef.current?.getAllEffects().find((e: VisualEffect) => e.id === effect.id);
-                if (!activeEffect) {
-                  return (
-                    <div className="text-white/60 text-xs font-mono text-center py-4">
-                      Effect not active.
-                    </div>
-                  );
-                }
-                
-                // Sort parameters to show booleans first
-                const sortedParams = Object.entries(activeEffect.parameters).sort(([, a], [, b]) => {
-                  if (typeof a === 'boolean' && typeof b !== 'boolean') return -1;
-                  if (typeof a !== 'boolean' && typeof b === 'boolean') return 1;
-                  return 0;
-                });
 
-                if (sortedParams.length === 0) {
-                  return (
-                    <div className="text-white/60 text-xs font-mono text-center py-4">
-                      No configurable parameters.
-                    </div>
-                  );
-                }
-
-                return sortedParams.map(([paramName, value]) => {
-                  if (typeof value === 'boolean') {
-                    return (
-                      <div key={paramName} className="flex items-center justify-between">
-                        <Label className="text-white/80 text-xs font-mono">{paramName}</Label>
-                        <Switch
-                          checked={value}
-                          onCheckedChange={(checked: boolean) => handleParameterChange(effect.id, paramName, checked)}
-                        />
-                      </div>
-                    )
-                  }
-                  if (typeof value === 'number') {
-                    const paramKey = `${effect.id}-${paramName}`;
-                    const displayValue = activeSliderValues[paramKey] ?? value;
-
-                    // Special handling for smoothingFactor slider
-                    if (paramName === 'smoothingFactor') {
+        {/* Modals are now rendered within the full-width edit canvas */}
+        {Object.entries(openEffectModals).map(([effectId, isOpen], index) => {
+          if (!isOpen) return null;
+          const effectInstance = internalVisualizerRef.current?.getAllEffects().find((e: any) => e.id === effectId);
+          if (!effectInstance) return null;
+          const sortedParams = Object.entries(effectInstance.parameters).sort(([, a], [, b]) => {
+            if (typeof a === 'boolean' && typeof b !== 'boolean') return -1;
+            if (typeof a !== 'boolean' && typeof b === 'boolean') return 1;
+            return 0;
+          });
+          const initialPos = {
+            x: 100 + (index * 50),
+            y: 100 + (index * 50)
+          };
+          return (
+            <PortalModal
+              key={effectId}
+              title={effectInstance.name.replace(' Effect', '')}
+              isOpen={isOpen}
+              onClose={() => onCloseEffectModal(effectId)}
+              initialPosition={initialPos}
+              bounds="#editor-bounds"
+            >
+              <div className="space-y-4">
+                <div className="text-sm text-white/80 mb-4">{effectInstance.description}</div>
+                {sortedParams.length === 0 ? (
+                  <div className="text-white/60 text-xs font-mono text-center py-4">No configurable parameters.</div>
+                ) : (
+                  sortedParams.map(([paramName, value]) => {
+                    if (typeof value === 'boolean') {
                       return (
-                        <div key={paramKey} className="space-y-2">
-                          <Label className="text-white/80 text-xs font-mono flex items-center justify-between">
-                            <span>{paramName}</span>
-                            <span className="ml-2 text-white/60">{displayValue.toFixed(2)}</span>
-                          </Label>
-                          <Slider
-                            value={[displayValue]}
-                            onValueChange={([val]) => {
-                              setActiveSliderValues(prev => ({ ...prev, [paramKey]: val }));
-                              handleParameterChange(effect.id, paramName, val);
-                            }}
-                            min={0.1}
-                            max={5.0}
-                            step={0.01}
+                        <div key={paramName} className="flex items-center justify-between">
+                          <Label className="text-white/80 text-xs font-mono">{paramName}</Label>
+                          <Switch
+                            checked={value}
+                            onCheckedChange={(checked) => handleParameterChange(effectId, paramName, checked)}
                           />
                         </div>
                       );
                     }
-                    // Default for other numeric sliders
-                    return (
-                      <div key={paramKey} className="space-y-2">
-                        <Label className="text-white/80 text-xs font-mono">{paramName}</Label>
-                        <Slider
-                          value={[displayValue]}
-                          onValueChange={([val]) => {
-                            setActiveSliderValues(prev => ({ ...prev, [paramKey]: val }));
-                            handleParameterChange(effect.id, paramName, val);
-                          }}
-                          min={0}
-                          max={getSliderMax(paramName)}
-                          step={getSliderStep(paramName)}
-                        />
-                      </div>
-                    );
-                  }
-                  if ((paramName === 'highlightColor' || paramName === 'particleColor') && Array.isArray(value)) {
-                    // Show a color input for color array parameters
-                    const displayName = paramName === 'highlightColor' ? 'Highlight Color' : 'Particle Color';
-                    return (
-                      <div key={paramName} className="space-y-2">
-                        <Label className="text-white/90 text-sm font-medium flex items-center justify-between">
-                          {displayName}
-                          <span className="ml-2 w-6 h-6 rounded-full border border-white/40 inline-block" style={{ background: `rgb(${value.map((v: number) => Math.round(v * 255)).join(',')})` }} />
-                        </Label>
-                        <input
-                          type="color"
-                          value={`#${value.map((v: number) => Math.round(v * 255).toString(16).padStart(2, '0')).join('')}`}
-                          onChange={e => {
-                            const hex = e.target.value;
-                            const rgb = [
-                              parseInt(hex.slice(1, 3), 16) / 255,
-                              parseInt(hex.slice(3, 5), 16) / 255,
-                              parseInt(hex.slice(5, 7), 16) / 255
-                            ];
-                            handleParameterChange(effect.id, paramName, rgb);
-                          }}
-                          className="w-12 h-8 rounded border border-white/30 bg-transparent cursor-pointer"
-                        />
-                      </div>
-                    );
-                  }
-                  return null;
-                });
-              })()}
-            </div>
-          </DraggableModal>
-        )
-      })}
+                    if (typeof value === 'number') {
+                      const paramKey = `${effectId}-${paramName}`;
+                      const mappedFeatureId = mappings[paramKey];
+                      const mappedFeatureName = mappedFeatureId ? featureNames[mappedFeatureId] : undefined;
+                      return (
+                        <DroppableParameter
+                          key={paramKey}
+                          parameterId={paramKey}
+                          label={paramName}
+                          mappedFeatureId={mappedFeatureId}
+                          mappedFeatureName={mappedFeatureName}
+                          onFeatureDrop={onMapFeature}
+                          onFeatureUnmap={onUnmapFeature}
+                          className="mb-2"
+                          dropZoneStyle="inlayed"
+                          showTagOnHover
+                        >
+                          <Slider
+                            value={[activeSliderValues[paramKey] ?? value]}
+                            onValueChange={([val]) => {
+                              setActiveSliderValues(prev => ({ ...prev, [paramKey]: val }));
+                              handleParameterChange(effectId, paramName, val);
+                            }}
+                            min={0}
+                            max={getSliderMax(paramName)}
+                            step={getSliderStep(paramName)}
+                            className="w-full"
+                          />
+                        </DroppableParameter>
+                      );
+                    }
+                    if ((paramName === 'highlightColor' || paramName === 'particleColor') && Array.isArray(value)) {
+                      const displayName = paramName === 'highlightColor' ? 'Highlight Color' : 'Particle Color';
+                      return (
+                        <div key={paramName} className="space-y-2">
+                          <Label className="text-white/90 text-sm font-medium flex items-center justify-between">
+                            {displayName}
+                            <span className="ml-2 w-6 h-6 rounded-full border border-white/40 inline-block" style={{ background: `rgb(${value.map((v) => Math.round(v * 255)).join(',')})` }} />
+                          </Label>
+                          <input
+                            type="color"
+                            value={`#${value.map((v) => Math.round(v * 255).toString(16).padStart(2, '0')).join('')}`}
+                            onChange={e => {
+                              const hex = e.target.value;
+                              const rgb = [
+                                parseInt(hex.slice(1, 3), 16) / 255,
+                                parseInt(hex.slice(3, 5), 16) / 255,
+                                parseInt(hex.slice(5, 7), 16) / 255
+                              ];
+                              handleParameterChange(effectId, paramName, rgb);
+                            }}
+                            className="w-12 h-8 rounded border border-white/30 bg-transparent cursor-pointer"
+                          />
+                        </div>
+                      );
+                    }
+                    return null;
+                  })
+                )}
+                <div className="pt-4 border-t border-white/20">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-white/80 text-xs font-mono">Effect Enabled</Label>
+                    <Switch 
+                      checked={selectedEffects[effectId]}
+                      onCheckedChange={(checked) => {
+                        onSelectedEffectsChange(prev => ({
+                          ...prev,
+                          [effectId]: checked
+                        }));
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </PortalModal>
+          );
+        })}
     </div>
   );
 }
@@ -490,11 +493,11 @@ function ErrorDisplay({ message }: { message: string }) {
   return (
     <div className="absolute inset-0 flex items-center justify-center bg-red-900/50 z-50">
       <Card className="bg-red-800/80 text-white p-4 max-w-md">
-        <h3 className="text-lg font-semibold">An Error Occurred</h3>
-        <p className="text-sm">{message}</p>
-        <Button onClick={() => window.location.reload()} variant="secondary" className="mt-4">
-          Refresh Page
-        </Button>
+      <h3 className="text-lg font-semibold">An Error Occurred</h3>
+      <p className="text-sm">{message}</p>
+      <Button onClick={() => window.location.reload()} variant="secondary" className="mt-4">
+        Refresh Page
+      </Button>
       </Card>
     </div>
   );
@@ -516,17 +519,15 @@ function Canvas({ canvasRef }: { canvasRef: React.RefObject<HTMLCanvasElement> }
   return <canvas ref={canvasRef} className="absolute top-0 left-0 w-full h-full" />;
 }
 
-const getSliderMax = (paramName: string) => {
+// Utility: getSliderMax for effect parameter sliders
+function getSliderMax(paramName: string) {
   switch (paramName) {
-    case 'baseRadius': return 1;
-    case 'animationSpeed': return 2;
-    case 'noiseIntensity': return 5;
-    case 'glowIntensity': return 3;
-    case 'strength': return 3;
-    case 'radius': return 2;
-    case 'threshold': return 1;
-    case 'maxParticles': return 200;
-    case 'connectionDistance': return 5;
+    case 'animationSpeed': return 5.0;
+    case 'noiseIntensity': return 2.0;
+    case 'glowIntensity': return 2.0;
+    case 'strength': return 2.0;
+    case 'radius': return 2.0;
+    case 'threshold': return 1.0;
     case 'particleLifetime': return 10;
     case 'particleSize': return 50;
     case 'glowSoftness': return 5;
@@ -534,7 +535,8 @@ const getSliderMax = (paramName: string) => {
   }
 }
 
-const getSliderStep = (paramName: string) => {
+// Utility: getSliderStep for effect parameter sliders
+function getSliderStep(paramName: string) {
   switch (paramName) {
     case 'animationSpeed': return 0.05;
     case 'noiseIntensity': return 0.1;

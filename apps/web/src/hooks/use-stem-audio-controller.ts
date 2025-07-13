@@ -1,6 +1,4 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
-import { AudioProcessor } from '@/lib/audio-processor';
-import { AudioWorkerManager } from '@/lib/audio-worker-manager';
 import { PerformanceMonitor } from '@/lib/performance-monitor';
 import { DeviceOptimizer } from '@/lib/device-optimizer';
 import { FallbackSystem } from '@/lib/fallback-system';
@@ -12,6 +10,7 @@ interface Stem {
   id: string;
   url: string;
   label?: string;
+  isMaster: boolean;
 }
 
 interface StemFeatures {
@@ -26,10 +25,11 @@ interface UseStemAudioController {
   featuresByStem: StemFeatures;
   currentTime: number;
   setCurrentTime: (t: number) => void;
-  loadStems: (stems: Stem[]) => Promise<void>;
+  loadStems: (stems: Stem[], onDecode?: (stemId: string, buffer: AudioBuffer) => void) => Promise<void>;
   clearStems: () => void;
   setStemVolume: (stemId: string, volume: number) => void;
   getStemVolume: (stemId: string) => number;
+  testAudioOutput: () => Promise<void>;
   performanceMetrics: PerformanceMetrics;
   deviceProfile: string;
   fallbackState: any;
@@ -37,6 +37,11 @@ interface UseStemAudioController {
   stemsLoaded: boolean;
   isLooping: boolean;
   setLooping: (looping: boolean) => void;
+  soloedStems: Set<string>;
+  toggleStemSolo: (stemId: string) => void;
+  getAudioLatency: () => number;
+  getAudioContextTime: () => number;
+  scheduledStartTimeRef: React.MutableRefObject<number>;
 }
 
 export function useStemAudioController(): UseStemAudioController {
@@ -50,7 +55,9 @@ export function useStemAudioController(): UseStemAudioController {
   const [workerSetupComplete, setWorkerSetupComplete] = useState(false);
   const loadingRef = useRef(false);
   const [isLooping, setIsLooping] = useState(true); // Default to looping
-  
+  const [soloedStems, setSoloedStems] = useState<Set<string>>(new Set());
+  const masterStemIdRef = useRef<string | null>(null);
+
   // Track which stems have finished playing
   const finishedStemsRef = useRef<Set<string>>(new Set());
 
@@ -60,6 +67,7 @@ export function useStemAudioController(): UseStemAudioController {
   const audioSourcesRef = useRef<Record<string, AudioBufferSourceNode>>({});
   const gainNodesRef = useRef<Record<string, GainNode>>({});
   const startTimeRef = useRef(0);
+  const scheduledStartTimeRef = useRef(0); // Scheduled start time for precise sync
   const pausedTimeRef = useRef(0);
   const timeUpdateIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isIntentionallyStoppingRef = useRef(false);
@@ -78,6 +86,22 @@ export function useStemAudioController(): UseStemAudioController {
       try {
         // Create AudioContext
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        
+        // Log initial audio context state
+        console.log('🎵 Audio context created with state:', audioContextRef.current.state);
+        console.log('🎵 Audio context sample rate:', audioContextRef.current.sampleRate);
+        
+        // Try to resume immediately if possible
+        if (audioContextRef.current.state === 'suspended') {
+          console.log('🎵 Audio context is suspended, attempting to resume...');
+          try {
+            await audioContextRef.current.resume();
+            console.log('🎵 Audio context resumed successfully');
+          } catch (resumeError) {
+            console.warn('⚠️ Could not resume audio context immediately:', resumeError);
+            console.log('🎵 User interaction will be required to start audio');
+          }
+        }
         
         // Initialize device optimizer
         // deviceOptimizerRef.current = new DeviceOptimizer(); // This line was removed
@@ -145,8 +169,37 @@ export function useStemAudioController(): UseStemAudioController {
     };
   }, []);
 
+  useEffect(() => {
+    if (!isPlaying || !audioContextRef.current) return;
+
+    const audioContext = audioContextRef.current;
+    const activeSoloStems = soloedStems.size > 0;
+
+    Object.entries(gainNodesRef.current).forEach(([stemId, gainNode]) => {
+      const isMaster = stemId === masterStemIdRef.current;
+      const isSoloed = soloedStems.has(stemId);
+      const shouldPlay = activeSoloStems ? isSoloed : isMaster;
+      const targetVolume = shouldPlay ? 0.7 : 0;
+
+      // Smoothly ramp to the target volume to avoid clicks
+      gainNode.gain.linearRampToValueAtTime(targetVolume, audioContext.currentTime + 0.1);
+    });
+  }, [soloedStems, isPlaying]);
+
+  const toggleStemSolo = useCallback((stemId: string) => {
+    setSoloedStems(prev => {
+      const newSoloed = new Set(prev);
+      if (newSoloed.has(stemId)) {
+        newSoloed.delete(stemId);
+      } else {
+        newSoloed.add(stemId);
+      }
+      return newSoloed;
+    });
+  }, []);
+
   // In loadStems, remove all worker/processor/feature pipeline logic, just load and decode audio buffers for playback
-  const loadStems = useCallback(async (stems: Stem[]) => {
+  const loadStems = useCallback(async (stems: Stem[], onDecode?: (stemId: string, buffer: AudioBuffer) => void) => {
     if (stems.length === 0) return;
     if (loadingRef.current || stemsLoaded) {
       console.log('⚠️ Stems already loading or loaded, skipping duplicate request');
@@ -157,39 +210,52 @@ export function useStemAudioController(): UseStemAudioController {
       console.log(`🎵 Starting to load ${stems.length} stems...`);
       // Only fetch and decode audio buffers
       const decodedBuffers: Record<string, AudioBuffer> = {};
+      const masterStem = stems.find(s => s.isMaster);
+      if (masterStem) {
+        masterStemIdRef.current = masterStem.id;
+      } else if (stems.length > 0) {
+        // Fallback: if no master is flagged, assume the first one is.
+        masterStemIdRef.current = stems[0].id;
+        console.warn('⚠️ No master stem designated. Defaulting to first stem:', stems[0].id);
+      }
+
+
       for (const stem of stems) {
         try {
           const resp = await fetch(stem.url);
           if (!resp.ok) throw new Error(`Failed to load stem ${stem.id}: ${resp.status}`);
+          
           const buffer = await resp.arrayBuffer();
           const audioBuffer = await audioContextRef.current!.decodeAudioData(buffer);
           decodedBuffers[stem.id] = audioBuffer;
+          
           // Create gain node for volume control
           const gainNode = audioContextRef.current!.createGain();
-          gainNode.gain.value = 0.7;
+          gainNode.gain.value = 0.7; // Default volume
           gainNodesRef.current[stem.id] = gainNode;
+          
           console.log(`🎵 Decoded audio buffer for ${stem.id}: ${audioBuffer.duration.toFixed(2)}s`);
+          
+          if (onDecode) {
+            onDecode(stem.id, audioBuffer);
+          }
         } catch (error) {
           console.error(`❌ Failed to decode audio buffer for ${stem.id}:`, error);
         }
       }
+
+      // Store all decoded buffers
       audioBuffersRef.current = decodedBuffers;
       setStemsLoaded(true);
-      setFeaturesByStem(Object.fromEntries(stems.map(s => [s.id, null])));
-      console.log(`🎵 Successfully loaded ${stems.length} stems for playback`);
-      console.log('📊 Loaded audio buffers:', Object.keys(decodedBuffers).map(id => ({
-        id,
-        duration: decodedBuffers[id].duration.toFixed(2) + 's',
-        sampleRate: decodedBuffers[id].sampleRate,
-        numberOfChannels: decodedBuffers[id].numberOfChannels
-      })));
+      loadingRef.current = false;
+      // REMOVED VERBOSE LOGGING
+      // console.log(`✅ Successfully loaded ${stems.length} stems`);
+      
     } catch (error) {
       console.error('❌ Failed to load stems:', error);
-      setStemsLoaded(false);
-    } finally {
       loadingRef.current = false;
     }
-  }, [stemsLoaded]);
+  }, []);
 
   // Remove startAnalysis and stopAnalysis logic
 
@@ -219,13 +285,32 @@ export function useStemAudioController(): UseStemAudioController {
       finishedStemsRef.current.clear();
       isIntentionallyStoppingRef.current = false;
 
-      // Create and start new audio sources
-      const startTime = audioContextRef.current.currentTime;
-      startTimeRef.current = startTime;
+      // Schedule playback to start slightly in the future for sync
+      const now = audioContextRef.current.currentTime;
+      const scheduleDelay = 0.1; // 100ms in the future
+      const scheduledStartTime = now + scheduleDelay;
+      scheduledStartTimeRef.current = scheduledStartTime;
+      startTimeRef.current = scheduledStartTime;
+
+      const activeSoloStems = soloedStems.size > 0;
 
       Object.entries(audioBuffersRef.current).forEach(([stemId, buffer]) => {
         const source = audioContextRef.current!.createBufferSource();
         const gainNode = gainNodesRef.current[stemId];
+        
+        const isMaster = stemId === masterStemIdRef.current;
+        const isSoloed = soloedStems.has(stemId);
+
+        // Play logic:
+        // - If any stem is soloed, play only soloed stems.
+        // - If no stems are soloed, play only the master track.
+        const shouldPlay = activeSoloStems ? isSoloed : isMaster;
+
+        if (shouldPlay) {
+          gainNode.gain.setValueAtTime(0.7, audioContextRef.current!.currentTime);
+        } else {
+          gainNode.gain.setValueAtTime(0, audioContextRef.current!.currentTime);
+        }
         
         source.buffer = buffer;
         source.connect(gainNode);
@@ -236,43 +321,67 @@ export function useStemAudioController(): UseStemAudioController {
           if (!isIntentionallyStoppingRef.current && isLooping) {
             finishedStemsRef.current.add(stemId);
             
-            // If all stems have finished, restart them
-            if (finishedStemsRef.current.size === Object.keys(audioBuffersRef.current).length) {
-              console.log('🔄 All stems finished, restarting...');
+            // Determine which stems we expect to end
+            const stemsThatShouldBePlaying = new Set<string>();
+            if (activeSoloStems) {
+              soloedStems.forEach(id => stemsThatShouldBePlaying.add(id));
+            } else if (masterStemIdRef.current) {
+              stemsThatShouldBePlaying.add(masterStemIdRef.current);
+            }
+
+            // If all *active* stems have finished, restart them
+            const allActiveFinished = [...stemsThatShouldBePlaying].every(id => finishedStemsRef.current.has(id));
+
+            if (allActiveFinished) {
+              console.log('🔄 All active stems finished, restarting...');
               finishedStemsRef.current.clear();
-              play(); // Restart playback
+              // Schedule next playback at the correct time
+              const nextStartTime = scheduledStartTimeRef.current + buffer.duration;
+              scheduledStartTimeRef.current = nextStartTime;
+              startTimeRef.current = nextStartTime;
+              Object.entries(audioBuffersRef.current).forEach(([loopStemId, loopBuffer]) => {
+                const loopSource = audioContextRef.current!.createBufferSource();
+                const loopGainNode = gainNodesRef.current[loopStemId];
+                const isLoopMaster = loopStemId === masterStemIdRef.current;
+                const isLoopSoloed = soloedStems.has(loopStemId);
+                const shouldLoopPlay = activeSoloStems ? isLoopSoloed : isLoopMaster;
+                if (shouldLoopPlay) {
+                  loopGainNode.gain.setValueAtTime(0.7, audioContextRef.current!.currentTime);
+                } else {
+                  loopGainNode.gain.setValueAtTime(0, audioContextRef.current!.currentTime);
+                }
+                loopSource.buffer = loopBuffer;
+                loopSource.connect(loopGainNode);
+                loopGainNode.connect(audioContextRef.current!.destination);
+                loopSource.onended = source.onended; // Reuse the same onended logic
+                loopSource.start(nextStartTime);
+                audioSourcesRef.current[loopStemId] = loopSource;
+              });
             }
           }
         };
         
-        source.start(startTime);
+        source.start(scheduledStartTime);
         audioSourcesRef.current[stemId] = source;
       });
 
       setIsPlaying(true);
-      console.log('🎵 Audio playback started');
+      // REMOVED VERBOSE LOGGING
+      // console.log('🎵 Audio playback started');
 
       // Start time updates
       timeUpdateIntervalRef.current = setInterval(() => {
         if (audioContextRef.current && isPlaying) {
-          const currentTime = audioContextRef.current.currentTime - startTimeRef.current;
+          const currentTime = audioContextRef.current.currentTime - scheduledStartTimeRef.current;
           setCurrentTime(Math.max(0, currentTime));
         }
       }, 16); // ~60fps
-
-      // DISABLED: Real-time audio analysis
-      // if (audioProcessorRef.current) {
-      //   audioProcessorRef.current.startAnalysis();
-      // }
-      // if (workerManagerRef.current && workerManagerRef.current.isWorkerReady()) {
-      //   workerManagerRef.current.startAnalysis();
-      // }
 
     } catch (error) {
       console.error('❌ Failed to start audio playback:', error);
       setIsPlaying(false);
     }
-  }, [stemsLoaded, isLooping]);
+  }, [stemsLoaded, isLooping, soloedStems]);
 
   const pause = useCallback(() => {
     isIntentionallyStoppingRef.current = true;
@@ -296,7 +405,8 @@ export function useStemAudioController(): UseStemAudioController {
     // Store current time for resume
     pausedTimeRef.current = currentTime;
     setIsPlaying(false);
-    console.log('⏸️ Audio playback paused');
+    // REMOVED VERBOSE LOGGING
+    // console.log('⏸️ Audio playback paused');
 
     // DISABLED: Real-time audio analysis
     // if (audioProcessorRef.current) {
@@ -421,22 +531,68 @@ export function useStemAudioController(): UseStemAudioController {
   //   return () => clearInterval(interval);
   // }, [isPlaying, featuresByStem]);
 
-  // Real-time time tracking for audio playback
+  // OPTIMIZED REAL-TIME TIME TRACKING
   useEffect(() => {
     if (!isPlaying || !audioContextRef.current) return;
 
+    // Use requestAnimationFrame for more accurate timing, but cap at 30fps
+    let animationFrameId: number;
+    let lastUpdateTime = 0;
+    const targetFrameTime = 1000 / 30; // 33.33ms for 30fps
+    
     const updateTime = () => {
       try {
-        const currentAudioTime = audioContextRef.current!.currentTime - startTimeRef.current;
-        setCurrentTime(Math.max(0, currentAudioTime));
+        const now = performance.now();
+        const elapsed = now - lastUpdateTime;
+        
+        // Only update if enough time has passed (30fps cap)
+        if (elapsed >= targetFrameTime) {
+          const currentAudioTime = audioContextRef.current!.currentTime - startTimeRef.current;
+          setCurrentTime(Math.max(0, currentAudioTime));
+          lastUpdateTime = now;
+        }
+        
+        animationFrameId = requestAnimationFrame(updateTime);
       } catch (error) {
         console.error('❌ Failed to update time:', error);
       }
     };
 
-    const interval = setInterval(updateTime, 100); // Update 10 times per second
-    return () => clearInterval(interval);
+    animationFrameId = requestAnimationFrame(updateTime);
+    
+    return () => {
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
+    };
   }, [isPlaying]);
+
+  // Add user interaction handler to resume audio context
+  useEffect(() => {
+    const handleUserInteraction = async () => {
+      if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+        console.log('🎵 User interaction detected, resuming audio context...');
+        try {
+          await audioContextRef.current.resume();
+          console.log('🎵 Audio context resumed via user interaction');
+        } catch (error) {
+          console.error('❌ Failed to resume audio context on user interaction:', error);
+        }
+      }
+    };
+
+    // Listen for user interactions that should enable audio
+    const events = ['click', 'touchstart', 'keydown', 'mousedown'];
+    events.forEach(event => {
+      document.addEventListener(event, handleUserInteraction, { once: true, passive: true });
+    });
+
+    return () => {
+      events.forEach(event => {
+        document.removeEventListener(event, handleUserInteraction);
+      });
+    };
+  }, []);
 
   // Adaptive performance optimization
   useEffect(() => {
@@ -472,10 +628,54 @@ export function useStemAudioController(): UseStemAudioController {
     return gainNode ? gainNode.gain.value : 0.7;
   }, []);
 
+  // Test audio output function
+  const testAudioOutput = useCallback(async () => {
+    if (!audioContextRef.current) {
+      console.warn('⚠️ No audio context available for test');
+      return;
+    }
+
+    try {
+      console.log('🎵 Testing audio output...');
+      
+      // Create a simple test tone
+      const oscillator = audioContextRef.current.createOscillator();
+      const gainNode = audioContextRef.current.createGain();
+      
+      oscillator.frequency.setValueAtTime(440, audioContextRef.current.currentTime); // A4 note
+      oscillator.type = 'sine';
+      
+      gainNode.gain.setValueAtTime(0.1, audioContextRef.current.currentTime); // Low volume
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContextRef.current.currentTime + 0.5);
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContextRef.current.destination);
+      
+      oscillator.start(audioContextRef.current.currentTime);
+      oscillator.stop(audioContextRef.current.currentTime + 0.5);
+      
+      console.log('🎵 Test tone played - you should hear a 440Hz tone for 0.5 seconds');
+    } catch (error) {
+      console.error('❌ Audio output test failed:', error);
+    }
+  }, []);
+
   // Helper function to get the maximum duration of all loaded stems
   const getMaxDuration = useCallback((): number => {
     const durations = Object.values(audioBuffersRef.current).map(buffer => buffer.duration);
     return Math.max(...durations, 0);
+  }, []);
+
+  // Expose audio context latency and time
+  const getAudioLatency = useCallback((): number => {
+    const ctx = audioContextRef.current;
+    if (!ctx) return 0;
+    // baseLatency is always present, outputLatency is optional
+    return (ctx.baseLatency || 0) + (ctx.outputLatency || 0);
+  }, []);
+
+  const getAudioContextTime = useCallback((): number => {
+    return audioContextRef.current ? audioContextRef.current.currentTime : 0;
   }, []);
 
   return {
@@ -490,19 +690,25 @@ export function useStemAudioController(): UseStemAudioController {
     clearStems,
     setStemVolume,
     getStemVolume,
-    performanceMetrics: { // This line was removed
+    testAudioOutput,
+    performanceMetrics: {
       fps: 0,
       analysisLatency: 0,
       memoryUsage: 0,
       cpuUsage: 0,
       frameDrops: 0
     },
-    deviceProfile: 'medium', // This line was removed
-    fallbackState: {}, // This line was removed
+    deviceProfile: 'medium',
+    fallbackState: {},
     visualizationData,
     stemsLoaded,
     isLooping,
     setLooping: setIsLooping,
+    soloedStems,
+    toggleStemSolo,
+    getAudioLatency, // <-- add this
+    getAudioContextTime, // <-- add this
+    scheduledStartTimeRef // <-- expose for mapping loop
   };
 }
 
