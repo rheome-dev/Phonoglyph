@@ -48,4 +48,4 @@ out/
 
 # Ignore Cursor and GitHub workflow files (if you want to keep them local)
 .cursor/
-.github/
+.github/apps/api/.env

@@ -320,7 +320,15 @@ export class MidiHudEffect implements VisualEffect {
 
   update(deltaTime: number, audioData: AudioAnalysisData, midiData: LiveMIDIData): void {
     if (!this.uniforms) return;
-    
+
+    // Generic: sync all parameters to uniforms
+    for (const key in this.parameters) {
+      const uniformKey = 'u' + key.charAt(0).toUpperCase() + key.slice(1);
+      if (this.uniforms[uniformKey]) {
+        this.uniforms[uniformKey].value = this.parameters[key];
+      }
+    }
+
     this.uniforms.uTime.value += deltaTime * this.parameters.animationSpeed;
     this.uniforms.uIntensity.value = Math.max(0.5, Math.min(midiData.activeNotes.length / 3.0, 2.0));
     this.uniforms.uGlowIntensity.value = this.parameters.glowIntensity;

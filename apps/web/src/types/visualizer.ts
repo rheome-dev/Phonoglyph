@@ -12,8 +12,8 @@ export interface VisualEffect {
 }
 
 export interface AudioAnalysisData {
-  frequencies: Float32Array;
-  timeData: Float32Array;
+  frequencies: number[];
+  timeData: number[];
   volume: number;
   bass: number;
   mid: number;

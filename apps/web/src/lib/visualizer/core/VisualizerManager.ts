@@ -1,10 +1,13 @@
 import * as THREE from 'three';
 import { VisualEffect, VisualizerConfig, LiveMIDIData, AudioAnalysisData, VisualizerControls } from '@/types/visualizer';
 import { BloomEffect } from '../effects/BloomEffect';
-import { AudioAnalyzer } from '@/lib/audio-analyzer';
 import { VisualizationPreset } from '@/types/stem-visualization';
+import { debugLog } from '@/lib/utils';
 
 export class VisualizerManager {
+  private static instanceCounter = 0;
+  private instanceId: number;
+  
   private scene!: THREE.Scene;
   private camera!: THREE.PerspectiveCamera;
   private renderer!: THREE.WebGLRenderer;
@@ -17,8 +20,8 @@ export class VisualizerManager {
   private lastTime = 0;
   
   // Audio analysis
-  private audioContext: AudioContext;
-  private audioAnalyzer: AudioAnalyzer | null = null;
+  private audioContext: AudioContext | null = null;
+  private audioSources: AudioBufferSourceNode[] = [];
   private currentAudioBuffer: AudioBuffer | null = null;
   
   // Bloom post-processing
@@ -49,16 +52,15 @@ export class VisualizerManager {
   };
   
   constructor(canvas: HTMLCanvasElement, config: VisualizerConfig) {
-    console.log('🎭 VisualizerManager constructor called');
+    debugLog.log('🎭 VisualizerManager constructor called');
+    this.instanceId = ++VisualizerManager.instanceCounter;
     this.canvas = canvas;
     this.clock = new THREE.Clock();
-    this.audioContext = new AudioContext();
     
     this.initScene(config);
     this.setupEventListeners();
     this.initBloomEffect();
-    this.initAudioAnalyzer();
-    console.log('🎭 VisualizerManager constructor complete');
+    debugLog.log('🎭 VisualizerManager constructor complete');
   }
   
   private initScene(config: VisualizerConfig) {
@@ -81,7 +83,7 @@ export class VisualizerManager {
       // First, check if canvas already has a context to avoid conflicts
       const existingContext = this.canvas.getContext('webgl2') || this.canvas.getContext('webgl');
       if (existingContext) {
-        console.log('🔄 Found existing WebGL context, will attempt to reuse');
+        debugLog.log('🔄 Found existing WebGL context, will attempt to reuse');
       }
       
       this.renderer = new THREE.WebGLRenderer({
@@ -92,14 +94,14 @@ export class VisualizerManager {
         failIfMajorPerformanceCaveat: false // Allow software rendering
       });
       
-      console.log('✅ WebGL Renderer created successfully');
-      console.log('🔧 WebGL Context:', this.renderer.getContext());
+      debugLog.log('✅ WebGL Renderer created successfully');
+      debugLog.log('🔧 WebGL Context:', this.renderer.getContext());
     } catch (error) {
       console.error('❌ Primary WebGL renderer failed:', error);
       
       // Try minimal fallback settings
       try {
-        console.log('🔄 Attempting fallback renderer with minimal settings...');
+        debugLog.log('🔄 Attempting fallback renderer with minimal settings...');
         this.renderer = new THREE.WebGLRenderer({
           canvas: this.canvas,
           antialias: false,
@@ -107,7 +109,7 @@ export class VisualizerManager {
           powerPreference: 'low-power',
           failIfMajorPerformanceCaveat: false
         });
-        console.log('✅ Fallback renderer created successfully');
+        debugLog.log('✅ Fallback renderer created successfully');
       } catch (fallbackError) {
         console.error('❌ Fallback renderer also failed:', fallbackError);
         throw new Error('WebGL is not available. Please refresh the page and try again. If the problem persists, try closing other browser tabs or restarting your browser.');
@@ -118,7 +120,7 @@ export class VisualizerManager {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, config.canvas.pixelRatio));
     this.renderer.setClearColor(0x000000, 1); // Pure black background
     
-    console.log('🎮 Renderer configured with size:', config.canvas.width, 'x', config.canvas.height);
+    debugLog.log('🎮 Renderer configured with size:', config.canvas.width, 'x', config.canvas.height);
     
     // Performance optimizations for 30fps
     this.renderer.setAnimationLoop(null); // Use manual RAF control
@@ -137,18 +139,23 @@ export class VisualizerManager {
     // Initialize bloom post-processing
     this.bloomEffect = new BloomEffect();
     this.bloomEffect.init(this.scene, this.camera, this.renderer);
-    console.log('✨ Bloom post-processing initialized');
+    debugLog.log('✨ Bloom post-processing initialized');
   }
   
-  private initAudioAnalyzer() {
+  private async initAudioAnalyzer() {
+    if (!this.audioContext) {
+      debugLog.log('🎵 Creating AudioContext after user interaction...');
+      this.audioContext = new AudioContext();
+      // Resume the context to ensure it's active
+      await this.audioContext.resume();
+    }
+    
     try {
-      this.audioAnalyzer = new AudioAnalyzer(this.audioContext);
-      this.audioAnalyzer.setAnalysisCallback((data) => {
-        this.currentAudioData = data;
-      });
-      console.log('🎵 Audio analyzer initialized');
+      // This method is no longer used as AudioAnalyzer is removed.
+      // Keeping it for now to avoid breaking existing calls, but it will be removed.
+      debugLog.log('🎵 Audio analyzer initialization (placeholder)');
     } catch (error) {
-      console.error('❌ Failed to initialize audio analyzer:', error);
+      debugLog.error('❌ Failed to initialize audio analyzer:', error);
     }
   }
   
@@ -185,21 +192,30 @@ export class VisualizerManager {
     });
     
     this.canvas.addEventListener('webglcontextrestored', () => {
-      console.log('✅ WebGL context restored, reinitializing...');
+      debugLog.log('✅ WebGL context restored, reinitializing...');
       // Context restoration would require reinitializing all GPU resources
       // For now, we'll just log and suggest a page refresh
-      console.log('🔄 Please refresh the page to restore full functionality');
+      debugLog.log('🔄 Please refresh the page to restore full functionality');
     });
   }
   
   // Effect management
   public addEffect(effect: VisualEffect) {
     try {
-    effect.init(this.scene, this.camera, this.renderer);
-    this.effects.set(effect.id, effect);
-      console.log(`✅ Added effect: ${effect.name}`);
+      debugLog.log(`🎨 Adding effect: ${effect.name} (${effect.id})`);
+      effect.init(this.scene, this.camera, this.renderer);
+      this.effects.set(effect.id, effect);
+      
+      // Set initial visibility based on enabled status
+      if (effect.enabled) {
+        this.showEffectInScene(effect);
+      } else {
+        this.hideEffectFromScene(effect);
+      }
+      
+      debugLog.log(`✅ Added effect: ${effect.name}. Total effects: ${this.effects.size}`);
     } catch (error) {
-      console.error(`❌ Failed to add effect ${effect.name}:`, error);
+      debugLog.error(`❌ Failed to add effect ${effect.name}:`, error);
     }
   }
   
@@ -208,7 +224,7 @@ export class VisualizerManager {
     if (effect) {
       effect.destroy();
       this.effects.delete(effectId);
-      console.log(`✅ Removed effect: ${effect.name}`);
+      debugLog.log(`✅ Removed effect: ${effect.name}. Remaining effects: ${this.effects.size}`);
     }
   }
   
@@ -224,6 +240,11 @@ export class VisualizerManager {
     const effect = this.effects.get(effectId);
     if (effect) {
       effect.enabled = true;
+      // Show the effect's visual elements in the scene
+      this.showEffectInScene(effect);
+      debugLog.log(`✅ Enabled effect: ${effect.name} (${effectId})`);
+    } else {
+      debugLog.warn(`⚠️ Effect not found: ${effectId}`);
     }
   }
   
@@ -231,15 +252,102 @@ export class VisualizerManager {
     const effect = this.effects.get(effectId);
     if (effect) {
       effect.enabled = false;
+      // Hide the effect's visual elements from the scene
+      this.hideEffectFromScene(effect);
+      debugLog.log(`❌ Disabled effect: ${effect.name} (${effectId})`);
+    }
+  }
+  
+  private showEffectInScene(effect: VisualEffect): void {
+    // Show the effect's visual elements by setting their visibility to true
+    
+    // Handle MetaballsEffect (has 'mesh' property)
+    if ('mesh' in effect && (effect as any).mesh) {
+      (effect as any).mesh.visible = true;
+    }
+    
+    // Handle ParticleNetworkEffect (has 'instancedMesh' and 'connectionLines')
+    if ('instancedMesh' in effect && (effect as any).instancedMesh) {
+      (effect as any).instancedMesh.visible = true;
+    }
+    if ('connectionLines' in effect && (effect as any).connectionLines) {
+      (effect as any).connectionLines.visible = true;
+    }
+    
+    // Handle MidiHudEffect (has 'hudGroup')
+    if ('hudGroup' in effect && (effect as any).hudGroup) {
+      (effect as any).hudGroup.visible = true;
+    }
+    
+    // Handle TestCubeEffect (has 'mesh' property)
+    if ('mesh' in effect && (effect as any).mesh) {
+      (effect as any).mesh.visible = true;
+    }
+    
+    // Handle other visual elements that might need to be shown
+    if ('materials' in effect && Array.isArray((effect as any).materials)) {
+      (effect as any).materials.forEach((material: any) => {
+        if (material && material.visible !== undefined) {
+          material.visible = true;
+        }
+      });
+    }
+  }
+  
+  private hideEffectFromScene(effect: VisualEffect): void {
+    // Hide the effect's visual elements by setting their visibility to false
+    
+    // Handle MetaballsEffect (has 'mesh' property)
+    if ('mesh' in effect && (effect as any).mesh) {
+      (effect as any).mesh.visible = false;
+    }
+    
+    // Handle ParticleNetworkEffect (has 'instancedMesh' and 'connectionLines')
+    if ('instancedMesh' in effect && (effect as any).instancedMesh) {
+      (effect as any).instancedMesh.visible = false;
+    }
+    if ('connectionLines' in effect && (effect as any).connectionLines) {
+      (effect as any).connectionLines.visible = false;
+    }
+    
+    // Handle MidiHudEffect (has 'hudGroup')
+    if ('hudGroup' in effect && (effect as any).hudGroup) {
+      (effect as any).hudGroup.visible = false;
+    }
+    
+    // Handle TestCubeEffect (has 'mesh' property)
+    if ('mesh' in effect && (effect as any).mesh) {
+      (effect as any).mesh.visible = false;
+    }
+    
+    // Handle other visual elements that might need to be hidden
+    if ('materials' in effect && Array.isArray((effect as any).materials)) {
+      (effect as any).materials.forEach((material: any) => {
+        if (material && material.visible !== undefined) {
+          material.visible = false;
+        }
+      });
     }
   }
   
   // Playback control
   play(): void {
+    debugLog.log(`🎬 Play() called. Current state: isPlaying=${this.isPlaying}, effects=${this.effects.size}`);
     if (!this.isPlaying) {
       this.isPlaying = true;
       this.clock.start();
       this.animate();
+      debugLog.log(`🎬 Animation started`);
+      
+      // Start audio playback
+      this.audioSources.forEach((source, index) => {
+        try {
+          source.start(0);
+          debugLog.log(`🎵 Started audio source ${index}`);
+        } catch (error) {
+          debugLog.warn(`⚠️ Audio source ${index} already playing or ended`);
+        }
+      });
     }
   }
   
@@ -250,6 +358,16 @@ export class VisualizerManager {
       cancelAnimationFrame(this.animationId);
       this.animationId = null;
     }
+    
+    // Stop audio playback
+    this.audioSources.forEach((source, index) => {
+      try {
+        source.stop();
+        debugLog.log(`🎵 Stopped audio source ${index}`);
+      } catch (error) {
+        debugLog.warn(`⚠️ Audio source ${index} already stopped`);
+      }
+    });
   }
   
   stop(): void {
@@ -262,7 +380,7 @@ export class VisualizerManager {
     
     this.animationId = requestAnimationFrame(this.animate);
     
-    // Implement 30fps cap by skipping frames
+    // IMPLEMENT 30FPS CAP - Much more reasonable for audio-visual sync
     const now = performance.now();
     const elapsed = now - this.lastTime;
     const targetFrameTime = 1000 / 30; // 33.33ms for 30fps
@@ -271,19 +389,18 @@ export class VisualizerManager {
       return; // Skip this frame to maintain 30fps cap
     }
     
-    // Emergency performance check - skip frame if last frame took too long
+    // Only skip frames if we're severely behind (emergency performance protection)
     const frameTime = elapsed;
-    if (frameTime > 50) { // If frame takes more than 50ms (20fps), skip next frame
+    if (frameTime > 100) { // If frame takes more than 100ms (10fps), skip next frame
       this.consecutiveSlowFrames++;
-      console.warn(`⚠️ Long frame detected: ${frameTime.toFixed(1)}ms (${this.consecutiveSlowFrames}/${this.maxSlowFrames}), skipping to prevent freeze`);
       
       // Emergency pause if too many consecutive slow frames
       if (this.consecutiveSlowFrames >= this.maxSlowFrames) {
-        console.error(`🚨 Emergency pause: ${this.maxSlowFrames} consecutive slow frames detected. Pausing to prevent browser freeze.`);
+        debugLog.error(`🚨 Emergency pause: ${this.maxSlowFrames} consecutive slow frames detected. Pausing to prevent browser freeze.`);
         this.pause();
         // Suggest recovery action
         setTimeout(() => {
-          console.log('💡 Tip: Try refreshing the page or closing other browser tabs to improve performance.');
+          debugLog.log('💡 Tip: Try refreshing the page or closing other browser tabs to improve performance.');
         }, 1000);
         return;
       }
@@ -297,11 +414,6 @@ export class VisualizerManager {
     const deltaTime = Math.min(this.clock.getDelta(), 0.1); // Cap delta time to prevent large jumps
     const currentTime = now;
     
-    // Debug every 120 frames (roughly 4 seconds at 30fps)
-    if (this.frameCount % 120 === 0) {
-      console.log(`🎬 Frame ${this.frameCount}: ${this.effects.size} effects, ${this.scene.children.length} scene children`);
-    }
-    
     // Update FPS counter
     this.frameCount++;
     if (currentTime - this.lastFPSUpdate > 1000) {
@@ -314,13 +426,13 @@ export class VisualizerManager {
     if (this.frameCount % 300 === 0) { // Every 10 seconds at 30fps
       const memInfo = this.getMemoryUsage();
       if (memInfo.geometries > 100 || memInfo.textures > 50) {
-        console.warn(`⚠️ High memory usage detected: ${memInfo.geometries} geometries, ${memInfo.textures} textures`);
+        debugLog.warn(`⚠️ High memory usage detected: ${memInfo.geometries} geometries, ${memInfo.textures} textures`);
       }
     }
     
-    // Update all enabled effects with throttling for performance
+    // Update all enabled effects with improved performance
     let activeEffectCount = 0;
-    const maxEffectsPerFrame = 3; // Limit concurrent effect updates
+    const maxEffectsPerFrame = 3; // Reduced back to 3 for 30fps
     let updatedEffects = 0;
     
     this.effects.forEach(effect => {
@@ -330,12 +442,12 @@ export class VisualizerManager {
         
         try {
           // Use real data if available, otherwise fallback to mock data
-          const audioData: AudioAnalysisData = this.currentAudioData || this.createMockAudioData();
-          const midiData: LiveMIDIData = this.currentMidiData || this.createMockMidiData();
+          const audioData: AudioAnalysisData = this.createMockAudioData();
+          const midiData: LiveMIDIData = this.createMockMidiData();
           
           effect.update(deltaTime, audioData, midiData);
         } catch (error) {
-          console.error(`❌ Effect ${effect.id} update failed:`, error);
+          debugLog.error(`❌ Effect ${effect.id} update failed:`, error);
           // Disable problematic effect to prevent further issues
           effect.enabled = false;
         }
@@ -344,15 +456,10 @@ export class VisualizerManager {
       }
     });
     
-    // Log if we have no active effects (reduced frequency)
-    if (activeEffectCount === 0 && this.frameCount % 120 === 0) {
-      console.warn('⚠️ No active effects found!');
-    }
-    
     // Update bloom effect
     if (this.bloomEffect) {
-      const audioData: AudioAnalysisData = this.currentAudioData || this.createMockAudioData();
-      const midiData: LiveMIDIData = this.currentMidiData || this.createMockMidiData();
+      const audioData: AudioAnalysisData = this.createMockAudioData();
+      const midiData: LiveMIDIData = this.createMockMidiData();
       this.bloomEffect.update(deltaTime, audioData, midiData);
       
       // Render with bloom post-processing
@@ -367,8 +474,8 @@ export class VisualizerManager {
   
   // Mock data generators (will be replaced with real data)
   private createMockAudioData(): AudioAnalysisData {
-    const frequencies = new Float32Array(256);
-    const timeData = new Float32Array(256);
+    const frequencies = new Array(256);
+    const timeData = new Array(256);
     
     // Generate more realistic frequency data
     for (let i = 0; i < 256; i++) {
@@ -387,7 +494,7 @@ export class VisualizerManager {
   }
   
   private createMockMidiData(): LiveMIDIData {
-    return this.currentMidiData || {
+    return {
       activeNotes: [],
       currentTime: this.clock.elapsedTime,
       tempo: 120,
@@ -399,23 +506,35 @@ export class VisualizerManager {
   // Update methods for real data
   updateMIDIData(midiData: LiveMIDIData): void {
     // Store MIDI data to be used in next animation frame
-    this.currentMidiData = midiData;
+    // This method is no longer used as AudioAnalyzer is removed.
+    // Keeping it for now to avoid breaking existing calls, but it will be removed.
+    debugLog.log('🎵 MIDI data received (placeholder):', midiData);
   }
   
   updateAudioData(audioData: AudioAnalysisData): void {
     // Store audio data to be used in next animation frame
-    this.currentAudioData = audioData;
+    // This method is no longer used as AudioAnalyzer is removed.
+    // Keeping it for now to avoid breaking existing calls, but it will be removed.
+    debugLog.log('🎵 Audio data received (placeholder):', audioData);
   }
   
   updateEffectParameter(effectId: string, paramName: string, value: any): void {
     const effect = this.effects.get(effectId);
     if (effect && effect.parameters.hasOwnProperty(paramName)) {
+      const oldValue = (effect.parameters as any)[paramName];
       (effect.parameters as any)[paramName] = value;
-      console.log(`🎛️ Updated ${effectId}.${paramName} = ${value}`);
       
+      // REMOVED VERBOSE LOGGING - Only log significant changes or errors
       // If the effect has an updateParameter method, call it for immediate updates
       if (typeof (effect as any).updateParameter === 'function') {
         (effect as any).updateParameter(paramName, value);
+      }
+    } else {
+      // Only log errors, not every parameter update
+      if (!effect) {
+        console.warn(`⚠️ Effect ${effectId} not found`);
+      } else if (!effect.parameters.hasOwnProperty(paramName)) {
+        console.warn(`⚠️ Parameter ${paramName} not found in effect ${effectId}`);
       }
     }
   }
@@ -438,6 +557,7 @@ export class VisualizerManager {
   
   // Cleanup
   dispose(): void {
+    debugLog.log(`🗑️ VisualizerManager.dispose() called. Effects: ${this.effects.size}`);
     this.stop();
     
     // Dispose bloom effect
@@ -447,8 +567,10 @@ export class VisualizerManager {
     }
     
     // Dispose all effects
+    debugLog.log(`🗑️ Disposing ${this.effects.size} effects`);
     this.effects.forEach(effect => effect.destroy());
     this.effects.clear();
+    debugLog.log(`🗑️ Effects cleared. Remaining: ${this.effects.size}`);
     
     // Dispose Three.js resources
     this.scene.traverse((object) => {
@@ -466,14 +588,27 @@ export class VisualizerManager {
   }
 
   public async loadAudioBuffer(buffer: ArrayBuffer): Promise<void> {
+    if (!this.audioContext) {
+      throw new Error('AudioContext not initialized');
+    }
     try {
+      // Log buffer info for debugging
+      debugLog.log('Audio buffer length:', buffer.byteLength);
+      debugLog.log('First 16 bytes:', Array.from(new Uint8Array(buffer.slice(0, 16))));
       this.currentAudioBuffer = await this.audioContext.decodeAudioData(buffer);
-      if (this.audioAnalyzer && this.currentAudioBuffer) {
-        await this.audioAnalyzer.analyzeStem(this.currentAudioBuffer);
-        console.log('🎵 Audio analysis started');
+      // Create audio source for playback
+      const audioSource = this.audioContext.createBufferSource();
+      audioSource.buffer = this.currentAudioBuffer;
+      audioSource.connect(this.audioContext.destination);
+      // Store the source for control
+      if (!this.audioSources) {
+        this.audioSources = [];
       }
+      this.audioSources.push(audioSource);
+      // Remove any call to audioAnalyzer/analyzeStem
     } catch (error) {
-      console.error('❌ Failed to load audio buffer:', error);
+      debugLog.error('❌ Failed to load audio buffer:', error);
+      throw error;
     }
   }
 

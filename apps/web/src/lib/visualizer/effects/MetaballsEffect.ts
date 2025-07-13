@@ -52,7 +52,6 @@ export class MetaballsEffect implements VisualEffect {
   }
 
   init(scene: THREE.Scene, camera: THREE.Camera, renderer: THREE.WebGLRenderer): void {
-    console.log('🔮 MetaballsEffect.init() called');
     this.scene = scene;
     this.camera = camera;
     this.renderer = renderer;
@@ -62,9 +61,7 @@ export class MetaballsEffect implements VisualEffect {
     this.uniforms.uResolution.value.set(size.x, size.y);
 
     this.createMaterial();
-    console.log('🎨 Material created');
     this.createMesh();
-    console.log('🔲 Mesh created and added to scene');
   }
 
   private createMaterial() {
@@ -277,14 +274,13 @@ export class MetaballsEffect implements VisualEffect {
 
     // Add shader compilation error checking
     try {
-      this.material = new THREE.ShaderMaterial({
-        vertexShader,
-        fragmentShader,
-        uniforms: this.uniforms,
-        transparent: true,
-        side: THREE.DoubleSide
-      });
-      console.log('✅ Shader material created successfully');
+          this.material = new THREE.ShaderMaterial({
+      vertexShader,
+      fragmentShader,
+      uniforms: this.uniforms,
+      transparent: true,
+      side: THREE.DoubleSide
+    });
     } catch (error) {
       console.error('❌ Shader compilation error:', error);
       // Fallback to basic material
@@ -331,7 +327,15 @@ export class MetaballsEffect implements VisualEffect {
 
   update(deltaTime: number, audioData: AudioAnalysisData, midiData: LiveMIDIData): void {
     if (!this.uniforms) return;
-    
+
+    // Generic: sync all parameters to uniforms
+    for (const key in this.parameters) {
+      const uniformKey = 'u' + key.charAt(0).toUpperCase() + key.slice(1);
+      if (this.uniforms[uniformKey]) {
+        this.uniforms[uniformKey].value = this.parameters[key];
+      }
+    }
+
     // Update time
     this.uniforms.uTime.value += deltaTime * this.parameters.animationSpeed;
 
@@ -346,7 +350,7 @@ export class MetaballsEffect implements VisualEffect {
 
     // Debug log to see if we're getting MIDI data
     if (midiData.activeNotes.length > 0) {
-      console.log(`Active notes: ${midiData.activeNotes.length}, Intensity: ${this.uniforms.uIntensity.value}`);
+      // Removed console.log to reduce console noise
     }
   }
 

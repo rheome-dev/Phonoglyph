@@ -4,6 +4,7 @@ import { getFileBuffer } from './r2-storage';
 import { spawn } from 'child_process';
 import { join } from 'path';
 import { promises as fs } from 'fs';
+import { logger } from '../lib/logger';
 
 // Validation schema for stem separation config
 export const StemSeparationConfigSchema = z.object({
@@ -103,7 +104,7 @@ export class StemSeparator {
         ]);
 
         docker.stdout.on('data', (data) => {
-          console.log(`Spleeter stdout: ${data}`);
+          logger.log(`Spleeter stdout: ${data}`);
           // Update progress based on output
           if (data.toString().includes('Progress')) {
             const match = data.toString().match(/Progress: (\d+)%/);
@@ -115,7 +116,7 @@ export class StemSeparator {
         });
 
         docker.stderr.on('data', (data) => {
-          console.error(`Spleeter stderr: ${data}`);
+          logger.error(`Spleeter stderr: ${data}`);
         });
 
         docker.on('close', (code) => {

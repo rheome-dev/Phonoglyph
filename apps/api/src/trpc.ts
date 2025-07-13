@@ -10,22 +10,23 @@ import {
   isGuestUser,
   type GuestUser 
 } from './types/guest'
+import { logger } from './lib/logger'
 
 // Create tRPC context with Supabase authentication and guest support for Express
 export const createTRPCContext = async (opts: CreateExpressContextOptions) => {
   const { req, res } = opts
 
   // Debug all headers
-  console.log('🔍 Backend - All headers:', req.headers)
-  console.log('🔍 Backend - Authorization header:', req.headers.authorization)
-  console.log('🔍 Backend - Content-Type header:', req.headers['content-type'])
+  logger.debug('Backend - All headers:', req.headers)
+  logger.debug('Backend - Authorization header:', req.headers.authorization)
+  logger.debug('Backend - Content-Type header:', req.headers['content-type'])
 
   // Extract authorization header
   const authHeader = req.headers.authorization
   const accessToken = authHeader?.replace('Bearer ', '')
 
-  console.log('🔐 Backend - Auth header present:', !!authHeader)
-  console.log('🔐 Backend - Access token present:', !!accessToken)
+  logger.auth('Backend - Auth header present:', !!authHeader)
+  logger.auth('Backend - Access token present:', !!accessToken)
 
   // Create Supabase client with user session
   const supabase = createSupabaseServerClient(accessToken)
@@ -39,7 +40,7 @@ export const createTRPCContext = async (opts: CreateExpressContextOptions) => {
     try {
       const { data: { user: supabaseUser }, error } = await supabase.auth.getUser(accessToken)
       
-      console.log('🔐 Backend - Supabase user lookup result:', { user: !!supabaseUser, error: !!error })
+      logger.auth('Backend - Supabase user lookup result:', { user: !!supabaseUser, error: !!error })
       
       if (!error && supabaseUser) {
         user = transformSupabaseUser(supabaseUser)
@@ -50,10 +51,10 @@ export const createTRPCContext = async (opts: CreateExpressContextOptions) => {
           access_token: accessToken,
           // Add other session properties as needed
         }
-        console.log('🔐 Backend - User authenticated:', user.email)
+        logger.auth('Backend - User authenticated:', user.email)
       }
     } catch (error) {
-      console.error('Error retrieving user session:', error)
+      logger.error('Error retrieving user session:', error)
     }
   }
 
@@ -63,11 +64,11 @@ export const createTRPCContext = async (opts: CreateExpressContextOptions) => {
     if (guestSession && isValidGuestSession(guestSession.sessionId)) {
       user = createGuestUserFromSession(guestSession.sessionId)
       isGuest = true
-      console.log('🔐 Backend - Guest user created')
+      logger.auth('Backend - Guest user created')
     }
   }
 
-  console.log('🔐 Backend - Final context:', { 
+  logger.auth('Backend - Final context:', { 
     hasUser: !!user, 
     hasSession: !!session, 
     isGuest 

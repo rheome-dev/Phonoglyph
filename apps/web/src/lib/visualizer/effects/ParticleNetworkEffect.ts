@@ -171,7 +171,19 @@ export class ParticleNetworkEffect implements VisualEffect {
       new THREE.InstancedBufferAttribute(this.instanceSizes, 1, false)
     );
 
+    // Initialize with some default particles to ensure rendering
+    this.initializeDefaultParticles();
+
     this.scene.add(this.instancedMesh);
+  }
+
+  private initializeDefaultParticles() {
+    // Add a few default particles to ensure the system renders
+    for (let i = 0; i < 5; i++) {
+      const particle = this.createParticle(60 + i, 64, 'default');
+      this.particles.push(particle);
+    }
+    this.updateBuffers();
   }
   
   private getRandomSpawnPosition(): THREE.Vector3 {
@@ -422,10 +434,25 @@ export class ParticleNetworkEffect implements VisualEffect {
 
   update(deltaTime: number, audioData: AudioAnalysisData, midiData: LiveMIDIData): void {
     if (!this.uniforms) return;
+
+    // Generic: sync all parameters to uniforms
+    for (const key in this.parameters) {
+      const uniformKey = 'u' + key.charAt(0).toUpperCase() + key.slice(1);
+      if (this.uniforms[uniformKey]) {
+        this.uniforms[uniformKey].value = this.parameters[key];
+      }
+    }
+
     // Always update time and uniforms for smooth animation
     this.uniforms.uTime.value += deltaTime;
     this.uniforms.uIntensity.value = Math.max(0.5, Math.min(midiData.activeNotes.length / 3.0, 2.0));
     this.uniforms.uGlowIntensity.value = this.parameters.glowIntensity;
+    
+    // Ensure the instanced mesh is visible
+    if (this.instancedMesh) {
+      this.instancedMesh.visible = true;
+    }
+    
     // Skip heavy particle updates every few frames for performance
     this.frameSkipCounter++;
     if (this.frameSkipCounter >= this.frameSkipInterval) {

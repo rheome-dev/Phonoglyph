@@ -22,6 +22,7 @@ export default function RootLayout({
         <TRPCProvider>
           {children}
           <Toaster />
+          <div id="modal-portal-root" />
         </TRPCProvider>
       </body>
     </html>
