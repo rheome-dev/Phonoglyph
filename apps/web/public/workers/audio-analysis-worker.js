@@ -65,11 +65,10 @@ let performanceMetrics = {
 
 // Optimized feature sets for different stem types
 const STEM_FEATURES = {
-  drums: ['rms', 'spectralCentroid', 'spectralRolloff'],
-  bass: ['rms', 'spectralCentroid', 'loudness'],
-  vocals: ['rms', 'spectralCentroid', 'loudness'],
-  piano: ['rms', 'spectralCentroid', 'loudness'],
-  other: ['rms', 'spectralCentroid', 'spectralRolloff']
+  drums: ['rms', 'zcr', 'spectralCentroid'],
+  bass: ['rms', 'loudness', 'spectralCentroid'],
+  vocals: ['rms', 'loudness', 'mfcc'],
+  other: ['rms', 'loudness', 'spectralCentroid'] // For synths, guitars, etc.
 };
 
 // Quality presets for different performance levels
@@ -118,6 +117,9 @@ self.onmessage = function(event) {
         break;
       case 'GET_METRICS':
         sendMetrics();
+        break;
+      case 'ANALYZE_BUFFER':
+        analyzeBuffer(data);
         break;
       default:
         console.warn('⚠️ Unknown worker message type:', type);
@@ -198,6 +200,166 @@ function initializeWorker(config) {
       }
     });
   }
+}
+
+async function analyzeBuffer(data) {
+  const { fileId, channelData, sampleRate, duration, stemType } = data;
+  console.log(`🎵 Received job to analyze buffer for file: ${fileId} (${stemType})`);
+
+  try {
+    await loadMeyda();
+    if (!Meyda) {
+      throw new Error("Meyda library not loaded.");
+    }
+
+    self.postMessage({
+      type: 'ANALYSIS_PROGRESS',
+      data: { fileId, progress: 0.5, message: 'Analyzing features...' }
+    });
+
+    const analysis = await performFullAnalysis(channelData, sampleRate, stemType, (progress) => {
+      self.postMessage({
+        type: 'ANALYSIS_PROGRESS',
+        data: { fileId, progress: 0.5 + progress * 0.4, message: 'Extracting features...' }
+      });
+    });
+
+    self.postMessage({
+      type: 'ANALYSIS_PROGRESS',
+      data: { fileId, progress: 0.9, message: 'Generating waveform...' }
+    });
+    
+    const waveformData = generateWaveformData(channelData, duration, 1024);
+
+    const result = {
+      id: `client_${fileId}`,
+      fileMetadataId: fileId,
+      stemType: stemType,
+      analysisData: analysis, // <-- this is now the flatFeatures object
+      waveformData: waveformData,
+      metadata: {
+        sampleRate: sampleRate,
+        duration: duration,
+        bufferSize: 1024,
+        featuresExtracted: Object.keys(analysis),
+        analysisDuration: 0
+      }
+    };
+
+    self.postMessage({
+      type: 'ANALYSIS_COMPLETE',
+      data: { fileId, result }
+    });
+
+  } catch (error) {
+    console.error(`❌ Error analyzing buffer for file ${fileId}:`, error);
+    self.postMessage({
+      type: 'ANALYSIS_ERROR',
+      data: { fileId, error: error.message }
+    });
+  }
+}
+
+function generateWaveformData(channelData, duration, points = 1024) {
+    const totalSamples = channelData.length;
+    const samplesPerPoint = Math.floor(totalSamples / points);
+    const waveform = new Float32Array(points);
+
+    for (let i = 0; i < points; i++) {
+        const start = i * samplesPerPoint;
+        const end = start + samplesPerPoint;
+        let max = 0;
+        for (let j = start; j < end; j++) {
+            const sample = Math.abs(channelData[j]);
+            if (sample > max) {
+                max = sample;
+            }
+        }
+        waveform[i] = max;
+    }
+    
+    return {
+        points: Array.from(waveform),
+        duration: duration,
+        sampleRate: channelData.length / duration,
+        markers: [] 
+    };
+}
+
+async function performFullAnalysis(channelData, sampleRate, stemType, onProgress) {
+  const featuresToExtract = stemType === 'master' 
+    ? [] 
+    : (STEM_FEATURES[stemType] || STEM_FEATURES['other']);
+  
+  const featureFrames = {};
+  featuresToExtract.forEach(f => {
+    if (f === 'loudness') {
+      featureFrames.loudness = { specific: [], total: [] };
+    } else {
+      featureFrames[f] = [];
+    }
+  });
+
+  if (featuresToExtract.length === 0) {
+    if (onProgress) onProgress(1);
+    // Return empty analysis but with valid structure
+    return {
+      features: {},
+      markers: [],
+      frequencies: [],
+      timeData: [],
+      volume: 0,
+      bass: 0,
+      mid: 0,
+      treble: 0,
+    };
+  }
+  
+  const bufferSize = 1024;
+  const hopSize = 512;
+  
+  let currentPosition = 0;
+  const totalSteps = Math.floor((channelData.length - bufferSize) / hopSize);
+
+  while (currentPosition + bufferSize <= channelData.length) {
+    const buffer = channelData.slice(currentPosition, currentPosition + bufferSize);
+    
+    // Using .extract is designed for offline, one-off analysis on a buffer
+    const features = Meyda.extract(featuresToExtract, buffer);
+
+    if (features) {
+      for (const feature of featuresToExtract) {
+        if (features[feature]) {
+          if (feature === 'loudness') {
+            featureFrames.loudness.specific.push(features.loudness.specific);
+            featureFrames.loudness.total.push(features.loudness.total);
+          } else {
+            featureFrames[feature].push(features[feature]);
+          }
+        }
+      }
+    }
+    
+    currentPosition += hopSize;
+
+    if (onProgress) {
+      onProgress(currentPosition / channelData.length);
+    }
+  }
+
+  // Flatten featureFrames so each key is an array of numbers
+  const flatFeatures = {};
+  for (const key in featureFrames) {
+    // If it's loudness, flatten .total or .specific as needed
+    if (key === 'loudness') {
+      // You can choose which to use; here we use .total
+      flatFeatures.loudness = featureFrames.loudness.total;
+    } else {
+      flatFeatures[key] = featureFrames[key];
+    }
+  }
+
+  return flatFeatures;
 }
 
 function setupStemAnalysis(data) {
