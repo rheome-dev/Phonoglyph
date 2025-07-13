@@ -170,30 +170,52 @@ export function useStemAudioController(): UseStemAudioController {
   }, []);
 
   useEffect(() => {
-    if (!isPlaying || !audioContextRef.current) return;
+    if (!audioContextRef.current) return;
 
     const audioContext = audioContextRef.current;
     const activeSoloStems = soloedStems.size > 0;
 
+    console.log('🎵 Updating solo state:', {
+      soloedStems: Array.from(soloedStems),
+      activeSoloStems,
+      availableStems: Object.keys(gainNodesRef.current)
+    });
+
     Object.entries(gainNodesRef.current).forEach(([stemId, gainNode]) => {
       const isMaster = stemId === masterStemIdRef.current;
       const isSoloed = soloedStems.has(stemId);
-      const shouldPlay = activeSoloStems ? isSoloed : isMaster;
+      
+      // Solo logic:
+      // - If any stems are soloed, only play soloed stems
+      // - If no stems are soloed, play all stems (not just master)
+      const shouldPlay = activeSoloStems ? isSoloed : true;
       const targetVolume = shouldPlay ? 0.7 : 0;
+
+      console.log(`🎵 Stem ${stemId}:`, {
+        isMaster,
+        isSoloed,
+        shouldPlay,
+        targetVolume,
+        currentGain: gainNode.gain.value
+      });
 
       // Smoothly ramp to the target volume to avoid clicks
       gainNode.gain.linearRampToValueAtTime(targetVolume, audioContext.currentTime + 0.1);
     });
-  }, [soloedStems, isPlaying]);
+  }, [soloedStems]);
 
   const toggleStemSolo = useCallback((stemId: string) => {
+    console.log('🎵 Toggling solo for stem:', stemId);
     setSoloedStems(prev => {
       const newSoloed = new Set(prev);
       if (newSoloed.has(stemId)) {
         newSoloed.delete(stemId);
+        console.log('🎵 Removed solo from stem:', stemId);
       } else {
         newSoloed.add(stemId);
+        console.log('🎵 Added solo to stem:', stemId);
       }
+      console.log('🎵 New soloed stems:', Array.from(newSoloed));
       return newSoloed;
     });
   }, []);
@@ -294,6 +316,26 @@ export function useStemAudioController(): UseStemAudioController {
 
       const activeSoloStems = soloedStems.size > 0;
 
+      console.log('🎵 Starting playback with solo state:', {
+        activeSoloStems,
+        soloedStems: Array.from(soloedStems)
+      });
+
+      // Apply current solo state to all gain nodes immediately
+      Object.entries(gainNodesRef.current).forEach(([stemId, gainNode]) => {
+        const isSoloed = soloedStems.has(stemId);
+        const shouldPlay = activeSoloStems ? isSoloed : true;
+        const targetVolume = shouldPlay ? 0.7 : 0;
+        
+        console.log(`🎵 Setting initial gain for ${stemId}:`, {
+          isSoloed,
+          shouldPlay,
+          targetVolume
+        });
+        
+        gainNode.gain.setValueAtTime(targetVolume, audioContextRef.current!.currentTime);
+      });
+
       Object.entries(audioBuffersRef.current).forEach(([stemId, buffer]) => {
         const source = audioContextRef.current!.createBufferSource();
         const gainNode = gainNodesRef.current[stemId];
@@ -303,15 +345,17 @@ export function useStemAudioController(): UseStemAudioController {
 
         // Play logic:
         // - If any stem is soloed, play only soloed stems.
-        // - If no stems are soloed, play only the master track.
-        const shouldPlay = activeSoloStems ? isSoloed : isMaster;
+        // - If no stems are soloed, play all stems (not just master).
+        const shouldPlay = activeSoloStems ? isSoloed : true;
 
-        if (shouldPlay) {
-          gainNode.gain.setValueAtTime(0.7, audioContextRef.current!.currentTime);
-        } else {
-          gainNode.gain.setValueAtTime(0, audioContextRef.current!.currentTime);
-        }
-        
+        console.log(`🎵 Creating source for ${stemId}:`, {
+          isMaster,
+          isSoloed,
+          shouldPlay,
+          activeSoloStems
+        });
+
+        // Always start the source, but control volume via gain
         source.buffer = buffer;
         source.connect(gainNode);
         gainNode.connect(audioContextRef.current!.destination);
@@ -325,8 +369,9 @@ export function useStemAudioController(): UseStemAudioController {
             const stemsThatShouldBePlaying = new Set<string>();
             if (activeSoloStems) {
               soloedStems.forEach(id => stemsThatShouldBePlaying.add(id));
-            } else if (masterStemIdRef.current) {
-              stemsThatShouldBePlaying.add(masterStemIdRef.current);
+            } else {
+              // If no stems are soloed, all stems should be playing
+              Object.keys(audioBuffersRef.current).forEach(id => stemsThatShouldBePlaying.add(id));
             }
 
             // If all *active* stems have finished, restart them
@@ -344,7 +389,7 @@ export function useStemAudioController(): UseStemAudioController {
                 const loopGainNode = gainNodesRef.current[loopStemId];
                 const isLoopMaster = loopStemId === masterStemIdRef.current;
                 const isLoopSoloed = soloedStems.has(loopStemId);
-                const shouldLoopPlay = activeSoloStems ? isLoopSoloed : isLoopMaster;
+                const shouldLoopPlay = activeSoloStems ? isLoopSoloed : true;
                 if (shouldLoopPlay) {
                   loopGainNode.gain.setValueAtTime(0.7, audioContextRef.current!.currentTime);
                 } else {

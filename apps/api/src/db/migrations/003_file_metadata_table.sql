@@ -10,6 +10,8 @@ CREATE TABLE "file_metadata" (
   "s3_key" VARCHAR(255) NOT NULL,
   "s3_bucket" VARCHAR(255) NOT NULL,
   "upload_status" VARCHAR(20) NOT NULL DEFAULT 'uploading' CHECK (upload_status IN ('uploading', 'completed', 'failed')),
+  "is_master" BOOLEAN NOT NULL DEFAULT FALSE,
+  "stem_type" VARCHAR(32),
   "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
   "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );

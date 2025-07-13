@@ -254,6 +254,57 @@ export const projectRouter = router({
     .input(projectIdSchema)
     .mutation(async ({ input, ctx }) => {
       try {
+        // Step 1: Fetch all file metadata associated with the project
+        const { data: files, error: filesError } = await ctx.supabase
+          .from('file_metadata')
+          .select('id, s3_key')
+          .eq('project_id', input.id);
+
+        if (filesError) {
+          console.error('Database error fetching project files:', filesError);
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to fetch project files for deletion.',
+          });
+        }
+
+        // Step 2: If files exist, delete them from storage
+        if (files && files.length > 0) {
+          const filePaths = files.map((f: { s3_key: string | null }) => f.s3_key).filter((p: string | null): p is string => !!p);
+          
+          if (filePaths.length > 0) {
+            const { error: storageError } = await ctx.supabase.storage
+              .from('assets')
+              .remove(filePaths);
+
+            if (storageError) {
+              console.error('Storage error deleting project files:', storageError);
+              throw new TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: 'Failed to delete project assets from storage.',
+              });
+            }
+          }
+
+          // Step 3: Delete the file metadata records
+          const fileIds = files.map((f: { id: string }) => f.id);
+          const { error: deleteMetaError } = await ctx.supabase
+            .from('file_metadata')
+            .delete()
+            .in('id', fileIds);
+          
+          if (deleteMetaError) {
+            console.error('Database error deleting file metadata:', deleteMetaError);
+            // Note: at this point, files might be deleted from storage but not DB.
+            // This is a situation that may require a cleanup job.
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Failed to clean up project file metadata.',
+            });
+          }
+        }
+
+        // Step 4: Delete the project itself
         const { data: project, error } = await ctx.supabase
           .from('projects')
           .delete()

@@ -11,7 +11,6 @@ import { Play, Pause, RotateCcw, Zap, Palette, Settings2, Eye, EyeOff, Info, Map
 import { ThreeVisualizer } from '@/components/midi/three-visualizer';
 import { EffectsLibrarySidebar, EffectUIData } from '@/components/ui/EffectsLibrarySidebar';
 import { CollapsibleEffectsSidebar } from '@/components/layout/collapsible-effects-sidebar';
-import { MappingEditor } from '@/components/stem-visualization/mapping-editor';
 import { FileSelector } from '@/components/midi/file-selector';
 import { MIDIData, VisualizationSettings, DEFAULT_VISUALIZATION_SETTINGS } from '@/types/midi';
 import { VisualizationPreset, StemVisualizationMapping } from '@/types/stem-visualization';
@@ -23,12 +22,10 @@ import { ProjectCreationModal } from '@/components/projects/project-creation-mod
 import { useStemAudioController } from '@/hooks/use-stem-audio-controller';
 import { useCachedStemAnalysis } from '@/hooks/use-cached-stem-analysis';
 import { StemWaveformPanel } from '@/components/stem-visualization/stem-waveform-panel';
-import { DEFAULT_PRESETS } from '@/lib/default-visualization-mappings';
 import { PortalModal } from '@/components/ui/portal-modal';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { MappingDemo } from '@/components/ui/MappingDemo';
 import { MappingSourcesPanel } from '@/components/ui/MappingSourcesPanel';
 import { DroppableParameter } from '@/components/ui/droppable-parameter';
 import { useFeatureValue } from '@/hooks/use-feature-value';
@@ -148,7 +145,25 @@ export default function CreativeVisualizerPage() {
   const [fps, setFps] = useState(60);
   const playbackIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [isMapMode, setIsMapMode] = useState(false);
-  const [currentPreset, setCurrentPreset] = useState<VisualizationPreset>(DEFAULT_PRESETS[0]);
+  const [currentPreset, setCurrentPreset] = useState<VisualizationPreset>({
+    id: 'default',
+    name: 'Default',
+    description: 'Default visualization preset',
+    category: 'custom',
+    tags: ['default'],
+    mappings: {},
+    defaultSettings: {
+      masterIntensity: 1.0,
+      transitionSpeed: 1.0,
+      backgroundAlpha: 0.1,
+      particleCount: 100,
+      qualityLevel: 'medium'
+    },
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    isDefault: true,
+    usageCount: 0
+  });
 
   // Effects timeline state
   const [effectClips, setEffectClips] = useState<Array<{
@@ -576,31 +591,7 @@ export default function CreativeVisualizerPage() {
     }));
   };
 
-  const handlePresetChange = (preset: VisualizationPreset) => {
-    setCurrentPreset(preset);
-  };
 
-  const handleMappingUpdate = (stemType: string, mapping: StemVisualizationMapping) => {
-    // Update the current preset with new mapping
-    const updatedPreset = {
-      ...currentPreset,
-      mappings: {
-        ...currentPreset.mappings,
-        [stemType]: mapping
-      }
-    };
-    setCurrentPreset(updatedPreset);
-  };
-
-  const handleStemMute = (stemType: string, muted: boolean) => {
-    // Handle stem muting
-    // TODO: Implement stem muting functionality
-  };
-
-  const handleStemSolo = (stemType: string, solo: boolean) => {
-    // Handle stem solo
-    // TODO: Implement stem solo functionality
-  };
 
   // Feature mapping handlers
   const handleMapFeature = (parameterId: string, featureId: string) => {
@@ -1267,18 +1258,18 @@ export default function CreativeVisualizerPage() {
               </div>
             </div>
             
-            {/* Visualizer Area - Full Height Layout */}
+            {/* Visualizer Area - Scrollable Layout */}
             <div className="flex-1 flex flex-col overflow-hidden bg-stone-900 relative">
-              <div className="flex-1 flex flex-col min-h-0 px-4">
-                {/* Visualizer Container - Takes calculated space */}
-                <div className="flex-shrink-0">
+              <div className="flex-1 flex flex-col min-h-0 px-4 overflow-y-auto">
+                {/* Visualizer Container - Fixed height */}
+                <div className="flex-shrink-0 mb-4">
                   <div 
                     className={`relative mx-auto bg-stone-900 rounded-lg overflow-hidden shadow-lg flex items-center justify-center ${
                       visualizerAspectRatio === 'mobile' ? 'max-w-md' : 'max-w-4xl'
                     }`}
                     style={{ 
-                      height: 'min(calc(100vh - 350px), 70vh)', // Account for control bar + stem tracks, with max limit
-                      minHeight: '250px'
+                      height: 'min(calc(100vh - 400px), 60vh)', // Reduced height to make room for stem panel
+                      minHeight: '200px'
                     }}
                   >
                   <ThreeVisualizer
@@ -1308,8 +1299,8 @@ export default function CreativeVisualizerPage() {
                 </div>
                 </div>
                 
-                {/* Stem Waveforms - Fixed bottom area */}
-                <div className="flex-shrink-0 mt-4">
+                {/* Stem Waveforms - Scrollable area with proper height */}
+                <div className="flex-shrink-0 mb-4">
                   <StemWaveformPanel
                     stems={sortedAvailableStems}
                     masterStemId={projectFiles?.files.find(f => f.is_master)?.id ?? null}
@@ -1349,23 +1340,7 @@ export default function CreativeVisualizerPage() {
               />
             </CollapsibleEffectsSidebar>
 
-              {/* Mapping Editor Modal */}
-              {isMapMode && (
-              <div className="fixed inset-0 bg-black/80 z-50 flex">
-                  <div className="w-1/3 bg-stone-900 border-l border-white/10 overflow-y-auto">
-                    <MappingEditor
-                      currentPreset={currentPreset}
-                      onPresetChange={handlePresetChange}
-                      onMappingUpdate={handleMappingUpdate}
-                      onStemMute={handleStemMute}
-                      onStemSolo={handleStemSolo}
-                      isPlaying={isPlaying}
-                      className="h-full"
-                    />
-                  </div>
-                  <div className="flex-1" />
-                </div>
-              )}
+
         </main>
       </div>
       </DndProvider>
