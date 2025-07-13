@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { DndProvider } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -22,10 +24,14 @@ import { useStemAudioController } from '@/hooks/use-stem-audio-controller';
 import { useCachedStemAnalysis } from '@/hooks/use-cached-stem-analysis';
 import { StemWaveformPanel } from '@/components/stem-visualization/stem-waveform-panel';
 import { DEFAULT_PRESETS } from '@/lib/default-visualization-mappings';
-import { DraggableModal } from '@/components/ui/draggable-modal';
+import { PortalModal } from '@/components/ui/portal-modal';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { MappingDemo } from '@/components/ui/MappingDemo';
+import { MappingSourcesPanel } from '@/components/ui/MappingSourcesPanel';
+import { DroppableParameter } from '@/components/ui/droppable-parameter';
+import { useFeatureValue } from '@/hooks/use-feature-value';
 
 // Sample MIDI data for demonstration
 const createSampleMIDIData = (): MIDIData => {
@@ -143,9 +149,18 @@ export default function CreativeVisualizerPage() {
   const playbackIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [isMapMode, setIsMapMode] = useState(false);
   const [currentPreset, setCurrentPreset] = useState<VisualizationPreset>(DEFAULT_PRESETS[0]);
-  const [performanceMode, setPerformanceMode] = useState<'master-only' | 'all-stems'>('master-only');
 
-  // Effects carousel state
+  // Effects timeline state
+  const [effectClips, setEffectClips] = useState<Array<{
+    id: string;
+    effectId: string;
+    name: string;
+    startTime: number;
+    endTime: number;
+    parameters: Record<string, any>;
+  }>>([]);
+
+  // Effects carousel state (now for timeline-based effects)
   const [selectedEffects, setSelectedEffects] = useState<Record<string, boolean>>({
     'metaballs': true,
     'midiHud': true,
@@ -162,18 +177,58 @@ export default function CreativeVisualizerPage() {
     'particleNetwork': false
   });
 
+  // Feature mapping state
+  const [mappings, setMappings] = useState<Record<string, string | null>>({});
+  const [featureNames, setFeatureNames] = useState<Record<string, string>>({});
+  const [activeTrackId, setActiveTrackId] = useState<string | null>(null);
 
+  // Real-time sync calibration offset in ms
+  const [syncOffsetMs, setSyncOffsetMs] = useState(0);
+
+  // Performance monitoring for sync debugging
+  const [syncMetrics, setSyncMetrics] = useState({
+    audioLatency: 0,
+    visualLatency: 0,
+    syncDrift: 0,
+    frameTime: 0,
+    lastUpdate: 0
+  });
 
   const [sampleMidiData] = useState<MIDIData>(createSampleMIDIData());
   const stemAudio = useStemAudioController();
   const cachedStemAnalysis = useCachedStemAnalysis();
   
-  // Enhanced audio analysis data
-  const [audioAnalysisData, setAudioAnalysisData] = useState<any>(null);
+  // Sync performance monitoring
+  useEffect(() => {
+    if (!isPlaying) return;
+    
+    const updateSyncMetrics = () => {
+      const now = performance.now();
+      const audioTime = stemAudio.currentTime;
+      const visualTime = currentTime;
+      const audioLatency = stemAudio.getAudioLatency ? stemAudio.getAudioLatency() * 1000 : 0;
+      const frameTime = now - syncMetrics.lastUpdate;
+      
+      setSyncMetrics({
+        audioLatency,
+        visualLatency: frameTime,
+        syncDrift: Math.abs(audioTime - visualTime) * 1000, // Convert to ms
+        frameTime,
+        lastUpdate: now
+      });
+    };
+    
+    const interval = setInterval(updateSyncMetrics, 100); // Update every 100ms
+    return () => clearInterval(interval);
+  }, [isPlaying, stemAudio.currentTime, currentTime, syncMetrics.lastUpdate]);
+  
+  // Enhanced audio analysis data - This state is no longer needed, data comes from useCachedStemAnalysis
+  // const [audioAnalysisData, setAudioAnalysisData] = useState<any>(null);
   
   const [showPicker, setShowPicker] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const isLoadingStemsRef = useRef(false);
+  const [isCacheLoaded, setIsCacheLoaded] = useState(false);
 
   // Get download URL mutation
   const getDownloadUrlMutation = trpc.file.getDownloadUrl.useMutation();
@@ -241,96 +296,75 @@ export default function CreativeVisualizerPage() {
     setIsInitialized(true);
   }, [searchParams]);
 
+  // Helper to sort stems: non-master first, master last
+  function sortStemsWithMasterLast(stems: any[]) {
+    return [...stems].sort((a, b) => {
+      if (a.isMaster && !b.isMaster) return 1;
+      if (!a.isMaster && b.isMaster) return -1;
+      return 0;
+    });
+  }
+
   // Load stems when project files are available
   useEffect(() => {
-    if (!isInitialized || !projectFiles?.files || !currentProjectId || isLoadingStemsRef.current || stemAudio.stemsLoaded) {
-      return;
-    }
-
-    const audioFiles = projectFiles.files.filter(file => 
-      file.file_type === 'audio' && file.upload_status === 'completed'
-    );
-
-    if (audioFiles.length > 0) {
+    // This effect now correctly handles both initial load and changes to project files
+    if (projectFiles?.files && currentProjectId && isInitialized && !cachedStemAnalysis.isLoading) {
       let cancelled = false;
-      isLoadingStemsRef.current = true;
       
       const loadStemsWithUrls = async () => {
-        try {
-          // Add delay to prevent rapid successive calls
-          await new Promise(resolve => setTimeout(resolve, 200));
-          
-          if (cancelled) {
-            return;
-          }
+        // Prevent re-loading if already in progress
+        if (isLoadingStemsRef.current) return;
+        isLoadingStemsRef.current = true;
 
-          // Process files sequentially with retry logic to avoid overwhelming the API
-          const stems: Array<{ id: string; url: string; label: string }> = [];
-          
-          // Sort files to prioritize master track (usually contains "master" or "mix" in filename)
-          const sortedFiles = [...audioFiles].sort((a, b) => {
-            const aName = a.file_name.toLowerCase();
-            const bName = b.file_name.toLowerCase();
+        try {
+          const audioFiles = projectFiles.files.filter(file => 
+            file.file_type === 'audio' && file.upload_status === 'completed'
+          );
+
+          if (audioFiles.length > 0) {
+            console.log('Found audio files, preparing to load:', audioFiles.map(f => f.file_name));
             
-            // Master track gets priority
-            if (aName.includes('master') || aName.includes('mix') || aName.includes('full')) return -1;
-            if (bName.includes('master') || bName.includes('mix') || bName.includes('full')) return 1;
-            
-            return 0;
-          });
-          
-          // In performance mode, only load the first (master) track
-          const filesToProcess = performanceMode === 'master-only' ? sortedFiles.slice(0, 1) : sortedFiles;
-          
-          for (const file of filesToProcess) {
-            if (cancelled) {
-              break;
-            }
-            
-            // Skip if we already have this stem loaded
-            const stemId = file.file_name.toLowerCase().replace(/\.[^/.]+$/, '');
-            if (stems.some(s => s.id === stemId)) {
-              continue;
-            }
-            
-            let retryCount = 0;
-            const maxRetries = 3;
-            
-            while (retryCount < maxRetries && !cancelled) {
-              try {
-                const downloadUrlResult = await getDownloadUrlMutation.mutateAsync({ fileId: file.id });
-                
-                stems.push({
-                  id: file.file_name.toLowerCase().replace(/\.[^/.]+$/, ''),
-                  url: downloadUrlResult.downloadUrl,
-                  label: file.file_name
-                });
-                break; // Success, exit retry loop
-              } catch (error) {
-                retryCount++;
-                
-                if (retryCount >= maxRetries) {
-                  console.error(`Failed to get download URL for file ${file.file_name} after ${maxRetries} attempts`);
-                  // Don't add to stems array, continue with next file
-                } else {
-                  // Wait before retry with exponential backoff
-                  const waitTime = Math.pow(2, retryCount) * 1000;
-                  await new Promise(resolve => setTimeout(resolve, waitTime));
+            // Sort so master is last
+            const sortedAudioFiles = sortStemsWithMasterLast(audioFiles.map(f => ({
+              ...f,
+              isMaster: f.is_master || false,
+              stemType: f.stem_type || getStemTypeFromFileName(f.file_name)
+            })));
+
+            const stemsToLoad = await Promise.all(
+              sortedAudioFiles.map(async file => {
+                const result = await getDownloadUrlMutation.mutateAsync({ fileId: file.id });
+                return {
+                  id: file.id,
+                  url: result.downloadUrl,
+                  label: file.file_name,
+                  isMaster: file.isMaster,
+                  stemType: file.stemType
+                };
+              })
+            );
+
+            if (!cancelled) {
+              // Process non-master first, then master
+              const nonMasterStems = stemsToLoad.filter(s => !s.isMaster);
+              const masterStems = stemsToLoad.filter(s => s.isMaster);
+              await stemAudio.loadStems(nonMasterStems, (stemId, audioBuffer) => {
+                const stem = nonMasterStems.find(s => s.id === stemId);
+                if (stem && !cachedStemAnalysis.cachedAnalysis.some(a => a.fileMetadataId === stemId)) {
+                  cachedStemAnalysis.analyzeAudioBuffer(stemId, audioBuffer, stem.stemType);
                 }
+              });
+              if (masterStems.length > 0) {
+                await stemAudio.loadStems(masterStems, (stemId, audioBuffer) => {
+                  const stem = masterStems.find(s => s.id === stemId);
+                  if (stem && !cachedStemAnalysis.cachedAnalysis.some(a => a.fileMetadataId === stemId)) {
+                    cachedStemAnalysis.analyzeAudioBuffer(stemId, audioBuffer, stem.stemType);
+                  }
+                });
               }
             }
-          }
-          
-          if (!cancelled && stems.length > 0) {
-            try {
-              await stemAudio.loadStems(stems);
-            } catch (stemError) {
-              console.error('Failed to load stems into audio controller:', stemError);
-            }
-          } else if (stems.length === 0) {
-            console.warn('No valid stems could be loaded');
-          } else if (cancelled) {
-            console.log('Stem loading was cancelled');
+          } else {
+            console.log('No completed audio files found in project.');
           }
         } catch (error) {
           if (!cancelled) {
@@ -349,30 +383,21 @@ export default function CreativeVisualizerPage() {
         isLoadingStemsRef.current = false;
       };
     }
-  }, [projectFiles?.files, currentProjectId, isInitialized, performanceMode]); // Removed cachedAnalysis from dependencies
+  }, [projectFiles?.files, currentProjectId, isInitialized, cachedStemAnalysis.isLoading, cachedStemAnalysis.cachedAnalysis]);
 
-  // Load cached analysis after stems are loaded
-  useEffect(() => {
-    if (stemAudio.stemsLoaded && projectFiles?.files) {
-      const audioFiles = projectFiles.files.filter(file => 
-        file.file_type === 'audio' && file.upload_status === 'completed'
-      );
-      
-      if (audioFiles.length > 0) {
-        cachedStemAnalysis.loadAnalysis(audioFiles.map(stem => stem.id));
-      }
-    }
-  }, [stemAudio.stemsLoaded, projectFiles?.files]);
+  
 
-  // Update audio analysis data from cached analysis
+  const availableStems = projectFiles?.files?.filter(file => 
+    file.file_type === 'audio' && file.upload_status === 'completed'
+  ) || [];
+
+  // Load all analyses when stems are available
   useEffect(() => {
-    const cachedData = cachedStemAnalysis.cachedAnalysis;
-    if (cachedData) {
-      setAudioAnalysisData(cachedData);
-    } else if (stemAudio.visualizationData) {
-      setAudioAnalysisData(stemAudio.visualizationData);
+    if (availableStems.length > 0) {
+      const stemIds = availableStems.map(stem => stem.id);
+      cachedStemAnalysis.loadAnalysis(stemIds);
     }
-  }, [cachedStemAnalysis.cachedAnalysis, stemAudio.visualizationData]);
+  }, [availableStems.length]);
 
 
 
@@ -445,21 +470,12 @@ export default function CreativeVisualizerPage() {
 
   const handleCloseCreateModal = () => {
     setShowCreateModal(false);
-    setShowPicker(true);
   };
 
-  const availableStems = projectFiles?.files?.filter(file => 
-    file.file_type === 'audio' && file.upload_status === 'completed'
-  ) || [];
+  
 
 
-  // Load all analyses when stems are available
-  useEffect(() => {
-    if (availableStems.length > 0) {
-      const stemIds = availableStems.map(stem => stem.id);
-      cachedStemAnalysis.loadAnalysis(stemIds);
-    }
-  }, [availableStems.length, availableStems.map(stem => stem.id).join(',')]);
+  
 
   // Check if stems are actually loaded in the audio controller, not just available in the project
   const hasStems = availableStems.length > 0 && stemAudio.stemsLoaded;
@@ -474,21 +490,24 @@ export default function CreativeVisualizerPage() {
       name: 'Metaballs Effect', 
       description: 'Organic, fluid-like visualizations that respond to audio intensity',
       category: 'Generative',
-      rarity: 'Rare'
+      rarity: 'Rare',
+      parameters: {} // <-- Added
     },
     { 
       id: 'midiHud', 
       name: 'HUD Effect', 
       description: 'Technical overlay displaying real-time audio analysis and MIDI data',
       category: 'Overlays',
-      rarity: 'Common'
+      rarity: 'Common',
+      parameters: {} // <-- Added
     },
     { 
       id: 'particleNetwork', 
       name: 'Particle Effect', 
       description: 'Dynamic particle systems that react to rhythm and pitch',
       category: 'Generative',
-      rarity: 'Mythic'
+      rarity: 'Mythic',
+      parameters: {} // <-- Added
     }
   ];
 
@@ -504,6 +523,48 @@ export default function CreativeVisualizerPage() {
       ...prev,
       [effectId]: true
     }));
+  };
+
+  const handleEffectDoubleClick = (effectId: string) => {
+    // Open the parameter modal for this effect
+    setOpenEffectModals(prev => ({
+      ...prev,
+      [effectId]: true
+    }));
+  };
+
+  const handleEffectClipAdd = (effect: any) => {
+    const newClip = {
+      id: `${effect.id}-${Date.now()}`,
+      effectId: effect.id,
+      name: effect.name,
+      startTime: stemAudio.currentTime,
+      endTime: stemAudio.currentTime + 10, // Default 10 second duration
+      parameters: effect.parameters || {}
+    };
+    setEffectClips(prev => [...prev, newClip]);
+    
+    // Also enable the effect in the visualizer
+    setSelectedEffects(prev => ({
+      ...prev,
+      [effect.id]: true
+    }));
+    
+    console.log('Effect added to timeline:', newClip);
+  };
+
+  const handleEffectClipRemove = (clipId: string) => {
+    setEffectClips(prev => prev.filter(clip => clip.id !== clipId));
+  };
+
+  const handleEffectClipEdit = (clipId: string) => {
+    const clip = effectClips.find(c => c.id === clipId);
+    if (clip) {
+      setOpenEffectModals(prev => ({
+        ...prev,
+        [clip.effectId]: true
+      }));
+    }
   };
 
 
@@ -541,7 +602,479 @@ export default function CreativeVisualizerPage() {
     // TODO: Implement stem solo functionality
   };
 
+  // Feature mapping handlers
+  const handleMapFeature = (parameterId: string, featureId: string) => {
+    console.log('🎛️ Creating mapping:', {
+      parameterId,
+      featureId,
+      parameterName: parameterId.split('-')[1],
+      effectId: parameterId.split('-')[0]
+    });
+    
+    setMappings(prev => ({ ...prev, [parameterId]: featureId }));
+    
+    // Store feature name for display
+    const featureName = featureId.split('-').map(word => 
+      word.charAt(0).toUpperCase() + word.slice(1)
+    ).join(' ');
+    setFeatureNames(prev => ({ ...prev, [featureId]: featureName }));
+    
+    console.log('🎛️ Mapping created successfully');
+  };
 
+  const handleUnmapFeature = (parameterId: string) => {
+    console.log('🎛️ Removing mapping:', {
+      parameterId,
+      currentMapping: mappings[parameterId]
+    });
+    
+    setMappings(prev => ({ ...prev, [parameterId]: null }));
+    
+    console.log('🎛️ Mapping removed successfully');
+  };
+
+  // Handler for selecting a stem/track
+  const handleStemSelect = (stemId: string) => {
+    console.log('🎛️ Selecting stem:', {
+      stemId,
+      previousActiveTrack: activeTrackId,
+      availableAnalyses: cachedStemAnalysis.cachedAnalysis.map(a => ({
+        id: a.fileMetadataId,
+        stemType: a.stemType,
+        hasData: !!a.analysisData,
+        features: a.analysisData ? Object.keys(a.analysisData) : []
+      }))
+    });
+    
+    setActiveTrackId(stemId);
+    
+    // Log the analysis data for the selected stem
+    const selectedAnalysis = cachedStemAnalysis.cachedAnalysis.find(a => a.fileMetadataId === stemId);
+    if (selectedAnalysis) {
+      console.log('🎛️ Selected stem analysis:', {
+        stemId,
+        stemType: selectedAnalysis.stemType,
+        duration: selectedAnalysis.metadata.duration,
+        features: selectedAnalysis.analysisData ? Object.keys(selectedAnalysis.analysisData) : [],
+        sampleValues: selectedAnalysis.analysisData ? 
+          Object.entries(selectedAnalysis.analysisData).reduce((acc, [feature, data]) => {
+            if (Array.isArray(data) && data.length > 0) {
+              acc[feature] = {
+                length: data.length,
+                firstValue: data[0],
+                lastValue: data[data.length - 1],
+                sampleValues: data.slice(0, 5) // First 5 values
+              };
+            }
+            return acc;
+          }, {} as Record<string, any>) : {}
+      });
+    } else {
+      console.warn('🎛️ No analysis found for selected stem:', stemId);
+    }
+  };
+
+  const [activeSliderValues, setActiveSliderValues] = useState<Record<string, number>>({});
+  const visualizerRef = useRef<any>(null);
+  const animationFrameId = useRef<number>();
+
+  // Function to convert frontend feature names to backend analysis keys
+  const getAnalysisKeyFromFeatureId = (featureId: string): string => {
+    // Frontend feature IDs are like "drums-rms-volume", "bass-loudness", etc.
+    // Backend analysis data has keys like "rms", "loudness", etc.
+    const parts = featureId.split('-');
+    if (parts.length >= 2) {
+      // Remove the stem type prefix and get the feature name
+      const featureName = parts.slice(1).join('-');
+      
+      // Map frontend feature names to backend analysis keys
+      const featureMapping: Record<string, string> = {
+        'rms-volume': 'rms',
+        'loudness': 'loudness',
+        'spectral-centroid': 'spectralCentroid',
+        'spectral-rolloff': 'spectralRolloff',
+        'spectral-flux': 'spectralFlux',
+        'mfcc-1': 'mfcc_0', // Meyda uses 0-indexed MFCC
+        'mfcc-2': 'mfcc_1',
+        'mfcc-3': 'mfcc_2',
+        'perceptual-spread': 'perceptualSpread',
+        'energy': 'energy',
+        'zcr': 'zcr',
+        'beat-intensity': 'beatIntensity',
+        'rhythm-pattern': 'rhythmPattern',
+        'attack-time': 'attackTime',
+        'chroma-vector': 'chromaVector',
+        'harmonic-content': 'harmonicContent',
+        'sub-bass': 'subBass',
+        'warmth': 'warmth',
+        'spectral-complexity': 'spectralComplexity',
+        'texture': 'texture',
+        'pitch-height': 'pitchHeight',
+        'pitch-movement': 'pitchMovement',
+        'melody-complexity': 'melodyComplexity',
+        'expression': 'expression'
+      };
+      
+      return featureMapping[featureName] || featureName;
+    }
+    return featureId; // Fallback to original if no prefix
+  };
+
+  // Function to get the stem type from a feature ID
+  const getStemTypeFromFeatureId = (featureId: string): string | null => {
+    const parts = featureId.split('-');
+    if (parts.length >= 2) {
+      return parts[0]; // First part is the stem type
+    }
+    return null;
+  };
+
+  // Track when visualizer ref becomes available
+  useEffect(() => {
+    if (visualizerRef.current) {
+      console.log('🎛️ Visualizer ref available:', {
+        hasRef: !!visualizerRef.current,
+        availableEffects: visualizerRef.current?.getAllEffects?.()?.map((e: any) => e.id) || [],
+        selectedEffects: Object.keys(selectedEffects).filter(k => selectedEffects[k])
+      });
+    } else {
+      console.log('🎛️ Visualizer ref not available yet');
+    }
+  }, [visualizerRef.current, selectedEffects]);
+
+  // Real-time feature mapping and visualizer update loop
+  useEffect(() => {
+    // REMOVED VERBOSE LOGGING - Only log setup and errors
+    // console.log('🎛️ Setting up mapping loop:', {
+    //   isPlaying,
+    //   hasVisualizerRef: !!visualizerRef.current,
+    //   activeTrackId,
+    //   mappingsCount: Object.keys(mappings).length
+    // });
+
+    // Cache analysis data and mappings for performance
+    let cachedMappings: [string, string][] = [];
+    let lastUpdateTime = 0;
+    let frameCount = 0;
+    
+    // Pre-calculate analysis data for better performance
+    let analysisCache: Record<string, any> = {};
+    let lastAnalysisCacheTime = 0;
+
+    const animationLoop = () => {
+      if (!isPlaying || !visualizerRef.current) {
+        animationFrameId.current = requestAnimationFrame(animationLoop);
+        return;
+      }
+      
+      // IMPLEMENT 30FPS CAP FOR MAPPING LOOP
+      const now = performance.now();
+      const elapsed = now - lastUpdateTime;
+      const targetFrameTime = 1000 / 30; // 33.33ms for 30fps
+      
+      if (elapsed < targetFrameTime) {
+        animationFrameId.current = requestAnimationFrame(animationLoop);
+        return; // Skip this frame to maintain 30fps cap
+      }
+      
+      lastUpdateTime = now;
+      
+      const time = stemAudio.currentTime;
+      setCurrentTime(time);
+      
+      // IMPROVED SYNC CALCULATION
+      // Use a more accurate sync calculation that accounts for all timing factors
+      const measuredLatency = stemAudio.getAudioLatency ? stemAudio.getAudioLatency() : 0;
+      const audioContextTime = stemAudio.getAudioContextTime ? stemAudio.getAudioContextTime() : 0;
+      const scheduledStartTime = stemAudio.scheduledStartTimeRef?.current || 0;
+      
+      // Calculate the actual audio playback time more accurately
+      const audioPlaybackTime = Math.max(0, audioContextTime - scheduledStartTime);
+      
+      // Apply latency compensation and manual offset
+      const compensatedTime = audioPlaybackTime - measuredLatency + (syncOffsetMs / 1000);
+      const syncTime = Math.max(0, compensatedTime);
+
+      // Cache analysis data to avoid repeated lookups
+      // if (!cachedAnalysis || cachedAnalysis.fileMetadataId !== activeTrackId) {
+      //   cachedAnalysis = cachedStemAnalysis.cachedAnalysis.find(a => a.fileMetadataId === activeTrackId);
+      // }
+
+      // Cache mappings to avoid repeated Object.entries calls
+      if (cachedMappings.length !== Object.keys(mappings).length) {
+        cachedMappings = Object.entries(mappings).filter(([, featureId]) => featureId !== null) as [string, string][];
+      }
+
+      // REMOVED VERBOSE LOGGING - Only log errors
+      frameCount++;
+      const shouldLog = false; // Disable all logging for performance
+
+      if (activeTrackId && cachedStemAnalysis.cachedAnalysis.length > 0) {
+        // Use duration-based proportional indexing for robust sync
+        const analysisDuration = cachedStemAnalysis.cachedAnalysis.find(a => a.fileMetadataId === activeTrackId)?.metadata.duration || 1; // Default to 1 if no analysis
+        
+        // Pre-calculate analysis cache every 100ms to avoid repeated calculations
+        const now = performance.now();
+        if (now - lastAnalysisCacheTime > 100) {
+          analysisCache = {};
+          lastAnalysisCacheTime = now;
+        }
+        
+        // Process all mappings in a single pass for better performance
+        for (const [paramKey, featureId] of cachedMappings) {
+          if (!featureId) continue;
+
+          // Get the stem type from the feature ID
+          const featureStemType = getStemTypeFromFeatureId(featureId);
+          if (!featureStemType) {
+            continue;
+          }
+
+          // Find the analysis data for the specific stem type of this feature
+          const featureAnalysis = cachedStemAnalysis.cachedAnalysis.find(a => 
+            a.stemType === featureStemType
+          );
+
+          if (!featureAnalysis || !featureAnalysis.analysisData) {
+            continue;
+          }
+
+          // Convert frontend feature ID to backend analysis key
+          const analysisKey = getAnalysisKeyFromFeatureId(featureId);
+          const featureData = featureAnalysis.analysisData[analysisKey];
+          
+          if (!featureData || featureData.length === 0) {
+            // Only log errors, not every frame
+            continue;
+          }
+
+          // OPTIMIZED DURATION-BASED INDEXING
+          const analysisDuration = featureAnalysis.metadata.duration;
+          const progress = Math.max(0, Math.min(syncTime / analysisDuration, 1));
+          const index = progress * (featureData.length - 1);
+          const lower = Math.floor(index);
+          const upper = Math.min(lower + 1, featureData.length - 1);
+          const fraction = index - lower;
+          
+          // Use cached interpolation if available
+          const cacheKey = `${featureId}-${lower}-${upper}`;
+          let rawValue: number;
+          
+          if (analysisCache[cacheKey]) {
+            rawValue = analysisCache[cacheKey] + (featureData[upper] - featureData[lower]) * fraction;
+          } else {
+            rawValue = featureData[lower] + (featureData[upper] - featureData[lower]) * fraction;
+            analysisCache[cacheKey] = featureData[lower];
+          }
+
+          const [effectId, paramName] = paramKey.split('-', 2);
+          if (!effectId || !paramName) {
+            continue;
+          }
+
+          const maxValue = getSliderMax(paramName);
+          const minValue = 0; 
+          
+          const scaledValue = rawValue * (maxValue - minValue) + minValue;
+
+          // OPTIMIZED UPDATE THRESHOLD
+          // Only update if value has changed significantly (reduce unnecessary updates)
+          const currentValue = activeSliderValues[paramKey];
+          const valueChange = Math.abs(scaledValue - (currentValue || 0));
+          
+          // Use adaptive threshold based on parameter type for smoother updates
+          const updateThreshold = paramName.includes('speed') || paramName.includes('animation') ? 0.005 : 0.01;
+          
+          if (valueChange > updateThreshold) { // Update if change > threshold
+            // DIRECT VISUALIZER UPDATE - No React state update to reduce latency
+            visualizerRef.current.updateEffectParameter(effectId, paramName, scaledValue);
+            
+            // Batch React state updates to reduce re-renders
+            if (frameCount % 10 === 0) { // Update React state less frequently
+              setActiveSliderValues(prev => ({ ...prev, [paramKey]: scaledValue }));
+            }
+          }
+        }
+      }
+
+      animationFrameId.current = requestAnimationFrame(animationLoop);
+    };
+
+    animationFrameId.current = requestAnimationFrame(animationLoop);
+
+    return () => {
+      if (animationFrameId.current) {
+        cancelAnimationFrame(animationFrameId.current);
+        // REMOVED VERBOSE LOGGING
+        // console.log('🎛️ Mapping loop stopped');
+      }
+    };
+  }, [isPlaying, mappings, activeTrackId, cachedStemAnalysis.cachedAnalysis, stemAudio, activeSliderValues]);
+  
+  const getSliderMax = (paramName: string) => {
+    if (paramName === 'base-radius') return 1.0;
+    if (paramName === 'animation-speed') return 2.0;
+    if (paramName === 'glow-intensity') return 3.0;
+    if (paramName === 'hud-opacity') return 1.0;
+    if (paramName === 'max-particles') return 200;
+    if (paramName === 'connection-distance') return 5.0;
+    if (paramName === 'particle-size') return 50;
+    return 100; // Default max for other numeric parameters
+  };
+
+  const getSliderStep = (paramName: string) => {
+    if (paramName === 'base-radius') return 0.1;
+    if (paramName === 'animation-speed') return 0.1;
+    if (paramName === 'glow-intensity') return 0.1;
+    if (paramName === 'hud-opacity') return 0.1;
+    if (paramName === 'max-particles') return 10;
+    if (paramName === 'connection-distance') return 0.1;
+    if (paramName === 'particle-size') return 5;
+    return 1; // Default step for other numeric parameters
+  };
+
+  const handleParameterChange = (effectId: string, paramName: string, value: any) => {
+    const paramKey = `${effectId}-${paramName}`;
+    setActiveSliderValues(prev => ({ ...prev, [paramKey]: value }));
+    // In a real application, you would update the effect's parameters here
+    // For now, we'll just update the state to reflect the current value in the modal
+  };
+
+  const effectModals = Object.entries(openEffectModals).map(([effectId, isOpen], index) => {
+    if (!isOpen) return null;
+    const effectInstance = effects.find(e => e.id === effectId);
+    if (!effectInstance) return null;
+    const sortedParams = Object.entries(effectInstance.parameters || {}).sort(([, a], [, b]) => {
+      if (typeof a === 'boolean' && typeof b !== 'boolean') return -1;
+      if (typeof a !== 'boolean' && typeof b === 'boolean') return 1;
+      return 0;
+    });
+    if (sortedParams.length === 0) return null;
+    const initialPos = {
+      x: 100 + (index * 50),
+      y: 100 + (index * 50)
+    };
+    return (
+      <PortalModal
+        key={effectId}
+        title={effectInstance.name.replace(' Effect', '')}
+        isOpen={isOpen}
+        onClose={() => handleCloseEffectModal(effectId)}
+        initialPosition={initialPos}
+        bounds="#editor-bounds"
+      >
+        <div className="flex flex-col gap-4">
+          {sortedParams.map(([paramName, value]) => {
+            if (typeof value === 'boolean') {
+              return (
+                <div key={paramName} className="flex items-center justify-between">
+                  <Label className="text-white/80 text-xs font-mono">{paramName}</Label>
+                  <Switch
+                    checked={value}
+                    onCheckedChange={(checked) => handleParameterChange(effectId, paramName, checked)}
+                  />
+                </div>
+              );
+            }
+            if (typeof value === 'number') {
+              const paramKey = `${effectId}-${paramName}`;
+              const mappedFeatureId = mappings[paramKey];
+              const mappedFeatureName = mappedFeatureId ? featureNames[mappedFeatureId] : undefined;
+              return (
+                <DroppableParameter
+                  key={paramKey}
+                  parameterId={paramKey}
+                  label={paramName}
+                  mappedFeatureId={mappedFeatureId}
+                  mappedFeatureName={mappedFeatureName}
+                  onFeatureDrop={handleMapFeature}
+                  onFeatureUnmap={handleUnmapFeature}
+                  className="mb-2"
+                  dropZoneStyle="inlayed"
+                  showTagOnHover
+                >
+                                            <Slider
+                            value={[activeSliderValues[paramKey] ?? value]}
+                            onValueChange={([val]) => {
+                              setActiveSliderValues(prev => ({ ...prev, [paramKey]: val }));
+                              handleParameterChange(effectId, paramName, val);
+                            }}
+                            min={0}
+                            max={getSliderMax(paramName)}
+                            step={getSliderStep(paramName)}
+                            className="w-full"
+                            disabled={!!mappedFeatureId} // Disable manual control when mapped
+                          />
+                </DroppableParameter>
+              );
+            }
+            if ((paramName === 'highlightColor' || paramName === 'particleColor') && Array.isArray(value)) {
+              const displayName = paramName === 'highlightColor' ? 'Highlight Color' : 'Particle Color';
+              return (
+                <div key={paramName} className="space-y-2">
+                  <Label className="text-white/90 text-sm font-medium flex items-center justify-between">
+                    {displayName}
+                    <span className="ml-2 w-6 h-6 rounded-full border border-white/40 inline-block" style={{ background: `rgb(${value.map((v) => Math.round(v * 255)).join(',')})` }} />
+                  </Label>
+                  <input
+                    type="color"
+                    value={`#${value.map((v) => Math.round(v * 255).toString(16).padStart(2, '0')).join('')}`}
+                    onChange={e => {
+                      const hex = e.target.value;
+                      const rgb = [
+                        parseInt(hex.slice(1, 3), 16) / 255,
+                        parseInt(hex.slice(3, 5), 16) / 255,
+                        parseInt(hex.slice(5, 7), 16) / 255
+                      ];
+                      handleParameterChange(effectId, paramName, rgb);
+                    }}
+                    className="w-12 h-8 rounded border border-white/30 bg-transparent cursor-pointer"
+                  />
+                </div>
+              );
+            }
+            return null;
+          })}
+          {/* Effect Enabled Toggle - Remove border and adjust spacing */}
+          <div className="pt-2 mt-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-white/80 text-xs font-mono">Effect Enabled</Label>
+              <Switch 
+                checked={selectedEffects[effectId]}
+                onCheckedChange={(checked) => {
+                  setSelectedEffects(prev => ({
+                    ...prev,
+                    [effectId]: checked
+                  }));
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      </PortalModal>
+    );
+  });
+
+  // Helper to infer stem type from file name
+  const getStemTypeFromFileName = (fileName: string) => {
+    const lower = fileName.toLowerCase();
+    if (lower.includes('bass')) return 'bass';
+    if (lower.includes('drum')) return 'drums';
+    if (lower.includes('vocal')) return 'vocals';
+    return 'other';
+  };
+
+  // Find the selected stem and its type
+  const selectedStem = availableStems.find(stem => stem.id === activeTrackId);
+  // Use the actual stem_type from the database, fallback to filename inference
+  const selectedStemType = selectedStem 
+    ? (selectedStem.stem_type || getStemTypeFromFileName(selectedStem.file_name))
+    : undefined;
+
+
+
+  // In the render, use the sorted stems
+  const sortedAvailableStems = sortStemsWithMasterLast(availableStems);
 
   return (
     <>
@@ -559,138 +1092,176 @@ export default function CreativeVisualizerPage() {
           onClose={handleCloseCreateModal}
         />
       )}
-      {/* Main visualizer UI */}
-      <div className="flex h-screen bg-stone-800 text-white min-w-0">
-        <CollapsibleSidebar>
-          <FileSelector 
-            onFileSelected={handleFileSelected}
-            selectedFileId={selectedFileId || undefined}
-            useDemoData={useDemoData}
-            onDemoModeChange={handleDemoModeChange}
-            projectId={currentProjectId || undefined}
-            projectName={projectData?.name}
-          />
-        </CollapsibleSidebar>
-        <main className="flex-1 flex overflow-hidden min-w-0">
-          {/* Main Content Area */}
-          <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-            {/* Top Control Bar */}
-            <div className="p-4 bg-stone-900/50 border-b border-white/10">
+      <DndProvider backend={HTML5Backend}>
+        {/* Main visualizer UI */}
+        <div className="flex h-screen bg-stone-800 text-white min-w-0">
+          <CollapsibleSidebar>
+            <div className="space-y-4">
+              <MappingSourcesPanel 
+                activeTrackId={activeTrackId || undefined}
+                className="mb-4"
+                selectedStemType={selectedStemType}
+              />
+              <FileSelector 
+                onFileSelected={handleFileSelected}
+                selectedFileId={selectedFileId || undefined}
+                useDemoData={useDemoData}
+                onDemoModeChange={handleDemoModeChange}
+                projectId={currentProjectId || undefined}
+                projectName={projectData?.name}
+              />
+            </div>
+          </CollapsibleSidebar>
+          <main className="flex-1 flex overflow-hidden min-w-0">
+            {/* Editor bounds container with proper positioning context */}
+            <div 
+              id="editor-bounds" 
+              className="relative flex-1 flex flex-col overflow-hidden min-w-0"
+              style={{ 
+                height: '100vh',
+                position: 'relative',
+                contain: 'layout'
+              }}
+            >
+          {/* Top Control Bar */}
+          <div className="p-4 bg-stone-900/50 border-b border-white/10">
               <div className="flex items-center justify-between min-w-0">
                 <div className="flex items-center gap-3 min-w-0 overflow-hidden">
-                  <Button 
-                    onClick={handlePlayPause} 
-                    size="lg" 
+                <Button 
+                  onClick={handlePlayPause} 
+                  size="lg" 
                     disabled={stemLoadingState}
-                    className={`font-sans text-sm uppercase tracking-wider px-6 py-3 transition-all duration-300 ${
+                  className={`font-sans text-sm uppercase tracking-wider px-6 py-3 transition-all duration-300 ${
                       stemLoadingState 
-                        ? 'bg-stone-600 text-stone-400 cursor-not-allowed' 
-                        : 'bg-stone-700 hover:bg-stone-600'
-                    }`}
-                  >
+                      ? 'bg-stone-600 text-stone-400 cursor-not-allowed' 
+                      : 'bg-stone-700 hover:bg-stone-600'
+                  }`}
+                >
                     {stemLoadingState ? (
-                      <>
-                        <div className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-stone-400 border-t-transparent" />
-                        LOADING AUDIO
-                      </>
-                    ) : (
-                      <>
-                        {isPlaying ? <Pause className="h-4 w-4 mr-2" /> : <Play className="h-4 w-4 mr-2" />}
-                        {isPlaying ? 'PAUSE' : 'PLAY'}
-                      </>
-                    )}
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                    <>
+                      <div className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-stone-400 border-t-transparent" />
+                      LOADING AUDIO
+                    </>
+                  ) : (
+                    <>
+                      {isPlaying ? <Pause className="h-4 w-4 mr-2" /> : <Play className="h-4 w-4 mr-2" />}
+                      {isPlaying ? 'PAUSE' : 'PLAY'}
+                    </>
+                  )}
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
                     disabled={stemLoadingState}
-                    onClick={() => stemAudio.setLooping(!stemAudio.isLooping)}
-                    className={`bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 font-sans text-xs uppercase tracking-wider ${
+                  onClick={() => stemAudio.setLooping(!stemAudio.isLooping)}
+                  className={`bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 font-sans text-xs uppercase tracking-wider ${
                       stemLoadingState 
-                        ? 'opacity-50 cursor-not-allowed' 
-                        : stemAudio.isLooping ? 'bg-emerald-900/20 border-emerald-600 text-emerald-300' : ''
-                    }`}
-                    style={{ borderRadius: '8px' }}
-                  >
-                    🔄 {stemAudio.isLooping ? 'LOOP ON' : 'LOOP OFF'}
-                  </Button>
-                  <Button 
-                    variant="outline" 
+                      ? 'opacity-50 cursor-not-allowed' 
+                      : stemAudio.isLooping ? 'bg-emerald-900/20 border-emerald-600 text-emerald-300' : ''
+                  }`}
+                  style={{ borderRadius: '8px' }}
+                >
+                  🔄 {stemAudio.isLooping ? 'LOOP ON' : 'LOOP OFF'}
+                </Button>
+                <Button 
+                  variant="outline" 
                     disabled={stemLoadingState}
-                    onClick={handleReset} 
-                    className={`bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 ${
+                  onClick={handleReset} 
+                  className={`bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 ${
                       stemLoadingState ? 'opacity-50 cursor-not-allowed' : ''
-                    }`}
-                  >
-                    <RotateCcw className="h-4 w-4 mr-2" />
-                    RESET
-                  </Button>
+                  }`}
+                >
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  RESET
+                </Button>
                   
                   {/* Stats Section - Compact layout */}
                   <div className="flex items-center gap-1 overflow-hidden">
-                    <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                      {currentTime.toFixed(1)}S / {(midiData || sampleMidiData).file.duration.toFixed(1)}S
-                    </div>
-                    <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                      FPS: {fps}
-                    </div>
-                    {stemAudio.performanceMetrics && (
-                      <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                        LAT: {stemAudio.performanceMetrics.analysisLatency.toFixed(1)}ms
-                      </div>
-                    )}
-                    {stemAudio.deviceProfile && (
-                      <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                        {stemAudio.deviceProfile.toUpperCase()}
-                      </div>
-                    )}
-                    <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                      NOTES: {(midiData || sampleMidiData).tracks.reduce((sum, track) => sum + track.notes.length, 0)}
-                    </div>
-                    {hasStems && (
-                      <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                        STEMS: {availableStems.length}
-                      </div>
-                    )}
-                    <Badge className="bg-emerald-900/80 text-emerald-200 text-xs uppercase tracking-wide px-3 py-1 border border-emerald-700">
-                      <span className="mr-2 h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                      LIVE
-                    </Badge>
+                <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                  {currentTime.toFixed(1)}S / {(midiData || sampleMidiData).file.duration.toFixed(1)}S
+                </div>
+                <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                  FPS: {fps}
+                </div>
+                {/* Sync Calibration Slider */}
+                <div className="flex items-center gap-2 px-2">
+                  <span className="text-xs font-mono text-stone-400">SYNC</span>
+                  <input
+                    type="range"
+                    min={-1000}
+                    max={1000}
+                    step={1}
+                    value={syncOffsetMs}
+                    onChange={e => setSyncOffsetMs(Number(e.target.value))}
+                    style={{ width: 120 }}
+                  />
+                  <span className="text-xs font-mono text-stone-300" style={{ width: 48, textAlign: 'right' }}>{syncOffsetMs}ms</span>
+                </div>
+                {stemAudio.performanceMetrics && (
+                  <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                    LAT: {(stemAudio.getAudioLatency ? (stemAudio.getAudioLatency() * 1000).toFixed(1) : '0.0')}ms
                   </div>
+                )}
+                {stemAudio.deviceProfile && (
+                  <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                    {stemAudio.deviceProfile.toUpperCase()}
+                  </div>
+                )}
+                <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                  NOTES: {(midiData || sampleMidiData).tracks.reduce((sum, track) => sum + track.notes.length, 0)}
+                </div>
+                {hasStems && (
+                  <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                    STEMS: {availableStems.length}
+                  </div>
+                )}
+                {/* Sync Metrics Display */}
+                <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                  DRIFT: {syncMetrics.syncDrift.toFixed(1)}ms
+                </div>
+                <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                  FRAME: {syncMetrics.frameTime.toFixed(1)}ms
+                </div>
+                <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                  TARGET: 30fps
+                </div>
+                <Badge className="bg-emerald-900/80 text-emerald-200 text-xs uppercase tracking-wide px-3 py-1 border border-emerald-700">
+                  <span className="mr-2 h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  LIVE
+                </Badge>
+              </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => setPerformanceMode(performanceMode === 'master-only' ? 'all-stems' : 'master-only')}
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setVisualizerAspectRatio(visualizerAspectRatio === 'mobile' ? 'youtube' : 'mobile')}
                     disabled={stemLoadingState}
-                    className={`bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 font-sans text-xs uppercase tracking-wider px-2 py-1 ${
-                      performanceMode === 'master-only' ? 'bg-amber-900/20 border-amber-600 text-amber-300' : ''
-                    }`}
-                    style={{ borderRadius: '6px' }}
-                  >
-                    ⚡ {performanceMode === 'master-only' ? 'MASTER' : 'ALL'}
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => setVisualizerAspectRatio(visualizerAspectRatio === 'mobile' ? 'youtube' : 'mobile')}
                     className="bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 font-sans text-xs uppercase tracking-wider px-2 py-1"
                     style={{ borderRadius: '6px' }}
                   >
                     📱 {visualizerAspectRatio === 'mobile' ? 'MOB' : 'YT'}
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => setIsMapMode(!isMapMode)} 
-                    disabled={!hasStems}
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setIsMapMode(!isMapMode)} 
+                  disabled={!hasStems}
                     className="bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 font-sans text-xs uppercase tracking-wider px-2 py-1" 
                     style={{ borderRadius: '6px' }}
-                  >
+                >
                     {isMapMode ? <Zap className="h-3 w-3 mr-1" /> : <Zap className="h-3 w-3 mr-1" />}
                     {isMapMode ? 'EXIT' : 'MAP'}
-                  </Button>
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => stemAudio.testAudioOutput()} 
+                  className="bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 font-sans text-xs uppercase tracking-wider px-2 py-1" 
+                  style={{ borderRadius: '6px' }}
+                >
+                    🔊 TEST
+                </Button>
                   
                 </div>
               </div>
@@ -710,7 +1281,7 @@ export default function CreativeVisualizerPage() {
                       minHeight: '250px'
                     }}
                   >
-                    <ThreeVisualizer
+                  <ThreeVisualizer
                       midiData={midiData || sampleMidiData}
                       settings={settings}
                       currentTime={currentTime}
@@ -719,189 +1290,85 @@ export default function CreativeVisualizerPage() {
                       onSettingsChange={setSettings}
                       onFpsUpdate={setFps}
                       selectedEffects={selectedEffects}
-                      audioAnalysisData={audioAnalysisData}
                       aspectRatio={visualizerAspectRatio}
-                    />
-                  </div>
-                </div>
+                          // Modal and mapping props
+                          openEffectModals={openEffectModals}
+                          onCloseEffectModal={handleCloseEffectModal}
+                          mappings={mappings}
+                          featureNames={featureNames}
+                          onMapFeature={handleMapFeature}
+                          onUnmapFeature={handleUnmapFeature}
+                          activeSliderValues={activeSliderValues}
+                          setActiveSliderValues={setActiveSliderValues}
+                      onSelectedEffectsChange={() => {}} // <-- Added no-op
+                      visualizerRef={visualizerRef}
+                  />
 
+                      {/* Visualizer content only - no modals here */}
+                </div>
+                </div>
+                
                 {/* Stem Waveforms - Fixed bottom area */}
                 <div className="flex-shrink-0 mt-4">
                   <StemWaveformPanel
-                    stems={availableStems}
+                    stems={sortedAvailableStems}
+                    masterStemId={projectFiles?.files.find(f => f.is_master)?.id ?? null}
                     currentTime={stemAudio.currentTime}
                     isPlaying={stemAudio.isPlaying}
                     onSeek={stemAudio.setCurrentTime}
                     className="bg-gray-800/50 border border-gray-700"
+                    onStemSelect={handleStemSelect}
+                    activeTrackId={activeTrackId}
+                    soloedStems={stemAudio.soloedStems}
+                    onToggleSolo={stemAudio.toggleStemSolo}
+                    analysisProgress={cachedStemAnalysis.analysisProgress}
+                    cachedAnalysis={cachedStemAnalysis.cachedAnalysis}
+                    isLoading={cachedStemAnalysis.isLoading}
+                    error={cachedStemAnalysis.error}
+                    effectClips={effectClips}
+                    onEffectClipAdd={handleEffectClipAdd}
+                    onEffectClipRemove={handleEffectClipRemove}
+                    onEffectClipEdit={handleEffectClipEdit}
                   />
-                </div>
               </div>
             </div>
           </div>
 
-          {/* Right Effects Sidebar */}
-          <CollapsibleEffectsSidebar>
-            <EffectsLibrarySidebar
-              effects={effects}
-              selectedEffects={selectedEffects}
-              onEffectToggle={handleSelectEffect}
-              isVisible={true}
-            />
-          </CollapsibleEffectsSidebar>
+              {/* Effect parameter modals - positioned relative to editor-bounds */}
+              {effectModals}
+            </div>
 
-          {/* Effect Parameter Modals */}
-            {effects.map((effect, index) => {
-              const initialPos = {
-                x: 100 + (index * 50),
-                y: 100 + (index * 50)
-              };
-              
-              return (
-                <DraggableModal
-                  key={effect.id}
-                  title={effect.name.replace(' Effect', '')}
-                  isOpen={openEffectModals[effect.id]}
-                  onClose={() => handleCloseEffectModal(effect.id)}
-                  initialPosition={initialPos}
-                >
-                  <div className="space-y-4">
-                    <div className="text-sm text-gray-300 mb-4">
-                      {effect.description}
-                    </div>
-                    
-                    {/* Effect-specific parameters */}
-                    {effect.id === 'metaballs' && (
-                      <>
-                        <div className="space-y-2">
-                          <Label className="text-white/80 text-xs font-mono">Base Radius</Label>
-                          <Slider
-                            defaultValue={[0.5]}
-                            min={0.1}
-                            max={1.0}
-                            step={0.1}
-                            className="w-full"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-white/80 text-xs font-mono">Animation Speed</Label>
-                          <Slider
-                            defaultValue={[1.0]}
-                            min={0.1}
-                            max={2.0}
-                            step={0.1}
-                            className="w-full"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-white/80 text-xs font-mono">Glow Intensity</Label>
-                          <Slider
-                            defaultValue={[1.5]}
-                            min={0.5}
-                            max={3.0}
-                            step={0.1}
-                            className="w-full"
-                          />
-                        </div>
-                      </>
-                    )}
-                    
-                    {effect.id === 'midiHud' && (
-                      <>
-                        <div className="flex items-center justify-between">
-                          <Label className="text-white/80 text-xs font-mono">Show Track Info</Label>
-                          <Switch defaultChecked={true} />
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <Label className="text-white/80 text-xs font-mono">Show Velocity</Label>
-                          <Switch defaultChecked={true} />
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-white/80 text-xs font-mono">HUD Opacity</Label>
-                          <Slider
-                            defaultValue={[0.8]}
-                            min={0.1}
-                            max={1.0}
-                            step={0.1}
-                            className="w-full"
-                          />
-                        </div>
-                      </>
-                    )}
-                    
-                    {effect.id === 'particleNetwork' && (
-                      <>
-                        <div className="space-y-2">
-                          <Label className="text-white/80 text-xs font-mono">Max Particles</Label>
-                          <Slider
-                            defaultValue={[100]}
-                            min={50}
-                            max={200}
-                            step={10}
-                            className="w-full"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-white/80 text-xs font-mono">Connection Distance</Label>
-                          <Slider
-                            defaultValue={[2.0]}
-                            min={1.0}
-                            max={5.0}
-                            step={0.1}
-                            className="w-full"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-white/80 text-xs font-mono">Particle Size</Label>
-                          <Slider
-                            defaultValue={[20]}
-                            min={10}
-                            max={50}
-                            step={5}
-                            className="w-full"
-                          />
-                        </div>
-                      </>
-                    )}
-                    
-                    {/* Common controls */}
-                    <div className="pt-4 border-t border-gray-600">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-white/80 text-xs font-mono">Effect Enabled</Label>
-                        <Switch 
-                          checked={selectedEffects[effect.id]}
-                          onCheckedChange={(checked) => {
-                            setSelectedEffects(prev => ({
-                              ...prev,
-                              [effect.id]: checked
-                            }));
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </DraggableModal>
-              );
-            })}
+            {/* Right Effects Sidebar */}
+            <CollapsibleEffectsSidebar>
+              <EffectsLibrarySidebar
+                effects={effects}
+                selectedEffects={selectedEffects}
+                onEffectToggle={handleSelectEffect}
+                onEffectDoubleClick={handleEffectDoubleClick}
+                isVisible={true}
+              />
+            </CollapsibleEffectsSidebar>
 
-            {/* Mapping Editor Modal */}
-            {isMapMode && (
+              {/* Mapping Editor Modal */}
+              {isMapMode && (
               <div className="fixed inset-0 bg-black/80 z-50 flex">
-                <div className="w-1/3 bg-stone-900 border-l border-white/10 overflow-y-auto">
-                  <MappingEditor
-                    currentPreset={currentPreset}
-                    onPresetChange={handlePresetChange}
-                    onMappingUpdate={handleMappingUpdate}
-                    onStemMute={handleStemMute}
-                    onStemSolo={handleStemSolo}
-                    isPlaying={isPlaying}
-                    className="h-full"
-                  />
+                  <div className="w-1/3 bg-stone-900 border-l border-white/10 overflow-y-auto">
+                    <MappingEditor
+                      currentPreset={currentPreset}
+                      onPresetChange={handlePresetChange}
+                      onMappingUpdate={handleMappingUpdate}
+                      onStemMute={handleStemMute}
+                      onStemSolo={handleStemSolo}
+                      isPlaying={isPlaying}
+                      className="h-full"
+                    />
+                  </div>
+                  <div className="flex-1" />
                 </div>
-                <div className="flex-1" />
-              </div>
-            )}
+              )}
         </main>
       </div>
+      </DndProvider>
     </>
   );
 }
