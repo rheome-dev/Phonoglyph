@@ -22,6 +22,7 @@ import { trpc } from '@/lib/trpc';
 import { useUpload } from '@/hooks/use-upload';
 import { useToast } from '@/hooks/use-toast';
 import { ConfirmationModal } from '@/components/ui/confirmation-modal';
+import { DraggableFile } from '@/components/video-composition/DraggableFile';
 
 interface FileMetadata {
   id: string;
@@ -228,122 +229,72 @@ export function FileSelector({
   const userFiles = filesData?.files || [];
 
   return (
-    <div className="bg-stone-800/50 p-4 rounded-lg border border-white/10 h-full flex flex-col min-h-0">
-      <div className="flex items-center justify-between mb-4 flex-shrink-0">
-        <h3 className="text-sm font-semibold uppercase tracking-wider flex items-center gap-2">
-            <Users className="h-4 w-4" />
-            {projectName ? `${projectName} - Files` : 'File Library'}
-        </h3>
-        {/* Hidden demo toggle - keep for debugging but don't show */}
-        <div className="hidden items-center gap-2">
-            <Switch 
-            checked={useDemoData}
-            onCheckedChange={onDemoModeChange}
-            id="demo-mode"
-            />
-            <Label htmlFor="demo-mode" className="text-xs font-medium">
-            Demo
-            </Label>
-        </div>
+    <div className="bg-stone-900 border border-stone-700 rounded-none font-mono text-xs flex flex-col min-h-0" style={{ maxHeight: 420, overflow: 'hidden' }}>
+      <div className="flex items-center justify-between px-3 py-2 border-b border-stone-700 bg-stone-900 text-stone-100">
+        <h3 className="text-xs font-bold tracking-widest uppercase">{projectName ? `${projectName} - Files` : 'File Library'}</h3>
       </div>
-
       {/* File List with proper scrolling */}
-      <div className="flex-1 min-h-0 overflow-y-auto relative">
-        {filesLoading && (
-          <div className="absolute inset-0 bg-stone-800/80 backdrop-blur-sm flex flex-col items-center justify-center z-10 rounded-lg">
-            <Loader2 className="h-8 w-8 animate-spin text-stone-400 mb-3" />
-            <p className="text-stone-300 font-medium">Loading Project Files...</p>
-            <p className="text-stone-400 text-xs mt-1">Please wait a moment.</p>
-          </div>
-        )}
-        <div className="h-full overflow-y-auto space-y-2 pr-2">
-        {filesError && <p className="text-red-400 text-xs">Error loading files.</p>}
-        
-        {!useDemoData && userFiles.length === 0 && !filesLoading && (
-          <div className="text-center py-8 text-stone-400">
-            <FileMusic className="h-8 w-8 mx-auto mb-2 opacity-50" />
-            <p className="text-sm">
-              {projectId ? 'No files in this project yet' : 'No files uploaded yet'}
-            </p>
-            <p className="text-xs mt-1">Upload files to get started</p>
-          </div>
-        )}
-        
-        {!useDemoData && userFiles.map((file: FileMetadata) => (
-          <div
-            key={file.id}
-              className={`p-2 rounded-md cursor-pointer transition-colors flex-shrink-0 ${selectedFileId === file.id ? 'bg-stone-600/80' : 'hover:bg-stone-700/50'}`}
-            onClick={() => file.file_type === 'midi' && onFileSelected(file.id)}
-          >
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 min-w-0 flex-1">
-                {getFileIcon(file.file_type)}
-                  <span className="font-bold text-sm text-stone-200 truncate">{file.file_name}</span>
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <StatusBadge file={file} />
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); setDeleteFileId(file.id); }} 
-                    className="text-red-500 hover:text-red-700 transition-colors"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              </div>
-              <div className="text-xs text-stone-400 mt-1 truncate">
-              <span>{formatFileSize(file.file_size)}</span> | <span className="capitalize">{file.file_type}</span> | <span>{file.mime_type}</span>
+      <div className="flex-1 min-h-0 overflow-y-auto" style={{ maxHeight: 320 }}>
+        <div className="space-y-1 p-2">
+          {filesError && <p className="text-red-400 text-xs">Error loading files.</p>}
+          {!useDemoData && userFiles.length === 0 && !filesLoading && (
+            <div className="text-center py-8 text-stone-400">
+              <span className="text-2xl">📄</span>
+              <p className="text-xs mt-1">No files uploaded yet</p>
             </div>
-          </div>
-        ))}
-          
+          )}
+          {!useDemoData && userFiles.map((file: FileMetadata) => (
+            <DraggableFile
+              key={file.id}
+              file={{
+                id: file.id,
+                name: file.file_name,
+                file_type: file.file_type,
+                file_size: file.file_size,
+                uploading: file.upload_status === 'uploading',
+              }}
+              isSelected={selectedFileId === file.id}
+              onClick={() => file.file_type === 'midi' && onFileSelected(file.id)}
+              onDelete={() => setDeleteFileId(file.id)}
+            />
+          ))}
           {/* Demo data - only show when useDemoData is true */}
-        {useDemoData && (
-              <div className={`p-2 rounded-md flex-shrink-0 ${useDemoData ? 'bg-stone-600/80' : ''}`}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <FileMusic className="h-4 w-4" />
-                  <span className="font-bold text-sm text-stone-200">Creative Demo.mid</span>
-                </div>
-                <div className="parsing-status completed">
-                  <CheckCircle2 className="h-3 w-3" />
-                  Ready
-                </div>
-              </div>
-              <div className="text-xs text-stone-400 mt-1">
-                <span>1 KB</span> | <span>MIDI</span> | <span>3 Tracks</span> | <span>29 Notes</span>
-              </div>
+          {useDemoData && (
+            <div className="flex items-center border border-stone-700 bg-stone-900 text-stone-100 font-mono text-xs h-8 px-2 gap-2 select-none" style={{ borderRadius: 2, minHeight: 32, maxHeight: 32 }}>
+              <div className="flex-shrink-0 w-4 h-4 flex items-center justify-center">🎹</div>
+              <div className="truncate flex-1 font-bold" title="Creative Demo.mid" style={{ maxWidth: 120 }}>Creative Demo.mid</div>
+              <div className="uppercase tracking-widest px-1 border border-stone-700 bg-transparent" style={{ borderRadius: 1 }}>midi</div>
+              <div className="text-[10px] text-stone-400 font-mono px-1">1 KB</div>
             </div>
-        )}
+          )}
         </div>
       </div>
-
       {/* Upload Zone */}
       {!useDemoData && (
-        <div className="mt-4 flex-shrink-0">
-        <div 
-            className="p-4 border-2 border-dashed border-stone-600 rounded-lg text-center cursor-pointer hover:border-stone-500 hover:bg-stone-700/30 transition-colors"
-          onClick={() => document.getElementById('file-upload-input')?.click()}
-        >
-          <Upload className="h-6 w-6 mx-auto text-stone-500 mb-2" />
-          <h4 className="text-sm font-semibold text-stone-300">Upload Files</h4>
-          <p className="text-xs text-stone-500">MIDI, audio, video, or images</p>
-          <input
-            id="file-upload-input"
-            type="file"
-            multiple
-            accept=".mid,.midi,.mp3,.wav,.ogg,.m4a,.aac,.mp4,.mov,.avi,.mkv,.webm,.jpg,.jpeg,.png,.gif,.bmp,.webp"
-            className="hidden"
-            onChange={(e) => {
-              const files = Array.from(e.target.files || []);
-              if (files.length > 0) {
-                handleFileUpload(files);
-              }
-            }}
-          />
+        <div className="border-t border-stone-700 p-2 bg-stone-900">
+          <div 
+            className="w-full border-2 border-dashed border-stone-700 rounded-none text-center cursor-pointer hover:bg-stone-800 hover:text-stone-100 transition-colors py-2"
+            onClick={() => document.getElementById('file-upload-input')?.click()}
+          >
+            <div className="text-lg">⬆️</div>
+            <div className="font-bold">Upload Files</div>
+            <div className="text-[10px]">MIDI, audio, video, or images</div>
+            <input
+              id="file-upload-input"
+              type="file"
+              multiple
+              accept=".mid,.midi,.mp3,.wav,.ogg,.m4a,.aac,.mp4,.mov,.avi,.mkv,.webm,.jpg,.jpeg,.png,.gif,.bmp,.webp"
+              className="hidden"
+              onChange={(e) => {
+                const files = Array.from(e.target.files || []);
+                if (files.length > 0) {
+                  handleFileUpload(files);
+                }
+              }}
+            />
           </div>
         </div>
       )}
-
       <ConfirmationModal
         isOpen={!!deleteFileId}
         onClose={() => setDeleteFileId(null)}

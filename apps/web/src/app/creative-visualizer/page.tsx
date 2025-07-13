@@ -21,13 +21,16 @@ import { ProjectPickerModal } from '@/components/projects/project-picker-modal';
 import { ProjectCreationModal } from '@/components/projects/project-creation-modal';
 import { useStemAudioController } from '@/hooks/use-stem-audio-controller';
 import { useCachedStemAnalysis } from '@/hooks/use-cached-stem-analysis';
-import { StemWaveformPanel } from '@/components/stem-visualization/stem-waveform-panel';
 import { PortalModal } from '@/components/ui/portal-modal';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { MappingSourcesPanel } from '@/components/ui/MappingSourcesPanel';
 import { DroppableParameter } from '@/components/ui/droppable-parameter';
+import { LayerContainer } from '@/components/video-composition/LayerContainer';
+import { UnifiedTimeline } from '@/components/video-composition/UnifiedTimeline';
+import { TestVideoComposition } from '@/components/video-composition/TestVideoComposition';
+import type { Layer } from '@/types/video-composition';
 import { useFeatureValue } from '@/hooks/use-feature-value';
 
 // Sample MIDI data for demonstration
@@ -174,6 +177,11 @@ export default function CreativeVisualizerPage() {
     endTime: number;
     parameters: Record<string, any>;
   }>>([]);
+
+  // Video composition state
+  const [videoLayers, setVideoLayers] = useState<Layer[]>([]);
+  const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
+  const [showVideoComposition, setShowVideoComposition] = useState(false);
 
   // Effects carousel state (now for timeline-based effects)
   const [selectedEffects, setSelectedEffects] = useState<Record<string, boolean>>({
@@ -590,6 +598,30 @@ export default function CreativeVisualizerPage() {
       [effectId]: false
     }));
   };
+
+  // Video composition handlers
+  const handleLayerAdd = (layer: Layer) => {
+    setVideoLayers(prev => [...prev, layer]);
+  };
+
+  const handleLayerUpdate = (layerId: string, updates: Partial<Layer>) => {
+    setVideoLayers(prev => prev.map(layer => 
+      layer.id === layerId ? { ...layer, ...updates } : layer
+    ));
+  };
+
+  const handleLayerDelete = (layerId: string) => {
+    setVideoLayers(prev => prev.filter(layer => layer.id !== layerId));
+    if (selectedLayerId === layerId) {
+      setSelectedLayerId(null);
+    }
+  };
+
+  const handleLayerSelect = (layerId: string) => {
+    setSelectedLayerId(layerId);
+  };
+
+
 
 
 
@@ -1062,6 +1094,38 @@ export default function CreativeVisualizerPage() {
     ? (selectedStem.stem_type || getStemTypeFromFileName(selectedStem.file_name))
     : undefined;
 
+  // Helper to get the master stem (if available)
+  const getMasterStem = () => availableStems.find(stem => stem.is_master);
+
+  // Helper to get the correct duration (master audio if available, else fallback)
+  const getCurrentDuration = () => {
+    if (hasStems && stemAudio.duration && stemAudio.duration > 0) {
+      return stemAudio.duration;
+    }
+    return (midiData || sampleMidiData).file.duration;
+  };
+
+  // Update currentTime from stemAudio if stems are loaded
+  useEffect(() => {
+    if (!isPlaying) return;
+    let rafId: number;
+    const update = () => {
+      if (hasStems) {
+        const duration = getCurrentDuration();
+        let displayTime = stemAudio.currentTime;
+        
+        // If looping is enabled, show position within the current loop cycle
+        if (stemAudio.isLooping && duration > 0) {
+          displayTime = stemAudio.currentTime % duration;
+        }
+        
+        setCurrentTime(displayTime);
+      }
+      rafId = requestAnimationFrame(update);
+    };
+    rafId = requestAnimationFrame(update);
+    return () => cancelAnimationFrame(rafId);
+  }, [isPlaying, hasStems, stemAudio]);
 
 
   // In the render, use the sorted stems
@@ -1092,6 +1156,9 @@ export default function CreativeVisualizerPage() {
                 activeTrackId={activeTrackId || undefined}
                 className="mb-4"
                 selectedStemType={selectedStemType}
+                currentTime={currentTime}
+                cachedAnalysis={cachedStemAnalysis.cachedAnalysis}
+                isPlaying={isPlaying}
               />
               <FileSelector 
                 onFileSelected={handleFileSelected}
@@ -1115,14 +1182,14 @@ export default function CreativeVisualizerPage() {
               }}
             >
           {/* Top Control Bar */}
-          <div className="p-4 bg-stone-900/50 border-b border-white/10">
+          <div className="p-2 bg-stone-900/50 border-b border-white/10">
               <div className="flex items-center justify-between min-w-0">
-                <div className="flex items-center gap-3 min-w-0 overflow-hidden">
+                <div className="flex items-center gap-2 min-w-0 overflow-hidden">
                 <Button 
                   onClick={handlePlayPause} 
-                  size="lg" 
+                  size="sm" 
                     disabled={stemLoadingState}
-                  className={`font-sans text-sm uppercase tracking-wider px-6 py-3 transition-all duration-300 ${
+                  className={`font-mono text-xs uppercase tracking-wider px-4 py-2 transition-all duration-300 ${
                       stemLoadingState 
                       ? 'bg-stone-600 text-stone-400 cursor-not-allowed' 
                       : 'bg-stone-700 hover:bg-stone-600'
@@ -1130,12 +1197,12 @@ export default function CreativeVisualizerPage() {
                 >
                     {stemLoadingState ? (
                     <>
-                      <div className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-stone-400 border-t-transparent" />
-                      LOADING AUDIO
+                      <div className="h-3 w-3 mr-1 animate-spin rounded-full border-2 border-stone-400 border-t-transparent" />
+                      LOADING
                     </>
                   ) : (
                     <>
-                      {isPlaying ? <Pause className="h-4 w-4 mr-2" /> : <Play className="h-4 w-4 mr-2" />}
+                      {isPlaying ? <Pause className="h-3 w-3 mr-1" /> : <Play className="h-3 w-3 mr-1" />}
                       {isPlaying ? 'PAUSE' : 'PLAY'}
                     </>
                   )}
@@ -1145,81 +1212,54 @@ export default function CreativeVisualizerPage() {
                   size="sm" 
                     disabled={stemLoadingState}
                   onClick={() => stemAudio.setLooping(!stemAudio.isLooping)}
-                  className={`bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 font-sans text-xs uppercase tracking-wider ${
+                  className={`bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 font-mono text-xs uppercase tracking-wider px-3 py-1 ${
                       stemLoadingState 
                       ? 'opacity-50 cursor-not-allowed' 
                       : stemAudio.isLooping ? 'bg-emerald-900/20 border-emerald-600 text-emerald-300' : ''
                   }`}
-                  style={{ borderRadius: '8px' }}
+                  style={{ borderRadius: '6px' }}
                 >
-                  🔄 {stemAudio.isLooping ? 'LOOP ON' : 'LOOP OFF'}
+                  🔄 {stemAudio.isLooping ? 'LOOP' : 'LOOP'}
                 </Button>
                 <Button 
                   variant="outline" 
                     disabled={stemLoadingState}
                   onClick={handleReset} 
-                  className={`bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 ${
+                  className={`bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 px-3 py-1 ${
                       stemLoadingState ? 'opacity-50 cursor-not-allowed' : ''
                   }`}
                 >
-                  <RotateCcw className="h-4 w-4 mr-2" />
+                  <RotateCcw className="h-3 w-3 mr-1" />
                   RESET
                 </Button>
                   
                   {/* Stats Section - Compact layout */}
                   <div className="flex items-center gap-1 overflow-hidden">
-                <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                  {currentTime.toFixed(1)}S / {(midiData || sampleMidiData).file.duration.toFixed(1)}S
+                <div className="text-xs font-mono uppercase tracking-wider px-2 py-1 rounded text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                  {currentTime.toFixed(1)}S / {getCurrentDuration().toFixed(1)}S
                 </div>
-                <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                <div className="text-xs font-mono uppercase tracking-wider px-2 py-1 rounded text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
                   FPS: {fps}
                 </div>
-                {/* Sync Calibration Slider */}
-                <div className="flex items-center gap-2 px-2">
-                  <span className="text-xs font-mono text-stone-400">SYNC</span>
-                  <input
-                    type="range"
-                    min={-1000}
-                    max={1000}
-                    step={1}
-                    value={syncOffsetMs}
-                    onChange={e => setSyncOffsetMs(Number(e.target.value))}
-                    style={{ width: 120 }}
-                  />
-                  <span className="text-xs font-mono text-stone-300" style={{ width: 48, textAlign: 'right' }}>{syncOffsetMs}ms</span>
-                </div>
                 {stemAudio.performanceMetrics && (
-                  <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                  <div className="text-xs font-mono uppercase tracking-wider px-2 py-1 rounded text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
                     LAT: {(stemAudio.getAudioLatency ? (stemAudio.getAudioLatency() * 1000).toFixed(1) : '0.0')}ms
                   </div>
                 )}
                 {stemAudio.deviceProfile && (
-                  <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                  <div className="text-xs font-mono uppercase tracking-wider px-2 py-1 rounded text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
                     {stemAudio.deviceProfile.toUpperCase()}
                   </div>
                 )}
-                <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                <div className="text-xs font-mono uppercase tracking-wider px-2 py-1 rounded text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
                   NOTES: {(midiData || sampleMidiData).tracks.reduce((sum, track) => sum + track.notes.length, 0)}
                 </div>
                 {hasStems && (
-                  <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                  <div className="text-xs font-mono uppercase tracking-wider px-2 py-1 rounded text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
                     STEMS: {availableStems.length}
                   </div>
                 )}
-                {/* Sync Metrics Display */}
-                <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                  DRIFT: {syncMetrics.syncDrift.toFixed(1)}ms
-                </div>
-                <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                  FRAME: {syncMetrics.frameTime.toFixed(1)}ms
-                </div>
-                <div className="text-xs font-mono font-bold uppercase tracking-wider px-3 py-2 rounded-lg text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                  TARGET: 30fps
-                </div>
-                <Badge className="bg-emerald-900/80 text-emerald-200 text-xs uppercase tracking-wide px-3 py-1 border border-emerald-700">
-                  <span className="mr-2 h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                  LIVE
-                </Badge>
+                
               </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0 ml-2">
@@ -1228,7 +1268,7 @@ export default function CreativeVisualizerPage() {
                   size="sm" 
                   onClick={() => setVisualizerAspectRatio(visualizerAspectRatio === 'mobile' ? 'youtube' : 'mobile')}
                     disabled={stemLoadingState}
-                    className="bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 font-sans text-xs uppercase tracking-wider px-2 py-1"
+                    className="bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 font-mono text-xs uppercase tracking-wider px-2 py-1"
                     style={{ borderRadius: '6px' }}
                   >
                     📱 {visualizerAspectRatio === 'mobile' ? 'MOB' : 'YT'}
@@ -1236,23 +1276,22 @@ export default function CreativeVisualizerPage() {
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  onClick={() => setIsMapMode(!isMapMode)} 
-                  disabled={!hasStems}
-                    className="bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 font-sans text-xs uppercase tracking-wider px-2 py-1" 
-                    style={{ borderRadius: '6px' }}
-                >
-                    {isMapMode ? <Zap className="h-3 w-3 mr-1" /> : <Zap className="h-3 w-3 mr-1" />}
-                    {isMapMode ? 'EXIT' : 'MAP'}
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => stemAudio.testAudioOutput()} 
-                  className="bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 font-sans text-xs uppercase tracking-wider px-2 py-1" 
+                  onClick={() => setShowVideoComposition(!showVideoComposition)} 
+                  className={`bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 font-mono text-xs uppercase tracking-wider px-2 py-1 ${
+                    showVideoComposition ? 'bg-emerald-900/20 border-emerald-600 text-emerald-300' : ''
+                  }`}
                   style={{ borderRadius: '6px' }}
                 >
-                    🔊 TEST
+                    🎬 {showVideoComposition ? 'COMP' : 'VIDEO'}
                 </Button>
+                
+                {/* Test Video Composition Controls */}
+                {showVideoComposition && (
+                  <TestVideoComposition
+                    onAddLayer={handleLayerAdd}
+                    className="ml-2"
+                  />
+                )}
                   
                 </div>
               </div>
@@ -1295,33 +1334,68 @@ export default function CreativeVisualizerPage() {
                       visualizerRef={visualizerRef}
                   />
 
+                  {/* Video Composition Layer Container */}
+                  {showVideoComposition && (
+                    <LayerContainer
+                      layers={videoLayers}
+                      width={visualizerAspectRatio === 'mobile' ? 400 : 1280}
+                      height={visualizerAspectRatio === 'mobile' ? 711 : 720}
+                      currentTime={currentTime}
+                      isPlaying={isPlaying}
+                      audioFeatures={{
+                        frequencies: new Array(256).fill(0.5),
+                        timeData: new Array(256).fill(0.5),
+                        volume: 0.5,
+                        bass: 0.5,
+                        mid: 0.5,
+                        treble: 0.5
+                      }}
+                      midiData={{
+                        activeNotes: [],
+                        currentTime: currentTime,
+                        tempo: 120,
+                        totalNotes: 0,
+                        trackActivity: {}
+                      }}
+                      onLayerUpdate={handleLayerUpdate}
+                      onLayerDelete={handleLayerDelete}
+                    />
+                  )}
+
                       {/* Visualizer content only - no modals here */}
                 </div>
                 </div>
                 
-                {/* Stem Waveforms - Scrollable area with proper height */}
+                {/* Unified Timeline */}
                 <div className="flex-shrink-0 mb-4">
-                  <StemWaveformPanel
+                  <UnifiedTimeline
+                    layers={videoLayers}
+                    currentTime={currentTime}
+                    duration={(midiData || sampleMidiData).file.duration}
+                    onLayerAdd={handleLayerAdd}
+                    onLayerUpdate={handleLayerUpdate}
+                    onLayerDelete={handleLayerDelete}
+                    onLayerSelect={handleLayerSelect}
+                    selectedLayerId={selectedLayerId || undefined}
+                    effectClips={effectClips}
+                    onEffectClipAdd={handleEffectClipAdd}
+                    onEffectClipRemove={handleEffectClipRemove}
+                    onEffectClipEdit={handleEffectClipEdit}
                     stems={sortedAvailableStems}
                     masterStemId={projectFiles?.files.find(f => f.is_master)?.id ?? null}
-                    currentTime={stemAudio.currentTime}
-                    isPlaying={stemAudio.isPlaying}
-                    onSeek={stemAudio.setCurrentTime}
-                    className="bg-gray-800/50 border border-gray-700"
                     onStemSelect={handleStemSelect}
                     activeTrackId={activeTrackId}
                     soloedStems={stemAudio.soloedStems}
                     onToggleSolo={stemAudio.toggleStemSolo}
                     analysisProgress={cachedStemAnalysis.analysisProgress}
                     cachedAnalysis={cachedStemAnalysis.cachedAnalysis}
-                    isLoading={cachedStemAnalysis.isLoading}
-                    error={cachedStemAnalysis.error}
-                    effectClips={effectClips}
-                    onEffectClipAdd={handleEffectClipAdd}
-                    onEffectClipRemove={handleEffectClipRemove}
-                    onEffectClipEdit={handleEffectClipEdit}
+                    stemLoadingState={cachedStemAnalysis.isLoading}
+                    stemError={cachedStemAnalysis.error}
+                    isPlaying={isPlaying}
+                    onSeek={setCurrentTime}
+                    className="bg-gray-800/50 border border-gray-700"
                   />
-              </div>
+                </div>
             </div>
           </div>
 

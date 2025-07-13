@@ -291,11 +291,33 @@ export class AudioAnalyzer {
       const frameSize = 1024; // A common frame size for analysis
       const hopLength = 512;   // Overlap for smoother results
 
+      // Expanded feature set for comprehensive analysis
       const features: AudioAnalysisData = {
         rms: [],
         spectralCentroid: [],
+        spectralRolloff: [],
+        spectralFlatness: [],
+        spectralSpread: [],
+        zcr: [],
         loudness: [],
         energy: [],
+        mfcc_0: [],
+        mfcc_1: [],
+        mfcc_2: [],
+        mfcc_3: [],
+        mfcc_4: [],
+        mfcc_5: [],
+        mfcc_6: [],
+        mfcc_7: [],
+        mfcc_8: [],
+        mfcc_9: [],
+        mfcc_10: [],
+        mfcc_11: [],
+        mfcc_12: [],
+        perceptualSpread: [],
+        perceptualSharpness: [],
+        chroma_0: [], chroma_1: [], chroma_2: [], chroma_3: [], chroma_4: [], chroma_5: [],
+        chroma_6: [], chroma_7: [], chroma_8: [], chroma_9: [], chroma_10: [], chroma_11: [],
       };
       
       const featureNames = Object.keys(features) as (keyof typeof features)[];
@@ -304,9 +326,6 @@ export class AudioAnalyzer {
       for (let i = 0; i + frameSize <= samples.length; i += hopLength) {
         const frame = samples.subarray(i, i + frameSize);
         
-        // This is a placeholder for MFCCs which require more complex logic
-        // const mfcc = this.calculateMFCC(frame); 
-
         for (const featureName of featureNames) {
           let value: number;
           switch (featureName) {
@@ -316,14 +335,44 @@ export class AudioAnalyzer {
             case 'spectralCentroid':
               value = this.calculateSpectralCentroid(frame);
               break;
+            case 'spectralRolloff':
+              value = this.calculateSpectralRolloff(frame);
+              break;
+            case 'spectralFlatness':
+              value = this.calculateSpectralFlatness(frame);
+              break;
+            case 'spectralSpread':
+              value = this.calculateSpectralSpread(frame);
+              break;
+            case 'zcr':
+              value = this.calculateZCR(frame);
+              break;
             case 'loudness':
               value = this.calculateLoudness(frame);
               break;
             case 'energy':
               value = this.calculateEnergy(frame);
               break;
-            default:
-              value = 0;
+            case 'perceptualSpread':
+              value = this.calculatePerceptualSpread(frame);
+              break;
+            case 'perceptualSharpness':
+              value = this.calculatePerceptualSharpness(frame);
+              break;
+                          default:
+                if (featureName.startsWith('mfcc_')) {
+                  const parts = featureName.split('_');
+                  const mfccIndex = parts[1] ? parseInt(parts[1]) : 0;
+                  const mfccValues = this.calculateMFCC(frame);
+                  value = mfccValues[mfccIndex] || 0;
+                } else if (featureName.startsWith('chroma_')) {
+                  const parts = featureName.split('_');
+                  const chromaIndex = parts[1] ? parseInt(parts[1]) : 0;
+                  const chromaValues = this.calculateChromaVector(frame);
+                  value = chromaValues[chromaIndex] || 0;
+                } else {
+                  value = 0;
+                }
           }
           const featureArray = features[featureName];
           if(featureArray) {
@@ -338,8 +387,14 @@ export class AudioAnalyzer {
         if (!values || values.length === 0) continue;
 
         const maxVal = Math.max(...values);
-        if (maxVal > 0) {
-          features[featureName] = values.map(v => v / maxVal);
+        const minVal = Math.min(...values);
+        const range = maxVal - minVal;
+        
+        if (range > 0) {
+          features[featureName] = values.map(v => (v - minVal) / range);
+        } else if (maxVal > 0) {
+          // If all values are the same but non-zero, normalize to 0.5
+          features[featureName] = values.map(() => 0.5);
         }
       }
 
@@ -477,25 +532,167 @@ export class AudioAnalyzer {
 
     for (let i = 0; i < fftData.length; i++) {
       const freq = (i * 44100) / fftData.length;
-      const magnitude = Math.abs(fftData[i] ?? 0);
+      const magnitude = Math.abs(fftData[i]);
       weightedSum += freq * magnitude;
       sum += magnitude;
     }
-    return sum === 0 ? 0 : weightedSum / sum;
+
+    return sum > 0 ? weightedSum / sum : 0;
+  }
+
+  private calculateSpectralRolloff(samples: Int16Array): number {
+    const fftData = this.performFFT(samples);
+    const totalEnergy = fftData.reduce((sum, val) => sum + Math.abs(val) ** 2, 0);
+    const threshold = totalEnergy * 0.85; // 85% energy threshold
+    
+    let cumulativeEnergy = 0;
+    for (let i = 0; i < fftData.length; i++) {
+      cumulativeEnergy += Math.abs(fftData[i]) ** 2;
+      if (cumulativeEnergy >= threshold) {
+        return (i * 44100) / fftData.length;
+      }
+    }
+    return 22050; // Nyquist frequency as fallback
+  }
+
+  private calculateSpectralFlatness(samples: Int16Array): number {
+    const fftData = this.performFFT(samples);
+    const magnitudes = fftData.map(val => Math.abs(val));
+    
+    const geometricMean = Math.exp(
+      magnitudes.reduce((sum, mag) => sum + Math.log(Math.max(mag, 1e-10)), 0) / magnitudes.length
+    );
+    const arithmeticMean = magnitudes.reduce((sum, mag) => sum + mag, 0) / magnitudes.length;
+    
+    return arithmeticMean > 0 ? geometricMean / arithmeticMean : 0;
+  }
+
+  private calculateSpectralSpread(samples: Int16Array): number {
+    const fftData = this.performFFT(samples);
+    const centroid = this.calculateSpectralCentroid(samples);
+    
+    let weightedSum = 0;
+    let sum = 0;
+    
+    for (let i = 0; i < fftData.length; i++) {
+      const freq = (i * 44100) / fftData.length;
+      const magnitude = Math.abs(fftData[i]);
+      const diff = freq - centroid;
+      weightedSum += (diff ** 2) * magnitude;
+      sum += magnitude;
+    }
+    
+    return sum > 0 ? Math.sqrt(weightedSum / sum) : 0;
+  }
+
+  private calculateZCR(samples: Int16Array): number {
+    let crossings = 0;
+    for (let i = 1; i < samples.length; i++) {
+      const prev = (samples[i - 1] ?? 0) / 32768;
+      const curr = (samples[i] ?? 0) / 32768;
+      if ((prev >= 0 && curr < 0) || (prev < 0 && curr >= 0)) {
+        crossings++;
+      }
+    }
+    return crossings / samples.length;
   }
 
   private calculateLoudness(samples: Int16Array): number {
-    // A-weighting approximation - very simplified
-    return this.calculateRMS(samples); // For now, use RMS as a proxy
+    // Simplified loudness calculation using A-weighting approximation
+    const fftData = this.performFFT(samples);
+    let weightedSum = 0;
+    
+    for (let i = 0; i < fftData.length; i++) {
+      const freq = (i * 44100) / fftData.length;
+      const magnitude = Math.abs(fftData[i]);
+      
+      // Simplified A-weighting curve
+      let aWeight = 1;
+      if (freq < 1000) {
+        aWeight = 0.5 + 0.5 * (freq / 1000);
+      } else if (freq > 1000) {
+        aWeight = 1 - 0.3 * Math.log10(freq / 1000);
+      }
+      
+      weightedSum += magnitude * aWeight;
+    }
+    
+    return weightedSum / fftData.length;
   }
 
   private calculateMFCC(samples: Int16Array): number[] {
-    // Placeholder for MFCC calculation, which is quite complex
-    return Array(12).fill(0);
+    // Simplified MFCC calculation
+    const fftData = this.performFFT(samples);
+    const magnitudes = fftData.map(val => Math.abs(val));
+    
+    // Simple mel-scale filter bank (13 coefficients)
+    const mfcc = [];
+    for (let i = 0; i < 13; i++) {
+      let sum = 0;
+      for (let j = 0; j < magnitudes.length; j++) {
+        const freq = (j * 44100) / magnitudes.length;
+        const melFreq = 2595 * Math.log10(1 + freq / 700);
+        const filterWeight = Math.exp(-((melFreq - i * 200) ** 2) / (2 * 100 ** 2));
+        sum += magnitudes[j] * filterWeight;
+      }
+      mfcc.push(Math.log(Math.max(sum, 1e-10)));
+    }
+    
+    return mfcc;
   }
 
   private calculateEnergy(samples: Int16Array): number {
-    return Array.from(samples).reduce((acc, val) => acc + ((val ?? 0) / 32768) ** 2, 0) / samples.length;
+    let sum = 0;
+    for (let i = 0; i < samples.length; i++) {
+      sum += ((samples[i] ?? 0) / 32768) ** 2;
+    }
+    return sum / samples.length;
+  }
+
+  private calculatePerceptualSpread(samples: Int16Array): number {
+    // Simplified perceptual spread using spectral centroid and spread
+    const centroid = this.calculateSpectralCentroid(samples);
+    const spread = this.calculateSpectralSpread(samples);
+    return spread / Math.max(centroid, 1);
+  }
+
+  private calculatePerceptualSharpness(samples: Int16Array): number {
+    // Simplified sharpness calculation
+    const fftData = this.performFFT(samples);
+    let weightedSum = 0;
+    let sum = 0;
+    
+    for (let i = 0; i < fftData.length; i++) {
+      const freq = (i * 44100) / fftData.length;
+      const magnitude = Math.abs(fftData[i]);
+      
+      // Sharpness increases with frequency
+      const sharpnessWeight = Math.min(freq / 10000, 1);
+      weightedSum += magnitude * sharpnessWeight;
+      sum += magnitude;
+    }
+    
+    return sum > 0 ? weightedSum / sum : 0;
+  }
+
+  private calculateChromaVector(samples: Int16Array): number[] {
+    // Simplified chroma vector (12 semitones)
+    const fftData = this.performFFT(samples);
+    const chroma = new Array(12).fill(0);
+    
+    for (let i = 0; i < fftData.length; i++) {
+      const freq = (i * 44100) / fftData.length;
+      if (freq > 0) {
+        // Convert frequency to semitone
+        const semitone = Math.round(12 * Math.log2(freq / 440)) % 12;
+        const magnitude = Math.abs(fftData[i]);
+        chroma[semitone] += magnitude;
+      }
+    }
+    
+    // Normalize
+    const maxVal = Math.max(...chroma);
+    return maxVal > 0 ? chroma.map(val => val / maxVal) : chroma;
   }
 
   private generateFrequencyData(samples: Int16Array): number[] {

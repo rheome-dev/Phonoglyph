@@ -32,7 +32,7 @@ export function CollapsibleSidebar({ children }: CollapsibleSidebarProps) {
     >
       <div className="h-full flex flex-col p-4">
         <div className={cn("flex items-center mb-6", isCollapsed ? 'justify-center' : 'justify-between')}>
-          <span className={cn("text-2xl font-semibold text-gray-100", isCollapsed && "hidden")}>MIDI Viz</span>
+          <span className={cn("text-2xl font-semibold text-gray-100", isCollapsed && "hidden")}>Phonoglyph</span>
         </div>
 
         <nav className="flex-grow space-y-2">

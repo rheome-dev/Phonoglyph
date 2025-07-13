@@ -42,6 +42,7 @@ interface UseStemAudioController {
   getAudioLatency: () => number;
   getAudioContextTime: () => number;
   scheduledStartTimeRef: React.MutableRefObject<number>;
+  duration: number;
 }
 
 export function useStemAudioController(): UseStemAudioController {
@@ -170,52 +171,37 @@ export function useStemAudioController(): UseStemAudioController {
   }, []);
 
   useEffect(() => {
-    if (!audioContextRef.current) return;
+    if (!isPlaying || !audioContextRef.current) return;
 
     const audioContext = audioContextRef.current;
     const activeSoloStems = soloedStems.size > 0;
-
-    console.log('🎵 Updating solo state:', {
-      soloedStems: Array.from(soloedStems),
-      activeSoloStems,
-      availableStems: Object.keys(gainNodesRef.current)
-    });
+    const masterStemId = masterStemIdRef.current;
 
     Object.entries(gainNodesRef.current).forEach(([stemId, gainNode]) => {
-      const isMaster = stemId === masterStemIdRef.current;
       const isSoloed = soloedStems.has(stemId);
-      
-      // Solo logic:
-      // - If any stems are soloed, only play soloed stems
-      // - If no stems are soloed, play all stems (not just master)
-      const shouldPlay = activeSoloStems ? isSoloed : true;
-      const targetVolume = shouldPlay ? 0.7 : 0;
+      let targetVolume = 0;
 
-      console.log(`🎵 Stem ${stemId}:`, {
-        isMaster,
-        isSoloed,
-        shouldPlay,
-        targetVolume,
-        currentGain: gainNode.gain.value
-      });
+      if (activeSoloStems) {
+        // If any stem is soloed, only it should be audible.
+        targetVolume = isSoloed ? 0.7 : 0;
+      } else {
+        // If no stems are soloed, only the master should be audible.
+        targetVolume = (stemId === masterStemId) ? 0.7 : 0;
+      }
 
-      // Smoothly ramp to the target volume to avoid clicks
+      // Smoothly ramp the volume to the new target.
       gainNode.gain.linearRampToValueAtTime(targetVolume, audioContext.currentTime + 0.1);
     });
-  }, [soloedStems]);
+  }, [soloedStems, isPlaying]);
 
   const toggleStemSolo = useCallback((stemId: string) => {
-    console.log('🎵 Toggling solo for stem:', stemId);
     setSoloedStems(prev => {
       const newSoloed = new Set(prev);
       if (newSoloed.has(stemId)) {
         newSoloed.delete(stemId);
-        console.log('🎵 Removed solo from stem:', stemId);
       } else {
         newSoloed.add(stemId);
-        console.log('🎵 Added solo to stem:', stemId);
       }
-      console.log('🎵 New soloed stems:', Array.from(newSoloed));
       return newSoloed;
     });
   }, []);
@@ -288,139 +274,73 @@ export function useStemAudioController(): UseStemAudioController {
     }
 
     try {
-      // Resume audio context if suspended
       if (audioContextRef.current.state === 'suspended') {
         await audioContextRef.current.resume();
       }
 
-      // Stop any currently playing sources
       Object.values(audioSourcesRef.current).forEach(source => {
-        try {
-          source.stop();
-        } catch (e) {
-          // Source might already be stopped
-        }
+        try { source.stop(); } catch (e) { /* Ignore */ }
       });
       audioSourcesRef.current = {};
 
-      // Reset finished stems tracking
-      finishedStemsRef.current.clear();
-      isIntentionallyStoppingRef.current = false;
-
-      // Schedule playback to start slightly in the future for sync
       const now = audioContextRef.current.currentTime;
-      const scheduleDelay = 0.1; // 100ms in the future
+      const scheduleDelay = 0.1;
       const scheduledStartTime = now + scheduleDelay;
-      scheduledStartTimeRef.current = scheduledStartTime;
-      startTimeRef.current = scheduledStartTime;
+      
+      // Use pausedTimeRef to resume from the correct position
+      const offset = pausedTimeRef.current;
+      startTimeRef.current = scheduledStartTime - offset;
+      scheduledStartTimeRef.current = scheduledStartTime - offset;
 
       const activeSoloStems = soloedStems.size > 0;
-
-      console.log('🎵 Starting playback with solo state:', {
-        activeSoloStems,
-        soloedStems: Array.from(soloedStems)
-      });
-
-      // Apply current solo state to all gain nodes immediately
-      Object.entries(gainNodesRef.current).forEach(([stemId, gainNode]) => {
-        const isSoloed = soloedStems.has(stemId);
-        const shouldPlay = activeSoloStems ? isSoloed : true;
-        const targetVolume = shouldPlay ? 0.7 : 0;
-        
-        console.log(`🎵 Setting initial gain for ${stemId}:`, {
-          isSoloed,
-          shouldPlay,
-          targetVolume
-        });
-        
-        gainNode.gain.setValueAtTime(targetVolume, audioContextRef.current!.currentTime);
-      });
+      const masterId = masterStemIdRef.current;
 
       Object.entries(audioBuffersRef.current).forEach(([stemId, buffer]) => {
         const source = audioContextRef.current!.createBufferSource();
         const gainNode = gainNodesRef.current[stemId];
         
-        const isMaster = stemId === masterStemIdRef.current;
         const isSoloed = soloedStems.has(stemId);
-
-        // Play logic:
-        // - If any stem is soloed, play only soloed stems.
-        // - If no stems are soloed, play all stems (not just master).
-        const shouldPlay = activeSoloStems ? isSoloed : true;
-
-        console.log(`🎵 Creating source for ${stemId}:`, {
-          isMaster,
-          isSoloed,
-          shouldPlay,
-          activeSoloStems
-        });
-
-        // Always start the source, but control volume via gain
+        
+        // Determine initial volume based on solo state
+        let initialVolume = 0;
+        if (activeSoloStems) {
+            initialVolume = isSoloed ? 0.7 : 0;
+        } else {
+            initialVolume = (stemId === masterId) ? 0.7 : 0;
+        }
+        gainNode.gain.setValueAtTime(initialVolume, audioContextRef.current!.currentTime);
+        
         source.buffer = buffer;
         source.connect(gainNode);
         gainNode.connect(audioContextRef.current!.destination);
         
-        // Set up loop handling
+        // *** THE KEY FIX ***
+        // Use the Web Audio API's native looping.
+        source.loop = isLooping;
+        
+        // Remove the complex onended handler entirely as it's no longer needed.
         source.onended = () => {
-          if (!isIntentionallyStoppingRef.current && isLooping) {
-            finishedStemsRef.current.add(stemId);
-            
-            // Determine which stems we expect to end
-            const stemsThatShouldBePlaying = new Set<string>();
-            if (activeSoloStems) {
-              soloedStems.forEach(id => stemsThatShouldBePlaying.add(id));
-            } else {
-              // If no stems are soloed, all stems should be playing
-              Object.keys(audioBuffersRef.current).forEach(id => stemsThatShouldBePlaying.add(id));
-            }
-
-            // If all *active* stems have finished, restart them
-            const allActiveFinished = [...stemsThatShouldBePlaying].every(id => finishedStemsRef.current.has(id));
-
-            if (allActiveFinished) {
-              console.log('🔄 All active stems finished, restarting...');
-              finishedStemsRef.current.clear();
-              // Schedule next playback at the correct time
-              const nextStartTime = scheduledStartTimeRef.current + buffer.duration;
-              scheduledStartTimeRef.current = nextStartTime;
-              startTimeRef.current = nextStartTime;
-              Object.entries(audioBuffersRef.current).forEach(([loopStemId, loopBuffer]) => {
-                const loopSource = audioContextRef.current!.createBufferSource();
-                const loopGainNode = gainNodesRef.current[loopStemId];
-                const isLoopMaster = loopStemId === masterStemIdRef.current;
-                const isLoopSoloed = soloedStems.has(loopStemId);
-                const shouldLoopPlay = activeSoloStems ? isLoopSoloed : true;
-                if (shouldLoopPlay) {
-                  loopGainNode.gain.setValueAtTime(0.7, audioContextRef.current!.currentTime);
-                } else {
-                  loopGainNode.gain.setValueAtTime(0, audioContextRef.current!.currentTime);
-                }
-                loopSource.buffer = loopBuffer;
-                loopSource.connect(loopGainNode);
-                loopGainNode.connect(audioContextRef.current!.destination);
-                loopSource.onended = source.onended; // Reuse the same onended logic
-                loopSource.start(nextStartTime);
-                audioSourcesRef.current[loopStemId] = loopSource;
-              });
-            }
+          // Can be used for cleanup if a track is stopped manually
+          if (isIntentionallyStoppingRef.current) {
+            delete audioSourcesRef.current[stemId];
           }
         };
         
-        source.start(scheduledStartTime);
+        source.start(scheduledStartTime, offset); // Start at scheduled time from the correct offset
         audioSourcesRef.current[stemId] = source;
       });
 
+      pausedTimeRef.current = 0; // Reset paused time
       setIsPlaying(true);
-      // REMOVED VERBOSE LOGGING
-      // console.log('🎵 Audio playback started');
+      isIntentionallyStoppingRef.current = false;
 
       // Start time updates
       timeUpdateIntervalRef.current = setInterval(() => {
         if (audioContextRef.current && isPlaying) {
-          const currentTime = audioContextRef.current.currentTime - scheduledStartTimeRef.current;
+          const currentTime = audioContextRef.current.currentTime - startTimeRef.current;
           setCurrentTime(Math.max(0, currentTime));
         }
-      }, 16); // ~60fps
+      }, 16);
 
     } catch (error) {
       console.error('❌ Failed to start audio playback:', error);
@@ -429,38 +349,25 @@ export function useStemAudioController(): UseStemAudioController {
   }, [stemsLoaded, isLooping, soloedStems]);
 
   const pause = useCallback(() => {
+    if (!isPlaying) return;
+    
     isIntentionallyStoppingRef.current = true;
     
-    // Stop all audio sources
     Object.values(audioSourcesRef.current).forEach(source => {
-      try {
-        source.stop();
-      } catch (e) {
-        // Source might already be stopped
-      }
+      try { source.stop(); } catch (e) { /* Ignore */ }
     });
+    
     audioSourcesRef.current = {};
 
-    // Clear time update interval
     if (timeUpdateIntervalRef.current) {
       clearInterval(timeUpdateIntervalRef.current);
       timeUpdateIntervalRef.current = null;
     }
-
-    // Store current time for resume
-    pausedTimeRef.current = currentTime;
+    
+    // Correctly calculate and store the paused time
+    pausedTimeRef.current = audioContextRef.current!.currentTime - startTimeRef.current;
     setIsPlaying(false);
-    // REMOVED VERBOSE LOGGING
-    // console.log('⏸️ Audio playback paused');
-
-    // DISABLED: Real-time audio analysis
-    // if (audioProcessorRef.current) {
-    //   audioProcessorRef.current.stopAnalysis();
-    // }
-    // if (workerManagerRef.current) {
-    //   workerManagerRef.current.stopAnalysis();
-    // }
-  }, [currentTime]);
+  }, [isPlaying]);
 
   const stop = useCallback(() => {
     try {
@@ -711,6 +618,15 @@ export function useStemAudioController(): UseStemAudioController {
     return Math.max(...durations, 0);
   }, []);
 
+  // Helper function to get the master stem duration if available
+  const getMasterDuration = useCallback((): number => {
+    const masterId = masterStemIdRef.current;
+    if (masterId && audioBuffersRef.current[masterId]) {
+      return audioBuffersRef.current[masterId].duration;
+    }
+    return getMaxDuration();
+  }, [getMaxDuration]);
+
   // Expose audio context latency and time
   const getAudioLatency = useCallback((): number => {
     const ctx = audioContextRef.current;
@@ -753,7 +669,8 @@ export function useStemAudioController(): UseStemAudioController {
     toggleStemSolo,
     getAudioLatency, // <-- add this
     getAudioContextTime, // <-- add this
-    scheduledStartTimeRef // <-- expose for mapping loop
+    scheduledStartTimeRef, // <-- expose for mapping loop
+    duration: getMasterDuration(), // <-- expose duration
   };
 }
 
