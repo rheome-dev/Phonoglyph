@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useDrop } from 'react-dnd';
+import { useDrag } from 'react-dnd';
 import { ChevronDown, ChevronUp, Plus, Video, Image, Zap, Music, FileAudio, FileMusic, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Layer } from '@/types/video-composition';
@@ -266,6 +267,14 @@ const StemTrack: React.FC<StemTrackProps> = ({
   analysisStatus,
   analysisProgress,
 }) => {
+  const [{ isDragging }, drag] = useDrag({
+    type: 'AUDIO_STEM',
+    item: { id, name, stemType },
+    collect: (monitor) => ({
+      isDragging: monitor.isDragging(),
+    }),
+  });
+
   const getStatusText = () => {
     if (waveformData) return null; // Has data, no text needed
     if (isLoading) return 'Loading...';
@@ -277,10 +286,12 @@ const StemTrack: React.FC<StemTrackProps> = ({
 
   return (
     <div
+      ref={drag}
       className={cn(
         "flex items-center group bg-stone-900/50 cursor-pointer transition-all border-l-4",
         isActive ? "border-emerald-400 bg-emerald-900/30" : "border-transparent hover:bg-stone-800/40"
       )}
+      style={{ opacity: isDragging ? 0.5 : 1 }}
       onClick={onClick}
     >
       <div className="w-56 px-3 py-2 flex items-center justify-between gap-2 border-r border-stone-700/50 flex-shrink-0">
