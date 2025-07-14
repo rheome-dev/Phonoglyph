@@ -265,7 +265,12 @@ export function EffectsLibrarySidebar({
                         key={effect.id}
                         effect={effect}
                         cardStyle={cardStyle}
-                        onDoubleClick={() => onEffectDoubleClick(effect.id)}
+                        onDoubleClick={() => {
+                          if (effect.category === 'Overlays' && window.addHudOverlay) {
+                            window.addHudOverlay(effect.id); // id should match overlay type
+                          }
+                          onEffectDoubleClick(effect.id);
+                        }}
                       />
                     );
                   })}

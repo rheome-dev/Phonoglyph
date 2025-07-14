@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { HudOverlay } from './HudOverlay';
 import { HudOverlayParameterModal } from './HudOverlayParameterModal';
 
@@ -43,6 +43,16 @@ export function HudOverlayManager() {
   function updateOverlay(id: string, update: Partial<HudOverlayConfig>) {
     setOverlays(prev => prev.map(o => o.id === id ? { ...o, ...update } : o));
   }
+
+  // Expose global function for sidebar integration
+  useEffect(() => {
+    window.addHudOverlay = (type: string) => {
+      addOverlay(type);
+    };
+    return () => {
+      delete window.addHudOverlay;
+    };
+  }, []);
 
   return (
     <div id="hud-overlays" style={{ position: 'absolute', top:0, left:0, width:'100%', height:'100%', pointerEvents:'none', zIndex: 20 }}>

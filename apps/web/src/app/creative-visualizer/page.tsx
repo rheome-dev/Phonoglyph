@@ -32,6 +32,7 @@ import { UnifiedTimeline } from '@/components/video-composition/UnifiedTimeline'
 import { TestVideoComposition } from '@/components/video-composition/TestVideoComposition';
 import type { Layer } from '@/types/video-composition';
 import { useFeatureValue } from '@/hooks/use-feature-value';
+import { HudOverlayManager } from '@/components/hud/HudOverlayManager';
 
 // Sample MIDI data for demonstration
 const createSampleMIDIData = (): MIDIData => {
@@ -1414,6 +1415,8 @@ export default function CreativeVisualizerPage() {
               />
             </CollapsibleEffectsSidebar>
 
+            {/* HUD overlays absolutely positioned over the visualizer */}
+            <HudOverlayManager />
 
         </main>
       </div>
