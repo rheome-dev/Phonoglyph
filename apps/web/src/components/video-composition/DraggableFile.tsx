@@ -59,7 +59,7 @@ export const DraggableFile: React.FC<DraggableFileProps> = ({
       id: file.id,
       name: file.name,
       fileType: getFileType(),
-      src: `/api/files/${file.id}/download`,
+      src: `file://${file.id}`, // Use a placeholder that will be resolved by the timeline
       size: file.file_size,
     },
     collect: (monitor) => ({

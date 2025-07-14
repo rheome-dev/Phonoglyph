@@ -35,11 +35,14 @@ export const LayerContainer: React.FC<LayerContainerProps> = ({
   
   return (
     <div 
-      className="layer-container relative overflow-hidden"
+      className="layer-container absolute inset-0 overflow-hidden pointer-events-none"
       style={{
         width: `${width}px`,
         height: `${height}px`,
-        background: 'transparent'
+        background: 'transparent',
+        left: '50%',
+        top: '50%',
+        transform: 'translate(-50%, -50%)'
       }}
     >
       {sortedLayers.map((layer) => {

@@ -183,6 +183,9 @@ export default function CreativeVisualizerPage() {
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
   const [showVideoComposition, setShowVideoComposition] = useState(false);
 
+  // Canvas dimensions state for video composition layers
+  const [canvasDimensions, setCanvasDimensions] = useState({ width: 400, height: 711 });
+
   // Effects carousel state (now for timeline-based effects)
   const [selectedEffects, setSelectedEffects] = useState<Record<string, boolean>>({
     'metaballs': true,
@@ -220,6 +223,11 @@ export default function CreativeVisualizerPage() {
   const [sampleMidiData] = useState<MIDIData>(createSampleMIDIData());
   const stemAudio = useStemAudioController();
   const cachedStemAnalysis = useCachedStemAnalysis();
+  
+  // Handle canvas dimension updates from ThreeVisualizer
+  const handleCanvasDimensionsUpdate = useCallback((width: number, height: number) => {
+    setCanvasDimensions({ width, height });
+  }, []);
   
   // Sync performance monitoring
   useEffect(() => {
@@ -1332,14 +1340,15 @@ export default function CreativeVisualizerPage() {
                           setActiveSliderValues={setActiveSliderValues}
                       onSelectedEffectsChange={() => {}} // <-- Added no-op
                       visualizerRef={visualizerRef}
+                      onCanvasDimensionsUpdate={handleCanvasDimensionsUpdate}
                   />
 
                   {/* Video Composition Layer Container */}
                   {showVideoComposition && (
                     <LayerContainer
                       layers={videoLayers}
-                      width={visualizerAspectRatio === 'mobile' ? 400 : 1280}
-                      height={visualizerAspectRatio === 'mobile' ? 711 : 720}
+                      width={canvasDimensions.width}
+                      height={canvasDimensions.height}
                       currentTime={currentTime}
                       isPlaying={isPlaying}
                       audioFeatures={{

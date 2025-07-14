@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useRef, useEffect, useState } from 'react';
+import { trpc } from '@/lib/trpc';
 import type { AudioBinding, MIDIBinding } from '@/types/video-composition';
 import type { AudioAnalysisData, LiveMIDIData } from '@/types/visualizer';
 import { 
@@ -48,6 +49,30 @@ export const VideoLayer: React.FC<VideoLayerProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const [videoCurrentTime, setVideoCurrentTime] = useState(0);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [resolvedSrc, setResolvedSrc] = useState(src);
+  
+  // Resolve file:// URLs to actual download URLs
+  const getDownloadUrlMutation = trpc.file.getDownloadUrl.useMutation();
+  
+  useEffect(() => {
+    const resolveFileUrl = async () => {
+      if (src.startsWith('file://')) {
+        const fileId = src.replace('file://', '');
+        try {
+          const result = await getDownloadUrlMutation.mutateAsync({ fileId });
+          setResolvedSrc(result.downloadUrl);
+        } catch (error) {
+          console.error('Failed to get download URL:', error);
+          // Fallback to a placeholder or error state
+          setResolvedSrc('');
+        }
+      } else {
+        setResolvedSrc(src);
+      }
+    };
+    
+    resolveFileUrl();
+  }, [src, getDownloadUrlMutation]);
   
   // Check if this layer should be visible based on timeline
   const isVisible = !endTime || (currentTime >= startTime && currentTime <= endTime);
@@ -97,7 +122,7 @@ export const VideoLayer: React.FC<VideoLayerProps> = ({
     }
   }, [currentTime, startTime, isLoaded]);
   
-  if (!isVisible) {
+  if (!isVisible || !resolvedSrc) {
     return null;
   }
   
@@ -112,13 +137,13 @@ export const VideoLayer: React.FC<VideoLayerProps> = ({
         zIndex,
         mixBlendMode: blendMode,
         pointerEvents: 'none',
-        width: '200px', // Default size, can be made configurable
-        height: '150px'
+        width: '300px', // Increased from 200px for better visibility
+        height: '225px' // Increased from 150px for better visibility
       }}
     >
       <video 
         ref={videoRef}
-        src={src} 
+        src={resolvedSrc} 
         autoPlay={false}
         loop 
         muted 

@@ -41,6 +41,7 @@ interface ThreeVisualizerProps {
   activeSliderValues: Record<string, number>;
   setActiveSliderValues: React.Dispatch<React.SetStateAction<Record<string, number>>>;
   visualizerRef?: React.RefObject<any>;
+  onCanvasDimensionsUpdate?: (width: number, height: number) => void;
 }
 
 export function ThreeVisualizer({
@@ -63,7 +64,8 @@ export function ThreeVisualizer({
   onUnmapFeature,
   activeSliderValues,
   setActiveSliderValues,
-  visualizerRef: externalVisualizerRef
+  visualizerRef: externalVisualizerRef,
+  onCanvasDimensionsUpdate
 }: ThreeVisualizerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -126,6 +128,11 @@ export function ThreeVisualizer({
         canvasWidth = containerWidth;
         canvasHeight = containerWidth / targetAspectRatio;
       }
+    }
+    
+    // Update canvas dimensions in parent component
+    if (onCanvasDimensionsUpdate) {
+      onCanvasDimensionsUpdate(Math.round(canvasWidth), Math.round(canvasHeight));
     }
     
     const config: VisualizerConfig = {
@@ -201,7 +208,38 @@ export function ThreeVisualizer({
         setTimeout(initializeVisualizer, 1000);
       }, 2000);
     }
-  }, [aspectRatio]);
+  }, [aspectRatio, onCanvasDimensionsUpdate]);
+
+  // Handle window resize to update canvas dimensions
+  useEffect(() => {
+    const handleResize = () => {
+      if (containerRef.current && onCanvasDimensionsUpdate) {
+        const container = containerRef.current;
+        const containerWidth = container.clientWidth;
+        const containerHeight = container.clientHeight;
+        
+        let canvasWidth, canvasHeight;
+        
+        if (aspectRatio === 'youtube') {
+          canvasWidth = containerWidth;
+          canvasHeight = containerHeight;
+        } else {
+          const targetAspectRatio = 9 / 16;
+          canvasHeight = containerHeight;
+          canvasWidth = containerHeight * targetAspectRatio;
+          if (canvasWidth > containerWidth) {
+            canvasWidth = containerWidth;
+            canvasHeight = containerWidth / targetAspectRatio;
+          }
+        }
+        
+        onCanvasDimensionsUpdate(Math.round(canvasWidth), Math.round(canvasHeight));
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [aspectRatio, onCanvasDimensionsUpdate]);
 
   // Convert MIDI data to live format
   const convertToLiveMIDI = useCallback((midiData: MIDIData, currentTime: number): LiveMIDIData => {
