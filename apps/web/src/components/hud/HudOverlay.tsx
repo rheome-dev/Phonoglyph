@@ -66,12 +66,23 @@ function drawMidiMeter(ctx: CanvasRenderingContext2D, w: number, h: number) {
   ctx.strokeRect(w / 2 - 40, h / 2 - 20, 80, 40);
 }
 
+const ANCHORS = [
+  { key: 'nw', style: { left: 0, top: 0, cursor: 'nwse-resize' }, dx: -1, dy: -1 },
+  { key: 'n',  style: { left: '50%', top: 0, transform: 'translateX(-50%)', cursor: 'ns-resize' }, dx: 0, dy: -1 },
+  { key: 'ne', style: { right: 0, top: 0, cursor: 'nesw-resize' }, dx: 1, dy: -1 },
+  { key: 'e',  style: { right: 0, top: '50%', transform: 'translateY(-50%)', cursor: 'ew-resize' }, dx: 1, dy: 0 },
+  { key: 'se', style: { right: 0, bottom: 0, cursor: 'nwse-resize' }, dx: 1, dy: 1 },
+  { key: 's',  style: { left: '50%', bottom: 0, transform: 'translateX(-50%)', cursor: 'ns-resize' }, dx: 0, dy: 1 },
+  { key: 'sw', style: { left: 0, bottom: 0, cursor: 'nesw-resize' }, dx: -1, dy: 1 },
+  { key: 'w',  style: { left: 0, top: '50%', transform: 'translateY(-50%)', cursor: 'ew-resize' }, dx: -1, dy: 0 },
+];
+
 export function HudOverlay({ type, position, size, stem, settings, onOpenModal, onUpdate }: any) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [dragging, setDragging] = useState(false);
-  const [resizing, setResizing] = useState(false);
+  const [resizing, setResizing] = useState<string | null>(null); // anchor key
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
-  const [resizeStart, setResizeStart] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const [resizeStart, setResizeStart] = useState<any>(null);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -79,34 +90,19 @@ export function HudOverlay({ type, position, size, stem, settings, onOpenModal, 
     if (!ctx) return;
     ctx.clearRect(0, 0, size.width, size.height);
     switch (type) {
-      case 'waveform':
-        drawWaveform(ctx, size.width, size.height);
-        break;
-      case 'spectrogram':
-        drawSpectrogram(ctx, size.width, size.height);
-        break;
-      case 'peakMeter':
-        drawPeakMeter(ctx, size.width, size.height);
-        break;
-      case 'stereometer':
-        drawStereometer(ctx, size.width, size.height);
-        break;
-      case 'oscilloscope':
-        drawOscilloscope(ctx, size.width, size.height);
-        break;
-      case 'spectrumAnalyzer':
-        drawSpectrumAnalyzer(ctx, size.width, size.height);
-        break;
-      case 'midiMeter':
-        drawMidiMeter(ctx, size.width, size.height);
-        break;
-      default:
-        drawWaveform(ctx, size.width, size.height);
+      case 'waveform': drawWaveform(ctx, size.width, size.height); break;
+      case 'spectrogram': drawSpectrogram(ctx, size.width, size.height); break;
+      case 'peakMeter': drawPeakMeter(ctx, size.width, size.height); break;
+      case 'stereometer': drawStereometer(ctx, size.width, size.height); break;
+      case 'oscilloscope': drawOscilloscope(ctx, size.width, size.height); break;
+      case 'spectrumAnalyzer': drawSpectrumAnalyzer(ctx, size.width, size.height); break;
+      case 'midiMeter': drawMidiMeter(ctx, size.width, size.height); break;
+      default: drawWaveform(ctx, size.width, size.height);
     }
   }, [type, stem, size, settings]);
 
   function onMouseDown(e: React.MouseEvent) {
-    if ((e.target as HTMLElement).classList.contains('resize-handle')) return;
+    if ((e.target as HTMLElement).classList.contains('transform-anchor')) return;
     setDragging(true);
     setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y });
     window.addEventListener('mousemove', onMouseMove as any);
@@ -117,23 +113,40 @@ export function HudOverlay({ type, position, size, stem, settings, onOpenModal, 
       onUpdate({ position: { x: e.clientX - dragStart.x, y: e.clientY - dragStart.y } });
     }
     if (resizing && resizeStart) {
-      const newWidth = Math.max(100, resizeStart.width + (e.clientX - resizeStart.x));
-      const newHeight = Math.max(40, resizeStart.height + (e.clientY - resizeStart.y));
-      onUpdate({ size: { width: newWidth, height: newHeight } });
+      const anchor = ANCHORS.find(a => a.key === resizing);
+      if (!anchor) return;
+      let { x, y, width, height } = resizeStart;
+      const dx = e.clientX - resizeStart.startX;
+      const dy = e.clientY - resizeStart.startY;
+      // Corner/side logic
+      if (anchor.dx === -1) { width -= dx; x += dx; }
+      if (anchor.dx === 1)  { width += dx; }
+      if (anchor.dy === -1) { height -= dy; y += dy; }
+      if (anchor.dy === 1)  { height += dy; }
+      width = Math.max(60, width);
+      height = Math.max(40, height);
+      onUpdate({ position: { x, y }, size: { width, height } });
     }
   }
   function onMouseUp() {
     setDragging(false);
-    setResizing(false);
+    setResizing(null);
     setDragStart(null);
     setResizeStart(null);
     window.removeEventListener('mousemove', onMouseMove as any);
     window.removeEventListener('mouseup', onMouseUp as any);
   }
-  function onResizeMouseDown(e: React.MouseEvent) {
+  function onAnchorMouseDown(anchorKey: string, e: React.MouseEvent) {
     e.stopPropagation();
-    setResizing(true);
-    setResizeStart({ x: e.clientX, y: e.clientY, width: size.width, height: size.height });
+    setResizing(anchorKey);
+    setResizeStart({
+      startX: e.clientX,
+      startY: e.clientY,
+      x: position.x,
+      y: position.y,
+      width: size.width,
+      height: size.height,
+    });
     window.addEventListener('mousemove', onMouseMove as any);
     window.addEventListener('mouseup', onMouseUp as any);
   }
@@ -163,23 +176,29 @@ export function HudOverlay({ type, position, size, stem, settings, onOpenModal, 
         height={size.height}
         style={{ width: '100%', height: '100%', display: 'block', borderRadius: 8 }}
       />
-      {/* Resize handle */}
-      <div
-        className="resize-handle"
-        style={{
-          position: 'absolute',
-          right: 0,
-          bottom: 0,
-          width: 18,
-          height: 18,
-          background: '#00ffff',
-          borderRadius: '0 0 8px 0',
-          cursor: 'nwse-resize',
-          zIndex: 11,
-          opacity: 0.7,
-        }}
-        onMouseDown={onResizeMouseDown}
-      />
+      {/* Photoshop-style transform anchors */}
+      {ANCHORS.map(anchor => (
+        <div
+          key={anchor.key}
+          className="transform-anchor"
+          style={{
+            position: 'absolute',
+            width: 14,
+            height: 14,
+            background: '#fff',
+            border: '2px solid #00ffff',
+            borderRadius: 4,
+            boxShadow: '0 0 4px #00ffff99',
+            zIndex: 20,
+            ...anchor.style,
+            marginLeft: anchor.style.left === 0 ? -7 : undefined,
+            marginTop: anchor.style.top === 0 ? -7 : undefined,
+            marginRight: anchor.style.right === 0 ? -7 : undefined,
+            marginBottom: anchor.style.bottom === 0 ? -7 : undefined,
+          }}
+          onMouseDown={e => onAnchorMouseDown(anchor.key, e)}
+        />
+      ))}
     </div>
   );
 }
