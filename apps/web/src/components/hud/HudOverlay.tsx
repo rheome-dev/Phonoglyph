@@ -1,8 +1,13 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 
 export function HudOverlay({ type, position, size, stem, settings, onOpenModal, onUpdate }: any) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [dragging, setDragging] = useState(false);
+  const [resizing, setResizing] = useState(false);
+  const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
+  const [resizeStart, setResizeStart] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
 
+  // Draw overlay visualization
   useEffect(() => {
     if (!canvasRef.current) return;
     const ctx = canvasRef.current.getContext('2d');
@@ -20,11 +25,42 @@ export function HudOverlay({ type, position, size, stem, settings, onOpenModal, 
     ctx.stroke();
   }, [type, stem, size, settings]);
 
-  // TODO: Add drag/resize logic and more overlay types
+  // Drag logic
+  function onMouseDown(e: React.MouseEvent) {
+    if ((e.target as HTMLElement).classList.contains('resize-handle')) return;
+    setDragging(true);
+    setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y });
+    window.addEventListener('mousemove', onMouseMove as any);
+    window.addEventListener('mouseup', onMouseUp as any);
+  }
+  function onMouseMove(e: MouseEvent) {
+    if (dragging && dragStart) {
+      onUpdate({ position: { x: e.clientX - dragStart.x, y: e.clientY - dragStart.y } });
+    }
+    if (resizing && resizeStart) {
+      const newWidth = Math.max(100, resizeStart.width + (e.clientX - resizeStart.x));
+      const newHeight = Math.max(40, resizeStart.height + (e.clientY - resizeStart.y));
+      onUpdate({ size: { width: newWidth, height: newHeight } });
+    }
+  }
+  function onMouseUp() {
+    setDragging(false);
+    setResizing(false);
+    setDragStart(null);
+    setResizeStart(null);
+    window.removeEventListener('mousemove', onMouseMove as any);
+    window.removeEventListener('mouseup', onMouseUp as any);
+  }
+  function onResizeMouseDown(e: React.MouseEvent) {
+    e.stopPropagation();
+    setResizing(true);
+    setResizeStart({ x: e.clientX, y: e.clientY, width: size.width, height: size.height });
+    window.addEventListener('mousemove', onMouseMove as any);
+    window.addEventListener('mouseup', onMouseUp as any);
+  }
 
   return (
-    <canvas
-      ref={canvasRef}
+    <div
       style={{
         position: 'absolute',
         left: position.x,
@@ -35,11 +71,36 @@ export function HudOverlay({ type, position, size, stem, settings, onOpenModal, 
         zIndex: 10,
         boxShadow: '0 0 16px #00ffff44',
         borderRadius: 8,
-        background: 'rgba(0,0,0,0.2)'
+        background: 'rgba(0,0,0,0.2)',
+        userSelect: dragging || resizing ? 'none' : 'auto',
+        cursor: dragging ? 'grabbing' : 'grab',
       }}
-      width={size.width}
-      height={size.height}
+      onMouseDown={onMouseDown}
       onDoubleClick={onOpenModal}
-    />
+    >
+      <canvas
+        ref={canvasRef}
+        width={size.width}
+        height={size.height}
+        style={{ width: '100%', height: '100%', display: 'block', borderRadius: 8 }}
+      />
+      {/* Resize handle */}
+      <div
+        className="resize-handle"
+        style={{
+          position: 'absolute',
+          right: 0,
+          bottom: 0,
+          width: 18,
+          height: 18,
+          background: '#00ffff',
+          borderRadius: '0 0 8px 0',
+          cursor: 'nwse-resize',
+          zIndex: 11,
+          opacity: 0.7,
+        }}
+        onMouseDown={onResizeMouseDown}
+      />
+    </div>
   );
 }
