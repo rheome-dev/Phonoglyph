@@ -47,7 +47,7 @@ const DraggableEffectCard: React.FC<{
 
   return (
     <div 
-      ref={(node) => drag(node)}
+      ref={drag as any}
       className="cursor-grab"
     >
       <div
@@ -265,12 +265,7 @@ export function EffectsLibrarySidebar({
                         key={effect.id}
                         effect={effect}
                         cardStyle={cardStyle}
-                        onDoubleClick={() => {
-                          if (effect.category === 'Overlays' && window.addHudOverlay) {
-                            window.addHudOverlay(effect.id); // id should match overlay type
-                          }
-                          onEffectDoubleClick(effect.id);
-                        }}
+                        onDoubleClick={() => onEffectDoubleClick(effect.id)}
                       />
                     );
                   })}

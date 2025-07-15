@@ -32,7 +32,57 @@ import { UnifiedTimeline } from '@/components/video-composition/UnifiedTimeline'
 import { TestVideoComposition } from '@/components/video-composition/TestVideoComposition';
 import type { Layer } from '@/types/video-composition';
 import { useFeatureValue } from '@/hooks/use-feature-value';
-import { HudOverlayManager } from '@/components/hud/HudOverlayManager';
+import { HudOverlayProvider, useHudOverlayContext } from '@/components/hud/HudOverlayManager';
+
+// Wrapper component that provides HUD overlay functionality to the sidebar
+const EffectsLibrarySidebarWithHud: React.FC<{
+  effects: any[];
+  selectedEffects: Record<string, boolean>;
+  onEffectToggle: (effectId: string) => void;
+  onEffectDoubleClick: (effectId: string) => void;
+  isVisible: boolean;
+}> = ({ effects, selectedEffects, onEffectToggle, onEffectDoubleClick, isVisible }) => {
+  const [isClient, setIsClient] = useState(false);
+  
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+  
+  const hudContext = useHudOverlayContext();
+  
+  const handleEffectDoubleClick = (effectId: string) => {
+    const effect = effects.find(e => e.id === effectId);
+    if (effect && effect.category === 'Overlays' && isClient) {
+      // Map effect ID to overlay type
+      const overlayTypeMap: Record<string, string> = {
+        'waveform': 'waveform',
+        'spectrogram': 'spectrogram',
+        'peakMeter': 'peakMeter',
+        'stereometer': 'stereometer',
+        'oscilloscope': 'oscilloscope',
+        'spectrumAnalyzer': 'spectrumAnalyzer',
+        'midiMeter': 'midiMeter'
+      };
+      
+      const overlayType = overlayTypeMap[effectId];
+      if (overlayType) {
+        console.log('🎯 Adding HUD overlay:', overlayType);
+        hudContext.addOverlay(overlayType);
+      }
+    }
+    onEffectDoubleClick(effectId);
+  };
+  
+  return (
+    <EffectsLibrarySidebar
+      effects={effects}
+      selectedEffects={selectedEffects}
+      onEffectToggle={onEffectToggle}
+      onEffectDoubleClick={handleEffectDoubleClick}
+      isVisible={isVisible}
+    />
+  );
+};
 
 // Sample MIDI data for demonstration
 const createSampleMIDIData = (): MIDIData => {
@@ -137,6 +187,12 @@ const transformBackendToFrontendMidiData = (backendData: any): MIDIData => {
 export default function CreativeVisualizerPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [isClient, setIsClient] = useState(false);
+
+  // Ensure we're on the client side to prevent hydration issues
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
   
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [useDemoData, setUseDemoData] = useState(false);
@@ -253,6 +309,14 @@ export default function CreativeVisualizerPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const isLoadingStemsRef = useRef(false);
   const [isCacheLoaded, setIsCacheLoaded] = useState(false);
+  
+  // Ref to track current analysis state to avoid stale closures
+  const currentAnalysisRef = useRef(cachedStemAnalysis.cachedAnalysis);
+  
+  // Update ref when analysis changes
+  useEffect(() => {
+    currentAnalysisRef.current = cachedStemAnalysis.cachedAnalysis;
+  }, [cachedStemAnalysis.cachedAnalysis]);
 
   // Get download URL mutation
   const getDownloadUrlMutation = trpc.file.getDownloadUrl.useMutation();
@@ -323,8 +387,8 @@ export default function CreativeVisualizerPage() {
   // Helper to sort stems: non-master first, master last
   function sortStemsWithMasterLast(stems: any[]) {
     return [...stems].sort((a, b) => {
-      if (a.isMaster && !b.isMaster) return 1;
-      if (!a.isMaster && b.isMaster) return -1;
+      if (a.is_master && !b.is_master) return 1;
+      if (!a.is_master && b.is_master) return -1;
       return 0;
     });
   }
@@ -347,11 +411,11 @@ export default function CreativeVisualizerPage() {
 
           if (audioFiles.length > 0) {
             console.log('Found audio files, preparing to load:', audioFiles.map(f => f.file_name));
+            console.log('Master stem info:', audioFiles.map(f => ({ name: f.file_name, is_master: f.is_master })));
             
             // Sort so master is last
             const sortedAudioFiles = sortStemsWithMasterLast(audioFiles.map(f => ({
               ...f,
-              isMaster: f.is_master || false,
               stemType: f.stem_type || getStemTypeFromFileName(f.file_name)
             })));
 
@@ -362,7 +426,7 @@ export default function CreativeVisualizerPage() {
                   id: file.id,
                   url: result.downloadUrl,
                   label: file.file_name,
-                  isMaster: file.isMaster,
+                  isMaster: file.is_master || false,
                   stemType: file.stemType
                 };
               })
@@ -374,15 +438,41 @@ export default function CreativeVisualizerPage() {
               const masterStems = stemsToLoad.filter(s => s.isMaster);
               await stemAudio.loadStems(nonMasterStems, (stemId, audioBuffer) => {
                 const stem = nonMasterStems.find(s => s.id === stemId);
-                if (stem && !cachedStemAnalysis.cachedAnalysis.some(a => a.fileMetadataId === stemId)) {
+                // Use ref to get current state to avoid stale closure
+                const currentAnalysis = currentAnalysisRef.current;
+                const hasAnalysis = currentAnalysis.some(a => a.fileMetadataId === stemId);
+                console.log('🎵 Stem loaded callback:', { 
+                  stemId, 
+                  stemType: stem?.stemType, 
+                  hasAnalysis,
+                  cachedAnalysisCount: currentAnalysis.length,
+                  cachedAnalysisIds: currentAnalysis.map(a => a.fileMetadataId)
+                });
+                if (stem && !hasAnalysis) {
+                  console.log('🎵 Triggering analysis for stem:', stemId, stem.stemType);
                   cachedStemAnalysis.analyzeAudioBuffer(stemId, audioBuffer, stem.stemType);
+                } else {
+                  console.log('🎵 Skipping analysis for stem:', stemId, 'reason:', !stem ? 'no stem found' : 'analysis already exists');
                 }
               });
               if (masterStems.length > 0) {
                 await stemAudio.loadStems(masterStems, (stemId, audioBuffer) => {
                   const stem = masterStems.find(s => s.id === stemId);
-                  if (stem && !cachedStemAnalysis.cachedAnalysis.some(a => a.fileMetadataId === stemId)) {
+                  // Use ref to get current state to avoid stale closure
+                  const currentAnalysis = currentAnalysisRef.current;
+                  const hasAnalysis = currentAnalysis.some(a => a.fileMetadataId === stemId);
+                  console.log('🎵 Master stem loaded callback:', { 
+                    stemId, 
+                    stemType: stem?.stemType, 
+                    hasAnalysis,
+                    cachedAnalysisCount: currentAnalysis.length,
+                    cachedAnalysisIds: currentAnalysis.map(a => a.fileMetadataId)
+                  });
+                  if (stem && !hasAnalysis) {
+                    console.log('🎵 Triggering analysis for master stem:', stemId, stem.stemType);
                     cachedStemAnalysis.analyzeAudioBuffer(stemId, audioBuffer, stem.stemType);
+                  } else {
+                    console.log('🎵 Skipping analysis for master stem:', stemId, 'reason:', !stem ? 'no stem found' : 'analysis already exists');
                   }
                 });
               }
@@ -407,7 +497,7 @@ export default function CreativeVisualizerPage() {
         isLoadingStemsRef.current = false;
       };
     }
-  }, [projectFiles?.files, currentProjectId, isInitialized, cachedStemAnalysis.isLoading, cachedStemAnalysis.cachedAnalysis]);
+  }, [projectFiles?.files, currentProjectId, isInitialized, cachedStemAnalysis.isLoading]); // Removed cachedStemAnalysis.cachedAnalysis from dependencies
 
   
 
@@ -532,6 +622,63 @@ export default function CreativeVisualizerPage() {
       category: 'Generative',
       rarity: 'Mythic',
       parameters: {} // <-- Added
+    },
+    // HUD Overlay Effects
+    { 
+      id: 'waveform', 
+      name: 'Waveform Overlay', 
+      description: 'Real-time audio waveform visualization',
+      category: 'Overlays',
+      rarity: 'Common',
+      parameters: {}
+    },
+    { 
+      id: 'spectrogram', 
+      name: 'Spectrogram Overlay', 
+      description: 'Frequency vs time visualization with color mapping',
+      category: 'Overlays',
+      rarity: 'Rare',
+      parameters: {}
+    },
+    { 
+      id: 'peakMeter', 
+      name: 'Peak/LUFS Meter', 
+      description: 'Professional audio level metering with peak and LUFS measurements',
+      category: 'Overlays',
+      rarity: 'Common',
+      parameters: {}
+    },
+    { 
+      id: 'stereometer', 
+      name: 'Stereometer Overlay', 
+      description: 'Stereo field visualization and correlation meter',
+      category: 'Overlays',
+      rarity: 'Rare',
+      parameters: {}
+    },
+    { 
+      id: 'oscilloscope', 
+      name: 'Oscilloscope Overlay', 
+      description: 'Real-time waveform oscilloscope with pitch tracking',
+      category: 'Overlays',
+      rarity: 'Mythic',
+      parameters: {}
+    },
+    { 
+      id: 'spectrumAnalyzer', 
+      name: 'Spectrum Analyzer', 
+      description: 'FFT-based frequency spectrum visualization',
+      category: 'Overlays',
+      rarity: 'Rare',
+      parameters: {}
+    },
+    { 
+      id: 'midiMeter', 
+      name: 'MIDI Activity Meter', 
+      description: 'Real-time MIDI note and velocity visualization',
+      category: 'Overlays',
+      rarity: 'Common',
+      parameters: {}
     }
   ];
 
@@ -1132,8 +1279,23 @@ export default function CreativeVisualizerPage() {
   // In the render, use the sorted stems
   const sortedAvailableStems = sortStemsWithMasterLast(availableStems);
 
+  // Don't render anything until we're on the client side
+  if (!isClient) {
+    return (
+      <div className="flex h-screen bg-stone-800 text-white items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-4"></div>
+          <div className="text-sm text-stone-300">Loading...</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <>
+    <HudOverlayProvider 
+      cachedAnalysis={cachedStemAnalysis.cachedAnalysis}
+      stemAudio={stemAudio}
+    >
       {showPicker && (
         <ProjectPickerModal
           isOpen={showPicker}
@@ -1363,6 +1525,11 @@ export default function CreativeVisualizerPage() {
                     />
                   )}
 
+                  {/* HUD Overlays positioned relative to visualizer */}
+                  <div id="hud-overlays" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 20 }}>
+                    {/* Overlays will be rendered here by the HudOverlayProvider */}
+                  </div>
+
                       {/* Visualizer content only - no modals here */}
                 </div>
                 </div>
@@ -1394,7 +1561,7 @@ export default function CreativeVisualizerPage() {
                     stemError={cachedStemAnalysis.error}
                     isPlaying={isPlaying}
                     onSeek={setCurrentTime}
-                    className="bg-gray-800/50 border border-gray-700"
+                    className="bg-stone-800 border border-gray-700"
                   />
                 </div>
             </div>
@@ -1406,7 +1573,7 @@ export default function CreativeVisualizerPage() {
 
             {/* Right Effects Sidebar */}
             <CollapsibleEffectsSidebar>
-              <EffectsLibrarySidebar
+              <EffectsLibrarySidebarWithHud
                 effects={effects}
                 selectedEffects={selectedEffects}
                 onEffectToggle={handleSelectEffect}
@@ -1415,12 +1582,11 @@ export default function CreativeVisualizerPage() {
               />
             </CollapsibleEffectsSidebar>
 
-            {/* HUD overlays absolutely positioned over the visualizer */}
-            <HudOverlayManager />
+
 
         </main>
       </div>
       </DndProvider>
-    </>
+    </HudOverlayProvider>
   );
 }

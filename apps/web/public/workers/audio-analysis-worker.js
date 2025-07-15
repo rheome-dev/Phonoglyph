@@ -68,7 +68,8 @@ const STEM_FEATURES = {
   drums: ['rms', 'zcr', 'spectralCentroid'],
   bass: ['rms', 'loudness', 'spectralCentroid'],
   vocals: ['rms', 'loudness', 'mfcc'],
-  other: ['rms', 'loudness', 'spectralCentroid'] // For synths, guitars, etc.
+  other: ['rms', 'loudness', 'spectralCentroid'], // For synths, guitars, etc.
+  master: ['rms', 'loudness', 'spectralCentroid'] // Master stem gets full analysis
 };
 
 // Quality presets for different performance levels
@@ -287,9 +288,7 @@ function generateWaveformData(channelData, duration, points = 1024) {
 }
 
 async function performFullAnalysis(channelData, sampleRate, stemType, onProgress) {
-  const featuresToExtract = stemType === 'master' 
-    ? [] 
-    : (STEM_FEATURES[stemType] || STEM_FEATURES['other']);
+  const featuresToExtract = STEM_FEATURES[stemType] || STEM_FEATURES['other'];
   
   const featureFrames = {};
   featuresToExtract.forEach(f => {

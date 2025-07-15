@@ -66,7 +66,12 @@ export function useCachedStemAnalysis(): UseCachedStemAnalysis {
           break;
         case 'ANALYSIS_COMPLETE':
           console.log('Analysis complete for file:', data.fileId);
-          setCachedAnalysis(prev => [...prev, data.result]);
+          console.log('Analysis result data:', data.result);
+          setCachedAnalysis(prev => {
+            const newAnalysis = [...prev, data.result];
+            console.log('Updated cached analysis:', newAnalysis.map(a => ({ id: a.fileMetadataId, stemType: a.stemType })));
+            return newAnalysis;
+          });
           setAnalysisProgress(prev => ({ ...prev, [data.fileId]: null })); // Clear progress
           // Cache the result in the background
           cacheAnalysisMutation.mutate(data.result);
@@ -117,14 +122,18 @@ export function useCachedStemAnalysis(): UseCachedStemAnalysis {
   }, [queryFileIds, queryStemType, cachedAnalysis]);
 
   const analyzeAudioBuffer = useCallback((fileId: string, audioBuffer: AudioBuffer, stemType: string) => {
+    console.log('🎵 analyzeAudioBuffer called:', { fileId, stemType, duration: audioBuffer.duration });
+    
     if (!workerRef.current) {
       console.error("Analysis worker not ready.");
       return;
     }
     if (cachedAnalysis.some(a => a.fileMetadataId === fileId) || analysisProgress[fileId]) {
+      console.log('🎵 Skipping analysis - already cached or in progress:', { fileId, hasCached: cachedAnalysis.some(a => a.fileMetadataId === fileId), inProgress: !!analysisProgress[fileId] });
       return;
     }
 
+    console.log('🎵 Starting analysis for:', fileId, stemType);
     setAnalysisProgress(prev => ({ ...prev, [fileId]: { progress: 0, message: 'Queued for analysis...' } }));
     
     const channelData = audioBuffer.getChannelData(0); // Using first channel for analysis

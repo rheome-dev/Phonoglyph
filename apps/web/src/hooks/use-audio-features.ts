@@ -74,6 +74,16 @@ export function useAudioFeatures(trackId?: string, stemType?: string): AudioFeat
       { id: 'other-spectral-rolloff', name: 'Spectral Rolloff', description: 'High-frequency content and brightness', category: 'pitch', stemType: 'other' },
       { id: 'other-spectral-flatness', name: 'Spectral Flatness', description: 'Tone vs noise characteristics', category: 'timbre', stemType: 'other' },
       { id: 'other-perceptual-spread', name: 'Perceptual Spread', description: 'Spectral width and stereo image', category: 'timbre', stemType: 'other' },
+      
+      // 🎵 MASTER STEM - Focus on overall mix characteristics
+      { id: 'master-rms', name: 'RMS Energy', description: 'Overall mix energy and intensity', category: 'intensity', stemType: 'master' },
+      { id: 'master-volume', name: 'Volume', description: 'Overall mix volume and power', category: 'rhythm', stemType: 'master' },
+      { id: 'master-brightness', name: 'Brightness', description: 'Overall mix brightness and mood', category: 'pitch', stemType: 'master' },
+      { id: 'master-harmonic-content', name: 'Harmonic Content', description: 'Overall mix richness and complexity', category: 'timbre', stemType: 'master' },
+      { id: 'master-spectral-rolloff', name: 'Spectral Rolloff', description: 'Overall mix high-frequency content', category: 'pitch', stemType: 'master' },
+      { id: 'master-spectral-flatness', name: 'Spectral Flatness', description: 'Overall mix tone quality', category: 'timbre', stemType: 'master' },
+      { id: 'master-perceptual-spread', name: 'Perceptual Spread', description: 'Overall mix stereo width', category: 'timbre', stemType: 'master' },
+      { id: 'master-loudness', name: 'Loudness', description: 'Overall mix perceived loudness', category: 'intensity', stemType: 'master' },
     ];
 
     // Filter features by stemType if provided, but keep all features available

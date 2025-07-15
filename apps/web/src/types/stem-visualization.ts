@@ -2,7 +2,7 @@
 // These are the only types actually being used in the working system
 
 export interface StemVisualizationMapping {
-  stemType: 'drums' | 'bass' | 'vocals' | 'piano' | 'other';
+  stemType: 'drums' | 'bass' | 'vocals' | 'piano' | 'other' | 'master';
   enabled: boolean;
   priority: number;
   globalMultiplier: number;
