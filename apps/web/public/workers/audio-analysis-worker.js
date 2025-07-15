@@ -287,7 +287,7 @@ function generateWaveformData(channelData, duration, points = 1024) {
     };
 }
 
-async function performFullAnalysis(channelData, sampleRate, stemType, onProgress) {
+async function performFullAnalysis(channelData, sampleRate, stemType, onProgress, audioBuffer) {
   const featuresToExtract = STEM_FEATURES[stemType] || STEM_FEATURES['other'];
   
   const featureFrames = {};
@@ -303,6 +303,9 @@ async function performFullAnalysis(channelData, sampleRate, stemType, onProgress
   featureFrames.fft = [];
   featureFrames.fftFrequencies = [];
 
+  // Add stereo window extraction
+  featureFrames.stereoWindow = [];
+
   if (featuresToExtract.length === 0) {
     if (onProgress) onProgress(1);
     // Return empty analysis but with valid structure
@@ -315,6 +318,7 @@ async function performFullAnalysis(channelData, sampleRate, stemType, onProgress
       bass: 0,
       mid: 0,
       treble: 0,
+      stereoWindow: null,
     };
   }
   
@@ -323,6 +327,12 @@ async function performFullAnalysis(channelData, sampleRate, stemType, onProgress
   
   let currentPosition = 0;
   const totalSteps = Math.floor((channelData.length - bufferSize) / hopSize);
+
+  // For stereo, get both channels if available
+  let rightChannelData = null;
+  if (audioBuffer && audioBuffer.numberOfChannels > 1) {
+    rightChannelData = audioBuffer.getChannelData(1);
+  }
 
   while (currentPosition + bufferSize <= channelData.length) {
     const buffer = channelData.slice(currentPosition, currentPosition + bufferSize);
@@ -376,6 +386,19 @@ async function performFullAnalysis(channelData, sampleRate, stemType, onProgress
         featureFrames.fft.push(mockFft);
       }
     }
+
+    // Extract stereo window for Lissajous stereometer
+    if (rightChannelData) {
+      const N = 1024;
+      const leftWindow = buffer.slice(-N);
+      const rightWindow = rightChannelData.slice(currentPosition, currentPosition + bufferSize).slice(-N);
+      featureFrames.stereoWindow = { left: leftWindow, right: rightWindow };
+    } else {
+      // Mono: duplicate left channel
+      const N = 1024;
+      const leftWindow = buffer.slice(-N);
+      featureFrames.stereoWindow = { left: leftWindow, right: leftWindow };
+    }
     
     currentPosition += hopSize;
 
@@ -387,14 +410,13 @@ async function performFullAnalysis(channelData, sampleRate, stemType, onProgress
   // Flatten featureFrames so each key is an array of numbers
   const flatFeatures = {};
   for (const key in featureFrames) {
-    // If it's loudness, flatten .total or .specific as needed
     if (key === 'loudness') {
-      // You can choose which to use; here we use .total
       flatFeatures.loudness = featureFrames.loudness.total;
     } else if (key === 'fft') {
-      // For FFT, we want the most recent frame for real-time visualization
       flatFeatures.fft = featureFrames.fft.length > 0 ? featureFrames.fft[featureFrames.fft.length - 1] : [];
       flatFeatures.fftFrequencies = featureFrames.fftFrequencies;
+    } else if (key === 'stereoWindow') {
+      flatFeatures.stereoWindow = featureFrames.stereoWindow;
     } else {
       flatFeatures[key] = featureFrames[key];
     }
