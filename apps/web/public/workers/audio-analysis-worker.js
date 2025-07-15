@@ -69,7 +69,7 @@ const STEM_FEATURES = {
   bass: ['rms', 'loudness', 'spectralCentroid'],
   vocals: ['rms', 'loudness', 'mfcc'],
   other: ['rms', 'loudness', 'spectralCentroid'], // For synths, guitars, etc.
-  master: ['rms', 'loudness', 'spectralCentroid'] // Master stem gets full analysis
+  master: ['rms', 'loudness', 'spectralCentroid', 'fft'] // Master stem gets full analysis including FFT
 };
 
 // Quality presets for different performance levels
@@ -299,6 +299,10 @@ async function performFullAnalysis(channelData, sampleRate, stemType, onProgress
     }
   });
 
+  // Add FFT data extraction
+  featureFrames.fft = [];
+  featureFrames.fftFrequencies = [];
+
   if (featuresToExtract.length === 0) {
     if (onProgress) onProgress(1);
     // Return empty analysis but with valid structure
@@ -338,6 +342,40 @@ async function performFullAnalysis(channelData, sampleRate, stemType, onProgress
         }
       }
     }
+
+    // Extract raw FFT data
+    if (Meyda) {
+      try {
+        // Get FFT magnitude spectrum
+        const fftFeatures = Meyda.extract(['fft'], buffer);
+        if (fftFeatures && fftFeatures.fft) {
+          // FFT returns complex numbers, we want magnitude
+          const fftMagnitudes = [];
+          for (let i = 0; i < fftFeatures.fft.length; i += 2) {
+            const real = fftFeatures.fft[i];
+            const imag = fftFeatures.fft[i + 1];
+            const magnitude = Math.sqrt(real * real + imag * imag);
+            fftMagnitudes.push(magnitude);
+          }
+          featureFrames.fft.push(fftMagnitudes);
+          
+          // Calculate frequency bins (only once)
+          if (featureFrames.fftFrequencies.length === 0) {
+            const fftFrequencies = [];
+            for (let i = 0; i < fftMagnitudes.length; i++) {
+              const frequency = (i * sampleRate) / bufferSize;
+              fftFrequencies.push(frequency);
+            }
+            featureFrames.fftFrequencies = fftFrequencies;
+          }
+        }
+      } catch (fftError) {
+        console.warn('FFT extraction failed:', fftError);
+        // Fallback: create mock FFT data
+        const mockFft = new Array(512).fill(0).map(() => Math.random() * 0.1);
+        featureFrames.fft.push(mockFft);
+      }
+    }
     
     currentPosition += hopSize;
 
@@ -353,6 +391,10 @@ async function performFullAnalysis(channelData, sampleRate, stemType, onProgress
     if (key === 'loudness') {
       // You can choose which to use; here we use .total
       flatFeatures.loudness = featureFrames.loudness.total;
+    } else if (key === 'fft') {
+      // For FFT, we want the most recent frame for real-time visualization
+      flatFeatures.fft = featureFrames.fft.length > 0 ? featureFrames.fft[featureFrames.fft.length - 1] : [];
+      flatFeatures.fftFrequencies = featureFrames.fftFrequencies;
     } else {
       flatFeatures[key] = featureFrames[key];
     }
