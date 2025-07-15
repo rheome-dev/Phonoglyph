@@ -7,6 +7,7 @@ import type { Layer } from '@/types/video-composition';
 import { StemWaveform, WaveformData } from '@/components/stem-visualization/stem-waveform';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { HudOverlayManager, HudOverlayConfig } from '@/components/hud/HudOverlayManager';
 
 interface EffectClip {
   id: string;
@@ -345,6 +346,91 @@ const StemTrack: React.FC<StemTrackProps> = ({
 };
 StemTrack.displayName = 'StemTrack';
 
+// Overlay Lane Card
+const OverlayCard: React.FC<{
+  overlay: HudOverlayConfig;
+  index: number;
+  moveOverlay: (from: number, to: number) => void;
+  onOpenModal: () => void;
+}> = ({ overlay, index, moveOverlay, onOpenModal }) => {
+  const ref = React.useRef<HTMLDivElement>(null);
+  const [{ isDragging }, drag] = useDrag({
+    type: 'HUD_OVERLAY_CARD',
+    item: { index },
+    collect: monitor => ({ isDragging: monitor.isDragging() })
+  });
+  const [, drop] = useDrop({
+    accept: 'HUD_OVERLAY_CARD',
+    hover: (item: any) => {
+      if (item.index !== index) {
+        moveOverlay(item.index, index);
+        item.index = index;
+      }
+    }
+  });
+  drag(drop(ref));
+  return (
+    <div
+      ref={ref}
+      style={{
+        opacity: isDragging ? 0.5 : 1,
+        width: 56,
+        height: 56,
+        margin: 4,
+        background: '#111',
+        border: '2px solid #00ffff',
+        borderRadius: 8,
+        boxShadow: '0 0 8px #00ffff88',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'grab',
+        position: 'relative',
+      }}
+      onDoubleClick={onOpenModal}
+      title={overlay.type}
+    >
+      <span style={{ color: '#00ffff', fontWeight: 700, fontSize: 12, textShadow: '0 0 4px #00ffff' }}>{overlay.type}</span>
+    </div>
+  );
+};
+
+// Overlay Lane
+const OverlayLane: React.FC<{
+  overlays: HudOverlayConfig[];
+  moveOverlay: (from: number, to: number) => void;
+  onOpenModal: (id: string) => void;
+}> = ({ overlays, moveOverlay, onOpenModal }) => (
+  <div style={{
+    display: 'flex',
+    alignItems: 'center',
+    minHeight: 72,
+    background: 'linear-gradient(90deg, #0ff2, #222 60%)',
+    borderBottom: '2px solid #00ffff',
+    position: 'relative',
+    padding: '0 8px',
+    marginBottom: 8,
+  }}>
+    <div style={{ marginRight: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
+      <span style={{ color: '#00ffff', fontWeight: 700, fontSize: 13 }}>HUD Overlays</span>
+      <span title="Overlays are always visible. Drag up/down to reorder stacking.">
+        <svg width="16" height="16" style={{ verticalAlign: 'middle' }}><rect x="2" y="2" width="12" height="12" rx="3" fill="#00ffff33" stroke="#00ffff" strokeWidth="2" /></svg>
+      </span>
+    </div>
+    <div style={{ display: 'flex', flexDirection: 'row', gap: 4 }}>
+      {overlays.map((overlay, i) => (
+        <OverlayCard
+          key={overlay.id}
+          overlay={overlay}
+          index={i}
+          moveOverlay={moveOverlay}
+          onOpenModal={() => onOpenModal(overlay.id)}
+        />
+      ))}
+    </div>
+  </div>
+);
+
 export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
   layers,
   onLayerAdd,
@@ -566,6 +652,18 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
     onSeek(Math.max(0, Math.min(duration, time)));
   };
 
+  // For now, mock overlays state and modal handler if not available from HudOverlayManager
+  const [hudOverlays, setHudOverlays] = useState<HudOverlayConfig[]>([]); // Replace with context or prop from HudOverlayManager
+  const [modalOverlayId, setModalOverlayId] = useState<string | null>(null);
+  function moveOverlay(from: number, to: number) {
+    setHudOverlays(prev => {
+      const arr = [...prev];
+      const [item] = arr.splice(from, 1);
+      arr.splice(to, 0, item);
+      return arr;
+    });
+  }
+
   return (
     <div className={cn("bg-stone-800 border border-stone-700 font-mono text-xs rounded-xl", className)}>
       {/* Header */}
@@ -733,6 +831,17 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
                 )}
                 {stemError && <p className="text-xs text-red-500 p-2">{stemError}</p>}
               </div>
+            </TimelineSection>
+            {/* HUD Overlays Section */}
+            <TimelineSection
+              title="HUD Overlays"
+              icon={<Settings className="h-3 w-3" />}
+              isExpanded={expandedSections.composition} // Assuming HUD overlays are part of composition
+              onToggle={() => toggleSection('composition')}
+              itemCount={hudOverlays.length}
+              itemType="overlays"
+            >
+              <OverlayLane overlays={hudOverlays} moveOverlay={moveOverlay} onOpenModal={setModalOverlayId} />
             </TimelineSection>
           </div>
         </div>
