@@ -218,8 +218,11 @@ const ANCHORS = [
   { key: 'w',  style: { left: 0, top: '50%', transform: 'translateY(-50%)', cursor: 'ew-resize' }, dx: -1, dy: 0 },
 ];
 
+<<<<<<< HEAD
 const SPECTROGRAM_BUFFER_SIZE = 200; // Number of FFT frames to keep (controls width)
 
+=======
+>>>>>>> eef7db848 (feat(hud): true bipolar oscilloscope waveform, amplitude control, subtle glow, and grid fixes for authentic scope UX)
 export function HudOverlay({ type, position, size, stem, settings, featureData, onOpenModal, onUpdate }: any) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -228,6 +231,7 @@ export function HudOverlay({ type, position, size, stem, settings, featureData, 
   const [resizeStart, setResizeStart] = useState<any>(null);
   const [isHovered, setIsHovered] = useState(false);
 
+<<<<<<< HEAD
   // Rolling buffer for spectrogram
   const spectrogramBufferRef = useRef<Array<Float32Array>>([]);
 
@@ -235,6 +239,12 @@ export function HudOverlay({ type, position, size, stem, settings, featureData, 
   const onMouseMoveRef = useRef<(e: MouseEvent) => void>();
   const onMouseUpRef = useRef<(e: MouseEvent) => void>();
 
+=======
+  // Stable refs for event handlers
+  const onMouseMoveRef = useRef<(e: MouseEvent) => void>();
+  const onMouseUpRef = useRef<(e: MouseEvent) => void>();
+
+>>>>>>> eef7db848 (feat(hud): true bipolar oscilloscope waveform, amplitude control, subtle glow, and grid fixes for authentic scope UX)
   // Mouse move handler
   const onMouseMove = useCallback((e: MouseEvent) => {
     if (dragging && dragStart) {
@@ -477,6 +487,10 @@ export function HudOverlay({ type, position, size, stem, settings, featureData, 
           }
         } else if (Array.isArray(featureData) && featureData.length > 0) {
           // Draw real spectrum using other features
+      case 'spectrogram':
+      case 'spectrumAnalyzer':
+        if (Array.isArray(featureData) && featureData.length > 0) {
+          // Draw real spectrum
           const barWidth = size.width / featureData.length;
           for (let i = 0; i < featureData.length; i++) {
             const val = featureData[i];
@@ -488,7 +502,6 @@ export function HudOverlay({ type, position, size, stem, settings, featureData, 
           drawSpectrumAnalyzer(ctx, size.width, size.height);
         }
         break;
-      }
       case 'peakMeter':
         if (typeof featureData === 'number') {
           // Draw real peak meter
@@ -533,6 +546,7 @@ export function HudOverlay({ type, position, size, stem, settings, featureData, 
             ctx.fill();
           }
           ctx.restore();
+
         } else {
           drawStereometer(ctx, size.width, size.height);
         }
@@ -564,7 +578,36 @@ export function HudOverlay({ type, position, size, stem, settings, featureData, 
         break;
       }
       case 'waveform': {
-        // ... existing waveform code ...
+        if (Array.isArray(featureData) && featureData.length > 0) {
+          // Draw bipolar waveform exactly like stem-waveform component
+          const midY = size.height / 2;
+      
+          // Draw center line
+          ctx.beginPath();
+          ctx.moveTo(0, midY);
+          ctx.lineTo(size.width, midY);
+          ctx.strokeStyle = '#444';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+      
+          // Draw bipolar waveform
+          ctx.beginPath();
+          ctx.strokeStyle = '#4db3fa'; // Same blue as stem-waveform
+          ctx.lineWidth = 1;
+      
+          for (let i = 0; i < size.width; i++) {
+            const idx = Math.floor(i / size.width * (featureData.length - 1));
+            // Normalize to [-1, 1] for bipolar display
+            const normalizedVal = (featureData[idx] - 0.5) * 2;
+            const pointHeight = normalizedVal * (midY * 0.8); // Scale to 80% of height
+            const x = i;
+            ctx.moveTo(x, midY - pointHeight);
+            ctx.lineTo(x, midY + pointHeight);
+          }
+          ctx.stroke();
+        } else {
+          drawWaveform(ctx, size.width, size.height);
+        }
         // Transient detector
         if (settings.showTransients && Array.isArray(featureData.transients)) {
           ctx.save();
@@ -582,28 +625,81 @@ export function HudOverlay({ type, position, size, stem, settings, featureData, 
         break;
       }
       case 'oscilloscope': {
-        if (settings.lissajous && featureData && featureData.stereoWindow && featureData.stereoWindow.left && featureData.stereoWindow.right) {
-          // Lissajous mode
-          const left = featureData.stereoWindow.left;
-          const right = featureData.stereoWindow.right;
-          const N = Math.min(left.length, right.length, 1024);
-          ctx.save();
-          ctx.globalAlpha = 0.8;
-          ctx.strokeStyle = settings.color || '#00ffff';
-          ctx.lineWidth = 1.5;
+        const amplitude = typeof settings.amplitude === 'number' ? settings.amplitude : 1;
+        const color = settings.color || '#00ffff';
+        const glowIntensity = typeof settings.glowIntensity === 'number' ? settings.glowIntensity : 0;
+        const showGrid = !!settings.showGrid;
+        const gridColor = settings.gridColor || '#333333';
+        if (Array.isArray(featureData) && featureData.length > 0) {
+          // Draw background grid if enabled
+          if (showGrid) {
+            ctx.save();
+            ctx.strokeStyle = gridColor;
+            ctx.lineWidth = 0.5;
+            // Vertical grid lines
+            for (let x = 0; x <= size.width; x += size.width / 10) {
+              ctx.beginPath();
+              ctx.moveTo(x, 0);
+              ctx.lineTo(x, size.height);
+              ctx.stroke();
+            }
+            // Horizontal grid lines
+            for (let y = 0; y <= size.height; y += size.height / 8) {
+              ctx.beginPath();
+              ctx.moveTo(0, y);
+              ctx.lineTo(size.width, y);
+              ctx.stroke();
+            }
+            // Center crosshair
+            ctx.strokeStyle = gridColor;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(size.width / 2, 0);
+            ctx.lineTo(size.width / 2, size.height);
+            ctx.moveTo(0, size.height / 2);
+            ctx.lineTo(size.width, size.height / 2);
+            ctx.stroke();
+            ctx.restore();
+          }
+          // Draw soft glow effect if enabled
+          if (glowIntensity > 0) {
+            ctx.save();
+            const glowIntensityValue = glowIntensity * 0.15;
+            const step = Math.max(1, Math.floor(size.width / 100));
+            for (let i = 0; i < size.width; i += step) {
+              const idx = Math.floor(i / size.width * (featureData.length - 1));
+              const val = featureData[idx];
+              // Bipolar: normalize to -1 to 1 range, then center at height/2
+              const normalizedVal = (val - 0.5) * 2; // Convert 0-1 to -1 to 1
+              const y = size.height / 2 - normalizedVal * (size.height / 2) * amplitude;
+              const gradient = ctx.createRadialGradient(i, y, 0, i, y, glowIntensity * 2.5);
+              const rgbaColor = color.startsWith('#') 
+                ? `rgba(${parseInt(color.slice(1, 3), 16)}, ${parseInt(color.slice(3, 5), 16)}, ${parseInt(color.slice(5, 7), 16)}, ${glowIntensityValue})`
+                : color;
+              gradient.addColorStop(0, rgbaColor);
+              gradient.addColorStop(1, 'transparent');
+              ctx.fillStyle = gradient;
+              ctx.beginPath();
+              ctx.arc(i, y, glowIntensity * 2.5, 0, Math.PI * 2);
+              ctx.fill();
+            }
+            ctx.restore();
+          }
+          // Draw main oscilloscope trace (bipolar)
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 2;
           ctx.beginPath();
-          for (let i = 0; i < N; i++) {
-            const lx = left[i];
-            const ry = right[i];
-            const x = ((lx + 1) / 2) * size.width;
-            const y = ((ry + 1) / 2) * size.height;
-            if (i === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
+          for (let i = 0; i < size.width; i++) {
+            const idx = Math.floor(i / size.width * (featureData.length - 1));
+            const val = featureData[idx];
+            const normalizedVal = (val - 0.5) * 2;
+            const y = size.height / 2 - normalizedVal * (size.height / 2) * amplitude;
+            if (i === 0) ctx.moveTo(i, y);
+            else ctx.lineTo(i, y);
           }
           ctx.stroke();
-          ctx.restore();
         } else {
-          drawOscilloscope(ctx, size.width, size.height, settings);
+          drawOscilloscope(ctx, size.width, size.height, { ...settings, amplitude });
         }
         break;
       }
@@ -640,7 +736,6 @@ export function HudOverlay({ type, position, size, stem, settings, featureData, 
         height: size.height,
         pointerEvents: 'auto',
         zIndex: 10,
-        boxShadow: '0 0 16px #00ffff44',
         borderRadius: 8,
         background: settings.glass || settings.glassmorphism
           ? 'rgba(20, 40, 60, 0.25)'
@@ -651,6 +746,7 @@ export function HudOverlay({ type, position, size, stem, settings, featureData, 
         WebkitBackdropFilter: settings.glass || settings.glassmorphism ? 'blur(12px)' : undefined,
         border: settings.glass || settings.glassmorphism ? '1.5px solid rgba(255,255,255,0.18)' : undefined,
         transition: 'background 0.2s, border 0.2s',
+        isolation: 'isolate',
       }}
       onMouseDown={onMouseDown}
       onDoubleClick={onOpenModal}
@@ -663,29 +759,27 @@ export function HudOverlay({ type, position, size, stem, settings, featureData, 
         height={size.height}
         style={{ width: '100%', height: '100%', display: 'block', borderRadius: 8 }}
       />
-      {/* Photoshop-style transform anchors */}
-      {ANCHORS.map(anchor => (
-        <div
-          key={anchor.key}
-          className="transform-anchor"
-          style={{
-            position: 'absolute',
-            width: 14,
-            height: 14,
-            background: '#fff',
-            border: '2px solid #00ffff',
-            borderRadius: 4,
-            boxShadow: '0 0 4px #00ffff99',
-            zIndex: 20,
-            ...anchor.style,
-            marginLeft: anchor.style.left === 0 ? -7 : undefined,
-            marginTop: anchor.style.top === 0 ? -7 : undefined,
-            marginRight: anchor.style.right === 0 ? -7 : undefined,
-            marginBottom: anchor.style.bottom === 0 ? -7 : undefined,
-          }}
-          onMouseDown={e => onAnchorMouseDown(anchor.key, e)}
-        />
-      ))}
+      {/* Photoshop-style transform anchors - only visible on hover */}
+      {isHovered && ANCHORS.map(anchor => (
+  <div
+    key={anchor.key}
+    className="transform-anchor"
+    style={{
+      position: 'absolute',
+      width: 12,
+      height: 12,
+      background: '#fff',
+      border: '1px solid #ccc',
+      borderRadius: 2,
+      boxShadow: '0 1px 2px rgba(0,0,0,0.08)',
+      ...anchor.style,
+      zIndex: 20,
+      opacity: 0.95,
+      transition: 'background 0.2s, box-shadow 0.2s'
+    }}
+    onMouseDown={e => onAnchorMouseDown(anchor.key, e)}
+  />
+))}
     </div>
   );
 }

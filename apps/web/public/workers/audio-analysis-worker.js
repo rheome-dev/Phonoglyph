@@ -287,8 +287,10 @@ function generateWaveformData(channelData, duration, points = 1024) {
     };
 }
 
-async function performFullAnalysis(channelData, sampleRate, stemType, onProgress, audioBuffer) {
-  const featuresToExtract = STEM_FEATURES[stemType] || STEM_FEATURES['other'];
+async function performFullAnalysis(channelData, sampleRate, stemType, onProgress) {
+  const featuresToExtract = stemType === 'master' 
+    ? [] 
+    : (STEM_FEATURES[stemType] || STEM_FEATURES['other']);
   
   const featureFrames = {};
   featuresToExtract.forEach(f => {
