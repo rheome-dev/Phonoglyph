@@ -92,8 +92,19 @@ export function PortalModal({
     setPortalContainer(container);
 
     return () => {
+      // Only cleanup if this is the last modal being closed
       if (container && container.childNodes.length === 0) {
-        document.body.removeChild(container);
+        // Use a small delay to ensure all cleanup is complete
+        setTimeout(() => {
+          if (container && container.childNodes.length === 0 && container.parentNode) {
+            try {
+              document.body.removeChild(container);
+            } catch (error) {
+              // Container might have already been removed, ignore the error
+              console.warn('Portal container cleanup error:', error);
+            }
+          }
+        }, 100);
       }
     };
   }, [portalContainerId]);

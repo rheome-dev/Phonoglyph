@@ -216,11 +216,13 @@ export function useStemAudioController(): UseStemAudioController {
     loadingRef.current = true;
     try {
       console.log(`🎵 Starting to load ${stems.length} stems...`);
+      console.log('🎵 Stem master info:', stems.map(s => ({ id: s.id, label: s.label, isMaster: s.isMaster })));
       // Only fetch and decode audio buffers
       const decodedBuffers: Record<string, AudioBuffer> = {};
       const masterStem = stems.find(s => s.isMaster);
       if (masterStem) {
         masterStemIdRef.current = masterStem.id;
+        console.log('🎵 Master stem identified:', masterStem.id, masterStem.label);
       } else if (stems.length > 0) {
         // Fallback: if no master is flagged, assume the first one is.
         masterStemIdRef.current = stems[0].id;

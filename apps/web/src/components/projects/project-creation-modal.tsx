@@ -471,7 +471,7 @@ export function ProjectCreationModal({ isOpen, onClose, defaultMidiFilePath }: P
             fileData: base64Data,
             projectId: project.id, // Pass the project ID
             isMaster: file.name === masterFileName, // Tag master file
-            stemType: stemTypes[file.name] || 'melody' // Tag stem type
+            stemType: file.name === masterFileName ? 'master' : (stemTypes[file.name] || 'melody') // Master files get 'master' type, others get their assigned type
           })
         })
 

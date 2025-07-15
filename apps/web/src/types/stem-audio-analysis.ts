@@ -9,7 +9,7 @@ export interface AudioFeature {
 
 export interface StemAnalysis {
   stemId: string;
-  stemType: 'drums' | 'bass' | 'vocals' | 'other' | 'piano'; // Matches Spleeter's output
+  stemType: 'drums' | 'bass' | 'vocals' | 'other' | 'piano' | 'master'; // Includes master stem type
   features: {
     rhythm: AudioFeature[];
     pitch: AudioFeature[];

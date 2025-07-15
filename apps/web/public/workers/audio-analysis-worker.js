@@ -68,7 +68,8 @@ const STEM_FEATURES = {
   drums: ['rms', 'zcr', 'spectralCentroid'],
   bass: ['rms', 'loudness', 'spectralCentroid'],
   vocals: ['rms', 'loudness', 'mfcc'],
-  other: ['rms', 'loudness', 'spectralCentroid'] // For synths, guitars, etc.
+  other: ['rms', 'loudness', 'spectralCentroid'], // For synths, guitars, etc.
+  master: ['rms', 'loudness', 'spectralCentroid', 'fft'] // Master stem gets full analysis including FFT
 };
 
 // Quality presets for different performance levels
@@ -286,10 +287,8 @@ function generateWaveformData(channelData, duration, points = 1024) {
     };
 }
 
-async function performFullAnalysis(channelData, sampleRate, stemType, onProgress) {
-  const featuresToExtract = stemType === 'master' 
-    ? [] 
-    : (STEM_FEATURES[stemType] || STEM_FEATURES['other']);
+async function performFullAnalysis(channelData, sampleRate, stemType, onProgress, audioBuffer) {
+  const featuresToExtract = STEM_FEATURES[stemType] || STEM_FEATURES['other'];
   
   const featureFrames = {};
   featuresToExtract.forEach(f => {
@@ -299,6 +298,13 @@ async function performFullAnalysis(channelData, sampleRate, stemType, onProgress
       featureFrames[f] = [];
     }
   });
+
+  // Add FFT data extraction
+  featureFrames.fft = [];
+  featureFrames.fftFrequencies = [];
+
+  // Add stereo window extraction
+  featureFrames.stereoWindow = [];
 
   if (featuresToExtract.length === 0) {
     if (onProgress) onProgress(1);
@@ -312,6 +318,7 @@ async function performFullAnalysis(channelData, sampleRate, stemType, onProgress
       bass: 0,
       mid: 0,
       treble: 0,
+      stereoWindow: null,
     };
   }
   
@@ -320,6 +327,12 @@ async function performFullAnalysis(channelData, sampleRate, stemType, onProgress
   
   let currentPosition = 0;
   const totalSteps = Math.floor((channelData.length - bufferSize) / hopSize);
+
+  // For stereo, get both channels if available
+  let rightChannelData = null;
+  if (audioBuffer && audioBuffer.numberOfChannels > 1) {
+    rightChannelData = audioBuffer.getChannelData(1);
+  }
 
   while (currentPosition + bufferSize <= channelData.length) {
     const buffer = channelData.slice(currentPosition, currentPosition + bufferSize);
@@ -339,6 +352,53 @@ async function performFullAnalysis(channelData, sampleRate, stemType, onProgress
         }
       }
     }
+
+    // Extract raw FFT data
+    if (Meyda) {
+      try {
+        // Get FFT magnitude spectrum
+        const fftFeatures = Meyda.extract(['fft'], buffer);
+        if (fftFeatures && fftFeatures.fft) {
+          // FFT returns complex numbers, we want magnitude
+          const fftMagnitudes = [];
+          for (let i = 0; i < fftFeatures.fft.length; i += 2) {
+            const real = fftFeatures.fft[i];
+            const imag = fftFeatures.fft[i + 1];
+            const magnitude = Math.sqrt(real * real + imag * imag);
+            fftMagnitudes.push(magnitude);
+          }
+          featureFrames.fft.push(fftMagnitudes);
+          
+          // Calculate frequency bins (only once)
+          if (featureFrames.fftFrequencies.length === 0) {
+            const fftFrequencies = [];
+            for (let i = 0; i < fftMagnitudes.length; i++) {
+              const frequency = (i * sampleRate) / bufferSize;
+              fftFrequencies.push(frequency);
+            }
+            featureFrames.fftFrequencies = fftFrequencies;
+          }
+        }
+      } catch (fftError) {
+        console.warn('FFT extraction failed:', fftError);
+        // Fallback: create mock FFT data
+        const mockFft = new Array(512).fill(0).map(() => Math.random() * 0.1);
+        featureFrames.fft.push(mockFft);
+      }
+    }
+
+    // Extract stereo window for Lissajous stereometer
+    if (rightChannelData) {
+      const N = 1024;
+      const leftWindow = buffer.slice(-N);
+      const rightWindow = rightChannelData.slice(currentPosition, currentPosition + bufferSize).slice(-N);
+      featureFrames.stereoWindow = { left: leftWindow, right: rightWindow };
+    } else {
+      // Mono: duplicate left channel
+      const N = 1024;
+      const leftWindow = buffer.slice(-N);
+      featureFrames.stereoWindow = { left: leftWindow, right: leftWindow };
+    }
     
     currentPosition += hopSize;
 
@@ -350,10 +410,13 @@ async function performFullAnalysis(channelData, sampleRate, stemType, onProgress
   // Flatten featureFrames so each key is an array of numbers
   const flatFeatures = {};
   for (const key in featureFrames) {
-    // If it's loudness, flatten .total or .specific as needed
     if (key === 'loudness') {
-      // You can choose which to use; here we use .total
       flatFeatures.loudness = featureFrames.loudness.total;
+    } else if (key === 'fft') {
+      flatFeatures.fft = featureFrames.fft.length > 0 ? featureFrames.fft[featureFrames.fft.length - 1] : [];
+      flatFeatures.fftFrequencies = featureFrames.fftFrequencies;
+    } else if (key === 'stereoWindow') {
+      flatFeatures.stereoWindow = featureFrames.stereoWindow;
     } else {
       flatFeatures[key] = featureFrames[key];
     }

@@ -47,7 +47,7 @@ const DraggableEffectCard: React.FC<{
 
   return (
     <div 
-      ref={(node) => drag(node)}
+      ref={drag as any}
       className="cursor-grab"
     >
       <div
