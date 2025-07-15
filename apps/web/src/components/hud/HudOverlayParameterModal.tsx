@@ -53,12 +53,30 @@ const OVERLAY_SETTINGS: Record<string, { label: string; key: string; type: strin
     { label: 'Scroll Speed', key: 'scrollSpeed', type: 'number', min: 0.1, max: 5, step: 0.1 },
     { label: 'Glassmorphism Background', key: 'glassmorphism', type: 'checkbox' },
   ],
+  vuMeter: [
+    { label: 'Color', key: 'color', type: 'color' },
+    { label: 'Style', key: 'style', type: 'select', options: ['Needle', 'Bar'] },
+    { label: 'Meter Type', key: 'meterType', type: 'select', options: ['RMS', 'Peak'] },
+    { label: 'Glassmorphism Background', key: 'glassmorphism', type: 'checkbox' },
+  ],
+  chromaWheel: [
+    { label: 'Color Scheme', key: 'colorScheme', type: 'select', options: ['Classic', 'Rainbow', 'Viridis', 'Inferno'] },
+    { label: 'Show Note Names', key: 'showNoteNames', type: 'checkbox' },
+    { label: 'Glassmorphism Background', key: 'glassmorphism', type: 'checkbox' },
+  ],
 };
 
 // Add glassmorphism toggle to all overlays
 Object.keys(OVERLAY_SETTINGS).forEach(type => {
   OVERLAY_SETTINGS[type].push({ label: 'Glassmorphism Background', key: 'glassmorphism', type: 'checkbox' });
 });
+
+// Add transient detector to waveform
+OVERLAY_SETTINGS.waveform.push({ label: 'Show Transient Detector', key: 'showTransients', type: 'checkbox' });
+OVERLAY_SETTINGS.waveform.push({ label: 'Transient Color', key: 'transientColor', type: 'color' });
+OVERLAY_SETTINGS.waveform.push({ label: 'Transient Sensitivity', key: 'transientSensitivity', type: 'number', min: 0.01, max: 1, step: 0.01 });
+// Add Lissajous mode to oscilloscope
+OVERLAY_SETTINGS.oscilloscope.push({ label: 'Lissajous Stereo Mode', key: 'lissajous', type: 'checkbox' });
 
 export function HudOverlayParameterModal({ overlay, onClose, onUpdate }: any) {
   const settings = overlay.settings || {};

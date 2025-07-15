@@ -38,11 +38,13 @@ const OVERLAY_TYPES = [
   { value: 'waveform', label: 'Waveform' },
   { value: 'spectrogram', label: 'Spectrogram' },
   { value: 'peakMeter', label: 'Peak/LUFS Meter' },
+  { value: 'vuMeter', label: 'VU Meter' }, // New
   { value: 'stereometer', label: 'Stereometer' },
   { value: 'oscilloscope', label: 'Oscilloscope' },
   { value: 'spectrumAnalyzer', label: 'Spectrum Analyzer' },
   { value: 'midiMeter', label: 'MIDI Activity Meter' },
-  { value: 'consoleFeed', label: 'Data Feed' }, // New overlay type
+  { value: 'chromaWheel', label: 'Chroma Wheel' }, // New
+  { value: 'consoleFeed', label: 'Data Feed' },
 ];
 
 export const HudOverlayProvider: React.FC<{ 
