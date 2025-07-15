@@ -138,6 +138,8 @@ const ANCHORS = [
   { key: 'w',  style: { left: 0, top: '50%', transform: 'translateY(-50%)', cursor: 'ew-resize' }, dx: -1, dy: 0 },
 ];
 
+const SPECTROGRAM_BUFFER_SIZE = 200; // Number of FFT frames to keep (controls width)
+
 export function HudOverlay({ type, position, size, stem, settings, featureData, onOpenModal, onUpdate }: any) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -145,6 +147,9 @@ export function HudOverlay({ type, position, size, stem, settings, featureData, 
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
   const [resizeStart, setResizeStart] = useState<any>(null);
   const [isHovered, setIsHovered] = useState(false);
+
+  // Rolling buffer for spectrogram
+  const spectrogramBufferRef = useRef<Array<Float32Array>>([]);
 
   // Stable refs for event handlers
   const onMouseMoveRef = useRef<(e: MouseEvent) => void>();
@@ -316,7 +321,39 @@ export function HudOverlay({ type, position, size, stem, settings, featureData, 
           drawOscilloscope(ctx, size.width, size.height, { ...settings, amplitude });
         }
         break;
-      case 'spectrogram':
+      case 'spectrogram': {
+        // Maintain rolling buffer of FFT frames
+        if (featureData && featureData.fft && Array.isArray(featureData.fft)) {
+          // Push new FFT frame
+          const buffer = spectrogramBufferRef.current;
+          buffer.push(Float32Array.from(featureData.fft));
+          if (buffer.length > SPECTROGRAM_BUFFER_SIZE) buffer.shift();
+          // Draw spectrogram
+          const width = size.width;
+          const height = size.height;
+          const frameCount = buffer.length;
+          const binCount = buffer[0]?.length || 0;
+          for (let x = 0; x < frameCount; x++) {
+            const fftFrame = buffer[x];
+            if (!fftFrame) continue;
+            for (let y = 0; y < binCount; y++) {
+              // Map y: 0=low freq (bottom), binCount-1=high freq (top)
+              const magnitude = fftFrame[y];
+              // Normalize and color map
+              const norm = Math.log10(magnitude + 1e-10) / Math.log10(1.1);
+              const clamped = Math.max(0, Math.min(1, norm));
+              const hue = 240 - (y / binCount) * 240;
+              ctx.fillStyle = `hsl(${hue}, 90%, ${30 + clamped * 70}%)`;
+              const px = Math.floor(x * width / SPECTROGRAM_BUFFER_SIZE);
+              const py = height - Math.floor(y * height / binCount) - 1;
+              ctx.fillRect(px, py, 1, 1);
+            }
+          }
+        } else {
+          drawSpectrogram(ctx, size.width, size.height);
+        }
+        break;
+      }
       case 'spectrumAnalyzer':
         if (featureData && featureData.fft && Array.isArray(featureData.fft)) {
           // High-resolution FFT-based spectrum analyzer
@@ -367,26 +404,45 @@ export function HudOverlay({ type, position, size, stem, settings, featureData, 
           drawPeakMeter(ctx, size.width, size.height);
         }
         break;
-      case 'stereometer':
-        if (typeof featureData === 'number') {
-          // Draw real stereo spread
-          ctx.strokeStyle = '#ff00ff';
+      case 'stereometer': {
+        // True Lissajous stereometer using stereoWindow
+        if (featureData && featureData.stereoWindow && featureData.stereoWindow.left && featureData.stereoWindow.right) {
+          const left = featureData.stereoWindow.left;
+          const right = featureData.stereoWindow.right;
+          const N = Math.min(left.length, right.length, 1024);
+          ctx.save();
+          ctx.globalAlpha = 0.8;
+          ctx.strokeStyle = '#00ffff';
+          ctx.lineWidth = 1.5;
           ctx.beginPath();
-          const spread = Math.max(-1, Math.min(1, featureData));
-          for (let i = 0; i < 360; i += 2) {
-            const angle = (i * Math.PI) / 180;
-            const r = size.height / 2 * (0.7 + 0.3 * spread);
-            const x = size.width / 2 + r * Math.cos(angle);
-            const y = size.height / 2 + r * Math.sin(angle);
+          for (let i = 0; i < N; i++) {
+            // Normalize to [-1, 1]
+            const lx = left[i];
+            const ry = right[i];
+            const x = ((lx + 1) / 2) * size.width;
+            const y = ((ry + 1) / 2) * size.height;
             if (i === 0) ctx.moveTo(x, y);
             else ctx.lineTo(x, y);
           }
-          ctx.closePath();
           ctx.stroke();
+          // Optionally, draw fading trail/cloud
+          ctx.globalAlpha = 0.2;
+          for (let i = 0; i < N; i += 4) {
+            const lx = left[i];
+            const ry = right[i];
+            const x = ((lx + 1) / 2) * size.width;
+            const y = ((ry + 1) / 2) * size.height;
+            ctx.beginPath();
+            ctx.arc(x, y, 2, 0, Math.PI * 2);
+            ctx.fillStyle = '#00ffff';
+            ctx.fill();
+          }
+          ctx.restore();
         } else {
           drawStereometer(ctx, size.width, size.height);
         }
         break;
+      }
       case 'midiMeter':
         if (typeof featureData === 'number') {
           // Draw real MIDI pitch/note
