@@ -47,6 +47,11 @@ const OVERLAY_SETTINGS: Record<string, { label: string; key: string; type: strin
   ],
 };
 
+// Add glassmorphism toggle to all overlays
+Object.keys(OVERLAY_SETTINGS).forEach(type => {
+  OVERLAY_SETTINGS[type].push({ label: 'Glassmorphism Background', key: 'glassmorphism', type: 'checkbox' });
+});
+
 export function HudOverlayParameterModal({ overlay, onClose, onUpdate }: any) {
   const settings = overlay.settings || {};
   const settingsConfig = OVERLAY_SETTINGS[overlay.type] || [];

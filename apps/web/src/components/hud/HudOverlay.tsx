@@ -503,12 +503,17 @@ export function HudOverlay({ type, position, size, stem, settings, featureData, 
         height: size.height,
         pointerEvents: 'auto',
         zIndex: 10,
+        boxShadow: '0 0 16px #00ffff44',
         borderRadius: 8,
-        background: 'rgba(0,0,0,0.2)',
+        background: settings.glass || settings.glassmorphism
+          ? 'rgba(20, 40, 60, 0.25)'
+          : 'rgba(0,0,0,0.2)',
         userSelect: dragging || resizing ? 'none' : 'auto',
         cursor: dragging ? 'grabbing' : 'grab',
-        // Ensure this element can receive pointer events
-        isolation: 'isolate',
+        backdropFilter: settings.glass || settings.glassmorphism ? 'blur(12px)' : undefined,
+        WebkitBackdropFilter: settings.glass || settings.glassmorphism ? 'blur(12px)' : undefined,
+        border: settings.glass || settings.glassmorphism ? '1.5px solid rgba(255,255,255,0.18)' : undefined,
+        transition: 'background 0.2s, border 0.2s',
       }}
       onMouseDown={onMouseDown}
       onDoubleClick={onOpenModal}
@@ -521,24 +526,25 @@ export function HudOverlay({ type, position, size, stem, settings, featureData, 
         height={size.height}
         style={{ width: '100%', height: '100%', display: 'block', borderRadius: 8 }}
       />
-      {/* Photoshop-style transform anchors - only visible on hover */}
-      {isHovered && ANCHORS.map(anchor => (
+      {/* Photoshop-style transform anchors */}
+      {ANCHORS.map(anchor => (
         <div
           key={anchor.key}
           className="transform-anchor"
           style={{
             position: 'absolute',
-            width: 8,
-            height: 8,
+            width: 14,
+            height: 14,
             background: '#fff',
-            border: '1px solid #333',
-            borderRadius: 1,
+            border: '2px solid #00ffff',
+            borderRadius: 4,
+            boxShadow: '0 0 4px #00ffff99',
             zIndex: 20,
             ...anchor.style,
-            marginLeft: anchor.style.left === 0 ? -4 : undefined,
-            marginTop: anchor.style.top === 0 ? -4 : undefined,
-            marginRight: anchor.style.right === 0 ? -4 : undefined,
-            marginBottom: anchor.style.bottom === 0 ? -4 : undefined,
+            marginLeft: anchor.style.left === 0 ? -7 : undefined,
+            marginTop: anchor.style.top === 0 ? -7 : undefined,
+            marginRight: anchor.style.right === 0 ? -7 : undefined,
+            marginBottom: anchor.style.bottom === 0 ? -7 : undefined,
           }}
           onMouseDown={e => onAnchorMouseDown(anchor.key, e)}
         />
