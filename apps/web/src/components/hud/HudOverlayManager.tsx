@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, createContext, useContext } from 'react';
 import { HudOverlay } from './HudOverlay';
 import { HudOverlayParameterModal } from './HudOverlayParameterModal';
 
@@ -11,6 +11,24 @@ export interface HudOverlayConfig {
   settings: Record<string, any>;
 }
 
+interface HudOverlayContextType {
+  overlays: HudOverlayConfig[];
+  addOverlay: (type: string) => void;
+  updateOverlay: (id: string, update: Partial<HudOverlayConfig>) => void;
+  removeOverlay: (id: string) => void;
+  moveOverlay: (from: number, to: number) => void;
+  openOverlayModal: (id: string) => void;
+  modalOverlayId: string | null;
+  closeOverlayModal: () => void;
+}
+
+export const HudOverlayContext = createContext<HudOverlayContextType | undefined>(undefined);
+export function useHudOverlayContext() {
+  const ctx = useContext(HudOverlayContext);
+  if (!ctx) throw new Error('useHudOverlayContext must be used within HudOverlayProvider');
+  return ctx;
+}
+
 const OVERLAY_TYPES = [
   { value: 'waveform', label: 'Waveform' },
   { value: 'spectrogram', label: 'Spectrogram' },
@@ -21,10 +39,9 @@ const OVERLAY_TYPES = [
   { value: 'midiMeter', label: 'MIDI Activity Meter' },
 ];
 
-export function HudOverlayManager() {
+export const HudOverlayProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [overlays, setOverlays] = useState<HudOverlayConfig[]>([]);
   const [modalOverlayId, setModalOverlayId] = useState<string | null>(null);
-  const [selectedType, setSelectedType] = useState<string>('waveform');
 
   function addOverlay(type: string) {
     setOverlays(prev => [
@@ -39,44 +56,48 @@ export function HudOverlayManager() {
       },
     ]);
   }
-
   function updateOverlay(id: string, update: Partial<HudOverlayConfig>) {
     setOverlays(prev => prev.map(o => o.id === id ? { ...o, ...update } : o));
   }
-
-  // Expose global function for sidebar integration
-  useEffect(() => {
-    window.addHudOverlay = (type: string) => {
-      addOverlay(type);
-    };
-    return () => {
-      delete window.addHudOverlay;
-    };
-  }, []);
+  function removeOverlay(id: string) {
+    setOverlays(prev => prev.filter(o => o.id !== id));
+  }
+  function moveOverlay(from: number, to: number) {
+    setOverlays(prev => {
+      const arr = [...prev];
+      const [item] = arr.splice(from, 1);
+      arr.splice(to, 0, item);
+      return arr;
+    });
+  }
+  function openOverlayModal(id: string) {
+    setModalOverlayId(id);
+  }
+  function closeOverlayModal() {
+    setModalOverlayId(null);
+  }
 
   return (
-    <div id="hud-overlays" style={{ position: 'absolute', top:0, left:0, width:'100%', height:'100%', pointerEvents:'none', zIndex: 20 }}>
-      <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 30, display: 'flex', gap: 8, alignItems: 'center', background: 'rgba(0,0,0,0.5)', padding: 8, borderRadius: 8 }}>
-        <select value={selectedType} onChange={e => setSelectedType(e.target.value)} style={{ fontSize: 16, padding: 4, borderRadius: 4 }}>
-          {OVERLAY_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-        </select>
-        <button onClick={() => addOverlay(selectedType)} style={{ fontSize: 16, padding: '4px 12px', borderRadius: 4, background: '#00ffff', color: '#222', fontWeight: 600 }}>+ Add Overlay</button>
+    <HudOverlayContext.Provider value={{ overlays, addOverlay, updateOverlay, removeOverlay, moveOverlay, openOverlayModal, modalOverlayId, closeOverlayModal }}>
+      {children}
+      {/* Render overlays and modal here for global access */}
+      <div id="hud-overlays" style={{ position: 'absolute', top:0, left:0, width:'100%', height:'100%', pointerEvents:'none', zIndex: 20 }}>
+        {overlays.map(overlay => (
+          <HudOverlay
+            key={overlay.id}
+            {...overlay}
+            onOpenModal={() => openOverlayModal(overlay.id)}
+            onUpdate={update => updateOverlay(overlay.id, update)}
+          />
+        ))}
+        {modalOverlayId && (
+          <HudOverlayParameterModal
+            overlay={overlays.find(o => o.id === modalOverlayId)!}
+            onClose={closeOverlayModal}
+            onUpdate={update => updateOverlay(modalOverlayId, update)}
+          />
+        )}
       </div>
-      {overlays.map(overlay => (
-        <HudOverlay
-          key={overlay.id}
-          {...overlay}
-          onOpenModal={() => setModalOverlayId(overlay.id)}
-          onUpdate={update => updateOverlay(overlay.id, update)}
-        />
-      ))}
-      {modalOverlayId && (
-        <HudOverlayParameterModal
-          overlay={overlays.find(o => o.id === modalOverlayId)!}
-          onClose={() => setModalOverlayId(null)}
-          onUpdate={update => updateOverlay(modalOverlayId, update)}
-        />
-      )}
-    </div>
+    </HudOverlayContext.Provider>
   );
-}
+};
