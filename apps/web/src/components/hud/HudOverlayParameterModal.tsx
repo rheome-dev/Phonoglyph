@@ -45,6 +45,14 @@ const OVERLAY_SETTINGS: Record<string, { label: string; key: string; type: strin
     { label: 'Show Note Names', key: 'showNoteNames', type: 'checkbox' },
     { label: 'Color', key: 'color', type: 'color' },
   ],
+  consoleFeed: [
+    { label: 'Data Source', key: 'dataSource', type: 'select', options: ['MIDI', 'LUFS/RMS', 'FFT Summary', 'All'] },
+    { label: 'Font Size', key: 'fontSize', type: 'number', min: 8, max: 20, step: 1 },
+    { label: 'Font Color', key: 'fontColor', type: 'color' },
+    { label: 'Max Lines', key: 'maxLines', type: 'number', min: 10, max: 100, step: 1 },
+    { label: 'Scroll Speed', key: 'scrollSpeed', type: 'number', min: 0.1, max: 5, step: 0.1 },
+    { label: 'Glassmorphism Background', key: 'glassmorphism', type: 'checkbox' },
+  ],
 };
 
 // Add glassmorphism toggle to all overlays

@@ -42,6 +42,7 @@ const OVERLAY_TYPES = [
   { value: 'oscilloscope', label: 'Oscilloscope' },
   { value: 'spectrumAnalyzer', label: 'Spectrum Analyzer' },
   { value: 'midiMeter', label: 'MIDI Activity Meter' },
+  { value: 'consoleFeed', label: 'Data Feed' }, // New overlay type
 ];
 
 export const HudOverlayProvider: React.FC<{ 
