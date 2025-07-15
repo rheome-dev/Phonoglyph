@@ -13,16 +13,21 @@ const OVERLAY_SETTINGS: Record<string, { label: string; key: string; type: strin
     { label: 'Line Width', key: 'lineWidth', type: 'number' },
   ],
   spectrogram: [
-    { label: 'Color Scheme', key: 'colorScheme', type: 'select', options: ['rainbow', 'fire', 'ice'] },
-    { label: 'FFT Size', key: 'fftSize', type: 'number' },
+    { label: 'Color Map', key: 'colorMap', type: 'select', options: ['Classic', 'Inferno', 'Viridis', 'Rainbow'] },
+    { label: 'Brightness', key: 'brightness', type: 'number', min: 0, max: 2, step: 0.01 },
+    { label: 'Contrast', key: 'contrast', type: 'number', min: 0, max: 2, step: 0.01 },
+    { label: 'Scroll Speed', key: 'scrollSpeed', type: 'number', min: 0.1, max: 5, step: 0.1 },
+    { label: 'FFT Size', key: 'fftSize', type: 'number', min: 256, max: 4096, step: 256 },
   ],
   peakMeter: [
     { label: 'Peak Color', key: 'peakColor', type: 'color' },
     { label: 'Hold Time (ms)', key: 'holdTime', type: 'number' },
   ],
   stereometer: [
-    { label: 'Mode', key: 'mode', type: 'select', options: ['scaled', 'linear', 'lissajous'] },
-    { label: 'Color', key: 'color', type: 'color' },
+    { label: 'Trace Color', key: 'traceColor', type: 'color' },
+    { label: 'Glow Intensity', key: 'glowIntensity', type: 'number', min: 0, max: 1, step: 0.01 },
+    { label: 'Point Size', key: 'pointSize', type: 'number', min: 1, max: 10, step: 1 },
+    { label: 'Show Grid', key: 'showGrid', type: 'checkbox' },
   ],
   oscilloscope: [
     { label: 'Follow Pitch', key: 'followPitch', type: 'checkbox' },
@@ -173,41 +178,21 @@ export function HudOverlayParameterModal({ overlay, onClose, onUpdate }: any) {
                 <div key={setting.key} className="flex items-center gap-2">
                   <label className="text-xs text-white/70 w-32">{setting.label}</label>
                   {setting.type === 'color' && (
-                    <input 
-                      type="color" 
-                      value={settings[setting.key] ?? (setting.key === 'gridColor' ? '#333333' : '#00ffff')} 
-                      onChange={e => handleSettingChange(setting.key, e.target.value)} 
-                    />
+                    <input type="color" value={settings[setting.key] || '#00ffff'} onChange={e => handleSettingChange(setting.key, e.target.value)} />
                   )}
                   {setting.type === 'number' && (
-                    <input 
-                      type="number" 
-                      value={settings[setting.key] ?? ''} 
-                      onChange={e => handleSettingChange(setting.key, Number(e.target.value))} 
-                      className="w-20 px-1 rounded" 
+                    <input
+                      type="number"
+                      value={settings[setting.key] ?? ''}
+                      min={setting.min}
+                      max={setting.max}
+                      step={setting.step}
+                      onChange={e => handleSettingChange(setting.key, Number(e.target.value))}
+                      className="w-20 px-1 rounded"
                     />
-                  )}
-                  {setting.type === 'slider' && (
-                    <div className="flex-1">
-                      <Slider
-                        value={[settings[setting.key] ?? (setting.key === 'glowIntensity' ? 0 : setting.key === 'amplitude' ? 1 : 0)]}
-                        onValueChange={([value]) => handleSettingChange(setting.key, value)}
-                        min={setting.key === 'amplitude' ? 0.1 : 0}
-                        max={setting.key === 'amplitude' ? 2 : 5}
-                        step={setting.key === 'amplitude' ? 0.01 : 0.1}
-                        className="w-full"
-                      />
-                      <div className="text-xs text-white/60 mt-1">
-                        {settings[setting.key] ?? (setting.key === 'glowIntensity' ? 0 : setting.key === 'amplitude' ? 1 : 0)}
-                      </div>
-                    </div>
                   )}
                   {setting.type === 'checkbox' && (
-                    <input 
-                      type="checkbox" 
-                      checked={settings[setting.key] ?? (setting.key === 'showGrid' ? false : false)} 
-                      onChange={e => handleSettingChange(setting.key, e.target.checked)} 
-                    />
+                    <input type="checkbox" checked={!!settings[setting.key]} onChange={e => handleSettingChange(setting.key, e.target.checked)} />
                   )}
                   {setting.type === 'select' && (
                     <select value={settings[setting.key] || setting.options?.[0]} onChange={e => handleSettingChange(setting.key, e.target.value)} className="px-1 rounded">
