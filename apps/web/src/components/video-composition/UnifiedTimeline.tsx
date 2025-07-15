@@ -7,7 +7,7 @@ import type { Layer } from '@/types/video-composition';
 import { StemWaveform, WaveformData } from '@/components/stem-visualization/stem-waveform';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { HudOverlayManager, HudOverlayConfig } from '@/components/hud/HudOverlayManager';
+import { HudOverlayManager, HudOverlayConfig, useHudOverlayContext } from '@/components/hud/HudOverlayManager';
 
 interface EffectClip {
   id: string;
@@ -348,11 +348,12 @@ StemTrack.displayName = 'StemTrack';
 
 // Overlay Lane Card
 const OverlayCard: React.FC<{
-  overlay: HudOverlayConfig;
+  overlay: any;
   index: number;
   moveOverlay: (from: number, to: number) => void;
   onOpenModal: () => void;
-}> = ({ overlay, index, moveOverlay, onOpenModal }) => {
+  onDelete: () => void;
+}> = ({ overlay, index, moveOverlay, onOpenModal, onDelete }) => {
   const ref = React.useRef<HTMLDivElement>(null);
   const [{ isDragging }, drag] = useDrag({
     type: 'HUD_OVERLAY_CARD',
@@ -391,45 +392,58 @@ const OverlayCard: React.FC<{
       title={overlay.type}
     >
       <span style={{ color: '#00ffff', fontWeight: 700, fontSize: 12, textShadow: '0 0 4px #00ffff' }}>{overlay.type}</span>
+      <button
+        onClick={e => { e.stopPropagation(); onDelete(); }}
+        style={{ position: 'absolute', top: 2, right: 2, background: 'none', border: 'none', color: '#00ffff', fontWeight: 900, fontSize: 14, cursor: 'pointer', padding: 0 }}
+        title="Remove overlay"
+      >×</button>
     </div>
   );
 };
 
 // Overlay Lane
-const OverlayLane: React.FC<{
-  overlays: HudOverlayConfig[];
-  moveOverlay: (from: number, to: number) => void;
-  onOpenModal: (id: string) => void;
-}> = ({ overlays, moveOverlay, onOpenModal }) => (
-  <div style={{
-    display: 'flex',
-    alignItems: 'center',
-    minHeight: 72,
-    background: 'linear-gradient(90deg, #0ff2, #222 60%)',
-    borderBottom: '2px solid #00ffff',
-    position: 'relative',
-    padding: '0 8px',
-    marginBottom: 8,
-  }}>
-    <div style={{ marginRight: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
-      <span style={{ color: '#00ffff', fontWeight: 700, fontSize: 13 }}>HUD Overlays</span>
-      <span title="Overlays are always visible. Drag up/down to reorder stacking.">
-        <svg width="16" height="16" style={{ verticalAlign: 'middle' }}><rect x="2" y="2" width="12" height="12" rx="3" fill="#00ffff33" stroke="#00ffff" strokeWidth="2" /></svg>
-      </span>
+const OverlayLane: React.FC = () => {
+  const { overlays, moveOverlay, openOverlayModal, removeOverlay, addOverlay } = useHudOverlayContext();
+  const [, drop] = useDrop({
+    accept: ['EFFECT_CARD'],
+    drop: (item: any) => {
+      if (item.type === 'EFFECT_CARD' && item.category === 'Overlays') {
+        addOverlay(item.id); // id should match overlay type
+      }
+    },
+  });
+  return (
+    <div ref={drop} style={{
+      display: 'flex',
+      alignItems: 'center',
+      minHeight: 72,
+      background: 'linear-gradient(90deg, #0ff2, #222 60%)',
+      borderBottom: '2px solid #00ffff',
+      position: 'relative',
+      padding: '0 8px',
+      marginBottom: 8,
+    }}>
+      <div style={{ marginRight: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
+        <span style={{ color: '#00ffff', fontWeight: 700, fontSize: 13 }}>HUD Overlays</span>
+        <span title="Overlays are always visible. Drag up/down to reorder stacking. Drag from sidebar to add.">
+          <svg width="16" height="16" style={{ verticalAlign: 'middle' }}><rect x="2" y="2" width="12" height="12" rx="3" fill="#00ffff33" stroke="#00ffff" strokeWidth="2" /></svg>
+        </span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'row', gap: 4 }}>
+        {overlays.map((overlay, i) => (
+          <OverlayCard
+            key={overlay.id}
+            overlay={overlay}
+            index={i}
+            moveOverlay={moveOverlay}
+            onOpenModal={() => openOverlayModal(overlay.id)}
+            onDelete={() => removeOverlay(overlay.id)}
+          />
+        ))}
+      </div>
     </div>
-    <div style={{ display: 'flex', flexDirection: 'row', gap: 4 }}>
-      {overlays.map((overlay, i) => (
-        <OverlayCard
-          key={overlay.id}
-          overlay={overlay}
-          index={i}
-          moveOverlay={moveOverlay}
-          onOpenModal={() => onOpenModal(overlay.id)}
-        />
-      ))}
-    </div>
-  </div>
-);
+  );
+};
 
 export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
   layers,
@@ -652,18 +666,6 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
     onSeek(Math.max(0, Math.min(duration, time)));
   };
 
-  // For now, mock overlays state and modal handler if not available from HudOverlayManager
-  const [hudOverlays, setHudOverlays] = useState<HudOverlayConfig[]>([]); // Replace with context or prop from HudOverlayManager
-  const [modalOverlayId, setModalOverlayId] = useState<string | null>(null);
-  function moveOverlay(from: number, to: number) {
-    setHudOverlays(prev => {
-      const arr = [...prev];
-      const [item] = arr.splice(from, 1);
-      arr.splice(to, 0, item);
-      return arr;
-    });
-  }
-
   return (
     <div className={cn("bg-stone-800 border border-stone-700 font-mono text-xs rounded-xl", className)}>
       {/* Header */}
@@ -838,10 +840,10 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
               icon={<Settings className="h-3 w-3" />}
               isExpanded={expandedSections.composition} // Assuming HUD overlays are part of composition
               onToggle={() => toggleSection('composition')}
-              itemCount={hudOverlays.length}
+              itemCount={0} // No direct count of overlays here, they are managed by context
               itemType="overlays"
             >
-              <OverlayLane overlays={hudOverlays} moveOverlay={moveOverlay} onOpenModal={setModalOverlayId} />
+              <OverlayLane />
             </TimelineSection>
           </div>
         </div>
