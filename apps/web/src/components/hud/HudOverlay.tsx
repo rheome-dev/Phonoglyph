@@ -127,6 +127,86 @@ function drawMidiMeter(ctx: CanvasRenderingContext2D, w: number, h: number) {
   ctx.strokeRect(w / 2 - 40, h / 2 - 20, 80, 40);
 }
 
+function drawVuMeter(ctx: CanvasRenderingContext2D, w: number, h: number, value: number, settings: any) {
+  const color = settings.color || '#00ff55';
+  const style = settings.style || 'Needle';
+  ctx.save();
+  ctx.clearRect(0, 0, w, h);
+  if (style === 'Needle') {
+    // Draw arc
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.arc(w/2, h*0.9, h*0.7, Math.PI, 2*Math.PI, false);
+    ctx.stroke();
+    // Draw needle
+    const angle = Math.PI + value * Math.PI;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(w/2, h*0.9);
+    ctx.lineTo(w/2 + Math.cos(angle)*h*0.7, h*0.9 + Math.sin(angle)*h*0.7);
+    ctx.stroke();
+  } else {
+    // Bar style
+    ctx.fillStyle = color;
+    ctx.fillRect(w*0.3, h*0.1, w*0.4, h*0.8*value);
+    ctx.strokeStyle = '#333';
+    ctx.strokeRect(w*0.3, h*0.1, w*0.4, h*0.8);
+  }
+  ctx.restore();
+}
+
+function drawChromaWheel(ctx: CanvasRenderingContext2D, w: number, h: number, chroma: any, settings: any) {
+  const colorSchemes = {
+    Classic: [
+      '#ff0000','#ff8000','#ffff00','#80ff00','#00ff00','#00ff80',
+      '#00ffff','#0080ff','#0000ff','#8000ff','#ff00ff','#ff0080'
+    ],
+    Rainbow: [
+      '#ff0000','#ff7f00','#ffff00','#7fff00','#00ff00','#00ff7f',
+      '#00ffff','#007fff','#0000ff','#7f00ff','#ff00ff','#ff007f'
+    ],
+    Viridis: [
+      '#440154','#482878','#3e4989','#31688e','#26828e','#1f9e89',
+      '#35b779','#6ece58','#b5de2b','#fee825','#fde725','#f9d923'
+    ],
+    Inferno: [
+      '#000004','#1b0c41','#4a0c6b','#781c6d','#a52c60','#cf4446',
+      '#ed6925','#fb9b06','#f7d13d','#fcffa4','#fffbb4','#fff7ec'
+    ]
+  };
+  const scheme = colorSchemes[settings.colorScheme] || colorSchemes.Classic;
+  const showNames = settings.showNoteNames;
+  ctx.save();
+  ctx.clearRect(0, 0, w, h);
+  const cx = w/2, cy = h/2, r = Math.min(w,h)*0.45;
+  for (let i = 0; i < 12; i++) {
+    const start = (i/12)*2*Math.PI - Math.PI/2;
+    const end = ((i+1)/12)*2*Math.PI - Math.PI/2;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, start, end, false);
+    ctx.closePath();
+    ctx.fillStyle = scheme[i];
+    ctx.globalAlpha = chroma && chroma[i] ? Math.max(0.2, chroma[i]) : 0.2;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    if (showNames) {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate((start+end)/2);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = 'bold 10px monospace';
+      ctx.fillStyle = '#fff';
+      ctx.fillText(['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'][i], r*0.7, 0);
+      ctx.restore();
+    }
+  }
+  ctx.restore();
+}
+
 const ANCHORS = [
   { key: 'nw', style: { left: 0, top: 0, cursor: 'nwse-resize' }, dx: -1, dy: -1 },
   { key: 'n',  style: { left: '50%', top: 0, transform: 'translateX(-50%)', cursor: 'ns-resize' }, dx: 0, dy: -1 },
@@ -470,6 +550,63 @@ export function HudOverlay({ type, position, size, stem, settings, featureData, 
           drawMidiMeter(ctx, size.width, size.height);
         }
         break;
+      case 'vuMeter': {
+        // Use RMS or peak from featureData
+        let value = 0;
+        if (settings.meterType === 'Peak' && typeof featureData.peak === 'number') value = featureData.peak;
+        else if (typeof featureData.rms === 'number') value = featureData.rms;
+        drawVuMeter(ctx, size.width, size.height, value, settings);
+        break;
+      }
+      case 'chromaWheel': {
+        // featureData.chroma should be an array of 12 values (0-1)
+        drawChromaWheel(ctx, size.width, size.height, featureData && featureData.chroma, settings);
+        break;
+      }
+      case 'waveform': {
+        // ... existing waveform code ...
+        // Transient detector
+        if (settings.showTransients && Array.isArray(featureData.transients)) {
+          ctx.save();
+          ctx.strokeStyle = settings.transientColor || '#ff0';
+          ctx.lineWidth = 1.5;
+          for (const t of featureData.transients) {
+            const x = Math.floor(t * size.width);
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, size.height);
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
+        break;
+      }
+      case 'oscilloscope': {
+        if (settings.lissajous && featureData && featureData.stereoWindow && featureData.stereoWindow.left && featureData.stereoWindow.right) {
+          // Lissajous mode
+          const left = featureData.stereoWindow.left;
+          const right = featureData.stereoWindow.right;
+          const N = Math.min(left.length, right.length, 1024);
+          ctx.save();
+          ctx.globalAlpha = 0.8;
+          ctx.strokeStyle = settings.color || '#00ffff';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          for (let i = 0; i < N; i++) {
+            const lx = left[i];
+            const ry = right[i];
+            const x = ((lx + 1) / 2) * size.width;
+            const y = ((ry + 1) / 2) * size.height;
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          ctx.stroke();
+          ctx.restore();
+        } else {
+          drawOscilloscope(ctx, size.width, size.height, settings);
+        }
+        break;
+      }
       default:
         drawWaveform(ctx, size.width, size.height);
     }
