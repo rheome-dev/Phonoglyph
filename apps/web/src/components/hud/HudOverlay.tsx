@@ -354,32 +354,46 @@ export function HudOverlay({ type, position, size, stem, settings, featureData, 
         }
         break;
       }
-      case 'spectrumAnalyzer':
+      case 'spectrumAnalyzer': {
         if (featureData && featureData.fft && Array.isArray(featureData.fft)) {
-          // High-resolution FFT-based spectrum analyzer
+          // Improved high-resolution FFT-based spectrum analyzer with log frequency scaling
           const fftData = featureData.fft;
-          const barCount = Math.min(fftData.length, size.width / 2); // Limit bars to prevent overcrowding
-          const barWidth = size.width / barCount;
-          
-          // Find max value for normalization
-          const maxMagnitude = Math.max(...fftData);
-          
-          for (let i = 0; i < barCount; i++) {
-            const magnitude = fftData[i] || 0;
-            const normalizedMagnitude = maxMagnitude > 0 ? magnitude / maxMagnitude : 0;
-            
-            // Apply logarithmic scaling for better visual representation
-            const logMagnitude = Math.log10(normalizedMagnitude + 1e-10) / Math.log10(1.1);
-            const clampedMagnitude = Math.max(0, Math.min(1, logMagnitude));
-            
-            const barHeight = Math.max(2, clampedMagnitude * size.height * 0.9);
-            
-            // Color based on frequency (low = red, high = blue)
-            const frequencyRatio = i / barCount;
-            const hue = 240 - (frequencyRatio * 240); // Blue to red
-            ctx.fillStyle = `hsl(${hue}, 90%, 60%)`;
-            
-            ctx.fillRect(i * barWidth, size.height - barHeight, barWidth - 1, barHeight);
+          const fftSize = settings.fftSize || fftData.length;
+          const barColor = settings.barColor || '#00ffff';
+          const barCount = Math.min(128, Math.floor(size.width / 4)); // Up to 128 bars, 4px min width
+          const minFreq = 20; // Hz
+          const maxFreq = 20000; // Hz
+          const sampleRate = 44100; // Or get from settings/featureData if available
+          const binCount = fftData.length;
+
+          // Precompute frequency for each bin
+          const binFreq = (i) => (i * sampleRate) / (2 * binCount);
+
+          // Map bars to log-spaced frequency bins
+          for (let bar = 0; bar < barCount; bar++) {
+            // Logarithmic frequency scaling
+            const freqStart = minFreq * Math.pow(maxFreq / minFreq, bar / barCount);
+            const freqEnd = minFreq * Math.pow(maxFreq / minFreq, (bar + 1) / barCount);
+            // Find bins in this frequency range
+            let binStart = Math.floor((freqStart / (sampleRate / 2)) * binCount);
+            let binEnd = Math.ceil((freqEnd / (sampleRate / 2)) * binCount);
+            binStart = Math.max(0, binStart);
+            binEnd = Math.min(binCount, binEnd);
+            // Average magnitude in this range
+            let sum = 0, count = 0;
+            for (let i = binStart; i < binEnd; i++) {
+              sum += fftData[i];
+              count++;
+            }
+            const avg = count > 0 ? sum / count : 0;
+            // Logarithmic magnitude scaling (dB-like)
+            const mag = Math.log10(avg + 1e-8) * 10 + 40; // dB scale, offset for visibility
+            const normMag = Math.max(0, Math.min(1, mag / 50));
+            // Draw bar
+            const barWidth = size.width / barCount;
+            const barHeight = normMag * size.height * 0.95;
+            ctx.fillStyle = barColor;
+            ctx.fillRect(bar * barWidth, size.height - barHeight, barWidth - 1, barHeight);
           }
         } else if (Array.isArray(featureData) && featureData.length > 0) {
           // Draw real spectrum using other features
@@ -394,6 +408,7 @@ export function HudOverlay({ type, position, size, stem, settings, featureData, 
           drawSpectrumAnalyzer(ctx, size.width, size.height);
         }
         break;
+      }
       case 'peakMeter':
         if (typeof featureData === 'number') {
           // Draw real peak meter
