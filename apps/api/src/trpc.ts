@@ -17,12 +17,12 @@ export const createTRPCContext = async (opts: CreateExpressContextOptions) => {
   const { req, res } = opts
 
   // Debug all headers
-  logger.debug('Backend - All headers:', req.headers)
-  logger.debug('Backend - Authorization header:', req.headers.authorization)
-  logger.debug('Backend - Content-Type header:', req.headers['content-type'])
+  logger.debug('Backend - All headers:', (req as any).headers)
+  logger.debug('Backend - Authorization header:', (req as any).headers?.authorization)
+  logger.debug('Backend - Content-Type header:', (req as any).headers?.['content-type'])
 
   // Extract authorization header
-  const authHeader = req.headers.authorization
+  const authHeader = (req as any).headers?.authorization
   const accessToken = authHeader?.replace('Bearer ', '')
 
   logger.auth('Backend - Auth header present:', !!authHeader)

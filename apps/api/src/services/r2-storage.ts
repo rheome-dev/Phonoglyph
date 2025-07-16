@@ -31,12 +31,12 @@ export function validateR2Config(): void {
 export async function createBucketIfNotExists(): Promise<void> {
   try {
     // Check if bucket exists
-    await r2Client.send(new HeadBucketCommand({ Bucket: BUCKET_NAME }));
+    await (r2Client as any).send(new HeadBucketCommand({ Bucket: BUCKET_NAME }));
     console.log(`✅ R2 bucket '${BUCKET_NAME}' already exists`);
   } catch (error: any) {
     if (error.name === 'NotFound') {
       try {
-        await r2Client.send(new CreateBucketCommand({ Bucket: BUCKET_NAME }));
+        await (r2Client as any).send(new CreateBucketCommand({ Bucket: BUCKET_NAME }));
         console.log(`✅ Created R2 bucket '${BUCKET_NAME}'`);
       } catch (createError) {
         console.error('❌ Failed to create R2 bucket:', createError);
@@ -76,7 +76,7 @@ export async function configureBucketCors(): Promise<void> {
   };
 
   try {
-    await r2Client.send(new PutBucketCorsCommand({
+    await (r2Client as any).send(new PutBucketCorsCommand({
       Bucket: BUCKET_NAME,
       CORSConfiguration: corsConfiguration,
     }));
@@ -135,7 +135,7 @@ export async function getFileBuffer(key: string): Promise<Buffer> {
   });
 
   try {
-    const response = await r2Client.send(command);
+    const response = await (r2Client as any).send(command);
     
     if (!response.Body) {
       throw new Error(`File not found: ${key}`);
@@ -166,7 +166,7 @@ export async function deleteFile(key: string): Promise<void> {
   });
 
   try {
-    await r2Client.send(command);
+    await (r2Client as any).send(command);
     console.log(`✅ Deleted file: ${key}`);
   } catch (error) {
     console.error(`❌ Failed to delete file ${key}:`, error);
@@ -206,7 +206,7 @@ export async function uploadThumbnail(
   });
 
   try {
-    await r2Client.send(command);
+    await (r2Client as any).send(command);
     return thumbnailKey;
   } catch (error) {
     console.error('❌ Failed to upload thumbnail:', error);
@@ -257,7 +257,7 @@ export async function initializeR2(): Promise<void> {
 // Test R2 connectivity
 export async function testR2Connection(): Promise<boolean> {
   try {
-    await r2Client.send(new HeadBucketCommand({ Bucket: BUCKET_NAME }));
+    await (r2Client as any).send(new HeadBucketCommand({ Bucket: BUCKET_NAME }));
     return true;
   } catch (error) {
     console.error('❌ R2 connection test failed:', error);
