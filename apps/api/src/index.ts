@@ -26,9 +26,13 @@ app.use((req, res, next) => {
 });
 
 // CORS configuration
+const allowedOrigins = process.env.FRONTEND_URL
+  ? process.env.FRONTEND_URL.split(',').map(origin => origin.trim())
+  : [];
+
 const corsOptions = {
-  origin: process.env.NODE_ENV === 'production' 
-    ? process.env.FRONTEND_URL 
+  origin: process.env.NODE_ENV === 'production'
+    ? allowedOrigins
     : ['http://localhost:3000', 'http://127.0.0.1:3000'], // Allow specific origins in development
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
