@@ -32,9 +32,10 @@ export const createProjectSchema = z.object({
   name: z.string().min(1, "Project name is required").max(100, "Project name too long"),
   description: z.string().max(500, "Description too long").optional(),
   privacy_setting: z.enum(['private', 'unlisted', 'public']).default('private'),
-  upload_method: z.enum(['single-audio', 'audio-stems', 'midi-stems']).optional(),
   midi_file_path: z.string().optional(),
-  stems_files: z.array(z.instanceof(File)).optional(),
+  audio_file_path: z.string().optional(),
+  user_video_path: z.string().optional(),
+  render_configuration: z.record(z.any()).default({}),
 })
 
 export const updateProjectSchema = z.object({

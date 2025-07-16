@@ -373,7 +373,6 @@ export function ProjectCreationModal({ isOpen, onClose, defaultMidiFilePath }: P
     defaultValues: {
       privacy_setting: 'private' as const,
       midi_file_path: defaultMidiFilePath || '',
-      stems_files: [] as File[],
     }
   })
 
@@ -426,8 +425,16 @@ export function ProjectCreationModal({ isOpen, onClose, defaultMidiFilePath }: P
       setIsLoading(true)
       console.log('Form submission data:', data)
       
-      // Create project first
-      const project = await createProjectMutation.mutateAsync(data as CreateProjectInput)
+      // Create project with only the fields the backend expects
+      const projectData = {
+        name: data.name,
+        description: data.description,
+        privacy_setting: data.privacy_setting,
+        render_configuration: {}
+      };
+      
+      console.log('Creating project with data:', projectData);
+      const project = await createProjectMutation.mutateAsync(projectData as CreateProjectInput)
       console.log('Project created:', project.id)
       
       // Upload files if stems method is selected
@@ -584,7 +591,7 @@ export function ProjectCreationModal({ isOpen, onClose, defaultMidiFilePath }: P
                   <p className="text-sm text-red-600 font-medium">Please fix the following errors:</p>
                   <ul className="mt-1 text-sm text-red-600 list-disc list-inside">
                     {Object.entries(errors).map(([field, error]) => (
-                      <li key={field}>{error?.message}</li>
+                      <li key={field}>{error?.message?.toString()}</li>
                     ))}
                   </ul>
                 </div>
@@ -695,7 +702,6 @@ export function ProjectCreationModal({ isOpen, onClose, defaultMidiFilePath }: P
                     setSelectedFiles(files);
                     setMasterFileName(master);
                     setStemTypes(types);
-                    setValue('stems_files', files);
                   }} 
                 />
               )}
