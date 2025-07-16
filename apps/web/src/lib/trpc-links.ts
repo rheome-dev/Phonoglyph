@@ -1,7 +1,16 @@
 import { httpLink, TRPCLink } from '@trpc/client';
 import type { AppRouter } from '../../../api/src/routers';
 import { supabase } from './supabase';
-import { observable } from '@trpc/client/observable';
+// Minimal observable implementation for tRPC custom links
+function observable<T>(subscribe: (observer: { next: (value: T) => void; error?: (err: any) => void; complete?: () => void; }) => void) {
+  return {
+    subscribe(observer: { next: (value: T) => void; error?: (err: any) => void; complete?: () => void; }) {
+      subscribe(observer);
+      return { unsubscribe() {} };
+    },
+    pipe() { return this; }, // no-op pipe for tRPC compatibility
+  };
+}
 import { guestUserService } from './guest-user';
 
 // Global session cache to avoid multiple calls
