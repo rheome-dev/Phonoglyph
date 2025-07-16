@@ -1349,14 +1349,42 @@ function CreativeVisualizerPage() {
   const stemUrlsReady = Object.keys(asyncStemUrlMap).length > 0;
 
   // Don't render anything until we're on the client side
-  if (!isClient || !stemUrlsReady) {
-  return (
+  if (!isClient) {
+    return (
       <div className="flex h-screen bg-stone-800 text-white items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-4"></div>
-          <div className="text-sm text-stone-300">Loading overlays...</div>
+          <div className="text-sm text-stone-300">Loading...</div>
         </div>
       </div>
+    );
+  }
+
+  // If no stems are ready, show the picker or a prompt/modal
+  if (!stemUrlsReady) {
+    return (
+      <>
+        {showPicker && (
+          <ProjectPickerModal
+            isOpen={showPicker}
+            onClose={() => router.push('/dashboard')}
+            onSelect={handleProjectSelect}
+            onCreateNew={handleCreateNew}
+          />
+        )}
+        {showCreateModal && (
+          <ProjectCreationModal
+            isOpen={showCreateModal}
+            onClose={handleCloseCreateModal}
+          />
+        )}
+        <div className="flex h-screen bg-stone-800 text-white items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-4"></div>
+            <div className="text-sm text-stone-300">No stems found. Please create or select a project.</div>
+          </div>
+        </div>
+      </>
     );
   }
 
