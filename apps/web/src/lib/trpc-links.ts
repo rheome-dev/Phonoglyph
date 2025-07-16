@@ -99,21 +99,32 @@ supabase.auth.onAuthStateChange(() => {
   sessionPromise = null;
 });
 
+// Determine API URL for tRPC
+const apiUrl =
+  process.env.NEXT_PUBLIC_API_URL ||
+  (typeof window !== 'undefined' ? '' : 'http://localhost:3001'); // fallback for SSR dev
+
+// Debug logging to see what URL is being used
+console.log('🔧 tRPC API URL Debug:', {
+  envVar: process.env.NEXT_PUBLIC_API_URL,
+  apiUrl,
+  isClient: typeof window !== 'undefined',
+  finalUrl: `${apiUrl}/api/trpc`
+});
+
 export const trpcLinks = [
   authLink,
   httpLink({
-    url: 'http://localhost:3001/api/trpc',
+    url: `${apiUrl}/api/trpc`, // Use env variable or relative path
     fetch: async (url, options) => {
       try {
         // Get the current session
         const session = await getSession();
-        
         // Create headers
         const headers: Record<string, string> = {
           'Content-Type': 'application/json',
           ...(options?.headers as Record<string, string> || {}),
         };
-        
         // Add Authorization header if session exists
         if (session?.access_token) {
           headers['Authorization'] = `Bearer ${session.access_token}`;
@@ -124,17 +135,14 @@ export const trpcLinks = [
             headers['x-guest-session'] = guestUser.sessionId;
           }
         }
-        
-        const response = await fetch(url, { 
-          ...(options || {}), 
+        const response = await fetch(url, {
+          ...(options || {}),
           headers
         });
-        
         // Check if the response is ok
         if (!response.ok) {
           console.warn(`HTTP ${response.status}: ${response.statusText} for ${url}`);
         }
-        
         return response;
       } catch (error) {
         console.error('Network error in tRPC request:', error);
