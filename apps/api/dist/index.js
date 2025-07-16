@@ -27,7 +27,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const dotenv_1 = __importDefault(require("dotenv"));
-dotenv_1.default.config();
+const path_1 = __importDefault(require("path"));
+// Load environment variables from the root .env file
+dotenv_1.default.config({ path: path_1.default.resolve(__dirname, '../../../.env') });
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const helmet_1 = __importDefault(require("helmet"));
@@ -42,7 +44,7 @@ const PORT = process.env.PORT || 3001;
 app.use((0, helmet_1.default)());
 // Debug middleware to log all requests
 app.use((req, res, next) => {
-    console.log(`🌐 ${req.method} ${req.path} - Origin: ${req.headers.origin} - Auth: ${req.headers.authorization ? 'present' : 'missing'}`);
+    // console.log(`🌐 ${req.method} ${req.path} - Origin: ${req.headers.origin} - Auth: ${req.headers.authorization ? 'present' : 'missing'}`);
     next();
 });
 // CORS configuration
@@ -78,7 +80,7 @@ app.get('/health', (req, res) => {
 });
 // Basic route
 app.get('/', (req, res) => {
-    res.json({ message: 'MidiViz API Server is running! 🎵' });
+    res.json({ message: 'Phonoglyph API Server is running! 🎵' });
 });
 // Start server
 app.listen(PORT, async () => {

@@ -1,4 +1,4 @@
-import type { Project, ProjectCollaborator, ProjectWithCollaborators, ProjectShare } from '../types/auth';
+import type { Project, ProjectCollaborator, ProjectShare } from '../types/auth';
 export declare const projectRouter: import("@trpc/server").CreateRouterInner<import("@trpc/server").RootConfig<{
     ctx: import("../types/auth").AuthContext & {
         req: any;
@@ -33,7 +33,7 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
         _input_out: typeof import("@trpc/server").unsetMarker;
         _output_in: typeof import("@trpc/server").unsetMarker;
         _output_out: typeof import("@trpc/server").unsetMarker;
-    }, ProjectWithCollaborators[]>;
+    }, Project[]>;
     get: import("@trpc/server").BuildProcedure<"query", {
         _config: import("@trpc/server").RootConfig<{
             ctx: import("../types/auth").AuthContext & {
@@ -62,7 +62,7 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
         };
         _output_in: typeof import("@trpc/server").unsetMarker;
         _output_out: typeof import("@trpc/server").unsetMarker;
-    }, ProjectWithCollaborators>;
+    }, Project>;
     create: import("@trpc/server").BuildProcedure<"mutation", {
         _config: import("@trpc/server").RootConfig<{
             ctx: import("../types/auth").AuthContext & {
@@ -85,10 +85,9 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
         };
         _input_in: {
             name: string;
-            midi_file_path: string;
             description?: string | undefined;
-            genre?: string | undefined;
             privacy_setting?: "public" | "private" | "unlisted" | undefined;
+            midi_file_path?: string | undefined;
             audio_file_path?: string | undefined;
             user_video_path?: string | undefined;
             render_configuration?: Record<string, any> | undefined;
@@ -96,10 +95,9 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
         _input_out: {
             name: string;
             privacy_setting: "public" | "private" | "unlisted";
-            midi_file_path: string;
             render_configuration: Record<string, any>;
             description?: string | undefined;
-            genre?: string | undefined;
+            midi_file_path?: string | undefined;
             audio_file_path?: string | undefined;
             user_video_path?: string | undefined;
         };
@@ -130,7 +128,6 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
             id: string;
             name?: string | undefined;
             description?: string | undefined;
-            genre?: string | undefined;
             privacy_setting?: "public" | "private" | "unlisted" | undefined;
             audio_file_path?: string | undefined;
             user_video_path?: string | undefined;
@@ -142,7 +139,6 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
             id: string;
             name?: string | undefined;
             description?: string | undefined;
-            genre?: string | undefined;
             privacy_setting?: "public" | "private" | "unlisted" | undefined;
             audio_file_path?: string | undefined;
             user_video_path?: string | undefined;
@@ -209,7 +205,6 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
             query?: string | undefined;
             limit?: number | undefined;
             offset?: number | undefined;
-            genre?: string | undefined;
             privacy_setting?: "public" | "private" | "unlisted" | undefined;
             sort_by?: "name" | "created_at" | "updated_at" | undefined;
             sort_order?: "asc" | "desc" | undefined;
@@ -220,7 +215,6 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
             sort_by: "name" | "created_at" | "updated_at";
             sort_order: "asc" | "desc";
             query?: string | undefined;
-            genre?: string | undefined;
             privacy_setting?: "public" | "private" | "unlisted" | undefined;
         };
         _output_in: typeof import("@trpc/server").unsetMarker;

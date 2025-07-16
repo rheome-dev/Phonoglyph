@@ -332,7 +332,7 @@ export class MetaballsEffect implements VisualEffect {
     for (const key in this.parameters) {
       const uniformKey = 'u' + key.charAt(0).toUpperCase() + key.slice(1);
       if (this.uniforms[uniformKey]) {
-        this.uniforms[uniformKey].value = this.parameters[key];
+        this.uniforms[uniformKey].value = this.parameters[key as keyof MetaballConfig];
       }
     }
 

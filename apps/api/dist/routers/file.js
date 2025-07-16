@@ -8,6 +8,7 @@ const r2_storage_1 = require("../services/r2-storage");
 const client_s3_1 = require("@aws-sdk/client-s3");
 const file_validation_1 = require("../lib/file-validation");
 const media_processor_1 = require("../services/media-processor");
+const asset_manager_1 = require("../services/asset-manager");
 // Create rate limiter instance
 const uploadRateLimit = (0, file_validation_1.createUploadRateLimit)();
 // File metadata schema for database storage - EXTENDED
@@ -67,7 +68,7 @@ exports.fileRouter = (0, trpc_1.router)({
                 mime_type: input.mimeType,
                 file_size: input.fileSize,
                 s3_key: s3Key,
-                s3_bucket: process.env.CLOUDFLARE_R2_BUCKET || 'midiviz-uploads',
+                s3_bucket: process.env.CLOUDFLARE_R2_BUCKET || 'phonoglyph-uploads',
                 processing_status: media_processor_1.MediaProcessor.requiresProcessing(validation.fileType) ? 'pending' : 'completed',
             });
             if (dbError) {
@@ -107,6 +108,9 @@ exports.fileRouter = (0, trpc_1.router)({
         mimeType: zod_1.z.string(),
         fileSize: zod_1.z.number(),
         fileData: zod_1.z.string(), // Base64 encoded file data
+        projectId: zod_1.z.string().optional(), // NEW: Associate with project
+        isMaster: zod_1.z.boolean().optional(), // NEW: Tag as master track
+        stemType: zod_1.z.string().optional(), // NEW: Tag stem type
     }))
         .mutation(async ({ ctx, input }) => {
         const userId = ctx.user.id;
@@ -163,6 +167,9 @@ exports.fileRouter = (0, trpc_1.router)({
                 s3_bucket: r2_storage_1.BUCKET_NAME,
                 upload_status: 'completed',
                 processing_status: media_processor_1.MediaProcessor.requiresProcessing(validation.fileType) ? 'pending' : 'completed',
+                project_id: input.projectId, // NEW: Associate with project
+                is_master: input.isMaster || false, // NEW: Store master tag
+                stem_type: input.stemType || null, // NEW: Store stem type
             })
                 .select('id')
                 .single();
@@ -172,6 +179,24 @@ exports.fileRouter = (0, trpc_1.router)({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to create file record',
                 });
+            }
+            // Trigger audio analysis and caching for audio files
+            if (validation.fileType === 'audio') {
+                // Instead of synchronous analysis, create a job for the queue worker
+                const { error: jobError } = await ctx.supabase
+                    .from('audio_analysis_jobs')
+                    .insert({
+                    user_id: userId,
+                    file_metadata_id: data.id,
+                    status: 'pending',
+                });
+                if (jobError) {
+                    // Log the error but don't block the upload from completing
+                    console.error(`❌ Failed to create audio analysis job for file ${sanitizedFileName}:`, jobError);
+                }
+                else {
+                    console.log(`✅ Audio analysis job queued for file ${sanitizedFileName}`);
+                }
             }
             // Process video/image files for metadata and thumbnails
             if (media_processor_1.MediaProcessor.requiresProcessing(validation.fileType) && (validation.fileType === 'video' || validation.fileType === 'image')) {
@@ -288,12 +313,68 @@ exports.fileRouter = (0, trpc_1.router)({
             });
         }
     }),
-    // List user's files - EXTENDED
+    // Save audio analysis data from the client-side worker
+    saveAudioAnalysis: trpc_1.protectedProcedure
+        .input(zod_1.z.object({
+        fileId: zod_1.z.string(),
+        analysisData: zod_1.z.any(), // In a real app, this should be a strict Zod schema
+    }))
+        .mutation(async ({ ctx, input }) => {
+        const { fileId, analysisData } = input;
+        const userId = ctx.user.id;
+        try {
+            // First, verify that the user has access to this file
+            const { data: file, error: fileError } = await ctx.supabase
+                .from('file_metadata')
+                .select('id, user_id, stem_type')
+                .eq('id', fileId)
+                .single();
+            if (fileError || !file) {
+                throw new server_1.TRPCError({ code: 'NOT_FOUND', message: 'File not found.' });
+            }
+            if (file.user_id !== userId) {
+                throw new server_1.TRPCError({ code: 'FORBIDDEN', message: 'You do not have access to this file.' });
+            }
+            // Save the analysis data
+            const { error: saveError } = await ctx.supabase
+                .from('audio_analysis_cache')
+                .insert({
+                file_metadata_id: fileId,
+                user_id: userId,
+                stem_type: file.stem_type || 'master',
+                analysis_data: analysisData,
+                // Add other relevant fields from your analysis data
+            });
+            if (saveError) {
+                throw new server_1.TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: `Failed to save analysis data: ${saveError.message}`,
+                });
+            }
+            // Update the file's processing status
+            await ctx.supabase
+                .from('file_metadata')
+                .update({ processing_status: 'completed' })
+                .eq('id', fileId);
+            return { success: true };
+        }
+        catch (error) {
+            if (error instanceof server_1.TRPCError)
+                throw error;
+            console.error('Error saving audio analysis:', error);
+            throw new server_1.TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: 'An unexpected error occurred while saving the analysis.',
+            });
+        }
+    }),
+    // Get a list of files for the current user
     getUserFiles: trpc_1.protectedProcedure
         .input(zod_1.z.object({
         fileType: zod_1.z.enum(['midi', 'audio', 'video', 'image', 'all']).optional().default('all'), // EXTENDED
         limit: zod_1.z.number().min(1).max(50).optional().default(20),
         offset: zod_1.z.number().min(0).optional().default(0),
+        projectId: zod_1.z.string().optional(), // NEW: Filter by project
     }))
         .query(async ({ ctx, input }) => {
         const userId = ctx.user.id;
@@ -307,6 +388,9 @@ exports.fileRouter = (0, trpc_1.router)({
                 .range(input.offset, input.offset + input.limit - 1);
             if (input.fileType !== 'all') {
                 query = query.eq('file_type', input.fileType);
+            }
+            if (input.projectId) {
+                query = query.eq('project_id', input.projectId);
             }
             const { data: files, error } = await query;
             if (error) {
@@ -477,6 +561,459 @@ exports.fileRouter = (0, trpc_1.router)({
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to fetch processing status',
+            });
+        }
+    }),
+    // NEW: Asset Management Endpoints
+    // Get project assets with enhanced filtering
+    getProjectAssets: trpc_1.protectedProcedure
+        .input(zod_1.z.object({
+        projectId: zod_1.z.string(),
+        assetType: zod_1.z.enum(['midi', 'audio', 'video', 'image', 'all']).optional().default('all'),
+        usageStatus: zod_1.z.enum(['active', 'referenced', 'unused', 'all']).optional().default('all'),
+        folderId: zod_1.z.string().optional(),
+        tagIds: zod_1.z.array(zod_1.z.string()).optional(),
+        search: zod_1.z.string().optional(),
+        limit: zod_1.z.number().min(1).max(100).optional().default(50),
+        offset: zod_1.z.number().min(0).optional().default(0),
+    }))
+        .query(async ({ ctx, input }) => {
+        const userId = ctx.user.id;
+        const assetManager = new asset_manager_1.AssetManager(ctx.supabase);
+        try {
+            let query = ctx.supabase
+                .from('file_metadata')
+                .select(`
+            *,
+            asset_folders(name),
+            asset_tag_relationships(
+              asset_tags(id, name, color)
+            )
+          `)
+                .eq('user_id', userId)
+                .eq('project_id', input.projectId)
+                .eq('upload_status', 'completed')
+                .order('created_at', { ascending: false })
+                .range(input.offset, input.offset + input.limit - 1);
+            if (input.assetType !== 'all') {
+                query = query.eq('asset_type', input.assetType);
+            }
+            if (input.usageStatus !== 'all') {
+                query = query.eq('usage_status', input.usageStatus);
+            }
+            if (input.folderId) {
+                query = query.eq('folder_id', input.folderId);
+            }
+            if (input.search) {
+                query = query.ilike('file_name', `%${input.search}%`);
+            }
+            const { data: files, error } = await query;
+            if (error) {
+                console.error('Database error fetching project assets:', error);
+                throw new server_1.TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to fetch project assets',
+                });
+            }
+            // Filter by tags if specified
+            let filteredFiles = files || [];
+            if (input.tagIds && input.tagIds.length > 0) {
+                filteredFiles = filteredFiles.filter((file) => {
+                    const fileTags = file.asset_tag_relationships?.map((rel) => rel.asset_tags.id) || [];
+                    return input.tagIds.some(tagId => fileTags.includes(tagId));
+                });
+            }
+            // Generate thumbnail URLs
+            const filesWithThumbnails = await Promise.all(filteredFiles.map(async (file) => {
+                if (file.thumbnail_url) {
+                    try {
+                        const thumbnailUrl = await (0, r2_storage_1.generateThumbnailUrl)(file.thumbnail_url);
+                        return { ...file, thumbnail_url: thumbnailUrl };
+                    }
+                    catch (error) {
+                        console.error('Failed to generate thumbnail URL:', error);
+                        return file;
+                    }
+                }
+                return file;
+            }));
+            return {
+                files: filesWithThumbnails,
+                hasMore: filteredFiles.length === input.limit,
+            };
+        }
+        catch (error) {
+            if (error instanceof server_1.TRPCError)
+                throw error;
+            console.error('Error fetching project assets:', error);
+            throw new server_1.TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: 'Failed to fetch project assets',
+            });
+        }
+    }),
+    // Start asset usage tracking
+    startAssetUsage: trpc_1.protectedProcedure
+        .input(zod_1.z.object({
+        fileId: zod_1.z.string(),
+        projectId: zod_1.z.string(),
+        usageType: zod_1.z.enum(['visualizer', 'composition', 'export']),
+        usageContext: zod_1.z.record(zod_1.z.any()).optional(),
+    }))
+        .mutation(async ({ ctx, input }) => {
+        const userId = ctx.user.id;
+        const assetManager = new asset_manager_1.AssetManager(ctx.supabase);
+        try {
+            // Verify file belongs to user and project
+            const { data: file, error: fileError } = await ctx.supabase
+                .from('file_metadata')
+                .select('id')
+                .eq('id', input.fileId)
+                .eq('user_id', userId)
+                .eq('project_id', input.projectId)
+                .single();
+            if (fileError || !file) {
+                throw new server_1.TRPCError({
+                    code: 'NOT_FOUND',
+                    message: 'File not found or access denied',
+                });
+            }
+            const usageId = await assetManager.startUsageTracking(input.fileId, input.projectId, input.usageType, input.usageContext);
+            return { usageId };
+        }
+        catch (error) {
+            if (error instanceof server_1.TRPCError)
+                throw error;
+            console.error('Error starting asset usage tracking:', error);
+            throw new server_1.TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: 'Failed to start usage tracking',
+            });
+        }
+    }),
+    // End asset usage tracking
+    endAssetUsage: trpc_1.protectedProcedure
+        .input(zod_1.z.object({
+        usageId: zod_1.z.string(),
+    }))
+        .mutation(async ({ ctx, input }) => {
+        const userId = ctx.user.id;
+        const assetManager = new asset_manager_1.AssetManager(ctx.supabase);
+        try {
+            // Verify usage record belongs to user
+            const { data: usage, error: usageError } = await ctx.supabase
+                .from('asset_usage')
+                .select('id')
+                .eq('id', input.usageId)
+                .eq('project_id', ctx.supabase
+                .from('projects')
+                .select('id')
+                .eq('user_id', userId))
+                .single();
+            if (usageError || !usage) {
+                throw new server_1.TRPCError({
+                    code: 'NOT_FOUND',
+                    message: 'Usage record not found or access denied',
+                });
+            }
+            await assetManager.endUsageTracking(input.usageId);
+            return { success: true };
+        }
+        catch (error) {
+            if (error instanceof server_1.TRPCError)
+                throw error;
+            console.error('Error ending asset usage tracking:', error);
+            throw new server_1.TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: 'Failed to end usage tracking',
+            });
+        }
+    }),
+    // Get storage quota for project
+    getStorageQuota: trpc_1.protectedProcedure
+        .input(zod_1.z.object({
+        projectId: zod_1.z.string(),
+    }))
+        .query(async ({ ctx, input }) => {
+        const userId = ctx.user.id;
+        const assetManager = new asset_manager_1.AssetManager(ctx.supabase);
+        try {
+            // Verify project belongs to user
+            const { data: project, error: projectError } = await ctx.supabase
+                .from('projects')
+                .select('id')
+                .eq('id', input.projectId)
+                .eq('user_id', userId)
+                .single();
+            if (projectError || !project) {
+                throw new server_1.TRPCError({
+                    code: 'NOT_FOUND',
+                    message: 'Project not found or access denied',
+                });
+            }
+            const quota = await assetManager.getStorageQuota(input.projectId);
+            return quota;
+        }
+        catch (error) {
+            if (error instanceof server_1.TRPCError)
+                throw error;
+            console.error('Error fetching storage quota:', error);
+            throw new server_1.TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: 'Failed to fetch storage quota',
+            });
+        }
+    }),
+    // Create asset folder
+    createAssetFolder: trpc_1.protectedProcedure
+        .input(zod_1.z.object({
+        projectId: zod_1.z.string(),
+        name: zod_1.z.string().min(1).max(100),
+        description: zod_1.z.string().optional(),
+        parentFolderId: zod_1.z.string().optional(),
+    }))
+        .mutation(async ({ ctx, input }) => {
+        const userId = ctx.user.id;
+        const assetManager = new asset_manager_1.AssetManager(ctx.supabase);
+        try {
+            // Verify project belongs to user
+            const { data: project, error: projectError } = await ctx.supabase
+                .from('projects')
+                .select('id')
+                .eq('id', input.projectId)
+                .eq('user_id', userId)
+                .single();
+            if (projectError || !project) {
+                throw new server_1.TRPCError({
+                    code: 'NOT_FOUND',
+                    message: 'Project not found or access denied',
+                });
+            }
+            const folder = await assetManager.createFolder(input.projectId, input.name, input.description, input.parentFolderId);
+            return folder;
+        }
+        catch (error) {
+            if (error instanceof server_1.TRPCError)
+                throw error;
+            console.error('Error creating asset folder:', error);
+            throw new server_1.TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: 'Failed to create asset folder',
+            });
+        }
+    }),
+    // Get asset folders
+    getAssetFolders: trpc_1.protectedProcedure
+        .input(zod_1.z.object({
+        projectId: zod_1.z.string(),
+    }))
+        .query(async ({ ctx, input }) => {
+        const userId = ctx.user.id;
+        const assetManager = new asset_manager_1.AssetManager(ctx.supabase);
+        try {
+            // Verify project belongs to user
+            const { data: project, error: projectError } = await ctx.supabase
+                .from('projects')
+                .select('id')
+                .eq('id', input.projectId)
+                .eq('user_id', userId)
+                .single();
+            if (projectError || !project) {
+                throw new server_1.TRPCError({
+                    code: 'NOT_FOUND',
+                    message: 'Project not found or access denied',
+                });
+            }
+            const folders = await assetManager.getFolders(input.projectId);
+            return folders;
+        }
+        catch (error) {
+            if (error instanceof server_1.TRPCError)
+                throw error;
+            console.error('Error fetching asset folders:', error);
+            throw new server_1.TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: 'Failed to fetch asset folders',
+            });
+        }
+    }),
+    // Create asset tag
+    createAssetTag: trpc_1.protectedProcedure
+        .input(zod_1.z.object({
+        projectId: zod_1.z.string(),
+        name: zod_1.z.string().min(1).max(50),
+        color: zod_1.z.string().regex(/^#[0-9A-F]{6}$/i).optional(),
+    }))
+        .mutation(async ({ ctx, input }) => {
+        const userId = ctx.user.id;
+        const assetManager = new asset_manager_1.AssetManager(ctx.supabase);
+        try {
+            // Verify project belongs to user
+            const { data: project, error: projectError } = await ctx.supabase
+                .from('projects')
+                .select('id')
+                .eq('id', input.projectId)
+                .eq('user_id', userId)
+                .single();
+            if (projectError || !project) {
+                throw new server_1.TRPCError({
+                    code: 'NOT_FOUND',
+                    message: 'Project not found or access denied',
+                });
+            }
+            const tag = await assetManager.createTag(input.projectId, input.name, input.color);
+            return tag;
+        }
+        catch (error) {
+            if (error instanceof server_1.TRPCError)
+                throw error;
+            console.error('Error creating asset tag:', error);
+            throw new server_1.TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: 'Failed to create asset tag',
+            });
+        }
+    }),
+    // Get asset tags
+    getAssetTags: trpc_1.protectedProcedure
+        .input(zod_1.z.object({
+        projectId: zod_1.z.string(),
+    }))
+        .query(async ({ ctx, input }) => {
+        const userId = ctx.user.id;
+        const assetManager = new asset_manager_1.AssetManager(ctx.supabase);
+        try {
+            // Verify project belongs to user
+            const { data: project, error: projectError } = await ctx.supabase
+                .from('projects')
+                .select('id')
+                .eq('id', input.projectId)
+                .eq('user_id', userId)
+                .single();
+            if (projectError || !project) {
+                throw new server_1.TRPCError({
+                    code: 'NOT_FOUND',
+                    message: 'Project not found or access denied',
+                });
+            }
+            const tags = await assetManager.getTags(input.projectId);
+            return tags;
+        }
+        catch (error) {
+            if (error instanceof server_1.TRPCError)
+                throw error;
+            console.error('Error fetching asset tags:', error);
+            throw new server_1.TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: 'Failed to fetch asset tags',
+            });
+        }
+    }),
+    // Add tag to file
+    addTagToFile: trpc_1.protectedProcedure
+        .input(zod_1.z.object({
+        fileId: zod_1.z.string(),
+        tagId: zod_1.z.string(),
+    }))
+        .mutation(async ({ ctx, input }) => {
+        const userId = ctx.user.id;
+        const assetManager = new asset_manager_1.AssetManager(ctx.supabase);
+        try {
+            // Verify file belongs to user
+            const { data: file, error: fileError } = await ctx.supabase
+                .from('file_metadata')
+                .select('id')
+                .eq('id', input.fileId)
+                .eq('user_id', userId)
+                .single();
+            if (fileError || !file) {
+                throw new server_1.TRPCError({
+                    code: 'NOT_FOUND',
+                    message: 'File not found or access denied',
+                });
+            }
+            await assetManager.addTagToFile(input.fileId, input.tagId);
+            return { success: true };
+        }
+        catch (error) {
+            if (error instanceof server_1.TRPCError)
+                throw error;
+            console.error('Error adding tag to file:', error);
+            throw new server_1.TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: 'Failed to add tag to file',
+            });
+        }
+    }),
+    // Remove tag from file
+    removeTagFromFile: trpc_1.protectedProcedure
+        .input(zod_1.z.object({
+        fileId: zod_1.z.string(),
+        tagId: zod_1.z.string(),
+    }))
+        .mutation(async ({ ctx, input }) => {
+        const userId = ctx.user.id;
+        const assetManager = new asset_manager_1.AssetManager(ctx.supabase);
+        try {
+            // Verify file belongs to user
+            const { data: file, error: fileError } = await ctx.supabase
+                .from('file_metadata')
+                .select('id')
+                .eq('id', input.fileId)
+                .eq('user_id', userId)
+                .single();
+            if (fileError || !file) {
+                throw new server_1.TRPCError({
+                    code: 'NOT_FOUND',
+                    message: 'File not found or access denied',
+                });
+            }
+            await assetManager.removeTagFromFile(input.fileId, input.tagId);
+            return { success: true };
+        }
+        catch (error) {
+            if (error instanceof server_1.TRPCError)
+                throw error;
+            console.error('Error removing tag from file:', error);
+            throw new server_1.TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: 'Failed to remove tag from file',
+            });
+        }
+    }),
+    // Replace asset
+    replaceAsset: trpc_1.protectedProcedure
+        .input(zod_1.z.object({
+        oldFileId: zod_1.z.string(),
+        newFileId: zod_1.z.string(),
+        preserveMetadata: zod_1.z.boolean().optional().default(true),
+    }))
+        .mutation(async ({ ctx, input }) => {
+        const userId = ctx.user.id;
+        const assetManager = new asset_manager_1.AssetManager(ctx.supabase);
+        try {
+            // Verify both files belong to user
+            const { data: files, error: filesError } = await ctx.supabase
+                .from('file_metadata')
+                .select('id')
+                .in('id', [input.oldFileId, input.newFileId])
+                .eq('user_id', userId);
+            if (filesError || !files || files.length !== 2) {
+                throw new server_1.TRPCError({
+                    code: 'NOT_FOUND',
+                    message: 'One or both files not found or access denied',
+                });
+            }
+            await assetManager.replaceAsset(input.oldFileId, input.newFileId, input.preserveMetadata);
+            return { success: true };
+        }
+        catch (error) {
+            if (error instanceof server_1.TRPCError)
+                throw error;
+            console.error('Error replacing asset:', error);
+            throw new server_1.TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: 'Failed to replace asset',
             });
         }
     }),

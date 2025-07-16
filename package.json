@@ -8,11 +8,11 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "concurrently \"npm run dev -w apps/web\" \"npm run dev -w apps/api\"",
-    "build": "npm run build -w apps/web && npm run build -w apps/api",
-    "test": "npm run test --workspaces",
-    "lint": "npm run lint --workspaces",
-    "clean": "npm run clean --workspaces"
+    "dev": "concurrently \"pnpm --filter @phonoglyph/web dev\" \"pnpm --filter @phonoglyph/api dev\"",
+    "build": "pnpm --filter @phonoglyph/web build && pnpm --filter @phonoglyph/api build",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "clean": "pnpm -r clean"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^3.2.4",
@@ -23,9 +23,5 @@
   "engines": {
     "node": ">=18.0.0",
     "npm": ">=9.0.0"
-  },
-  "dependencies": {
-    "meyda": "^5.6.3",
-    "nvm": "^0.0.4"
   }
 }

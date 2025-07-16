@@ -1,9 +1,29 @@
 @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+@import './fonts.css';
 
 body, .font-mono {
   font-family: 'VT323', 'Fira Mono', 'Menlo', 'monospace';
   letter-spacing: 0.04em;
 }
+
+/* Custom font for creative visualizer numbers */
+.font-creative-mono {
+  font-family: 'Doto', 'VT323', 'Fira Mono', 'Menlo', 'monospace';
+  letter-spacing: 0.04em;
+  font-weight: 100;
+  color: #fcf803; /* White color for Doto font instances */
+  font-size: 1.25em; /* Make Doto font slightly larger to match other fonts */
+  line-height: 1; /* Ensure consistent line height */
+  vertical-align: baseline; /* Align with the baseline of surrounding text */
+  position: relative;
+  top: .05em; /* Slightly lower the Doto text to match baseline */
+  text-shadow: 
+    0 0 3px hsla(59, 70%, 53%, 0.6)
+    0 0 6px rgba(255, 255, 255, 0.3),
+    0 0 9px rgba(255, 255, 255, 0.1); /* Subtle white glow effect */
+}
+
+
 
 @tailwind base;
 @tailwind components;

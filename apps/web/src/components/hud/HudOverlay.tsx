@@ -47,11 +47,21 @@ function drawOscilloscope(ctx: CanvasRenderingContext2D, w: number, h: number, s
     glowIntensity = 0, 
     showGrid = false, 
     gridColor = '#333333',
-    amplitude = 1
+    amplitude = 1,
+    traceWidth = 2,
+    cornerRadius = 0
   } = settings;
   // Draw background grid if enabled
   if (showGrid) {
     ctx.save();
+    
+    // Apply corner radius clipping if set
+    if (cornerRadius > 0) {
+      ctx.beginPath();
+      ctx.roundRect(0, 0, w, h, cornerRadius);
+      ctx.clip();
+    }
+    
     ctx.strokeStyle = gridColor;
     ctx.lineWidth = 0.5;
     // Vertical grid lines
@@ -102,7 +112,7 @@ function drawOscilloscope(ctx: CanvasRenderingContext2D, w: number, h: number, s
   }
   // Draw main oscilloscope trace (bipolar)
   ctx.strokeStyle = color;
-  ctx.lineWidth = 2;
+  ctx.lineWidth = traceWidth;
   ctx.beginPath();
   for (let i = 0; i < w; i++) {
     // Bipolar: center at height/2, scale amplitude both ways
@@ -176,7 +186,7 @@ function drawChromaWheel(ctx: CanvasRenderingContext2D, w: number, h: number, ch
       '#ed6925','#fb9b06','#f7d13d','#fcffa4','#fffbb4','#fff7ec'
     ]
   };
-  const scheme = colorSchemes[settings.colorScheme] || colorSchemes.Classic;
+  const scheme = colorSchemes[settings.colorScheme as keyof typeof colorSchemes] || colorSchemes.Classic;
   const showNames = settings.showNoteNames;
   ctx.save();
   ctx.clearRect(0, 0, w, h);
@@ -218,12 +228,9 @@ const ANCHORS = [
   { key: 'w',  style: { left: 0, top: '50%', transform: 'translateY(-50%)', cursor: 'ew-resize' }, dx: -1, dy: 0 },
 ];
 
-<<<<<<< HEAD
 const SPECTROGRAM_BUFFER_SIZE = 200; // Number of FFT frames to keep (controls width)
 
-=======
->>>>>>> eef7db848 (feat(hud): true bipolar oscilloscope waveform, amplitude control, subtle glow, and grid fixes for authentic scope UX)
-export function HudOverlay({ type, position, size, stem, settings, featureData, onOpenModal, onUpdate }: any) {
+export function HudOverlay({ id, type, position, size, stem, settings, featureData, onOpenModal, onUpdate, isSelected, onSelect }: any) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [dragging, setDragging] = useState(false);
   const [resizing, setResizing] = useState<string | null>(null); // anchor key
@@ -231,7 +238,6 @@ export function HudOverlay({ type, position, size, stem, settings, featureData, 
   const [resizeStart, setResizeStart] = useState<any>(null);
   const [isHovered, setIsHovered] = useState(false);
 
-<<<<<<< HEAD
   // Rolling buffer for spectrogram
   const spectrogramBufferRef = useRef<Array<Float32Array>>([]);
 
@@ -239,12 +245,6 @@ export function HudOverlay({ type, position, size, stem, settings, featureData, 
   const onMouseMoveRef = useRef<(e: MouseEvent) => void>();
   const onMouseUpRef = useRef<(e: MouseEvent) => void>();
 
-=======
-  // Stable refs for event handlers
-  const onMouseMoveRef = useRef<(e: MouseEvent) => void>();
-  const onMouseUpRef = useRef<(e: MouseEvent) => void>();
-
->>>>>>> eef7db848 (feat(hud): true bipolar oscilloscope waveform, amplitude control, subtle glow, and grid fixes for authentic scope UX)
   // Mouse move handler
   const onMouseMove = useCallback((e: MouseEvent) => {
     if (dragging && dragStart) {
@@ -317,7 +317,7 @@ export function HudOverlay({ type, position, size, stem, settings, featureData, 
           
           // Draw bipolar waveform
           ctx.beginPath();
-          ctx.strokeStyle = '#4db3fa'; // Same blue as stem-waveform
+          ctx.strokeStyle = settings.color || '#4db3fa'; // Use settings color or fallback to blue
           ctx.lineWidth = 1;
           
           for (let i = 0; i < size.width; i++) {
@@ -336,12 +336,22 @@ export function HudOverlay({ type, position, size, stem, settings, featureData, 
         const amplitude = typeof settings.amplitude === 'number' ? settings.amplitude : 1;
         const color = settings.color || '#00ffff';
         const glowIntensity = typeof settings.glowIntensity === 'number' ? settings.glowIntensity : 0;
+        const traceWidth = typeof settings.traceWidth === 'number' ? settings.traceWidth : 2;
         const showGrid = !!settings.showGrid;
         const gridColor = settings.gridColor || '#333333';
         if (Array.isArray(featureData) && featureData.length > 0) {
           // Draw background grid if enabled
           if (showGrid) {
             ctx.save();
+            
+            // Apply corner radius clipping if set
+            const cornerRadius = settings.cornerRadius || 0;
+            if (cornerRadius > 0) {
+              ctx.beginPath();
+              ctx.roundRect(0, 0, size.width, size.height, cornerRadius);
+              ctx.clip();
+            }
+            
             ctx.strokeStyle = gridColor;
             ctx.lineWidth = 0.5;
             // Vertical grid lines
@@ -395,7 +405,7 @@ export function HudOverlay({ type, position, size, stem, settings, featureData, 
           }
           // Draw main oscilloscope trace (bipolar)
           ctx.strokeStyle = color;
-          ctx.lineWidth = 2;
+          ctx.lineWidth = traceWidth;
           ctx.beginPath();
           for (let i = 0; i < size.width; i++) {
             const idx = Math.floor(i / size.width * (featureData.length - 1));
@@ -408,35 +418,187 @@ export function HudOverlay({ type, position, size, stem, settings, featureData, 
           }
           ctx.stroke();
         } else {
-          drawOscilloscope(ctx, size.width, size.height, { ...settings, amplitude });
+          drawOscilloscope(ctx, size.width, size.height, { ...settings, amplitude, traceWidth });
         }
         break;
       case 'spectrogram': {
-        // Maintain rolling buffer of FFT frames
+        // Enhanced spectrogram using FFT data
+        console.log('🎵 Spectrogram rendering check:', {
+          hasFeatureData: !!featureData,
+          hasFft: !!(featureData && featureData.fft),
+          isArray: !!(featureData && featureData.fft && Array.isArray(featureData.fft)),
+          hasBuffer: !!(featureData && featureData.fftBuffer),
+          bufferLength: featureData?.fftBuffer?.length || 0,
+          fftLength: featureData?.fft?.length || 0
+        });
+        
         if (featureData && featureData.fft && Array.isArray(featureData.fft)) {
-          // Push new FFT frame
-          const buffer = spectrogramBufferRef.current;
-          buffer.push(Float32Array.from(featureData.fft));
-          if (buffer.length > SPECTROGRAM_BUFFER_SIZE) buffer.shift();
-          // Draw spectrogram
+          console.log('🎵 Spectrogram rendering with cached FFT data:', {
+            fftLength: featureData.fft.length,
+            sampleValues: featureData.fft.slice(0, 5),
+            maxValue: Math.max(...featureData.fft),
+            minValue: Math.min(...featureData.fft),
+            hasBuffer: !!featureData.fftBuffer,
+            bufferLength: featureData.fftBuffer?.length || 0
+          });
+          
+          // Use the buffer from the overlay manager (contains time-based variations)
+          let buffer = featureData.fftBuffer;
+          
+          // If no buffer available, create a simple one from current FFT data
+          if (!buffer || buffer.length === 0) {
+            console.log('🎵 No buffer available, creating simple buffer from FFT data');
+            const simpleBuffer = [];
+            for (let i = 0; i < 50; i++) {
+              simpleBuffer.push(Float32Array.from(featureData.fft));
+            }
+            buffer = simpleBuffer;
+          }
+          
+          console.log('🎵 Spectrogram buffer state:', {
+            bufferLength: buffer.length,
+            firstFrameLength: buffer[0]?.length || 0
+          });
+          
+          // Clear canvas
+          ctx.clearRect(0, 0, size.width, size.height);
+          
+          // Draw spectrogram with enhanced visualization
           const width = size.width;
           const height = size.height;
           const frameCount = buffer.length;
           const binCount = buffer[0]?.length || 0;
-          for (let x = 0; x < frameCount; x++) {
-            const fftFrame = buffer[x];
-            if (!fftFrame) continue;
-            for (let y = 0; y < binCount; y++) {
-              // Map y: 0=low freq (bottom), binCount-1=high freq (top)
-              const magnitude = fftFrame[y];
-              // Normalize and color map
-              const norm = Math.log10(magnitude + 1e-10) / Math.log10(1.1);
-              const clamped = Math.max(0, Math.min(1, norm));
-              const hue = 240 - (y / binCount) * 240;
-              ctx.fillStyle = `hsl(${hue}, 90%, ${30 + clamped * 70}%)`;
-              const px = Math.floor(x * width / SPECTROGRAM_BUFFER_SIZE);
-              const py = height - Math.floor(y * height / binCount) - 1;
-              ctx.fillRect(px, py, 1, 1);
+          
+          if (frameCount > 0 && binCount > 0) {
+            // Calculate frequency range (assuming 44.1kHz sample rate)
+            const sampleRate = 44100;
+            const nyquist = sampleRate / 2;
+            
+            // Use logarithmic frequency scaling for better visualization
+            const logFreqScale = (binIndex: number) => {
+              const linearFreq = (binIndex / binCount) * nyquist;
+              // Map to log scale: 20Hz to 20kHz
+              const minFreq = 20;
+              const maxFreq = 20000;
+              const logMin = Math.log10(minFreq);
+              const logMax = Math.log10(maxFreq);
+              const logFreq = Math.log10(Math.max(minFreq, linearFreq));
+              return (logFreq - logMin) / (logMax - logMin);
+            };
+            
+                         // Enhanced color mapping with multiple color schemes
+             const colorMap = settings.colorMap || 'Classic';
+             const getColor = (magnitude: number, freqRatio: number) => {
+               const normalizedMagnitude = Math.log10(magnitude + 1e-10) / Math.log10(1.1);
+               const clamped = Math.max(0, Math.min(1, normalizedMagnitude));
+               
+               switch (colorMap) {
+                 case 'Inferno':
+                   // Inferno colormap: black -> red -> yellow -> white
+                   if (clamped < 0.25) {
+                     const t = clamped / 0.25;
+                     return `rgb(${Math.floor(255 * t)}, 0, 0)`;
+                   } else if (clamped < 0.5) {
+                     const t = (clamped - 0.25) / 0.25;
+                     return `rgb(255, ${Math.floor(255 * t)}, 0)`;
+                   } else if (clamped < 0.75) {
+                     const t = (clamped - 0.5) / 0.25;
+                     return `rgb(255, 255, ${Math.floor(255 * t)})`;
+                   } else {
+                     const t = (clamped - 0.75) / 0.25;
+                     return `rgb(255, 255, ${Math.floor(255 * (1 - t))})`;
+                   }
+                 case 'Viridis':
+                   // Viridis colormap: blue -> green -> yellow
+                   const viridisHue = 240 - clamped * 120;
+                   return `hsl(${viridisHue}, 90%, ${30 + clamped * 50}%)`;
+                 case 'Rainbow':
+                   // Rainbow colormap
+                   const rainbowHue = (freqRatio * 240 + clamped * 60) % 360;
+                   return `hsl(${rainbowHue}, 90%, ${30 + clamped * 70}%)`;
+                 default: // Classic
+                   // Classic spectrogram: blue (low) to red (high)
+                   const classicHue = 240 - (freqRatio * 240 + clamped * 60);
+                   return `hsl(${classicHue}, 90%, ${30 + clamped * 70}%)`;
+               }
+             };
+            
+            // Draw spectrogram with improved resolution and anti-aliasing
+            const pixelRatio = window.devicePixelRatio || 1;
+            const scaledWidth = width * pixelRatio;
+            const scaledHeight = height * pixelRatio;
+            
+            // Create off-screen canvas for high-resolution rendering
+            const offscreenCanvas = document.createElement('canvas');
+            offscreenCanvas.width = scaledWidth;
+            offscreenCanvas.height = scaledHeight;
+            const offscreenCtx = offscreenCanvas.getContext('2d');
+            
+            if (offscreenCtx) {
+              // Scale the offscreen context
+              offscreenCtx.scale(pixelRatio, pixelRatio);
+              
+              // Draw each pixel with proper frequency mapping
+              for (let x = 0; x < frameCount; x++) {
+                const fftFrame = buffer[x];
+                if (!fftFrame) continue;
+                
+                for (let y = 0; y < height; y++) {
+                  // Map screen Y to frequency bin using log scale
+                  const freqRatio = 1 - (y / height); // Invert Y axis
+                  const binIndex = Math.floor(freqRatio * binCount);
+                  
+                  if (binIndex >= 0 && binIndex < fftFrame.length) {
+                    const magnitude = fftFrame[binIndex];
+                    const color = getColor(magnitude, freqRatio);
+                    
+                    offscreenCtx.fillStyle = color;
+                    const px = Math.floor(x * width / frameCount);
+                    const colWidth = Math.max(1, Math.floor(width / frameCount));
+                    offscreenCtx.fillRect(px, y, colWidth, 1);
+                  }
+                }
+              }
+              
+              // Draw the high-resolution result back to the main canvas
+              ctx.drawImage(offscreenCanvas, 0, 0, width, height);
+            } else {
+              // Fallback to direct drawing if offscreen canvas not available
+              for (let x = 0; x < frameCount; x++) {
+                const fftFrame = buffer[x];
+                if (!fftFrame) continue;
+                
+                for (let y = 0; y < height; y++) {
+                  const freqRatio = 1 - (y / height);
+                  const binIndex = Math.floor(freqRatio * binCount);
+                  
+                  if (binIndex >= 0 && binIndex < fftFrame.length) {
+                    const magnitude = fftFrame[binIndex];
+                    const color = getColor(magnitude, freqRatio);
+                    
+                    ctx.fillStyle = color;
+                    const px = Math.floor(x * width / frameCount);
+                    const colWidth = Math.max(1, Math.floor(width / frameCount));
+                    ctx.fillRect(px, y, colWidth, 1);
+                  }
+                }
+              }
+            }
+            
+            // Add frequency labels if enabled
+            if (settings.showFrequencyLabels) {
+              ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+              ctx.font = '10px monospace';
+              ctx.textAlign = 'right';
+              
+              const frequencies = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
+              frequencies.forEach(freq => {
+                const freqRatio = 1 - (Math.log10(freq) - Math.log10(20)) / (Math.log10(20000) - Math.log10(20));
+                const y = freqRatio * height;
+                if (y >= 0 && y < height) {
+                  ctx.fillText(`${freq}Hz`, width - 5, y - 5);
+                }
+              });
             }
           }
         } else {
@@ -446,9 +608,8 @@ export function HudOverlay({ type, position, size, stem, settings, featureData, 
       }
       case 'spectrumAnalyzer': {
         if (featureData && featureData.fft && Array.isArray(featureData.fft)) {
-          // Improved high-resolution FFT-based spectrum analyzer with log frequency scaling
+          // Enhanced FFT-based spectrum analyzer using complex spectrum data
           const fftData = featureData.fft;
-          const fftSize = settings.fftSize || fftData.length;
           const barColor = settings.barColor || '#00ffff';
           const barCount = Math.min(128, Math.floor(size.width / 4)); // Up to 128 bars, 4px min width
           const minFreq = 20; // Hz
@@ -456,41 +617,85 @@ export function HudOverlay({ type, position, size, stem, settings, featureData, 
           const sampleRate = 44100; // Or get from settings/featureData if available
           const binCount = fftData.length;
 
-          // Precompute frequency for each bin
-          const binFreq = (i) => (i * sampleRate) / (2 * binCount);
+          // Clear canvas
+          ctx.clearRect(0, 0, size.width, size.height);
 
-          // Map bars to log-spaced frequency bins
+          // Enhanced logarithmic frequency scaling with better resolution
           for (let bar = 0; bar < barCount; bar++) {
-            // Logarithmic frequency scaling
+            // Logarithmic frequency scaling for better low-frequency resolution
             const freqStart = minFreq * Math.pow(maxFreq / minFreq, bar / barCount);
             const freqEnd = minFreq * Math.pow(maxFreq / minFreq, (bar + 1) / barCount);
+            
             // Find bins in this frequency range
             let binStart = Math.floor((freqStart / (sampleRate / 2)) * binCount);
             let binEnd = Math.ceil((freqEnd / (sampleRate / 2)) * binCount);
             binStart = Math.max(0, binStart);
             binEnd = Math.min(binCount, binEnd);
-            // Average magnitude in this range
-            let sum = 0, count = 0;
+            
+            // Calculate weighted average magnitude in this range
+            let sum = 0, weightSum = 0;
             for (let i = binStart; i < binEnd; i++) {
-              sum += fftData[i];
-              count++;
+              const magnitude = fftData[i];
+              // Apply frequency weighting (emphasize lower frequencies)
+              const freq = (i / binCount) * (sampleRate / 2);
+              const weight = 1 / (1 + freq / 1000); // Decay weight with frequency
+              sum += magnitude * weight;
+              weightSum += weight;
             }
-            const avg = count > 0 ? sum / count : 0;
-            // Logarithmic magnitude scaling (dB-like)
-            const mag = Math.log10(avg + 1e-8) * 10 + 40; // dB scale, offset for visibility
-            const normMag = Math.max(0, Math.min(1, mag / 50));
-            // Draw bar
+            
+            const avgMagnitude = weightSum > 0 ? sum / weightSum : 0;
+            
+            // Enhanced magnitude scaling with dynamic range compression
+            const logMagnitude = Math.log10(avgMagnitude + 1e-10);
+            const normalizedMagnitude = Math.max(0, Math.min(1, (logMagnitude + 6) / 4)); // Adjust range as needed
+            
+            // Draw bar with enhanced styling
             const barWidth = size.width / barCount;
-            const barHeight = normMag * size.height * 0.95;
-            ctx.fillStyle = barColor;
+            const barHeight = normalizedMagnitude * size.height * 0.95;
+            
+            // Create gradient for each bar
+            const gradient = ctx.createLinearGradient(
+              bar * barWidth, size.height - barHeight,
+              bar * barWidth, size.height
+            );
+            
+            // Color gradient based on frequency
+            const freqRatio = bar / barCount;
+            const lowFreqColor = `hsl(${180 + freqRatio * 60}, 90%, 60%)`; // Blue to cyan
+            const highFreqColor = `hsl(${240 + freqRatio * 60}, 90%, 60%)`; // Cyan to blue
+            
+            gradient.addColorStop(0, lowFreqColor);
+            gradient.addColorStop(1, highFreqColor);
+            
+            ctx.fillStyle = gradient;
             ctx.fillRect(bar * barWidth, size.height - barHeight, barWidth - 1, barHeight);
+            
+            // Add subtle glow effect
+            if (normalizedMagnitude > 0.7) {
+              ctx.shadowColor = barColor;
+              ctx.shadowBlur = 5;
+              ctx.fillRect(bar * barWidth, size.height - barHeight, barWidth - 1, barHeight);
+              ctx.shadowBlur = 0;
+            }
+          }
+          
+          // Add frequency labels if enabled
+          if (settings.showFrequencyLabels) {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.font = '10px monospace';
+            ctx.textAlign = 'center';
+            
+            const frequencies = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
+            frequencies.forEach(freq => {
+              const freqRatio = (Math.log10(freq) - Math.log10(minFreq)) / (Math.log10(maxFreq) - Math.log10(minFreq));
+              const x = freqRatio * size.width;
+              if (x >= 0 && x < size.width) {
+                ctx.fillText(`${freq}Hz`, x, size.height - 5);
+              }
+            });
           }
         } else if (Array.isArray(featureData) && featureData.length > 0) {
           // Draw real spectrum using other features
-      case 'spectrogram':
-      case 'spectrumAnalyzer':
-        if (Array.isArray(featureData) && featureData.length > 0) {
-          // Draw real spectrum
           const barWidth = size.width / featureData.length;
           for (let i = 0; i < featureData.length; i++) {
             const val = featureData[i];
@@ -502,6 +707,7 @@ export function HudOverlay({ type, position, size, stem, settings, featureData, 
           drawSpectrumAnalyzer(ctx, size.width, size.height);
         }
         break;
+      }
       case 'peakMeter':
         if (typeof featureData === 'number') {
           // Draw real peak meter
@@ -514,9 +720,25 @@ export function HudOverlay({ type, position, size, stem, settings, featureData, 
         break;
       case 'stereometer': {
         // True Lissajous stereometer using stereoWindow
-        if (featureData && featureData.stereoWindow && featureData.stereoWindow.left && featureData.stereoWindow.right) {
-          const left = featureData.stereoWindow.left;
-          const right = featureData.stereoWindow.right;
+        let stereoWindow = featureData && featureData.stereoWindow;
+        // Reconstruct from flat arrays if needed
+        if (!stereoWindow && featureData && featureData.stereoWindow_left && featureData.stereoWindow_right) {
+          stereoWindow = {
+            left: featureData.stereoWindow_left,
+            right: featureData.stereoWindow_right
+          };
+        }
+        if (stereoWindow && stereoWindow.left && stereoWindow.right) {
+          // Debug log
+          console.log('[stereometer render]', {
+            leftLength: stereoWindow.left.length,
+            rightLength: stereoWindow.right.length,
+            leftSample: stereoWindow.left.slice(0, 5),
+            rightSample: stereoWindow.right.slice(0, 5),
+            type: typeof stereoWindow.left[0]
+          });
+          const left = stereoWindow.left;
+          const right = stereoWindow.right;
           const N = Math.min(left.length, right.length, 1024);
           ctx.save();
           ctx.globalAlpha = 0.8;
@@ -546,7 +768,6 @@ export function HudOverlay({ type, position, size, stem, settings, featureData, 
             ctx.fill();
           }
           ctx.restore();
-
         } else {
           drawStereometer(ctx, size.width, size.height);
         }
@@ -592,7 +813,7 @@ export function HudOverlay({ type, position, size, stem, settings, featureData, 
       
           // Draw bipolar waveform
           ctx.beginPath();
-          ctx.strokeStyle = '#4db3fa'; // Same blue as stem-waveform
+          ctx.strokeStyle = settings.color || '#4db3fa'; // Use settings color or fallback to blue
           ctx.lineWidth = 1;
       
           for (let i = 0; i < size.width; i++) {
@@ -628,12 +849,22 @@ export function HudOverlay({ type, position, size, stem, settings, featureData, 
         const amplitude = typeof settings.amplitude === 'number' ? settings.amplitude : 1;
         const color = settings.color || '#00ffff';
         const glowIntensity = typeof settings.glowIntensity === 'number' ? settings.glowIntensity : 0;
+        const traceWidth = typeof settings.traceWidth === 'number' ? settings.traceWidth : 2;
         const showGrid = !!settings.showGrid;
         const gridColor = settings.gridColor || '#333333';
         if (Array.isArray(featureData) && featureData.length > 0) {
           // Draw background grid if enabled
           if (showGrid) {
             ctx.save();
+            
+            // Apply corner radius clipping if set
+            const cornerRadius = settings.cornerRadius || 0;
+            if (cornerRadius > 0) {
+              ctx.beginPath();
+              ctx.roundRect(0, 0, size.width, size.height, cornerRadius);
+              ctx.clip();
+            }
+            
             ctx.strokeStyle = gridColor;
             ctx.lineWidth = 0.5;
             // Vertical grid lines
@@ -687,7 +918,7 @@ export function HudOverlay({ type, position, size, stem, settings, featureData, 
           }
           // Draw main oscilloscope trace (bipolar)
           ctx.strokeStyle = color;
-          ctx.lineWidth = 2;
+          ctx.lineWidth = traceWidth;
           ctx.beginPath();
           for (let i = 0; i < size.width; i++) {
             const idx = Math.floor(i / size.width * (featureData.length - 1));
@@ -699,7 +930,7 @@ export function HudOverlay({ type, position, size, stem, settings, featureData, 
           }
           ctx.stroke();
         } else {
-          drawOscilloscope(ctx, size.width, size.height, { ...settings, amplitude });
+          drawOscilloscope(ctx, size.width, size.height, { ...settings, amplitude, traceWidth });
         }
         break;
       }
@@ -728,6 +959,7 @@ export function HudOverlay({ type, position, size, stem, settings, featureData, 
 
   return (
     <div
+      data-overlay-id={id}
       style={{
         position: 'absolute',
         left: position.x,
@@ -736,7 +968,7 @@ export function HudOverlay({ type, position, size, stem, settings, featureData, 
         height: size.height,
         pointerEvents: 'auto',
         zIndex: 10,
-        borderRadius: 8,
+        borderRadius: settings.cornerRadius !== undefined ? `${settings.cornerRadius}px` : 0,
         background: settings.glass || settings.glassmorphism
           ? 'rgba(20, 40, 60, 0.25)'
           : 'rgba(0,0,0,0.2)',
@@ -744,11 +976,16 @@ export function HudOverlay({ type, position, size, stem, settings, featureData, 
         cursor: dragging ? 'grabbing' : 'grab',
         backdropFilter: settings.glass || settings.glassmorphism ? 'blur(12px)' : undefined,
         WebkitBackdropFilter: settings.glass || settings.glassmorphism ? 'blur(12px)' : undefined,
-        border: settings.glass || settings.glassmorphism ? '1.5px solid rgba(255,255,255,0.18)' : undefined,
-        transition: 'background 0.2s, border 0.2s',
+        border: isSelected ? '1px dashed white' : (
+          settings.outline ? `${settings.outlineWidth || 1}px solid ${settings.outlineColor || '#ffffff'}` : undefined
+        ),
+        boxShadow: isSelected ? '0 0 0 1px rgba(255,255,255,0.2)' : (
+          settings.dropShadow ? `0 4px ${settings.shadowBlur || 8}px ${settings.shadowColor || '#000000'}40` : undefined
+        ),
+        transition: 'background 0.2s',
         isolation: 'isolate',
       }}
-      onMouseDown={onMouseDown}
+      onMouseDown={e => { onMouseDown(e); onSelect && onSelect(); }}
       onDoubleClick={onOpenModal}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -757,29 +994,29 @@ export function HudOverlay({ type, position, size, stem, settings, featureData, 
         ref={canvasRef}
         width={size.width}
         height={size.height}
-        style={{ width: '100%', height: '100%', display: 'block', borderRadius: 8 }}
+        style={{ width: '100%', height: '100%', display: 'block', borderRadius: settings.cornerRadius !== undefined ? `${settings.cornerRadius}px` : 0 }}
       />
       {/* Photoshop-style transform anchors - only visible on hover */}
       {isHovered && ANCHORS.map(anchor => (
-  <div
-    key={anchor.key}
-    className="transform-anchor"
-    style={{
-      position: 'absolute',
+        <div
+          key={anchor.key}
+          className="transform-anchor"
+          style={{
+            position: 'absolute',
       width: 12,
       height: 12,
-      background: '#fff',
+            background: '#fff',
       border: '1px solid #ccc',
       borderRadius: 2,
       boxShadow: '0 1px 2px rgba(0,0,0,0.08)',
       ...anchor.style,
-      zIndex: 20,
+            zIndex: 20,
       opacity: 0.95,
       transition: 'background 0.2s, box-shadow 0.2s'
-    }}
-    onMouseDown={e => onAnchorMouseDown(anchor.key, e)}
-  />
-))}
+          }}
+          onMouseDown={e => onAnchorMouseDown(anchor.key, e)}
+        />
+      ))}
     </div>
   );
 }

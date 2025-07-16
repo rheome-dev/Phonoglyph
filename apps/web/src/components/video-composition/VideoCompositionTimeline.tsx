@@ -178,7 +178,7 @@ export const VideoCompositionTimeline: React.FC<VideoCompositionTimelineProps> =
       <CardContent className="p-2 space-y-2">
         {/* Drop zone */}
         <div
-          ref={drop}
+          ref={drop as unknown as React.Ref<HTMLDivElement>}
           className={`relative h-16 border-2 border-dashed rounded-lg transition-all ${
             isOver && canDrop 
               ? "border-emerald-400 bg-emerald-900/20" 

@@ -532,7 +532,7 @@ export class AudioAnalyzer {
 
     for (let i = 0; i < fftData.length; i++) {
       const freq = (i * 44100) / fftData.length;
-      const magnitude = Math.abs(fftData[i]);
+      const magnitude = Math.abs(fftData[i] ?? 0);
       weightedSum += freq * magnitude;
       sum += magnitude;
     }
@@ -547,7 +547,7 @@ export class AudioAnalyzer {
     
     let cumulativeEnergy = 0;
     for (let i = 0; i < fftData.length; i++) {
-      cumulativeEnergy += Math.abs(fftData[i]) ** 2;
+      cumulativeEnergy += Math.abs(fftData[i] ?? 0) ** 2;
       if (cumulativeEnergy >= threshold) {
         return (i * 44100) / fftData.length;
       }
@@ -557,7 +557,7 @@ export class AudioAnalyzer {
 
   private calculateSpectralFlatness(samples: Int16Array): number {
     const fftData = this.performFFT(samples);
-    const magnitudes = fftData.map(val => Math.abs(val));
+    const magnitudes = fftData.map(val => Math.abs(val ?? 0));
     
     const geometricMean = Math.exp(
       magnitudes.reduce((sum, mag) => sum + Math.log(Math.max(mag, 1e-10)), 0) / magnitudes.length
@@ -576,7 +576,7 @@ export class AudioAnalyzer {
     
     for (let i = 0; i < fftData.length; i++) {
       const freq = (i * 44100) / fftData.length;
-      const magnitude = Math.abs(fftData[i]);
+      const magnitude = Math.abs(fftData[i] ?? 0);
       const diff = freq - centroid;
       weightedSum += (diff ** 2) * magnitude;
       sum += magnitude;
@@ -604,7 +604,7 @@ export class AudioAnalyzer {
     
     for (let i = 0; i < fftData.length; i++) {
       const freq = (i * 44100) / fftData.length;
-      const magnitude = Math.abs(fftData[i]);
+      const magnitude = Math.abs(fftData[i] ?? 0);
       
       // Simplified A-weighting curve
       let aWeight = 1;
@@ -623,7 +623,7 @@ export class AudioAnalyzer {
   private calculateMFCC(samples: Int16Array): number[] {
     // Simplified MFCC calculation
     const fftData = this.performFFT(samples);
-    const magnitudes = fftData.map(val => Math.abs(val));
+    const magnitudes = fftData.map(val => Math.abs(val ?? 0));
     
     // Simple mel-scale filter bank (13 coefficients)
     const mfcc = [];
@@ -633,7 +633,7 @@ export class AudioAnalyzer {
         const freq = (j * 44100) / magnitudes.length;
         const melFreq = 2595 * Math.log10(1 + freq / 700);
         const filterWeight = Math.exp(-((melFreq - i * 200) ** 2) / (2 * 100 ** 2));
-        sum += magnitudes[j] * filterWeight;
+        sum += (magnitudes[j] ?? 0) * filterWeight;
       }
       mfcc.push(Math.log(Math.max(sum, 1e-10)));
     }
@@ -664,7 +664,7 @@ export class AudioAnalyzer {
     
     for (let i = 0; i < fftData.length; i++) {
       const freq = (i * 44100) / fftData.length;
-      const magnitude = Math.abs(fftData[i]);
+      const magnitude = Math.abs(fftData[i] ?? 0);
       
       // Sharpness increases with frequency
       const sharpnessWeight = Math.min(freq / 10000, 1);
@@ -685,7 +685,7 @@ export class AudioAnalyzer {
       if (freq > 0) {
         // Convert frequency to semitone
         const semitone = Math.round(12 * Math.log2(freq / 440)) % 12;
-        const magnitude = Math.abs(fftData[i]);
+        const magnitude = Math.abs(fftData[i] ?? 0);
         chroma[semitone] += magnitude;
       }
     }

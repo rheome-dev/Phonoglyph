@@ -34,6 +34,7 @@ export interface Layer {
 }
 
 export type EffectType = 'metaballs' | 'particles' | 'midihud' | 'bloom';
+export type LayerType = 'video' | 'image' | 'effect';
 
 export interface VideoComposition {
   id: string;

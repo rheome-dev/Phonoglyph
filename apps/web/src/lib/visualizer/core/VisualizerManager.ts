@@ -274,11 +274,6 @@ export class VisualizerManager {
       (effect as any).connectionLines.visible = true;
     }
     
-    // Handle MidiHudEffect (has 'hudGroup')
-    if ('hudGroup' in effect && (effect as any).hudGroup) {
-      (effect as any).hudGroup.visible = true;
-    }
-    
     // Handle TestCubeEffect (has 'mesh' property)
     if ('mesh' in effect && (effect as any).mesh) {
       (effect as any).mesh.visible = true;
@@ -308,11 +303,6 @@ export class VisualizerManager {
     }
     if ('connectionLines' in effect && (effect as any).connectionLines) {
       (effect as any).connectionLines.visible = false;
-    }
-    
-    // Handle MidiHudEffect (has 'hudGroup')
-    if ('hudGroup' in effect && (effect as any).hudGroup) {
-      (effect as any).hudGroup.visible = false;
     }
     
     // Handle TestCubeEffect (has 'mesh' property)

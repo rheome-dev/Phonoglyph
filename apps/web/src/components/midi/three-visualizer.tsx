@@ -8,7 +8,6 @@ import { Play, Pause, Settings, Maximize, Download } from 'lucide-react';
 import { cn, debugLog } from '@/lib/utils';
 import { VisualizerManager } from '@/lib/visualizer/core/VisualizerManager';
 import { MetaballsEffect } from '@/lib/visualizer/effects/MetaballsEffect';
-import { MidiHudEffect } from '@/lib/visualizer/effects/MidiHudEffect';
 import { ParticleNetworkEffect } from '@/lib/visualizer/effects/ParticleNetworkEffect';
 import { MIDIData, VisualizationSettings } from '@/types/midi';
 import { VisualizerConfig, LiveMIDIData, AudioAnalysisData, VisualEffect } from '@/types/visualizer';
@@ -160,11 +159,9 @@ export function ThreeVisualizer({
       
       // Add all available effects to the visualizer
       const metaballs = new MetaballsEffect();
-      const hud = new MidiHudEffect();
       const particles = new ParticleNetworkEffect();
       
       internalVisualizerRef.current.addEffect(metaballs);
-      internalVisualizerRef.current.addEffect(hud);
       internalVisualizerRef.current.addEffect(particles);
       
       debugLog.log('🎨 Effects added to visualizer');

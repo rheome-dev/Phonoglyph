@@ -254,37 +254,88 @@ exports.midiRouter = (0, trpc_1.router)({
         limit: zod_1.z.number().min(1).max(50).default(20),
         offset: zod_1.z.number().min(0).default(0),
         status: zod_1.z.enum(['all', 'completed', 'failed', 'pending']).default('all'),
+        projectId: zod_1.z.string().optional(), // NEW: Filter by project
     }))
         .query(async ({ ctx, input }) => {
         const userId = ctx.user.id;
         try {
-            let query = ctx.supabase
-                .from('midi_files')
-                .select('*')
-                .eq('user_id', userId)
-                .order('created_at', { ascending: false })
-                .range(input.offset, input.offset + input.limit - 1);
-            if (input.status !== 'all') {
-                query = query.eq('parsing_status', input.status);
-            }
-            const { data: midiFiles, error } = await query;
-            if (error) {
-                // If the table doesn't exist yet, return empty result instead of error
-                if (error.code === '42P01') { // Table doesn't exist
-                    console.log('MIDI files table does not exist yet, returning empty result');
+            let midiFiles;
+            if (input.projectId) {
+                // When filtering by project, first get file_metadata for the project
+                const { data: fileMetadata, error: fileError } = await ctx.supabase
+                    .from('file_metadata')
+                    .select('s3_key')
+                    .eq('user_id', userId)
+                    .eq('project_id', input.projectId)
+                    .eq('file_type', 'midi');
+                if (fileError) {
+                    console.error('Database error fetching file metadata:', fileError);
+                    throw new server_1.TRPCError({
+                        code: 'INTERNAL_SERVER_ERROR',
+                        message: 'Failed to fetch project files',
+                    });
+                }
+                if (!fileMetadata || fileMetadata.length === 0) {
+                    // No files in this project
                     return {
                         files: [],
                         hasMore: false,
                     };
                 }
-                console.error('Database error fetching MIDI files:', error);
-                throw new server_1.TRPCError({
-                    code: 'INTERNAL_SERVER_ERROR',
-                    message: 'Failed to fetch MIDI files',
-                });
+                // Get the s3_keys for files in this project
+                const s3Keys = fileMetadata.map((f) => f.s3_key);
+                // Now query midi_files for those s3_keys
+                let query = ctx.supabase
+                    .from('midi_files')
+                    .select('*')
+                    .eq('user_id', userId)
+                    .in('file_key', s3Keys)
+                    .order('created_at', { ascending: false })
+                    .range(input.offset, input.offset + input.limit - 1);
+                if (input.status !== 'all') {
+                    query = query.eq('parsing_status', input.status);
+                }
+                const { data, error } = await query;
+                midiFiles = data;
+                if (error) {
+                    console.error('Database error fetching MIDI files:', error);
+                    throw new server_1.TRPCError({
+                        code: 'INTERNAL_SERVER_ERROR',
+                        message: 'Failed to fetch MIDI files',
+                    });
+                }
+            }
+            else {
+                // Standard query without project filtering
+                let query = ctx.supabase
+                    .from('midi_files')
+                    .select('*')
+                    .eq('user_id', userId)
+                    .order('created_at', { ascending: false })
+                    .range(input.offset, input.offset + input.limit - 1);
+                if (input.status !== 'all') {
+                    query = query.eq('parsing_status', input.status);
+                }
+                const { data, error } = await query;
+                midiFiles = data;
+                if (error) {
+                    // If the table doesn't exist yet, return empty result instead of error
+                    if (error.code === '42P01') { // Table doesn't exist
+                        console.log('MIDI files table does not exist yet, returning empty result');
+                        return {
+                            files: [],
+                            hasMore: false,
+                        };
+                    }
+                    console.error('Database error fetching MIDI files:', error);
+                    throw new server_1.TRPCError({
+                        code: 'INTERNAL_SERVER_ERROR',
+                        message: 'Failed to fetch MIDI files',
+                    });
+                }
             }
             return {
-                files: midiFiles.map((file) => ({
+                files: (midiFiles || []).map((file) => ({
                     id: file.id,
                     fileName: file.original_filename,
                     fileSize: file.file_size,

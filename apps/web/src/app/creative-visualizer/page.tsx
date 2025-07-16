@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, Suspense } from 'react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -34,6 +34,9 @@ import type { Layer } from '@/types/video-composition';
 import { useFeatureValue } from '@/hooks/use-feature-value';
 import { HudOverlayProvider, useHudOverlayContext } from '@/components/hud/HudOverlayManager';
 
+// Derived boolean: are stem URLs ready?
+// const stemUrlsReady = Object.keys(asyncStemUrlMap).length > 0; // This line was moved
+
 // Wrapper component that provides HUD overlay functionality to the sidebar
 const EffectsLibrarySidebarWithHud: React.FC<{
   effects: any[];
@@ -41,7 +44,8 @@ const EffectsLibrarySidebarWithHud: React.FC<{
   onEffectToggle: (effectId: string) => void;
   onEffectDoubleClick: (effectId: string) => void;
   isVisible: boolean;
-}> = ({ effects, selectedEffects, onEffectToggle, onEffectDoubleClick, isVisible }) => {
+  stemUrlsReady: boolean;
+}> = ({ effects, selectedEffects, onEffectToggle, onEffectDoubleClick, isVisible, stemUrlsReady }) => {
   const [isClient, setIsClient] = useState(false);
   
   useEffect(() => {
@@ -51,6 +55,10 @@ const EffectsLibrarySidebarWithHud: React.FC<{
   const hudContext = useHudOverlayContext();
   
   const handleEffectDoubleClick = (effectId: string) => {
+    if (!stemUrlsReady) {
+      console.warn('[EffectsLibrarySidebarWithHud] Overlay creation blocked: stem URLs not ready');
+      return;
+    }
     const effect = effects.find(e => e.id === effectId);
     if (effect && effect.category === 'Overlays' && isClient) {
       // Map effect ID to overlay type
@@ -184,7 +192,7 @@ const transformBackendToFrontendMidiData = (backendData: any): MIDIData => {
   };
 };
 
-export default function CreativeVisualizerPage() {
+function CreativeVisualizerPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isClient, setIsClient] = useState(false);
@@ -676,6 +684,30 @@ export default function CreativeVisualizerPage() {
       id: 'midiMeter', 
       name: 'MIDI Activity Meter', 
       description: 'Real-time MIDI note and velocity visualization',
+      category: 'Overlays',
+      rarity: 'Common',
+      parameters: {}
+    },
+    { 
+      id: 'vuMeter', 
+      name: 'VU Meter', 
+      description: 'Classic VU meter with needle and bar styles',
+      category: 'Overlays',
+      rarity: 'Common',
+      parameters: {}
+    },
+    { 
+      id: 'chromaWheel', 
+      name: 'Chroma Wheel', 
+      description: '12-note chroma wheel for pitch class visualization',
+      category: 'Overlays',
+      rarity: 'Rare',
+      parameters: {}
+    },
+    { 
+      id: 'consoleFeed', 
+      name: 'Data Feed', 
+      description: 'Live data feed for MIDI, LUFS, FFT, and more',
       category: 'Overlays',
       rarity: 'Common',
       parameters: {}
@@ -1279,13 +1311,50 @@ export default function CreativeVisualizerPage() {
   // In the render, use the sorted stems
   const sortedAvailableStems = sortStemsWithMasterLast(availableStems);
 
+  // Log projectFiles.files before building stemUrlMap
+  useEffect(() => {
+    console.log('[CreativeVisualizerPage] projectFiles.files:', projectFiles?.files);
+  }, [projectFiles?.files]);
+
+  // State for asynchronously built stemUrlMap
+  const [asyncStemUrlMap, setAsyncStemUrlMap] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    async function fetchUrls() {
+      if (!projectFiles?.files) return;
+      const audioFiles = projectFiles.files.filter(f => f.file_type === 'audio' && f.upload_status === 'completed');
+      const entries = await Promise.all(audioFiles.map(async f => {
+        let url = f.downloadUrl;
+        if (!url && getDownloadUrlMutation) {
+          try {
+            const result = await getDownloadUrlMutation.mutateAsync({ fileId: f.id });
+            url = result.downloadUrl;
+          } catch (err) {
+            console.error('[CreativeVisualizerPage] Failed to fetch downloadUrl for', f.id, err);
+          }
+        }
+        return [f.id, url];
+      }));
+      const map = Object.fromEntries(entries.filter(([id, url]) => !!url));
+      setAsyncStemUrlMap(map);
+      if (Object.keys(map).length > 0) {
+        console.log('[CreativeVisualizerPage] asyncStemUrlMap populated:', map);
+      } else {
+        console.log('[CreativeVisualizerPage] asyncStemUrlMap is empty');
+      }
+    }
+    fetchUrls();
+  }, [projectFiles?.files]);
+
+  const stemUrlsReady = Object.keys(asyncStemUrlMap).length > 0;
+
   // Don't render anything until we're on the client side
-  if (!isClient) {
-    return (
+  if (!isClient || !stemUrlsReady) {
+  return (
       <div className="flex h-screen bg-stone-800 text-white items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-4"></div>
-          <div className="text-sm text-stone-300">Loading...</div>
+          <div className="text-sm text-stone-300">Loading overlays...</div>
         </div>
       </div>
     );
@@ -1295,6 +1364,7 @@ export default function CreativeVisualizerPage() {
     <HudOverlayProvider 
       cachedAnalysis={cachedStemAnalysis.cachedAnalysis}
       stemAudio={stemAudio}
+      stemUrlMap={asyncStemUrlMap}
     >
       {showPicker && (
         <ProjectPickerModal
@@ -1399,14 +1469,14 @@ export default function CreativeVisualizerPage() {
                   {/* Stats Section - Compact layout */}
                   <div className="flex items-center gap-1 overflow-hidden">
                 <div className="text-xs font-mono uppercase tracking-wider px-2 py-1 rounded text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                  {currentTime.toFixed(1)}S / {getCurrentDuration().toFixed(1)}S
+                  <span className="font-creative-mono">{currentTime.toFixed(1)}</span><span className="font-creative-mono">S</span> / <span className="font-creative-mono">{getCurrentDuration().toFixed(1)}</span><span className="font-creative-mono">S</span>
                 </div>
                 <div className="text-xs font-mono uppercase tracking-wider px-2 py-1 rounded text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                  FPS: {fps}
+                  FPS: <span className="font-creative-mono">{fps}</span>
                 </div>
                 {stemAudio.performanceMetrics && (
                   <div className="text-xs font-mono uppercase tracking-wider px-2 py-1 rounded text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                    LAT: {(stemAudio.getAudioLatency ? (stemAudio.getAudioLatency() * 1000).toFixed(1) : '0.0')}ms
+                    LAT: <span className="font-creative-mono">{(stemAudio.getAudioLatency ? (stemAudio.getAudioLatency() * 1000).toFixed(1) : '0.0')}</span><span className="font-creative-mono">MS</span>
                   </div>
                 )}
                 {stemAudio.deviceProfile && (
@@ -1415,11 +1485,11 @@ export default function CreativeVisualizerPage() {
                   </div>
                 )}
                 <div className="text-xs font-mono uppercase tracking-wider px-2 py-1 rounded text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                  NOTES: {(midiData || sampleMidiData).tracks.reduce((sum, track) => sum + track.notes.length, 0)}
+                  NOTES: <span className="font-creative-mono">{(midiData || sampleMidiData).tracks.reduce((sum, track) => sum + track.notes.length, 0)}</span>
                 </div>
                 {hasStems && (
                   <div className="text-xs font-mono uppercase tracking-wider px-2 py-1 rounded text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                    STEMS: {availableStems.length}
+                    STEMS: <span className="font-creative-mono">{availableStems.length}</span>
                   </div>
                 )}
                 
@@ -1579,6 +1649,7 @@ export default function CreativeVisualizerPage() {
                 onEffectToggle={handleSelectEffect}
                 onEffectDoubleClick={handleEffectDoubleClick}
                 isVisible={true}
+                stemUrlsReady={stemUrlsReady}
               />
             </CollapsibleEffectsSidebar>
 
@@ -1588,5 +1659,13 @@ export default function CreativeVisualizerPage() {
       </div>
       </DndProvider>
     </HudOverlayProvider>
+  );
+}
+
+export default function CreativeVisualizerPageWithSuspense() {
+  return (
+    <Suspense>
+      <CreativeVisualizerPage />
+    </Suspense>
   );
 }

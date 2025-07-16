@@ -23,39 +23,91 @@ const OVERLAY_SETTINGS: Record<string, OverlaySetting[]> = {
   waveform: [
     { label: 'Color', key: 'color', type: 'color' },
     { label: 'Line Width', key: 'lineWidth', type: 'number' },
+    { label: 'Corner Radius', key: 'cornerRadius', type: 'number', min: 0, max: 50, step: 1 },
+    { label: 'Drop Shadow', key: 'dropShadow', type: 'checkbox' },
+    { label: 'Shadow Color', key: 'shadowColor', type: 'color' },
+    { label: 'Shadow Blur', key: 'shadowBlur', type: 'number', min: 0, max: 50, step: 1 },
+    { label: 'Outline', key: 'outline', type: 'checkbox' },
+    { label: 'Outline Color', key: 'outlineColor', type: 'color' },
+    { label: 'Outline Width', key: 'outlineWidth', type: 'number', min: 1, max: 10, step: 1 },
   ],
   spectrogram: [
     { label: 'Color Map', key: 'colorMap', type: 'select', options: ['Classic', 'Inferno', 'Viridis', 'Rainbow'] },
+    { label: 'Show Frequency Labels', key: 'showFrequencyLabels', type: 'checkbox' },
     { label: 'Brightness', key: 'brightness', type: 'number', min: 0, max: 2, step: 0.01 },
     { label: 'Contrast', key: 'contrast', type: 'number', min: 0, max: 2, step: 0.01 },
     { label: 'Scroll Speed', key: 'scrollSpeed', type: 'number', min: 0.1, max: 5, step: 0.1 },
     { label: 'FFT Size', key: 'fftSize', type: 'number', min: 256, max: 4096, step: 256 },
+    { label: 'Corner Radius', key: 'cornerRadius', type: 'number', min: 0, max: 50, step: 1 },
+    { label: 'Drop Shadow', key: 'dropShadow', type: 'checkbox' },
+    { label: 'Shadow Color', key: 'shadowColor', type: 'color' },
+    { label: 'Shadow Blur', key: 'shadowBlur', type: 'number', min: 0, max: 50, step: 1 },
+    { label: 'Outline', key: 'outline', type: 'checkbox' },
+    { label: 'Outline Color', key: 'outlineColor', type: 'color' },
+    { label: 'Outline Width', key: 'outlineWidth', type: 'number', min: 1, max: 10, step: 1 },
   ],
   peakMeter: [
     { label: 'Peak Color', key: 'peakColor', type: 'color' },
     { label: 'Hold Time (ms)', key: 'holdTime', type: 'number' },
+    { label: 'Corner Radius', key: 'cornerRadius', type: 'number', min: 0, max: 50, step: 1 },
+    { label: 'Drop Shadow', key: 'dropShadow', type: 'checkbox' },
+    { label: 'Shadow Color', key: 'shadowColor', type: 'color' },
+    { label: 'Shadow Blur', key: 'shadowBlur', type: 'number', min: 0, max: 50, step: 1 },
+    { label: 'Outline', key: 'outline', type: 'checkbox' },
+    { label: 'Outline Color', key: 'outlineColor', type: 'color' },
+    { label: 'Outline Width', key: 'outlineWidth', type: 'number', min: 1, max: 10, step: 1 },
   ],
   stereometer: [
     { label: 'Trace Color', key: 'traceColor', type: 'color' },
     { label: 'Glow Intensity', key: 'glowIntensity', type: 'number', min: 0, max: 1, step: 0.01 },
     { label: 'Point Size', key: 'pointSize', type: 'number', min: 1, max: 10, step: 1 },
     { label: 'Show Grid', key: 'showGrid', type: 'checkbox' },
+    { label: 'Corner Radius', key: 'cornerRadius', type: 'number', min: 0, max: 50, step: 1 },
+    { label: 'Drop Shadow', key: 'dropShadow', type: 'checkbox' },
+    { label: 'Shadow Color', key: 'shadowColor', type: 'color' },
+    { label: 'Shadow Blur', key: 'shadowBlur', type: 'number', min: 0, max: 50, step: 1 },
+    { label: 'Outline', key: 'outline', type: 'checkbox' },
+    { label: 'Outline Color', key: 'outlineColor', type: 'color' },
+    { label: 'Outline Width', key: 'outlineWidth', type: 'number', min: 1, max: 10, step: 1 },
   ],
   oscilloscope: [
     { label: 'Follow Pitch', key: 'followPitch', type: 'checkbox' },
     { label: 'Color', key: 'color', type: 'color' },
     { label: 'Glow Intensity', key: 'glowIntensity', type: 'slider' },
     { label: 'Amplitude', key: 'amplitude', type: 'slider' },
+    { label: 'Trace Width', key: 'traceWidth', type: 'slider', min: 0.5, max: 2, step: 0.1 },
     { label: 'Show Grid', key: 'showGrid', type: 'checkbox' },
     { label: 'Grid Color', key: 'gridColor', type: 'color' },
+    { label: 'Corner Radius', key: 'cornerRadius', type: 'number', min: 0, max: 50, step: 1 },
+    { label: 'Drop Shadow', key: 'dropShadow', type: 'checkbox' },
+    { label: 'Shadow Color', key: 'shadowColor', type: 'color' },
+    { label: 'Shadow Blur', key: 'shadowBlur', type: 'number', min: 0, max: 50, step: 1 },
+    { label: 'Outline', key: 'outline', type: 'checkbox' },
+    { label: 'Outline Color', key: 'outlineColor', type: 'color' },
+    { label: 'Outline Width', key: 'outlineWidth', type: 'number', min: 1, max: 10, step: 1 },
   ],
   spectrumAnalyzer: [
     { label: 'Bar Color', key: 'barColor', type: 'color' },
+    { label: 'Show Frequency Labels', key: 'showFrequencyLabels', type: 'checkbox' },
     { label: 'FFT Size', key: 'fftSize', type: 'number' },
+    { label: 'Corner Radius', key: 'cornerRadius', type: 'number', min: 0, max: 50, step: 1 },
+    { label: 'Drop Shadow', key: 'dropShadow', type: 'checkbox' },
+    { label: 'Shadow Color', key: 'shadowColor', type: 'color' },
+    { label: 'Shadow Blur', key: 'shadowBlur', type: 'number', min: 0, max: 50, step: 1 },
+    { label: 'Outline', key: 'outline', type: 'checkbox' },
+    { label: 'Outline Color', key: 'outlineColor', type: 'color' },
+    { label: 'Outline Width', key: 'outlineWidth', type: 'number', min: 1, max: 10, step: 1 },
   ],
   midiMeter: [
     { label: 'Show Note Names', key: 'showNoteNames', type: 'checkbox' },
     { label: 'Color', key: 'color', type: 'color' },
+    { label: 'Corner Radius', key: 'cornerRadius', type: 'number', min: 0, max: 50, step: 1 },
+    { label: 'Drop Shadow', key: 'dropShadow', type: 'checkbox' },
+    { label: 'Shadow Color', key: 'shadowColor', type: 'color' },
+    { label: 'Shadow Blur', key: 'shadowBlur', type: 'number', min: 0, max: 50, step: 1 },
+    { label: 'Outline', key: 'outline', type: 'checkbox' },
+    { label: 'Outline Color', key: 'outlineColor', type: 'color' },
+    { label: 'Outline Width', key: 'outlineWidth', type: 'number', min: 1, max: 10, step: 1 },
   ],
   consoleFeed: [
     { label: 'Data Source', key: 'dataSource', type: 'select', options: ['MIDI', 'LUFS/RMS', 'FFT Summary', 'All'] },
@@ -64,17 +116,38 @@ const OVERLAY_SETTINGS: Record<string, OverlaySetting[]> = {
     { label: 'Max Lines', key: 'maxLines', type: 'number', min: 10, max: 100, step: 1 },
     { label: 'Scroll Speed', key: 'scrollSpeed', type: 'number', min: 0.1, max: 5, step: 0.1 },
     { label: 'Glassmorphism Background', key: 'glassmorphism', type: 'checkbox' },
+    { label: 'Corner Radius', key: 'cornerRadius', type: 'number', min: 0, max: 50, step: 1 },
+    { label: 'Drop Shadow', key: 'dropShadow', type: 'checkbox' },
+    { label: 'Shadow Color', key: 'shadowColor', type: 'color' },
+    { label: 'Shadow Blur', key: 'shadowBlur', type: 'number', min: 0, max: 50, step: 1 },
+    { label: 'Outline', key: 'outline', type: 'checkbox' },
+    { label: 'Outline Color', key: 'outlineColor', type: 'color' },
+    { label: 'Outline Width', key: 'outlineWidth', type: 'number', min: 1, max: 10, step: 1 },
   ],
   vuMeter: [
     { label: 'Color', key: 'color', type: 'color' },
     { label: 'Style', key: 'style', type: 'select', options: ['Needle', 'Bar'] },
     { label: 'Meter Type', key: 'meterType', type: 'select', options: ['RMS', 'Peak'] },
     { label: 'Glassmorphism Background', key: 'glassmorphism', type: 'checkbox' },
+    { label: 'Corner Radius', key: 'cornerRadius', type: 'number', min: 0, max: 50, step: 1 },
+    { label: 'Drop Shadow', key: 'dropShadow', type: 'checkbox' },
+    { label: 'Shadow Color', key: 'shadowColor', type: 'color' },
+    { label: 'Shadow Blur', key: 'shadowBlur', type: 'number', min: 0, max: 50, step: 1 },
+    { label: 'Outline', key: 'outline', type: 'checkbox' },
+    { label: 'Outline Color', key: 'outlineColor', type: 'color' },
+    { label: 'Outline Width', key: 'outlineWidth', type: 'number', min: 1, max: 10, step: 1 },
   ],
   chromaWheel: [
     { label: 'Color Scheme', key: 'colorScheme', type: 'select', options: ['Classic', 'Rainbow', 'Viridis', 'Inferno'] },
     { label: 'Show Note Names', key: 'showNoteNames', type: 'checkbox' },
     { label: 'Glassmorphism Background', key: 'glassmorphism', type: 'checkbox' },
+    { label: 'Corner Radius', key: 'cornerRadius', type: 'number', min: 0, max: 50, step: 1 },
+    { label: 'Drop Shadow', key: 'dropShadow', type: 'checkbox' },
+    { label: 'Shadow Color', key: 'shadowColor', type: 'color' },
+    { label: 'Shadow Blur', key: 'shadowBlur', type: 'number', min: 0, max: 50, step: 1 },
+    { label: 'Outline', key: 'outline', type: 'checkbox' },
+    { label: 'Outline Color', key: 'outlineColor', type: 'color' },
+    { label: 'Outline Width', key: 'outlineWidth', type: 'number', min: 1, max: 10, step: 1 },
   ],
 };
 
@@ -223,12 +296,31 @@ export function HudOverlayParameterModal({ overlay, onClose, onUpdate }: any) {
                   {setting.type === 'color' && (
                     <input 
                       type="color" 
-                      value={settings[setting.key] ?? (setting.key === 'gridColor' ? '#333333' : '#00ffff')} 
+                      value={settings[setting.key] ?? (
+                        setting.key === 'gridColor' ? '#333333' : 
+                        setting.key === 'shadowColor' ? '#000000' :
+                        setting.key === 'outlineColor' ? '#ffffff' :
+                        '#00ffff'
+                      )} 
                       onChange={e => handleSettingChange(setting.key, e.target.value)} 
                     />
                   )}
-                  {setting.type === 'number' && (
-
+                  {setting.type === 'number' && (setting.key === 'cornerRadius' || setting.key === 'shadowBlur' || setting.key === 'outlineWidth') && (
+                    <div className="flex-1">
+                      <Slider
+                        value={[settings[setting.key] ?? (setting.key === 'cornerRadius' ? 8 : setting.key === 'shadowBlur' ? 8 : 1)]}
+                        onValueChange={([value]) => handleSettingChange(setting.key, value)}
+                        min={setting.min || 0}
+                        max={setting.max || 50}
+                        step={setting.step || 1}
+                        className="w-full"
+                      />
+                      <div className="text-xs text-white/60 mt-1">
+                        {settings[setting.key] ?? (setting.key === 'cornerRadius' ? 8 : setting.key === 'shadowBlur' ? 8 : 1)}
+                      </div>
+                    </div>
+                  )}
+                  {setting.type === 'number' && !(setting.key === 'cornerRadius' || setting.key === 'shadowBlur' || setting.key === 'outlineWidth') && (
                     <input 
                       type="number" 
                       value={settings[setting.key] ?? ''} 
@@ -239,15 +331,15 @@ export function HudOverlayParameterModal({ overlay, onClose, onUpdate }: any) {
                   {setting.type === 'slider' && (
                     <div className="flex-1">
                       <Slider
-                        value={[settings[setting.key] ?? (setting.key === 'glowIntensity' ? 0 : setting.key === 'amplitude' ? 1 : 0)]}
+                        value={[settings[setting.key] ?? (setting.key === 'glowIntensity' ? 0 : setting.key === 'amplitude' ? 1 : setting.key === 'traceWidth' ? 2 : 0)]}
                         onValueChange={([value]) => handleSettingChange(setting.key, value)}
-                        min={setting.key === 'amplitude' ? 0.1 : 0}
-                        max={setting.key === 'amplitude' ? 2 : 5}
-                        step={setting.key === 'amplitude' ? 0.01 : 0.1}
+                        min={setting.key === 'amplitude' ? 0.1 : setting.key === 'traceWidth' ? 0.5 : 0}
+                        max={setting.key === 'amplitude' ? 2 : setting.key === 'traceWidth' ? 2 : 5}
+                        step={setting.key === 'amplitude' ? 0.01 : setting.key === 'traceWidth' ? 0.1 : 0.1}
                         className="w-full"
                       />
                       <div className="text-xs text-white/60 mt-1">
-                        {settings[setting.key] ?? (setting.key === 'glowIntensity' ? 0 : setting.key === 'amplitude' ? 1 : 0)}
+                        {settings[setting.key] ?? (setting.key === 'glowIntensity' ? 0 : setting.key === 'amplitude' ? 1 : setting.key === 'traceWidth' ? 2 : 0)}
                       </div>
                     </div>
                   )}

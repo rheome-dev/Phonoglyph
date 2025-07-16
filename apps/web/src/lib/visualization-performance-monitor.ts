@@ -1,10 +1,15 @@
 // Visualization Performance Monitor for Story 5.3: Stem-based Visualization Control
 // Real-time performance tracking and optimization recommendations
 
-import { VisualizationMetrics, VisualizationConfig } from '@/types/stem-visualization';
-
 // Extended performance metrics for visualization
-export interface ExtendedVisualizationMetrics extends VisualizationMetrics {
+export interface ExtendedVisualizationMetrics {
+  frameRate: number;
+  memoryUsage: number;
+  lastUpdateLatency: number;
+  parameterUpdatesPerSecond: number;
+  gpuMemoryUsage: number;
+  renderTime: number;
+  mappingComputeTime: number;
   // GPU metrics
   gpuUtilization: number;
   renderCallsPerFrame: number;
@@ -396,12 +401,12 @@ export class VisualizationPerformanceMonitor {
     const metrics: ExtendedVisualizationMetrics = {
       // Basic metrics
       frameRate,
-      parameterUpdatesPerSecond: 0, // Will be set by visualization controller
       memoryUsage: memory.used,
-      gpuMemoryUsage: gpu.memory,
-      renderTime: this.renderStartTime > 0 ? now - this.renderStartTime : 0,
-      mappingComputeTime: 0, // Will be set by visualization controller
       lastUpdateLatency: this.updateStartTime > 0 ? now - this.updateStartTime : 0,
+      parameterUpdatesPerSecond: 0, // Will be set by visualization controller
+      gpuMemoryUsage: 0, // Will be set by GPU metrics
+      renderTime: 0, // Will be set by render timing
+      mappingComputeTime: 0, // Will be set by mapping compute time
       
       // Extended metrics
       gpuUtilization: gpu.utilization,

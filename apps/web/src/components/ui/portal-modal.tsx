@@ -98,7 +98,7 @@ export function PortalModal({
         setTimeout(() => {
           if (container && container.childNodes.length === 0 && container.parentNode) {
             try {
-              document.body.removeChild(container);
+        document.body.removeChild(container);
             } catch (error) {
               // Container might have already been removed, ignore the error
               console.warn('Portal container cleanup error:', error);

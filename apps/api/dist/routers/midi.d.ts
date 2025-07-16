@@ -157,11 +157,13 @@ export declare const midiRouter: import("@trpc/server").CreateRouterInner<import
             status?: "completed" | "failed" | "all" | "pending" | undefined;
             limit?: number | undefined;
             offset?: number | undefined;
+            projectId?: string | undefined;
         };
         _input_out: {
             status: "completed" | "failed" | "all" | "pending";
             limit: number;
             offset: number;
+            projectId?: string | undefined;
         };
         _output_in: typeof import("@trpc/server").unsetMarker;
         _output_out: typeof import("@trpc/server").unsetMarker;

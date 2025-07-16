@@ -8,9 +8,8 @@ const server_1 = require("@trpc/server");
 const createProjectSchema = zod_1.z.object({
     name: zod_1.z.string().min(1, 'Project name is required').max(100, 'Project name too long'),
     description: zod_1.z.string().max(500, 'Description too long').optional(),
-    genre: zod_1.z.string().max(50, 'Genre too long').optional(),
     privacy_setting: zod_1.z.enum(['private', 'unlisted', 'public']).default('private'),
-    midi_file_path: zod_1.z.string().min(1, 'MIDI file path is required'),
+    midi_file_path: zod_1.z.string().optional(),
     audio_file_path: zod_1.z.string().optional(),
     user_video_path: zod_1.z.string().optional(),
     render_configuration: zod_1.z.record(zod_1.z.any()).default({}),
@@ -19,7 +18,6 @@ const updateProjectSchema = zod_1.z.object({
     id: zod_1.z.string().min(1, 'Project ID is required'),
     name: zod_1.z.string().min(1, 'Project name is required').max(100, 'Project name too long').optional(),
     description: zod_1.z.string().max(500, 'Description too long').optional(),
-    genre: zod_1.z.string().max(50, 'Genre too long').optional(),
     privacy_setting: zod_1.z.enum(['private', 'unlisted', 'public']).optional(),
     thumbnail_url: zod_1.z.string().url('Invalid thumbnail URL').optional(),
     primary_midi_file_id: zod_1.z.string().uuid('Invalid file ID').optional(),
@@ -33,7 +31,6 @@ const projectIdSchema = zod_1.z.object({
 // Additional validation schemas for new endpoints
 const projectSearchSchema = zod_1.z.object({
     query: zod_1.z.string().optional(),
-    genre: zod_1.z.string().optional(),
     privacy_setting: zod_1.z.enum(['private', 'unlisted', 'public']).optional(),
     sort_by: zod_1.z.enum(['created_at', 'updated_at', 'name']).default('created_at'),
     sort_order: zod_1.z.enum(['asc', 'desc']).default('desc'),
@@ -71,15 +68,7 @@ exports.projectRouter = (0, trpc_1.router)({
             // RLS automatically filters projects based on user access
             const { data: projects, error } = await ctx.supabase
                 .from('projects')
-                .select(`
-            *,
-            project_collaborators (
-              id,
-              user_id,
-              role,
-              created_at
-            )
-          `)
+                .select('*')
                 .order('created_at', { ascending: false });
             if (error) {
                 console.error('Database error fetching projects:', error);
@@ -113,15 +102,7 @@ exports.projectRouter = (0, trpc_1.router)({
             // RLS automatically filters based on user access
             const { data: project, error } = await ctx.supabase
                 .from('projects')
-                .select(`
-            *,
-            project_collaborators (
-              id,
-              user_id,
-              role,
-              created_at
-            )
-          `)
+                .select('*')
                 .eq('id', input.id)
                 .single();
             if (error) {
@@ -168,7 +149,6 @@ exports.projectRouter = (0, trpc_1.router)({
                 id: projectId,
                 name: input.name,
                 description: input.description,
-                genre: input.genre,
                 privacy_setting: input.privacy_setting,
                 user_id: ctx.user.id,
                 midi_file_path: input.midi_file_path,
@@ -255,6 +235,50 @@ exports.projectRouter = (0, trpc_1.router)({
         .input(projectIdSchema)
         .mutation(async ({ input, ctx }) => {
         try {
+            // Step 1: Fetch all file metadata associated with the project
+            const { data: files, error: filesError } = await ctx.supabase
+                .from('file_metadata')
+                .select('id, s3_key')
+                .eq('project_id', input.id);
+            if (filesError) {
+                console.error('Database error fetching project files:', filesError);
+                throw new server_1.TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to fetch project files for deletion.',
+                });
+            }
+            // Step 2: If files exist, delete them from storage
+            if (files && files.length > 0) {
+                const filePaths = files.map((f) => f.s3_key).filter((p) => !!p);
+                if (filePaths.length > 0) {
+                    const { error: storageError } = await ctx.supabase.storage
+                        .from('assets')
+                        .remove(filePaths);
+                    if (storageError) {
+                        console.error('Storage error deleting project files:', storageError);
+                        throw new server_1.TRPCError({
+                            code: 'INTERNAL_SERVER_ERROR',
+                            message: 'Failed to delete project assets from storage.',
+                        });
+                    }
+                }
+                // Step 3: Delete the file metadata records
+                const fileIds = files.map((f) => f.id);
+                const { error: deleteMetaError } = await ctx.supabase
+                    .from('file_metadata')
+                    .delete()
+                    .in('id', fileIds);
+                if (deleteMetaError) {
+                    console.error('Database error deleting file metadata:', deleteMetaError);
+                    // Note: at this point, files might be deleted from storage but not DB.
+                    // This is a situation that may require a cleanup job.
+                    throw new server_1.TRPCError({
+                        code: 'INTERNAL_SERVER_ERROR',
+                        message: 'Failed to clean up project file metadata.',
+                    });
+                }
+            }
+            // Step 4: Delete the project itself
             const { data: project, error } = await ctx.supabase
                 .from('projects')
                 .delete()
@@ -312,9 +336,6 @@ exports.projectRouter = (0, trpc_1.router)({
             // Apply filters
             if (input.query) {
                 query = query.ilike('name', `%${input.query}%`);
-            }
-            if (input.genre) {
-                query = query.eq('genre', input.genre);
             }
             if (input.privacy_setting) {
                 query = query.eq('privacy_setting', input.privacy_setting);
@@ -375,7 +396,6 @@ exports.projectRouter = (0, trpc_1.router)({
                 id: newProjectId,
                 name: input.new_name,
                 description: originalProject.description,
-                genre: originalProject.genre,
                 privacy_setting: 'private', // Always start as private
                 user_id: ctx.user.id,
                 midi_file_path: originalProject.midi_file_path,

@@ -7,7 +7,7 @@ import type { Layer } from '@/types/video-composition';
 import { StemWaveform, WaveformData } from '@/components/stem-visualization/stem-waveform';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { HudOverlayManager, HudOverlayConfig, useHudOverlayContext } from '@/components/hud/HudOverlayManager';
+import { HudOverlayProvider, HudOverlayConfig, useHudOverlayContext } from '@/components/hud/HudOverlayManager';
 
 interface EffectClip {
   id: string;
@@ -287,12 +287,12 @@ const StemTrack: React.FC<StemTrackProps> = ({
 
   return (
     <div
-      ref={drag}
+      ref={drag as unknown as React.Ref<HTMLDivElement>}
       className={cn(
         "flex items-center group bg-stone-900/50 cursor-pointer transition-all border-l-4",
         isActive ? "border-emerald-400 bg-emerald-900/30" : "border-transparent hover:bg-stone-800/40"
       )}
-      style={{ opacity: isDragging ? 0.5 : 1 }}
+      style={{ opacity: isDragging ? 0.5 : 1, height: '32px', minHeight: '32px' }}
       onClick={onClick}
     >
       <div className="w-56 px-3 py-2 flex items-center justify-between gap-2 border-r border-stone-700/50 flex-shrink-0">
@@ -413,7 +413,7 @@ const OverlayLane: React.FC = () => {
     },
   });
   return (
-    <div ref={drop} style={{
+    <div ref={drop as unknown as React.Ref<HTMLDivElement>} style={{
       display: 'flex',
       alignItems: 'center',
       minHeight: 72,

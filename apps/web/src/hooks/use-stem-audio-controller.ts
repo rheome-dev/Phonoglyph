@@ -2,7 +2,6 @@ import { useRef, useState, useCallback, useEffect } from 'react';
 import { PerformanceMonitor } from '@/lib/performance-monitor';
 import { DeviceOptimizer } from '@/lib/device-optimizer';
 import { FallbackSystem } from '@/lib/fallback-system';
-import { VisualizationFeaturePipeline } from '@/lib/visualization-feature-pipeline';
 import { StemAnalysis, AudioFeature, PerformanceMetrics } from '@/types/stem-audio-analysis';
 import { AudioAnalysisData } from '@/types/visualizer';
 
@@ -43,6 +42,7 @@ interface UseStemAudioController {
   getAudioContextTime: () => number;
   scheduledStartTimeRef: React.MutableRefObject<number>;
   duration: number;
+  getStereoWindow: (stemId: string, windowSize: number) => { left: number[], right: number[] } | null;
 }
 
 export function useStemAudioController(): UseStemAudioController {
@@ -254,8 +254,8 @@ export function useStemAudioController(): UseStemAudioController {
         }
       }
 
-      // Store all decoded buffers
-      audioBuffersRef.current = decodedBuffers;
+      // Store all decoded buffers (MERGE instead of replace)
+      audioBuffersRef.current = { ...audioBuffersRef.current, ...decodedBuffers };
       setStemsLoaded(true);
       loadingRef.current = false;
       // REMOVED VERBOSE LOGGING
@@ -641,6 +641,40 @@ export function useStemAudioController(): UseStemAudioController {
     return audioContextRef.current ? audioContextRef.current.currentTime : 0;
   }, []);
 
+  // Helper: Get a real-time stereo window for a stem
+  const getStereoWindow = useCallback((stemId: string, windowSize: number = 1024) => {
+    const buffer = audioBuffersRef.current[stemId];
+    if (!buffer) {
+      console.warn('[getStereoWindow] No buffer for stemId', stemId, 'Available buffers:', Object.keys(audioBuffersRef.current));
+      return null;
+    }
+    const numChannels = buffer.numberOfChannels;
+    const currentSample = Math.floor((audioContextRef.current?.currentTime || 0 - startTimeRef.current) * buffer.sampleRate);
+    const start = Math.max(0, currentSample - windowSize);
+    const end = Math.min(buffer.length, currentSample);
+    let left: number[] = [];
+    let right: number[] = [];
+    try {
+      if (numChannels === 1) {
+        const channel = buffer.getChannelData(0).slice(start, end);
+        left = Array.from(channel);
+        right = Array.from(channel);
+      } else {
+        left = Array.from(buffer.getChannelData(0).slice(start, end));
+        right = Array.from(buffer.getChannelData(1).slice(start, end));
+      }
+    } catch (err) {
+      console.error('[getStereoWindow] Error accessing buffer:', err, { stemId, buffer });
+      return null;
+    }
+    // Pad if needed
+    if (left.length < windowSize) {
+      left = Array(windowSize - left.length).fill(0).concat(left);
+      right = Array(windowSize - right.length).fill(0).concat(right);
+    }
+    return { left, right };
+  }, []);
+
   return {
     play,
     pause,
@@ -673,6 +707,7 @@ export function useStemAudioController(): UseStemAudioController {
     getAudioContextTime, // <-- add this
     scheduledStartTimeRef, // <-- expose for mapping loop
     duration: getMasterDuration(), // <-- expose duration
+    getStereoWindow, // <-- expose real-time stereo window
   };
 }
 

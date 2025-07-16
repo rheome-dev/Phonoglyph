@@ -26,7 +26,6 @@ export interface Project {
     user_video_path?: string;
     render_configuration: Record<string, any>;
     description?: string;
-    genre?: string;
     privacy_setting: 'private' | 'unlisted' | 'public';
     thumbnail_url?: string;
     primary_midi_file_id?: string;

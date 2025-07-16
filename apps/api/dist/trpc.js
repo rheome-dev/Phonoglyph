@@ -5,18 +5,19 @@ const server_1 = require("@trpc/server");
 const supabase_1 = require("./lib/supabase");
 const auth_1 = require("./types/auth");
 const guest_1 = require("./types/guest");
+const logger_1 = require("./lib/logger");
 // Create tRPC context with Supabase authentication and guest support for Express
 const createTRPCContext = async (opts) => {
     const { req, res } = opts;
     // Debug all headers
-    console.log('🔍 Backend - All headers:', req.headers);
-    console.log('🔍 Backend - Authorization header:', req.headers.authorization);
-    console.log('🔍 Backend - Content-Type header:', req.headers['content-type']);
+    logger_1.logger.debug('Backend - All headers:', req.headers);
+    logger_1.logger.debug('Backend - Authorization header:', req.headers.authorization);
+    logger_1.logger.debug('Backend - Content-Type header:', req.headers['content-type']);
     // Extract authorization header
     const authHeader = req.headers.authorization;
     const accessToken = authHeader?.replace('Bearer ', '');
-    console.log('🔐 Backend - Auth header present:', !!authHeader);
-    console.log('🔐 Backend - Access token present:', !!accessToken);
+    logger_1.logger.auth('Backend - Auth header present:', !!authHeader);
+    logger_1.logger.auth('Backend - Access token present:', !!accessToken);
     // Create Supabase client with user session
     const supabase = (0, supabase_1.createSupabaseServerClient)(accessToken);
     let user = null;
@@ -26,7 +27,7 @@ const createTRPCContext = async (opts) => {
     if (accessToken) {
         try {
             const { data: { user: supabaseUser }, error } = await supabase.auth.getUser(accessToken);
-            console.log('🔐 Backend - Supabase user lookup result:', { user: !!supabaseUser, error: !!error });
+            logger_1.logger.auth('Backend - Supabase user lookup result:', { user: !!supabaseUser, error: !!error });
             if (!error && supabaseUser) {
                 user = (0, auth_1.transformSupabaseUser)(supabaseUser);
                 // For server-side, we create a session object from the user data
@@ -36,11 +37,11 @@ const createTRPCContext = async (opts) => {
                     access_token: accessToken,
                     // Add other session properties as needed
                 };
-                console.log('🔐 Backend - User authenticated:', user.email);
+                logger_1.logger.auth('Backend - User authenticated:', user.email);
             }
         }
         catch (error) {
-            console.error('Error retrieving user session:', error);
+            logger_1.logger.error('Error retrieving user session:', error);
         }
     }
     // If no authenticated user, check for guest session
@@ -49,10 +50,10 @@ const createTRPCContext = async (opts) => {
         if (guestSession && (0, guest_1.isValidGuestSession)(guestSession.sessionId)) {
             user = (0, guest_1.createGuestUserFromSession)(guestSession.sessionId);
             isGuest = true;
-            console.log('🔐 Backend - Guest user created');
+            logger_1.logger.auth('Backend - Guest user created');
         }
     }
-    console.log('🔐 Backend - Final context:', {
+    logger_1.logger.auth('Backend - Final context:', {
         hasUser: !!user,
         hasSession: !!session,
         isGuest

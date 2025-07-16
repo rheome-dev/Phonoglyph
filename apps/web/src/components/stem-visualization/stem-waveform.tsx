@@ -82,7 +82,7 @@ const WaveformVisualizer: React.FC<StemWaveformProps> = ({
     // Draw bipolar waveform
     ctx.beginPath();
     const midY = height / 2;
-    ctx.strokeStyle = '#4db3fa'; // blue
+    ctx.strokeStyle = '#ffffff'; // white
     ctx.lineWidth = 1;
 
     for (let i = 0; i < numPoints; i++) {
@@ -105,7 +105,7 @@ const WaveformVisualizer: React.FC<StemWaveformProps> = ({
   
   if (isLoading) {
     return (
-      <div className="h-[50px] flex items-center justify-center bg-stone-800/20">
+      <div className="h-[32px] flex items-center justify-center bg-stone-800/20">
         <p className="text-xs text-stone-400">Analyzing...</p>
       </div>
     );
@@ -113,7 +113,7 @@ const WaveformVisualizer: React.FC<StemWaveformProps> = ({
 
   if (!waveformData) {
     return (
-      <div className="h-[50px] flex items-center justify-center bg-stone-800/20">
+      <div className="h-[32px] flex items-center justify-center bg-stone-800/20">
         <p className="text-xs text-stone-500">No analysis data available</p>
       </div>
     );
@@ -124,7 +124,7 @@ const WaveformVisualizer: React.FC<StemWaveformProps> = ({
   return (
     <div 
       ref={containerRef}
-      className="relative h-[50px] w-full cursor-pointer"
+      className="relative h-[32px] w-full cursor-pointer"
       onClick={handleSeek}
     >
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />

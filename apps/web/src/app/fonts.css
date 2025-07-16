@@ -1,0 +1,22 @@
+/* Custom Fonts for Creative Visualizer */
+
+/* 
+  To use your downloaded Google Font:
+  1. Place your font files in /public/fonts/
+  2. Update the font-family name below
+  3. Update the src URLs to match your font file names
+  4. Uncomment and customize the @font-face declarations
+*/
+
+/* Doto Font - Custom monospace font for creative visualizer */
+@font-face {
+  font-family: 'Doto';
+  src: url('/fonts/Doto-Thin.woff2') format('woff2'),
+       url('/fonts/Doto-Thin.woff') format('woff'),
+       url('/fonts/Doto-Thin.ttf') format('truetype');
+  font-weight: 100;
+  font-style: normal;
+  font-display: swap;
+}
+
+ 

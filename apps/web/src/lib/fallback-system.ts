@@ -419,8 +419,8 @@ export class FallbackSystem {
     }
     
     return {
-      frequencies,
-      timeData,
+      frequencies: Array.from(frequencies),
+      timeData: Array.from(timeData),
       volume: 0.5,
       bass: 0.4,
       mid: 0.6,

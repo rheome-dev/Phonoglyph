@@ -9,6 +9,7 @@ const user_1 = require("./user");
 const project_1 = require("./project");
 const file_1 = require("./file");
 const midi_1 = require("./midi");
+const stem_1 = require("./stem");
 exports.appRouter = (0, trpc_1.router)({
     health: health_1.healthRouter,
     auth: auth_1.authRouter,
@@ -17,5 +18,6 @@ exports.appRouter = (0, trpc_1.router)({
     project: project_1.projectRouter,
     file: file_1.fileRouter,
     midi: midi_1.midiRouter,
+    stem: stem_1.stemRouter,
 });
 //# sourceMappingURL=index.js.map

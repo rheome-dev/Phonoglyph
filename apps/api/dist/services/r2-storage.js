@@ -17,7 +17,7 @@ const r2Config = {
 };
 exports.r2Client = new client_s3_1.S3Client(r2Config);
 exports.s3Client = exports.r2Client;
-exports.BUCKET_NAME = process.env.CLOUDFLARE_R2_BUCKET || 'midiviz-uploads';
+exports.BUCKET_NAME = process.env.CLOUDFLARE_R2_BUCKET || 'phonoglyph-uploads';
 // Validate required environment variables
 function validateR2Config() {
     const required = ['CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_R2_ACCESS_KEY_ID', 'CLOUDFLARE_R2_SECRET_ACCESS_KEY', 'CLOUDFLARE_R2_BUCKET'];
