@@ -421,6 +421,9 @@ function CreativeVisualizerPage() {
             console.log('Found audio files, preparing to load:', audioFiles.map(f => f.file_name));
             console.log('Master stem info:', audioFiles.map(f => ({ name: f.file_name, is_master: f.is_master })));
             
+            // Debug: Log file structure to see what fields are available
+            console.log('Audio file structure sample:', audioFiles[0]);
+            
             // Sort so master is last
             const sortedAudioFiles = sortStemsWithMasterLast(audioFiles.map(f => ({
               ...f,
@@ -429,6 +432,13 @@ function CreativeVisualizerPage() {
 
             const stemsToLoad = await Promise.all(
               sortedAudioFiles.map(async file => {
+                // Debug: Check if file.id exists
+                if (!file.id) {
+                  console.error('File missing ID:', file);
+                  throw new Error(`File missing ID: ${file.file_name}`);
+                }
+                
+                console.log('Getting download URL for file:', { id: file.id, name: file.file_name });
                 const result = await getDownloadUrlMutation.mutateAsync({ fileId: file.id });
                 return {
                   id: file.id,
@@ -1323,10 +1333,22 @@ function CreativeVisualizerPage() {
     async function fetchUrls() {
       if (!projectFiles?.files) return;
       const audioFiles = projectFiles.files.filter(f => f.file_type === 'audio' && f.upload_status === 'completed');
+      
+      // Debug: Log file structure
+      console.log('fetchUrls - projectFiles.files:', projectFiles.files);
+      console.log('fetchUrls - audioFiles:', audioFiles);
+      
       const entries = await Promise.all(audioFiles.map(async f => {
         let url = f.downloadUrl;
         if (!url && getDownloadUrlMutation) {
           try {
+            // Debug: Check if f.id exists
+            if (!f.id) {
+              console.error('fetchUrls - File missing ID:', f);
+              return [f.id, null];
+            }
+            
+            console.log('fetchUrls - Getting download URL for file:', { id: f.id, name: f.file_name });
             const result = await getDownloadUrlMutation.mutateAsync({ fileId: f.id });
             url = result.downloadUrl;
           } catch (err) {
