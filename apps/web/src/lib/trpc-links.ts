@@ -1,7 +1,7 @@
 import { httpLink, TRPCLink } from '@trpc/client';
 import type { AppRouter } from '../../../api/src/routers';
 import { supabase } from './supabase';
-import { observable } from '@trpc/server/observable';
+import { observable } from '@trpc/client/observable';
 import { guestUserService } from './guest-user';
 
 // Global session cache to avoid multiple calls
