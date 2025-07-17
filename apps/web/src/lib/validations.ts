@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { createProjectSchema, updateProjectSchema, type CreateProjectInput, type UpdateProjectInput } from "@phonoglyph/types"
+import { createProjectSchema, updateProjectSchema, type CreateProjectInput, type UpdateProjectInput } from "phonoglyph-types"
 
 export const loginSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
