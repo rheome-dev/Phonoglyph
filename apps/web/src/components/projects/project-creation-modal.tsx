@@ -425,11 +425,10 @@ export function ProjectCreationModal({ isOpen, onClose, defaultMidiFilePath }: P
       setIsLoading(true)
       console.log('Form submission data:', data)
       
-      // Create project with only the fields the backend expects
+      // TEMPORARY: Test with minimal hardcoded payload
       const projectData = {
-        name: data.name,
-        description: data.description,
-        privacy_setting: data.privacy_setting,
+        name: "Test Project",
+        privacy_setting: "private",
         render_configuration: {}
       };
       
