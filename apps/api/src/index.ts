@@ -4,7 +4,8 @@ import path from 'path';
 // Load environment variables from the root .env file
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
-import express, { Request, Response, NextFunction } from 'express'
+import express from 'express'
+import type { Request, Response, NextFunction } from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
 import * as trpcExpress from '@trpc/server/adapters/express'

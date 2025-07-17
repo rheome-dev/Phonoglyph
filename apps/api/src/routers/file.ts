@@ -178,7 +178,7 @@ export const fileRouter = router({
           ContentType: input.mimeType,
         })
 
-        await r2Client.send(command)
+        await (r2Client as any).send(command)
 
         // Create file metadata record
         const { data, error: dbError } = await ctx.supabase

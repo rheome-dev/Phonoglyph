@@ -289,7 +289,7 @@ export class AssetManager {
       })
     }
 
-    return (data || []).map(folder => ({
+    return (data || []).map((folder: any) => ({
       id: folder.id,
       projectId: folder.project_id,
       name: folder.name,
@@ -343,7 +343,7 @@ export class AssetManager {
       })
     }
 
-    return (data || []).map(tag => ({
+    return (data || []).map((tag: any) => ({
       id: tag.id,
       projectId: tag.project_id,
       name: tag.name,
@@ -405,7 +405,7 @@ export class AssetManager {
     }
 
     // Then get the actual tag data
-    const tagIds = relationships.map(rel => rel.tag_id)
+    const tagIds = relationships.map((rel: any) => rel.tag_id)
     const { data: tags, error: tagError } = await this.supabase
       .from('asset_tags')
       .select('*')
@@ -420,7 +420,7 @@ export class AssetManager {
       })
     }
 
-    return (tags || []).map(tag => ({
+    return (tags || []).map((tag: any) => ({
       id: tag.id,
       projectId: tag.project_id,
       name: tag.name,

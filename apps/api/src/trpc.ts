@@ -38,7 +38,7 @@ export const createTRPCContext = async (opts: CreateExpressContextOptions) => {
   // Try to get authenticated user session first
   if (accessToken) {
     try {
-      const { data: { user: supabaseUser }, error } = await supabase.auth.getUser(accessToken)
+      const { data: { user: supabaseUser }, error } = await supabase.auth.getUser()
       
       logger.auth('Backend - Supabase user lookup result:', { user: !!supabaseUser, error: !!error })
       
