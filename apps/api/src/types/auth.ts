@@ -1,4 +1,14 @@
-import type { User as SupabaseUser } from '@supabase/supabase-js'
+// Define our own Supabase User interface to avoid import issues
+interface SupabaseUser {
+  id: string
+  email?: string
+  user_metadata?: {
+    name?: string
+    avatar_url?: string
+  }
+  created_at?: string
+  updated_at?: string
+}
 
 export interface User {
   id: string
