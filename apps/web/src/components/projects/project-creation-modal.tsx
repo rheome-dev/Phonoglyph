@@ -432,7 +432,13 @@ export function ProjectCreationModal({ isOpen, onClose, defaultMidiFilePath }: P
         render_configuration: {}
       };
       
-      console.log('Creating project with data:', projectData);
+      // Debug: Log the exact payload being sent
+      console.log('=== DEBUG PROJECT CREATION ===');
+      console.log('projectData to send:', JSON.stringify(projectData, null, 2));
+      console.log('projectData.name:', projectData.name);
+      console.log('projectData.name type:', typeof projectData.name);
+      console.log('=== END DEBUG ===');
+      
       const project = await createProjectMutation.mutateAsync(projectData as CreateProjectInput)
       console.log('Project created:', project.id)
       
