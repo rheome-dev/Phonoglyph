@@ -21,7 +21,7 @@ app.use(helmet())
 
 // Debug middleware to log all requests
 app.use((req: any, res: any, next: any) => {
-  // console.log(`🌐 ${req.method} ${req.path} - Origin: ${req.headers.origin} - Auth: ${req.headers.authorization ? 'present' : 'missing'}`);
+  console.log(`🌐 ${req.method} ${req.path} - Origin: ${req.headers.origin} - Auth: ${req.headers.authorization ? 'present' : 'missing'}`);
   next();
 });
 
@@ -83,10 +83,22 @@ app.use('/api/trpc', trpcExpress.createExpressMiddleware({
 
 // Health check endpoint
 app.get('/health', (req: any, res: any) => {
+  console.log('🏥 Health check requested');
   res.status(200).json({ 
     status: 'healthy', 
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development'
+  })
+})
+
+// Test endpoint for debugging
+app.post('/test', (req: any, res: any) => {
+  console.log('🧪 Test endpoint hit');
+  console.log('Request body:', JSON.stringify(req.body, null, 2));
+  res.status(200).json({ 
+    message: 'Test endpoint working',
+    receivedBody: req.body,
+    timestamp: new Date().toISOString()
   })
 })
 
