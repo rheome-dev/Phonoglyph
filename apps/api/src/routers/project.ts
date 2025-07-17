@@ -135,6 +135,12 @@ export const projectRouter = router({
     .input(createProjectSchema)
     .mutation(async ({ input, ctx }) => {
       try {
+        console.log('=== API DEBUG PROJECT CREATION ===');
+        console.log('Raw input received:', JSON.stringify(input, null, 2));
+        console.log('input.name:', input.name);
+        console.log('input.name type:', typeof input.name);
+        console.log('=== END API DEBUG ===');
+        
         const projectId = `proj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
         const { data: project, error } = await ctx.supabase
