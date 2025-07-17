@@ -19,6 +19,28 @@ const PORT = process.env.PORT || 3001
 // Security middleware
 app.use(helmet())
 
+// Content-Type normalization middleware (before body parsing)
+app.use((req: any, res: any, next: any) => {
+  if (req.headers['content-type'] && req.headers['content-type'].includes('application/json, application/json')) {
+    console.log('🔧 Normalizing duplicate Content-Type header');
+    req.headers['content-type'] = 'application/json';
+  }
+  next();
+});
+
+// Raw body logging middleware (before body parsing)
+app.use((req: any, res: any, next: any) => {
+  if (req.path.startsWith('/api/trpc') && req.method === 'POST') {
+    console.log('=== RAW REQUEST BEFORE PARSING ===');
+    console.log('Content-Type:', req.headers['content-type']);
+    console.log('Content-Length:', req.headers['content-length']);
+    console.log('Raw body available:', !!req.body);
+    console.log('Body before parsing:', req.body);
+    console.log('=== END RAW REQUEST BEFORE PARSING ===');
+  }
+  next();
+});
+
 // Debug middleware to log all requests
 app.use((req: any, res: any, next: any) => {
   console.log(`🌐 ${req.method} ${req.path} - Origin: ${req.headers.origin} - Auth: ${req.headers.authorization ? 'present' : 'missing'}`);
@@ -45,10 +67,9 @@ const corsOptions = {
   origin: process.env.NODE_ENV === 'production'
     ? [
         ...allowedOrigins,
-        // Add common Vercel frontend URLs as fallbacks
-        'https://*.vercel.app',
-        'https://*.phonoglyph.com',
-        'https://*.yourdomain.com'
+        // Add specific Vercel frontend URLs as fallbacks
+        'https://phonoglyph.rheome.tools',
+        'https://phonoglyph.vercel.app'
       ]
     : ['http://localhost:3000', 'http://127.0.0.1:3000'], // Allow specific origins in development
   credentials: true,
