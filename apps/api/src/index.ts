@@ -5,7 +5,6 @@ import path from 'path';
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
 import express from 'express'
-import type { Request, Response, NextFunction } from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
 import * as trpcExpress from '@trpc/server/adapters/express'
@@ -21,7 +20,7 @@ const PORT = process.env.PORT || 3001
 app.use(helmet())
 
 // Debug middleware to log all requests
-app.use((req: Request, res: Response, next: NextFunction) => {
+app.use((req: any, res: any, next: any) => {
   // console.log(`🌐 ${req.method} ${req.path} - Origin: ${req.headers.origin} - Auth: ${req.headers.authorization ? 'present' : 'missing'}`);
   next();
 });
@@ -59,7 +58,7 @@ app.use('/api/trpc', trpcExpress.createExpressMiddleware({
 }))
 
 // Health check endpoint
-app.get('/health', (req: Request, res: Response) => {
+app.get('/health', (req: any, res: any) => {
   res.status(200).json({ 
     status: 'healthy', 
     timestamp: new Date().toISOString(),
@@ -68,7 +67,7 @@ app.get('/health', (req: Request, res: Response) => {
 })
 
 // Basic route
-app.get('/', (req: Request, res: Response) => {
+app.get('/', (req: any, res: any) => {
   res.json({ message: 'Phonoglyph API Server is running! 🎵' })
 })
 

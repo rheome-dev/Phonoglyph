@@ -43,17 +43,18 @@ export const createTRPCContext = async (opts: CreateExpressContextOptions) => {
       let error: any = null;
       
       try {
-        const result = await supabase.auth.getUser();
-        supabaseUser = result.data.user;
-        error = result.error;
-      } catch (authError) {
-        // Fallback: try to get user from session
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
+        // Use type assertion to access auth methods
+        const authClient = supabase.auth as any;
+        if (authClient.getUser) {
+          const result = await authClient.getUser();
+          supabaseUser = result.data?.user;
+          error = result.error;
+        } else if (authClient.getSession) {
+          const { data: { session } } = await authClient.getSession();
           supabaseUser = session?.user || null;
-        } catch (sessionError) {
-          error = sessionError;
         }
+      } catch (authError) {
+        error = authError;
       }
       
       logger.auth('Backend - Supabase user lookup result:', { user: !!supabaseUser, error: !!error })
