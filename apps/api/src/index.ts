@@ -57,10 +57,28 @@ app.options('*', cors(corsOptions))
 app.use(express.json({ limit: '600mb' }))
 app.use(express.urlencoded({ extended: true, limit: '600mb' }))
 
+// Debug middleware to log request bodies
+app.use('/api/trpc', (req: any, res: any, next: any) => {
+  console.log('=== REQUEST BODY DEBUG ===');
+  console.log('Method:', req.method);
+  console.log('Path:', req.path);
+  console.log('Content-Type:', req.headers['content-type']);
+  console.log('Body:', JSON.stringify(req.body, null, 2));
+  console.log('=== END REQUEST BODY DEBUG ===');
+  next();
+});
+
 // tRPC API routes with Supabase authentication context
 app.use('/api/trpc', trpcExpress.createExpressMiddleware({
   router: appRouter,
   createContext: createTRPCContext,
+  onError: ({ error, req }) => {
+    console.log('=== tRPC ERROR DEBUG ===');
+    console.log('Error:', error);
+    console.log('Request body:', req.body);
+    console.log('Request headers:', req.headers);
+    console.log('=== END tRPC ERROR DEBUG ===');
+  },
 }))
 
 // Health check endpoint
