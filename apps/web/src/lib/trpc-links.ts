@@ -54,9 +54,7 @@ const authLink: TRPCLink<AppRouter> = () => {
           }
           
           // Create headers object
-          const headers: Record<string, string> = {
-            'Content-Type': 'application/json',
-          };
+          const headers: Record<string, string> = {};
           
           // Add Authorization header if session exists
           if (session?.access_token) {
