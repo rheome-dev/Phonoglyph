@@ -75,8 +75,8 @@ app.use('/api/trpc', trpcExpress.createExpressMiddleware({
   onError: ({ error, req }) => {
     console.log('=== tRPC ERROR DEBUG ===');
     console.log('Error:', error);
-    console.log('Request body:', req.body);
-    console.log('Request headers:', req.headers);
+    console.log('Request body:', (req as any).body);
+    console.log('Request headers:', (req as any).headers);
     console.log('=== END tRPC ERROR DEBUG ===');
   },
 }))
