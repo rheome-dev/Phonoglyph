@@ -1,7 +1,6 @@
 {
   "name": "phonoglyph-types",
-  "version": "0.1.0",
-  "private": false,
+  "version": "0.1.3",
   "main": "index.ts",
   "types": "index.ts",
   "scripts": {
