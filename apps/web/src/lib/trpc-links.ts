@@ -109,8 +109,14 @@ console.log('🔧 tRPC API URL Debug:', {
   envVar: process.env.NEXT_PUBLIC_API_URL,
   apiUrl,
   isClient: typeof window !== 'undefined',
-  finalUrl: `${apiUrl}/api/trpc`
+  finalUrl: `${apiUrl}/api/trpc`,
+  environment: process.env.NODE_ENV
 });
+
+// Validate API URL
+if (!apiUrl && typeof window !== 'undefined') {
+  console.error('❌ NEXT_PUBLIC_API_URL is not set! This will cause API calls to fail.');
+}
 
 export const trpcLinks = [
   authLink,

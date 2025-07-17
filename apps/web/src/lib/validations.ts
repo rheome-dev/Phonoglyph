@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { createProjectSchema, updateProjectSchema, type CreateProjectInput, type UpdateProjectInput } from "@phonoglyph/types"
 
 export const loginSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -27,27 +28,11 @@ export const updatePasswordSchema = z.object({
   path: ["confirmPassword"],
 })
 
-// Project schemas
-export const createProjectSchema = z.object({
-  name: z.string().min(1, "Project name is required").max(100, "Project name too long"),
-  description: z.string().max(500, "Description too long").optional(),
-  privacy_setting: z.enum(['private', 'unlisted', 'public']).default('private'),
-  midi_file_path: z.string().optional(),
-  audio_file_path: z.string().optional(),
-  user_video_path: z.string().optional(),
-  render_configuration: z.record(z.any()).default({}),
-})
-
-export const updateProjectSchema = z.object({
-  name: z.string().min(1, "Project name is required").max(100, "Project name too long").optional(),
-  description: z.string().max(500, "Description too long").optional(),
-  privacy_setting: z.enum(['private', 'unlisted', 'public']).optional(),
-  thumbnail_url: z.string().url("Invalid thumbnail URL").optional(),
-})
+// Re-export shared schemas
+export { createProjectSchema, updateProjectSchema }
 
 export type LoginInput = z.infer<typeof loginSchema>
 export type SignupInput = z.infer<typeof signupSchema>
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>
 export type UpdatePasswordInput = z.infer<typeof updatePasswordSchema>
-export type CreateProjectInput = z.infer<typeof createProjectSchema>
-export type UpdateProjectInput = z.infer<typeof updateProjectSchema> 
+export type { CreateProjectInput, UpdateProjectInput } 

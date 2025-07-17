@@ -2,29 +2,9 @@ import { z } from 'zod';
 import { router, protectedProcedure, flexibleProcedure } from '../trpc';
 import { TRPCError } from '@trpc/server';
 import type { Project, ProjectCollaborator, ProjectWithCollaborators, ProjectShare } from '../types/auth';
+import { createProjectSchema, updateProjectSchema } from '@phonoglyph/types';
 
-// Input validation schemas
-const createProjectSchema = z.object({
-  name: z.string().min(1, 'Project name is required').max(100, 'Project name too long'),
-  description: z.string().max(500, 'Description too long').optional(),
-  privacy_setting: z.enum(['private', 'unlisted', 'public']).default('private'),
-  midi_file_path: z.string().optional(),
-  audio_file_path: z.string().optional(),
-  user_video_path: z.string().optional(),
-  render_configuration: z.record(z.any()).default({}),
-});
-
-const updateProjectSchema = z.object({
-  id: z.string().min(1, 'Project ID is required'),
-  name: z.string().min(1, 'Project name is required').max(100, 'Project name too long').optional(),
-  description: z.string().max(500, 'Description too long').optional(),
-  privacy_setting: z.enum(['private', 'unlisted', 'public']).optional(),
-  thumbnail_url: z.string().url('Invalid thumbnail URL').optional(),
-  primary_midi_file_id: z.string().uuid('Invalid file ID').optional(),
-  audio_file_path: z.string().optional(),
-  user_video_path: z.string().optional(),
-  render_configuration: z.record(z.any()).optional(),
-});
+// Additional validation schemas for new endpoints
 
 const projectIdSchema = z.object({
   id: z.string().min(1, 'Project ID is required'),

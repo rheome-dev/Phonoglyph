@@ -32,11 +32,17 @@ const allowedOrigins = process.env.FRONTEND_URL
 
 const corsOptions = {
   origin: process.env.NODE_ENV === 'production'
-    ? allowedOrigins
+    ? [
+        ...allowedOrigins,
+        // Add common Vercel frontend URLs as fallbacks
+        'https://*.vercel.app',
+        'https://*.phonoglyph.com',
+        'https://*.yourdomain.com'
+      ]
     : ['http://localhost:3000', 'http://127.0.0.1:3000'], // Allow specific origins in development
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-guest-session'],
   exposedHeaders: ['Authorization'],
   preflightContinue: false,
   optionsSuccessStatus: 204,

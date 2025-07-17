@@ -596,7 +596,7 @@ export function ProjectCreationModal({ isOpen, onClose, defaultMidiFilePath }: P
                   <p className="text-sm text-red-600 font-medium">Please fix the following errors:</p>
                   <ul className="mt-1 text-sm text-red-600 list-disc list-inside">
                     {Object.entries(errors).map(([field, error]) => (
-                      <li key={field}>{error?.message?.toString()}</li>
+                      <li key={field}>{error?.message?.toString() || 'Validation error'}</li>
                     ))}
                   </ul>
                 </div>
