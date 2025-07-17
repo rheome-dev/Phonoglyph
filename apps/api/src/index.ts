@@ -22,6 +22,17 @@ app.use(helmet())
 // Debug middleware to log all requests
 app.use((req: any, res: any, next: any) => {
   console.log(`🌐 ${req.method} ${req.path} - Origin: ${req.headers.origin} - Auth: ${req.headers.authorization ? 'present' : 'missing'}`);
+  
+  // Log raw request details for tRPC requests
+  if (req.path.startsWith('/api/trpc') && req.method === 'POST') {
+    console.log('=== RAW REQUEST DEBUG ===');
+    console.log('Content-Type:', req.headers['content-type']);
+    console.log('Raw body:', req.body);
+    console.log('Body type:', typeof req.body);
+    console.log('Body keys:', req.body ? Object.keys(req.body) : 'no body');
+    console.log('=== END RAW REQUEST DEBUG ===');
+  }
+  
   next();
 });
 
@@ -74,7 +85,9 @@ app.use('/api/trpc', trpcExpress.createExpressMiddleware({
   createContext: createTRPCContext,
   onError: ({ error, req }) => {
     console.log('=== tRPC ERROR DEBUG ===');
-    console.log('Error:', error);
+    console.log('Error code:', error.code);
+    console.log('Error message:', error.message);
+    console.log('Full error:', JSON.stringify(error, null, 2));
     console.log('Request body:', (req as any).body);
     console.log('Request headers:', (req as any).headers);
     console.log('=== END tRPC ERROR DEBUG ===');
