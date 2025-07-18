@@ -43,17 +43,28 @@ export interface MetaballConfig {
   highlightColor: [number, number, number];
 }
 
+export interface AspectRatioConfig {
+  id: string;
+  name: string;
+  width: number;
+  height: number;
+  maxWidth?: string;
+  maxHeight?: string;
+  className?: string;
+}
+
 export interface VisualizerConfig {
-  effects: VisualEffect[];
   canvas: {
     width: number;
     height: number;
-    pixelRatio: number;
+    pixelRatio?: number;
   };
-  performance: {
-    targetFPS: number;
-    adaptiveQuality: boolean;
-    maxParticles: number;
+  aspectRatio?: AspectRatioConfig;
+  effects?: VisualEffect[];
+  performance?: {
+    targetFPS?: number;
+    enableBloom?: boolean;
+    enableShadows?: boolean;
   };
   midi: {
     velocitySensitivity: number;

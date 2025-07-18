@@ -33,6 +33,8 @@ import { TestVideoComposition } from '@/components/video-composition/TestVideoCo
 import type { Layer } from '@/types/video-composition';
 import { useFeatureValue } from '@/hooks/use-feature-value';
 import { HudOverlayProvider, useHudOverlayContext } from '@/components/hud/HudOverlayManager';
+import { AspectRatioSelector } from '@/components/ui/aspect-ratio-selector';
+import { getAspectRatioConfig } from '@/lib/visualizer/aspect-ratios';
 
 // Derived boolean: are stem URLs ready?
 // const stemUrlsReady = Object.keys(asyncStemUrlMap).length > 0; // This line was moved
@@ -255,8 +257,8 @@ function CreativeVisualizerPage() {
     'particleNetwork': true
   });
 
-  // Visualizer aspect ratio toggle state
-  const [visualizerAspectRatio, setVisualizerAspectRatio] = useState<'mobile' | 'youtube'>('mobile');
+  // Visualizer aspect ratio toggle state - now using modular system
+  const [visualizerAspectRatio, setVisualizerAspectRatio] = useState<string>('mobile');
 
   // Effect parameter modal state
   const [openEffectModals, setOpenEffectModals] = useState<Record<string, boolean>>({
@@ -1546,16 +1548,11 @@ function CreativeVisualizerPage() {
               </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => setVisualizerAspectRatio(visualizerAspectRatio === 'mobile' ? 'youtube' : 'mobile')}
-                    disabled={stemLoadingState}
-                    className="bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 font-mono text-xs uppercase tracking-wider px-2 py-1"
-                    style={{ borderRadius: '6px' }}
-                  >
-                    📱 {visualizerAspectRatio === 'mobile' ? 'MOB' : 'YT'}
-                </Button>
+                <AspectRatioSelector
+                  currentAspectRatio={visualizerAspectRatio}
+                  onAspectRatioChange={setVisualizerAspectRatio}
+                  disabled={stemLoadingState}
+                />
                 <Button 
                   variant="outline" 
                   size="sm" 
@@ -1583,15 +1580,15 @@ function CreativeVisualizerPage() {
             {/* Visualizer Area - Scrollable Layout */}
             <div className="flex-1 flex flex-col overflow-hidden bg-stone-900 relative">
               <div className="flex-1 flex flex-col min-h-0 px-4 overflow-y-auto">
-                {/* Visualizer Container - Fixed height */}
+                {/* Visualizer Container - Responsive with aspect ratio */}
                 <div className="flex-shrink-0 mb-4">
                   <div 
-                    className={`relative mx-auto bg-stone-900 rounded-lg overflow-hidden shadow-lg flex items-center justify-center ${
-                      visualizerAspectRatio === 'mobile' ? 'max-w-md' : 'max-w-4xl'
-                    }`}
+                    className="relative mx-auto bg-stone-900 rounded-lg overflow-hidden shadow-lg flex items-center justify-center"
                     style={{ 
                       height: 'min(calc(100vh - 400px), 60vh)', // Reduced height to make room for stem panel
-                      minHeight: '200px'
+                      minHeight: '200px',
+                      width: '100%',
+                      maxWidth: '100%'
                     }}
                   >
                   <ThreeVisualizer

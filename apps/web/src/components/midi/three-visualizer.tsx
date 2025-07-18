@@ -10,13 +10,14 @@ import { VisualizerManager } from '@/lib/visualizer/core/VisualizerManager';
 import { MetaballsEffect } from '@/lib/visualizer/effects/MetaballsEffect';
 import { ParticleNetworkEffect } from '@/lib/visualizer/effects/ParticleNetworkEffect';
 import { MIDIData, VisualizationSettings } from '@/types/midi';
-import { VisualizerConfig, LiveMIDIData, AudioAnalysisData, VisualEffect } from '@/types/visualizer';
+import { VisualizerConfig, LiveMIDIData, AudioAnalysisData, VisualEffect, AspectRatioConfig } from '@/types/visualizer';
 import { PortalModal } from '@/components/ui/portal-modal';
 import { EffectCarousel } from '@/components/ui/effect-carousel';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { DroppableParameter } from '@/components/ui/droppable-parameter';
+import { getAspectRatioConfig, calculateCanvasSize } from '@/lib/visualizer/aspect-ratios';
 
 interface ThreeVisualizerProps {
   midiData: MIDIData;
@@ -29,7 +30,7 @@ interface ThreeVisualizerProps {
   className?: string;
   selectedEffects: Record<string, boolean>;
   onSelectedEffectsChange: (updater: (prev: Record<string, boolean>) => Record<string, boolean>) => void;
-  aspectRatio?: 'mobile' | 'youtube';
+  aspectRatio?: string; // Changed from 'mobile' | 'youtube' to string for modularity
   // Modal and mapping props
   openEffectModals: Record<string, boolean>;
   onCloseEffectModal: (effectId: string) => void;
@@ -39,7 +40,7 @@ interface ThreeVisualizerProps {
   onUnmapFeature: (parameterId: string) => void;
   activeSliderValues: Record<string, number>;
   setActiveSliderValues: React.Dispatch<React.SetStateAction<Record<string, number>>>;
-  visualizerRef?: React.RefObject<any>;
+  visualizerRef?: React.RefObject<VisualizerManager> | ((instance: VisualizerManager | null) => void);
 }
 
 export function ThreeVisualizer({
@@ -53,7 +54,7 @@ export function ThreeVisualizer({
   className,
   selectedEffects,
   onSelectedEffectsChange,
-  aspectRatio,
+  aspectRatio = 'mobile',
   openEffectModals,
   onCloseEffectModal,
   mappings,
@@ -67,223 +68,137 @@ export function ThreeVisualizer({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const internalVisualizerRef = useRef<VisualizerManager | null>(null);
-  
-  const [isInitialized, setIsInitialized] = useState(false);
-  
-  // Forward the ref to parent component
-  React.useImperativeHandle(externalVisualizerRef, () => {
-    console.log('🎛️ Visualizer ref requested:', {
-      hasInternalRef: !!internalVisualizerRef.current,
-      isInitialized,
-      availableEffects: internalVisualizerRef.current?.getAllEffects?.()?.map((e: any) => e.id) || []
-    });
-    return internalVisualizerRef.current;
-  }, [isInitialized]);
-  const [fps, setFPS] = useState(60);
-  const [showControls, setShowControls] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [effectsEnabled, setEffectsEnabled] = useState({
-    metaballs: false,
-    midiHud: false,
-    particleNetwork: false,
-    particles: false,
-    waveforms: false
-  });
-
-  const [availableEffects] = useState([
-    { id: 'metaballs', name: 'Metaballs Effect', description: 'Ray marching-based fluid spheres that respond to MIDI notes with organic morphing and droplet-like behavior using SDFs.' },
-    { id: 'midiHud', name: 'MIDI HUD Effect', description: 'Visual effects react to note velocity, track activity, and frequency content for dynamic color and motion responses.' },
-    { id: 'particleNetwork', name: 'Particle Network Effect', description: 'Plugin-based architecture allows infinite visual effects to be added as creative coding modules and shaders.' }
-  ]);
-
-  // Initialize Three.js visualizer
-  const initializeVisualizer = useCallback(() => {
-    if (!canvasRef.current || !containerRef.current || internalVisualizerRef.current) return;
-
-    const canvas = canvasRef.current;
-    const container = containerRef.current;
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [canvasSize, setCanvasSize] = useState({ width: 400, height: 711 });
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+  
+  // Get aspect ratio configuration
+  const aspectRatioConfig = getAspectRatioConfig(aspectRatio);
+  
+  // Resize observer for container size changes
+  useEffect(() => {
+    if (!containerRef.current) return;
     
-    // Get container dimensions
-    const containerWidth = container.clientWidth;
-    const containerHeight = container.clientHeight;
-    
-    // Set canvas dimensions based on aspect ratio preference
-    let canvasWidth, canvasHeight;
-    
-    if (aspectRatio === 'youtube') {
-      // YouTube dimensions (16:9 landscape) - fill the container width
-      canvasWidth = containerWidth;
-      canvasHeight = containerHeight;
-      // The Three.js content will render at 16:9 within this space
-    } else {
-      // Mobile dimensions (9:16 portrait) - fit portrait within container
-      const targetAspectRatio = 9 / 16;
-      canvasHeight = containerHeight;
-      canvasWidth = containerHeight * targetAspectRatio;
-      // Center horizontally if container is wider
-      if (canvasWidth > containerWidth) {
-        canvasWidth = containerWidth;
-        canvasHeight = containerWidth / targetAspectRatio;
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect;
+        setContainerSize({ width, height });
       }
-    }
+    });
     
-    const config: VisualizerConfig = {
-      effects: [],
-      canvas: {
-        width: Math.round(canvasWidth),
-        height: Math.round(canvasHeight),
-        pixelRatio: Math.min(window.devicePixelRatio, 2)
-      },
-      performance: {
-        targetFPS: 30, // Keep 30fps for performance
-        adaptiveQuality: true,
-        maxParticles: 2000 // Reduced from 5000 for better performance
-      },
-      midi: {
-        velocitySensitivity: 1.0,
-        noteTrailDuration: 2.0,
-        trackColorMapping: {}
-      }
-    };
-
-    try {
-      debugLog.log('🎬 Initializing Three.js visualizer...', { 
-        aspectRatio, 
-        containerWidth, 
-        containerHeight, 
-        canvasWidth: Math.round(canvasWidth), 
-        canvasHeight: Math.round(canvasHeight) 
-      });
-      internalVisualizerRef.current = new VisualizerManager(canvas, config);
-      debugLog.log('✅ VisualizerManager created');
-      
-      // Add all available effects to the visualizer
-      const metaballs = new MetaballsEffect();
-      const particles = new ParticleNetworkEffect();
-      
-      internalVisualizerRef.current.addEffect(metaballs);
-      internalVisualizerRef.current.addEffect(particles);
-      
-      debugLog.log('🎨 Effects added to visualizer');
-      
-      // Don't start the visualizer immediately - wait for play button
-      setIsInitialized(true);
-      debugLog.log('✅ Visualizer initialization complete');
-      console.log('🎛️ Visualizer initialized successfully:', {
-        hasRef: !!internalVisualizerRef.current,
-        availableEffects: internalVisualizerRef.current?.getAllEffects?.()?.map((e: any) => e.id) || [],
-        canvasSize: { width: canvas.width, height: canvas.height }
-      });
-
-      // Force an initial resize so the renderer matches the container dimensions
-      setTimeout(() => {
-        window.dispatchEvent(new Event('resize'));
-      }, 0);
-    } catch (error) {
-      debugLog.error('❌ Failed to initialize visualizer:', error);
-      setError(error instanceof Error ? error.message : 'Unknown error occurred');
-      
-      // Try to recover after a delay
-      setTimeout(() => {
-        debugLog.log('🔄 Attempting to recover WebGL context...');
-        setError(null);
-        // Clear existing canvas context
-        if (canvasRef.current) {
-          const gl = canvasRef.current.getContext('webgl2') || canvasRef.current.getContext('webgl');
-          if (gl && gl.getExtension('WEBGL_lose_context')) {
-            gl.getExtension('WEBGL_lose_context')?.loseContext();
-          }
-        }
-        // Try to reinitialize after clearing context
-        setTimeout(initializeVisualizer, 1000);
-      }, 2000);
-    }
-  }, [aspectRatio]);
-
-  // Convert MIDI data to live format
-  const convertToLiveMIDI = useCallback((midiData: MIDIData, currentTime: number): LiveMIDIData => {
-    const activeNotes: Array<{
-      note: number;
-      velocity: number;
-      startTime: number;
-      track: string;
-    }> = [];
-
-    // Find notes that are currently playing
-    midiData.tracks.forEach(track => {
-      track.notes.forEach(note => {
-        const noteStart = note.start;
-        const noteEnd = note.start + note.duration;
-        
-        if (currentTime >= noteStart && currentTime <= noteEnd) {
-          activeNotes.push({
-            note: note.pitch,
-            velocity: note.velocity,
-            startTime: noteStart,
-            track: track.id
-          });
-        }
-      });
-    });
-
-    const trackActivity: Record<string, boolean> = {};
-    midiData.tracks.forEach(track => {
-      trackActivity[track.id] = activeNotes.some(note => note.track === track.id);
-    });
-
-    return {
-      activeNotes,
-      currentTime,
-      tempo: 120, // Default tempo, would come from MIDI file
-      totalNotes: midiData.tracks.reduce((sum, track) => sum + track.notes.length, 0),
-      trackActivity
+    resizeObserver.observe(containerRef.current);
+    
+    return () => {
+      resizeObserver.disconnect();
     };
   }, []);
-
-  // Generate mock audio data (would come from Web Audio API in production)
-  const generateAudioData = useCallback((midiData: MIDIData, currentTime: number): AudioAnalysisData => {
-    const frequencies = new Array(256);
-    const timeData = new Array(256);
-    
-    // Calculate volume based on active notes
-    const liveMIDI = convertToLiveMIDI(midiData, currentTime);
-    const noteActivity = liveMIDI.activeNotes.length;
-    const dynamicVolume = Math.min(noteActivity / 3.0, 1.0);
-    
-    // Generate frequency data that responds to MIDI activity
-    for (let i = 0; i < 256; i++) {
-      const intensity = dynamicVolume * (0.5 + Math.sin(currentTime * 2 + i * 0.1) * 0.3);
-      frequencies[i] = intensity;
-      timeData[i] = intensity * 0.8;
-    }
-
-    return {
-      frequencies,
-      timeData,
-      volume: Math.max(0.1, dynamicVolume),
-      bass: Math.max(0.1, dynamicVolume * 0.8),
-      mid: Math.max(0.1, dynamicVolume * 0.9),
-      treble: Math.max(0.1, dynamicVolume * 0.7)
-    };
-  }, [convertToLiveMIDI]);
-
-  // Update visualizer with MIDI data and enhanced audio analysis
+  
+  // Calculate canvas size when container size or aspect ratio changes
   useEffect(() => {
-    if (!internalVisualizerRef.current || !isInitialized) return;
+    if (containerSize.width > 0 && containerSize.height > 0) {
+      const newCanvasSize = calculateCanvasSize(
+        containerSize.width,
+        containerSize.height,
+        aspectRatioConfig
+      );
+      setCanvasSize(newCanvasSize);
+    }
+  }, [containerSize, aspectRatioConfig]);
+  
+  // Update visualizer when canvas size changes
+  useEffect(() => {
+    if (internalVisualizerRef.current && canvasSize.width > 0 && canvasSize.height > 0) {
+      const visualizer = internalVisualizerRef.current;
+      
+      // Update camera aspect ratio
+      if (visualizer['camera']) {
+        visualizer['camera'].aspect = canvasSize.width / canvasSize.height;
+        visualizer['camera'].updateProjectionMatrix();
+      }
+      
+      // Update renderer size
+      if (visualizer['renderer']) {
+        visualizer['renderer'].setSize(canvasSize.width, canvasSize.height);
+      }
+      
+      // Update bloom effect if available
+      if (visualizer['bloomEffect']) {
+        visualizer['bloomEffect'].handleResize?.(canvasSize.width, canvasSize.height);
+      }
+      
+      debugLog.log('🎨 Canvas resized to:', canvasSize.width, 'x', canvasSize.height);
+    }
+  }, [canvasSize]);
 
-    const liveMIDI = convertToLiveMIDI(midiData, currentTime);
-    
-    // Fall back to generated data, as real-time analysis is now handled by the parent page
-    const audioData = generateAudioData(midiData, currentTime);
-    
-    internalVisualizerRef.current.updateMIDIData(liveMIDI);
-    internalVisualizerRef.current.updateAudioData(audioData);
-  }, [midiData, currentTime, isInitialized, generateAudioData, convertToLiveMIDI]);
+  // Initialize visualizer
+  useEffect(() => {
+    if (!canvasRef.current || isInitialized) return;
+
+    try {
+      debugLog.log('🎭 Initializing ThreeVisualizer with aspect ratio:', aspectRatio);
+      
+      const config: VisualizerConfig = {
+        canvas: {
+          width: canvasSize.width,
+          height: canvasSize.height,
+          pixelRatio: Math.min(window.devicePixelRatio, 2)
+        },
+        aspectRatio: aspectRatioConfig,
+        performance: {
+          targetFPS: 60,
+          enableBloom: true,
+          enableShadows: false
+        },
+        midi: {
+          velocitySensitivity: 1.0,
+          noteTrailDuration: 2.0,
+          trackColorMapping: {}
+        }
+      };
+
+      internalVisualizerRef.current = new VisualizerManager(canvasRef.current, config);
+      
+      // Add default effects
+      const metaballsEffect = new MetaballsEffect();
+      const particleEffect = new ParticleNetworkEffect();
+      
+      internalVisualizerRef.current.addEffect(metaballsEffect);
+      internalVisualizerRef.current.addEffect(particleEffect);
+      
+      // Enable selected effects
+      Object.entries(selectedEffects).forEach(([effectId, enabled]) => {
+        if (enabled) {
+          internalVisualizerRef.current?.enableEffect(effectId);
+        } else {
+          internalVisualizerRef.current?.disableEffect(effectId);
+        }
+      });
+
+      setIsInitialized(true);
+      debugLog.log('✅ ThreeVisualizer initialized successfully');
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      setError(errorMessage);
+      debugLog.error('❌ Failed to initialize ThreeVisualizer:', err);
+    }
+  }, [canvasSize, aspectRatioConfig]);
+
+  // Expose visualizer ref to parent
+  useEffect(() => {
+    if (externalVisualizerRef && internalVisualizerRef.current) {
+      if (typeof externalVisualizerRef === 'function') {
+        externalVisualizerRef(internalVisualizerRef.current);
+      } else if (externalVisualizerRef && 'current' in externalVisualizerRef) {
+        (externalVisualizerRef as any).current = internalVisualizerRef.current;
+      }
+    }
+  }, [externalVisualizerRef, isInitialized]);
 
   // Handle play/pause
   useEffect(() => {
     if (!internalVisualizerRef.current) return;
-
+    
     if (isPlaying) {
       internalVisualizerRef.current.play();
     } else {
@@ -291,74 +206,102 @@ export function ThreeVisualizer({
     }
   }, [isPlaying]);
 
-  // Monitor FPS (reduced frequency)
+  // Update MIDI data
   useEffect(() => {
-    if (!internalVisualizerRef.current) return;
+    if (!internalVisualizerRef.current || !midiData) return;
+    
+         const liveMidiData: LiveMIDIData = {
+       currentTime,
+       activeNotes: midiData.tracks.flatMap(track => 
+         track.notes.filter(note => 
+           note.start <= currentTime && note.start + note.duration >= currentTime
+         ).map(note => ({
+           note: note.pitch,
+           velocity: note.velocity,
+           track: track.id,
+           startTime: note.start
+         }))
+       ),
+       tempo: 120, // Default tempo
+       totalNotes: midiData.tracks.reduce((sum, track) => sum + track.notes.length, 0),
+       trackActivity: midiData.tracks.reduce((acc, track) => {
+         acc[track.id] = track.notes.filter(note => 
+           note.start <= currentTime && note.start + note.duration >= currentTime
+         ).length > 0;
+         return acc;
+       }, {} as Record<string, boolean>)
+     };
+    
+    internalVisualizerRef.current.updateMIDIData(liveMidiData);
+  }, [midiData, currentTime]);
 
+  // Update FPS
+  useEffect(() => {
+    if (!internalVisualizerRef.current || !onFpsUpdate) return;
+    
     const interval = setInterval(() => {
-              const currentFps = internalVisualizerRef.current?.getFPS() || 0;
-        setFPS(currentFps);
-        onFpsUpdate?.(currentFps);
-    }, 2000); // Reduced from 1000ms to 2000ms
-
+      const fps = internalVisualizerRef.current?.getFPS() || 60;
+      onFpsUpdate(fps);
+    }, 1000);
+    
     return () => clearInterval(interval);
-  }, [isInitialized, onFpsUpdate]);
+  }, [onFpsUpdate]);
 
-  // Initialize on mount
-  useEffect(() => {
-    const timer = setTimeout(initializeVisualizer, 100);
-    return () => clearTimeout(timer);
-  }, [initializeVisualizer]);
-
-  // Effect enabling/disabling logic
-  useEffect(() => {
+  // Handle effect parameter changes
+  const handleParameterChange = (effectId: string, paramName: string, value: any) => {
     if (!internalVisualizerRef.current) return;
     
-    const allEffects = internalVisualizerRef.current.getAllEffects();
-    debugLog.log('🎨 Effect carousel selection changed:', selectedEffects);
-    debugLog.log('🎨 Available effects:', allEffects.map((e: any) => ({ id: e.id, name: e.name, enabled: e.enabled })));
+    internalVisualizerRef.current.updateEffectParameter(effectId, paramName, value);
     
-    allEffects.forEach((effect: any) => {
-      const shouldBeEnabled = selectedEffects[effect.id];
-      debugLog.log(`🎨 Effect ${effect.id}: ${effect.enabled ? 'enabled' : 'disabled'} -> ${shouldBeEnabled ? 'enabling' : 'disabling'}`);
-      
-      if (shouldBeEnabled) {
-        internalVisualizerRef.current!.enableEffect(effect.id);
-      } else {
-        internalVisualizerRef.current!.disableEffect(effect.id);
-      }
-    });
-  }, [selectedEffects]);
-
-  const handleParameterChange = (effectId: string, paramName: string, value: any) => {
-    internalVisualizerRef.current?.updateEffectParameter(effectId, paramName, value);
-    if (typeof value === 'number') {
-      const paramKey = `${effectId}-${paramName}`;
-      setActiveSliderValues(prev => ({...prev, [paramKey]: value}));
-    }
+    // Update active slider values
+    const paramKey = `${effectId}-${paramName}`;
+    setActiveSliderValues(prev => ({ ...prev, [paramKey]: value }));
   };
 
-  const forceUpdate = useForceUpdate();
-
+  // Cleanup on unmount
   useEffect(() => {
-    const interval = setInterval(() => {
-      // Force a re-render to get the latest parameters from the visualizer effects
-      // This is a simple way to keep the UI in sync.
-      // A more complex implementation might use a dedicated event bus.
-      forceUpdate(); 
-    }, 200); // Poll every 200ms
-
-    return () => clearInterval(interval);
-  }, [forceUpdate]);
+    return () => {
+      if (internalVisualizerRef.current) {
+        internalVisualizerRef.current.dispose();
+      }
+    };
+  }, []);
 
   if (error) {
     return <ErrorDisplay message={error} />;
   }
 
   return (
-    <div className={cn("relative w-full h-full", className)} ref={containerRef}>
-      <canvas ref={canvasRef} className="absolute top-0 left-0 w-full h-full" />
-
+    <div 
+      ref={containerRef}
+      className={cn(
+        "relative w-full h-full flex items-center justify-center",
+        className
+      )}
+      style={{
+        minHeight: '200px',
+        aspectRatio: `${aspectRatioConfig.width}/${aspectRatioConfig.height}`
+      }}
+    >
+      {/* Canvas container with proper sizing */}
+      <div 
+        className="relative bg-stone-900 rounded-lg overflow-hidden shadow-lg"
+        style={{
+          width: `${canvasSize.width}px`,
+          height: `${canvasSize.height}px`,
+          maxWidth: '100%',
+          maxHeight: '100%'
+        }}
+      >
+        <canvas 
+          ref={canvasRef} 
+          className="absolute top-0 left-0 w-full h-full"
+          style={{
+            width: `${canvasSize.width}px`,
+            height: `${canvasSize.height}px`
+          }}
+        />
+        
         {/* Modals are now rendered within the full-width edit canvas */}
         {Object.entries(openEffectModals).map(([effectId, isOpen], index) => {
           if (!isOpen) return null;
@@ -476,6 +419,7 @@ export function ThreeVisualizer({
             </PortalModal>
           );
         })}
+      </div>
     </div>
   );
 }
