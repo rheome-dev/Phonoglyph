@@ -134,8 +134,8 @@ export const BoundingBoxOverlay: React.FC<BoundingBoxOverlayProps> = ({
     }
   };
 
-  // Only show if selected or hovered
-  const show = selected || hovered;
+  // Always show the bounding box for debugging
+  const show = true; // selected || hovered;
 
   return (
     <div
@@ -147,11 +147,11 @@ export const BoundingBoxOverlay: React.FC<BoundingBoxOverlayProps> = ({
         top: y,
         width,
         height,
-        pointerEvents: show ? 'auto' : 'none',
-        border: show ? '2px solid #7c3aed' : 'none',
+        border: '2px solid red', // Debug: always visible red border
+        zIndex: 1000,
+        pointerEvents: 'auto', // Ensure overlay receives pointer events
         boxSizing: 'border-box',
-        borderRadius: 6,
-        background: 'none',
+        background: show ? 'rgba(255,0,0,0.05)' : 'transparent', // subtle debug bg
         transition: 'border 0.1s',
         userSelect: 'none',
       }}
