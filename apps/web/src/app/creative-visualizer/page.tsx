@@ -251,11 +251,7 @@ function CreativeVisualizerPage() {
   const [showVideoComposition, setShowVideoComposition] = useState(false);
 
   // Effects carousel state (now for timeline-based effects)
-  const [selectedEffects, setSelectedEffects] = useState<Record<string, boolean>>({
-    'metaballs': true,
-    'midiHud': true,
-    'particleNetwork': true
-  });
+  const [selectedEffects, setSelectedEffects] = useState<Record<string, boolean>>({});
 
   // Visualizer aspect ratio toggle state - now using modular system
   const [visualizerAspectRatio, setVisualizerAspectRatio] = useState<string>('mobile');

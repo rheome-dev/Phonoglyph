@@ -163,13 +163,10 @@ export function ThreeVisualizer({
       internalVisualizerRef.current = new VisualizerManager(canvasRef.current, config);
       
       // Add default effects
-      const metaballsEffect = new MetaballsEffect();
-      const particleEffect = new ParticleNetworkEffect();
-      metaballsEffectRef.current = metaballsEffect;
-      particleEffectRef.current = particleEffect;
-      
-      internalVisualizerRef.current.addEffect(metaballsEffect);
-      internalVisualizerRef.current.addEffect(particleEffect);
+      // const metaballsEffect = new MetaballsEffect();
+      // const particleEffect = new ParticleNetworkEffect();
+      // metaballsEffectRef.current = metaballsEffect;
+      // particleEffectRef.current = particleEffect;
       
       // Enable selected effects
       Object.entries(selectedEffects).forEach(([effectId, enabled]) => {
