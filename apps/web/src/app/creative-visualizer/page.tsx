@@ -1382,8 +1382,8 @@ function CreativeVisualizerPage() {
     );
   }
 
-  // If no stems are ready, show the picker or a prompt/modal
-  if (!stemUrlsReady) {
+  // If no project is selected, show the picker
+  if (!currentProjectId && !useDemoData) {
     return (
       <>
         {showPicker && (
@@ -1403,7 +1403,7 @@ function CreativeVisualizerPage() {
         <div className="flex h-screen bg-stone-800 text-white items-center justify-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-4"></div>
-            <div className="text-sm text-stone-300">No stems found. Please create or select a project.</div>
+            <div className="text-sm text-stone-300">Please create or select a project.</div>
           </div>
         </div>
       </>
