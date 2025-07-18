@@ -390,9 +390,10 @@ export class MetaballsEffect implements VisualEffect {
       // Removed console.log to reduce console noise
     }
 
-    // Update shader resolution to match bounding box
-    if (this.uniforms.uResolution && this.boundingBox.width && this.boundingBox.height) {
-      this.uniforms.uResolution.value.set(this.boundingBox.width, this.boundingBox.height);
+    // Update shader resolution to match actual canvas size (not bounding box)
+    if (this.uniforms.uResolution && this.renderer) {
+      const size = this.renderer.getSize(new THREE.Vector2());
+      this.uniforms.uResolution.value.set(size.x, size.y);
     }
 
     // No conditional visibility logic here

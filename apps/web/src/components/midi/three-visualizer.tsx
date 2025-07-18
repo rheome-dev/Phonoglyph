@@ -412,25 +412,63 @@ export function ThreeVisualizer({
           }}
         />
         {/* Render bounding box overlays for each layer */}
-        {layers.map(layer => (
-          <BoundingBoxOverlay
-            key={layer.id}
-            x={layer.position.x}
-            y={layer.position.y}
-            width={layer.scale.x}
-            height={layer.scale.y}
-            selected={selectedLayerId === layer.id}
-            parentWidth={canvasSize.width}
-            parentHeight={canvasSize.height}
-            onChange={box => {
-              onLayerUpdate?.(layer.id, {
-                position: { x: box.x, y: box.y },
-                scale: { x: box.width, y: box.height }
-              });
-            }}
-            onSelect={() => onLayerSelect?.(layer.id)}
-          />
-        ))}
+        {layers.map(layer => {
+          // Only show bounding box for effect layers
+          if (layer.type !== 'effect') return null;
+          
+          // Convert percentage position to pixel coordinates
+          const pixelX = (layer.position.x / 100) * canvasSize.width;
+          const pixelY = (layer.position.y / 100) * canvasSize.height;
+          
+          // Convert scale to pixel dimensions (assuming a default size)
+          const defaultWidth = 200; // Default effect width in pixels
+          const defaultHeight = 150; // Default effect height in pixels
+          const pixelWidth = defaultWidth * layer.scale.x;
+          const pixelHeight = defaultHeight * layer.scale.y;
+          
+          console.log('[ThreeVisualizer] Rendering BoundingBoxOverlay for layer:', layer.id, {
+            originalPosition: layer.position,
+            originalScale: layer.scale,
+            pixelX,
+            pixelY,
+            pixelWidth,
+            pixelHeight,
+            selected: selectedLayerId === layer.id
+          });
+          
+          return (
+            <BoundingBoxOverlay
+              key={layer.id}
+              x={pixelX}
+              y={pixelY}
+              width={pixelWidth}
+              height={pixelHeight}
+              selected={selectedLayerId === layer.id}
+              parentWidth={canvasSize.width}
+              parentHeight={canvasSize.height}
+              onChange={box => {
+                console.log('[ThreeVisualizer] BoundingBoxOverlay onChange:', box);
+                // Convert pixel coordinates back to percentage
+                const newPosition = {
+                  x: (box.x / canvasSize.width) * 100,
+                  y: (box.y / canvasSize.height) * 100
+                };
+                const newScale = {
+                  x: box.width / defaultWidth,
+                  y: box.height / defaultHeight
+                };
+                onLayerUpdate?.(layer.id, {
+                  position: newPosition,
+                  scale: newScale
+                });
+              }}
+              onSelect={() => {
+                console.log('[ThreeVisualizer] BoundingBoxOverlay onSelect:', layer.id);
+                onLayerSelect?.(layer.id);
+              }}
+            />
+          );
+        })}
         {/* Show prompt if all layers are empty */}
         {allLayersEmpty && (
           <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-auto">
