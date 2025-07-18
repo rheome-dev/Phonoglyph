@@ -1596,6 +1596,9 @@ function CreativeVisualizerPage() {
                       settings={settings}
                       currentTime={currentTime}
                       isPlaying={isPlaying}
+                      layers={videoLayers}
+                      selectedLayerId={selectedLayerId}
+                      onLayerSelect={handleLayerSelect}
                       onPlayPause={handlePlayPause}
                       onSettingsChange={setSettings}
                       onFpsUpdate={setFps}

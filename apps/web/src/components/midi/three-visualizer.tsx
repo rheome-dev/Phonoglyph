@@ -137,25 +137,25 @@ export function ThreeVisualizer({
 
     try {
       debugLog.log('🎭 Initializing ThreeVisualizer with aspect ratio:', aspectRatio);
-      
-      const config: VisualizerConfig = {
-        canvas: {
+    
+    const config: VisualizerConfig = {
+      canvas: {
           width: canvasSize.width,
           height: canvasSize.height,
-          pixelRatio: Math.min(window.devicePixelRatio, 2)
-        },
+        pixelRatio: Math.min(window.devicePixelRatio, 2)
+      },
         aspectRatio: aspectRatioConfig,
-        performance: {
+      performance: {
           targetFPS: 60,
           enableBloom: true,
           enableShadows: false
-        },
-        midi: {
-          velocitySensitivity: 1.0,
-          noteTrailDuration: 2.0,
-          trackColorMapping: {}
-        }
-      };
+      },
+      midi: {
+        velocitySensitivity: 1.0,
+        noteTrailDuration: 2.0,
+        trackColorMapping: {}
+      }
+    };
 
       internalVisualizerRef.current = new VisualizerManager(canvasRef.current, config);
       
@@ -210,7 +210,7 @@ export function ThreeVisualizer({
   // Handle play/pause
   useEffect(() => {
     if (!internalVisualizerRef.current) return;
-    
+
     if (isPlaying) {
       internalVisualizerRef.current.play();
     } else {
@@ -250,12 +250,12 @@ export function ThreeVisualizer({
   // Update FPS
   useEffect(() => {
     if (!internalVisualizerRef.current || !onFpsUpdate) return;
-    
+
     const interval = setInterval(() => {
       const fps = internalVisualizerRef.current?.getFPS() || 60;
       onFpsUpdate(fps);
     }, 1000);
-    
+
     return () => clearInterval(interval);
   }, [onFpsUpdate]);
 
@@ -286,7 +286,7 @@ export function ThreeVisualizer({
     internalVisualizerRef.current.updateEffectParameter(effectId, paramName, value);
     
     // Update active slider values
-    const paramKey = `${effectId}-${paramName}`;
+      const paramKey = `${effectId}-${paramName}`;
     setActiveSliderValues(prev => ({ ...prev, [paramKey]: value }));
   };
 
