@@ -793,6 +793,7 @@ function CreativeVisualizerPage() {
   };
 
   const handleLayerUpdate = (layerId: string, updates: Partial<Layer>) => {
+    console.log('handleLayerUpdate', layerId, updates);
     setVideoLayers(prev => prev.map(layer => 
       layer.id === layerId ? { ...layer, ...updates } : layer
     ));

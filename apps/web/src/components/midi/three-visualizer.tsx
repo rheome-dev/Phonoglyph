@@ -200,7 +200,7 @@ export function ThreeVisualizer({
   useEffect(() => {
     if (!internalVisualizerRef.current) return;
     const manager = internalVisualizerRef.current;
-    console.log('[ThreeVisualizer] layers prop:', layers);
+    console.log('[ThreeVisualizer] layers prop:', layers, layers.map(l => l.type));
     const effectLayers = layers.filter(l => l.type === 'effect');
     console.log('[ThreeVisualizer] effectLayers:', effectLayers);
     const currentIds = Object.keys(effectInstancesRef.current);
