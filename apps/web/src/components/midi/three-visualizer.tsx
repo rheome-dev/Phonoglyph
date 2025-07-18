@@ -19,6 +19,7 @@ import { Switch } from '@/components/ui/switch';
 import { DroppableParameter } from '@/components/ui/droppable-parameter';
 import { getAspectRatioConfig, calculateCanvasSize } from '@/lib/visualizer/aspect-ratios';
 import { BoundingBoxOverlay } from '@/components/ui/BoundingBoxOverlay';
+import { Layer } from '@/types/video-composition';
 
 interface ThreeVisualizerProps {
   midiData: MIDIData;
@@ -42,6 +43,9 @@ interface ThreeVisualizerProps {
   activeSliderValues: Record<string, number>;
   setActiveSliderValues: React.Dispatch<React.SetStateAction<Record<string, number>>>;
   visualizerRef?: React.RefObject<VisualizerManager> | ((instance: VisualizerManager | null) => void);
+  layers: Layer[];
+  selectedLayerId?: string | null;
+  onLayerSelect?: (layerId: string) => void;
 }
 
 export function ThreeVisualizer({
@@ -64,7 +68,10 @@ export function ThreeVisualizer({
   onUnmapFeature,
   activeSliderValues,
   setActiveSliderValues,
-  visualizerRef: externalVisualizerRef
+  visualizerRef: externalVisualizerRef,
+  layers,
+  selectedLayerId,
+  onLayerSelect
 }: ThreeVisualizerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -342,23 +349,25 @@ export function ThreeVisualizer({
             zIndex: 1
           }}
         />
-        {/* Render bounding box overlays for each effect */}
-        {effects.map(effect => (
+        {/* Render bounding box overlays for each layer */}
+        {layers.map(layer => (
           <BoundingBoxOverlay
-            key={effect.id}
-            x={effect.boundingBox.x}
-            y={effect.boundingBox.y}
-            width={effect.boundingBox.width}
-            height={effect.boundingBox.height}
-            selected={selectedEffectId === effect.id}
+            key={layer.id}
+            x={layer.position.x}
+            y={layer.position.y}
+            width={layer.scale.x}
+            height={layer.scale.y}
+            selected={selectedLayerId === layer.id}
             parentWidth={canvasSize.width}
             parentHeight={canvasSize.height}
-            onChange={box => setEffects(prev => prev.map(e => e.id === effect.id ? { ...e, boundingBox: box } : e))}
-            onSelect={() => setSelectedEffectId(effect.id)}
+            onChange={box => {
+              // You may want to call onLayerUpdate here
+            }}
+            onSelect={() => onLayerSelect?.(layer.id)}
           />
         ))}
-        {/* Show prompt if no effects are present */}
-        {effects.length === 0 && (
+        {/* Show prompt if no layers are present */}
+        {layers.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-auto">
             <span className="text-white/60 text-sm font-mono text-center select-none">
               Add an effect from the library
