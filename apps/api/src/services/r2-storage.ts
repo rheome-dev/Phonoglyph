@@ -57,9 +57,6 @@ export async function configureBucketCors(): Promise<void> {
         AllowedOrigins: [
           process.env.FRONTEND_URL || 'http://localhost:3000',
           'https://*.vercel.app', // For preview deployments
-          'https://phonoglyph.rheome.tools', // Production frontend domain
-          'https://api.phonoglyph.rheome.tools', // Production API domain
-          'https://*.rheome.tools', // Allow subdomains
         ],
         AllowedMethods: ['GET', 'PUT', 'POST', 'DELETE', 'HEAD'],
         AllowedHeaders: [
