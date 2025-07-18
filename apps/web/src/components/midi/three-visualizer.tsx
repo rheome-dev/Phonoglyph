@@ -90,6 +90,7 @@ export function ThreeVisualizer({
   const [selectedEffectId, setSelectedEffectId] = useState<string | null>(null);
   const metaballsEffectRef = useRef<MetaballsEffect | null>(null);
   const particleEffectRef = useRef<ParticleNetworkEffect | null>(null);
+  const effectInstancesRef = useRef<{ [id: string]: VisualEffect }>({});
   
   // Get aspect ratio configuration
   const aspectRatioConfig = getAspectRatioConfig(aspectRatio);
@@ -197,6 +198,57 @@ export function ThreeVisualizer({
       particleEffectRef.current.setBoundingBox(boundingBoxes.particles);
     }
   }, [boundingBoxes, canvasSize.width, canvasSize.height]);
+
+  // Dynamic scene synchronization
+  useEffect(() => {
+    if (!internalVisualizerRef.current) return;
+    const manager = internalVisualizerRef.current;
+    const effectLayers = layers.filter(l => l.type === 'effect');
+    const currentIds = Object.keys(effectInstancesRef.current);
+    const newIds = effectLayers.map(l => l.id);
+
+    // Remove effects not in layers
+    for (const id of currentIds) {
+      if (!newIds.includes(id)) {
+        manager.removeEffect(id);
+        delete effectInstancesRef.current[id];
+      }
+    }
+
+    // Add new effects from layers
+    for (const layer of effectLayers) {
+      if (!effectInstancesRef.current[layer.id]) {
+        let effect: VisualEffect | null = null;
+        if (layer.effectType === 'metaballs') {
+          effect = new MetaballsEffect(layer.settings || {});
+        } else if (layer.effectType === 'particles') { // <-- correct type for ParticleNetworkEffect
+          effect = new ParticleNetworkEffect();
+        } // Add more effect types as needed
+        if (effect) {
+          effectInstancesRef.current[layer.id] = effect;
+          manager.addEffect(effect);
+        }
+      }
+      // Update bounding box for effect (type guard)
+      const effect = effectInstancesRef.current[layer.id];
+      if (effect && typeof (effect as any).setBoundingBox === 'function') {
+        (effect as any).setBoundingBox({
+          x: layer.position.x,
+          y: layer.position.y,
+          width: layer.scale.x,
+          height: layer.scale.y
+        });
+      }
+    }
+
+    // If no effect layers, remove all effects
+    if (effectLayers.length === 0) {
+      for (const id of Object.keys(effectInstancesRef.current)) {
+        manager.removeEffect(id);
+        delete effectInstancesRef.current[id];
+      }
+    }
+  }, [layers, internalVisualizerRef.current]);
 
   // Expose visualizer ref to parent
   useEffect(() => {
