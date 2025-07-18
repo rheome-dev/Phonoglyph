@@ -77,7 +77,8 @@ export function ThreeVisualizer({
     metaballs: { x: 0, y: 0, width: 0, height: 0 },
     particles: { x: 0, y: 0, width: 0, height: 0 },
   });
-  const [selectedEffect, setSelectedEffect] = useState<string | null>(null);
+  const [effects, setEffects] = useState<any[]>([]); // [{id, type, boundingBox, ...}]
+  const [selectedEffectId, setSelectedEffectId] = useState<string | null>(null);
   const metaballsEffectRef = useRef<MetaballsEffect | null>(null);
   const particleEffectRef = useRef<ParticleNetworkEffect | null>(null);
   
@@ -282,6 +283,20 @@ export function ThreeVisualizer({
     setActiveSliderValues(prev => ({ ...prev, [paramKey]: value }));
   };
 
+  // Handler to add an effect (stub, e.g., adds metaballs)
+  const handleAddEffect = (type: 'metaballs' | 'particles') => {
+    const id = `${type}-${Date.now()}`;
+    const box = {
+      x: canvasSize.width * 0.2,
+      y: canvasSize.height * 0.2,
+      width: canvasSize.width * 0.6,
+      height: canvasSize.height * 0.6,
+    };
+    setEffects(prev => [...prev, { id, type, boundingBox: box }]);
+    setSelectedEffectId(id);
+    // TODO: Actually instantiate and add the effect to the visualizer manager
+  };
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -322,32 +337,38 @@ export function ThreeVisualizer({
           className="absolute top-0 left-0 w-full h-full"
           style={{
             width: `${canvasSize.width}px`,
-            height: `${canvasSize.height}px`
+            height: `${canvasSize.height}px`,
+            pointerEvents: 'none', // Allow overlays to receive events
+            zIndex: 1
           }}
         />
-        {/* Bounding box overlays for effects */}
-        <BoundingBoxOverlay
-          x={boundingBoxes.metaballs.x}
-          y={boundingBoxes.metaballs.y}
-          width={boundingBoxes.metaballs.width}
-          height={boundingBoxes.metaballs.height}
-          selected={selectedEffect === 'metaballs'}
-          parentWidth={canvasSize.width}
-          parentHeight={canvasSize.height}
-          onChange={box => setBoundingBoxes(prev => ({ ...prev, metaballs: box }))}
-          onSelect={() => setSelectedEffect('metaballs')}
-        />
-        <BoundingBoxOverlay
-          x={boundingBoxes.particles.x}
-          y={boundingBoxes.particles.y}
-          width={boundingBoxes.particles.width}
-          height={boundingBoxes.particles.height}
-          selected={selectedEffect === 'particles'}
-          parentWidth={canvasSize.width}
-          parentHeight={canvasSize.height}
-          onChange={box => setBoundingBoxes(prev => ({ ...prev, particles: box }))}
-          onSelect={() => setSelectedEffect('particles')}
-        />
+        {/* Render bounding box overlays for each effect */}
+        {effects.map(effect => (
+          <BoundingBoxOverlay
+            key={effect.id}
+            x={effect.boundingBox.x}
+            y={effect.boundingBox.y}
+            width={effect.boundingBox.width}
+            height={effect.boundingBox.height}
+            selected={selectedEffectId === effect.id}
+            parentWidth={canvasSize.width}
+            parentHeight={canvasSize.height}
+            onChange={box => setEffects(prev => prev.map(e => e.id === effect.id ? { ...e, boundingBox: box } : e))}
+            onSelect={() => setSelectedEffectId(effect.id)}
+          />
+        ))}
+        {/* Show placeholder/cue if no effects */}
+        {effects.length === 0 && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center z-20 pointer-events-auto">
+            <div className="text-white/80 text-lg font-mono mb-4">Add an effect from the library</div>
+            <button
+              className="px-4 py-2 bg-purple-600 text-white rounded shadow hover:bg-purple-700 focus:outline-none"
+              onClick={() => handleAddEffect('metaballs')}
+            >
+              + Add Metaballs Effect
+            </button>
+          </div>
+        )}
         {/* Modals are now rendered within the full-width edit canvas */}
         {Object.entries(openEffectModals).map(([effectId, isOpen], index) => {
           if (!isOpen) return null;
