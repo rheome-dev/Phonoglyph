@@ -1567,6 +1567,15 @@ function CreativeVisualizerPage() {
                 >
                     🎬 {showVideoComposition ? 'COMP' : 'VIDEO'}
                 </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => stemAudio.testAudioOutput()} 
+                  className="bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 font-mono text-xs uppercase tracking-wider px-2 py-1"
+                  style={{ borderRadius: '6px' }}
+                >
+                    🔊 TEST
+                </Button>
                 
                 {/* Test Video Composition Controls */}
                 {showVideoComposition && (

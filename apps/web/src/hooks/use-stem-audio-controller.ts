@@ -244,7 +244,13 @@ export function useStemAudioController(): UseStemAudioController {
           gainNode.gain.value = 0.7; // Default volume
           gainNodesRef.current[stem.id] = gainNode;
           
-          console.log(`🎵 Decoded audio buffer for ${stem.id}: ${audioBuffer.duration.toFixed(2)}s`);
+          // Log audio buffer details for debugging
+          console.log(`🎵 Decoded audio buffer for ${stem.id}:`, {
+            duration: audioBuffer.duration.toFixed(2) + 's',
+            numberOfChannels: audioBuffer.numberOfChannels,
+            sampleRate: audioBuffer.sampleRate,
+            length: audioBuffer.length
+          });
           
           if (onDecode) {
             onDecode(stem.id, audioBuffer);
@@ -315,6 +321,16 @@ export function useStemAudioController(): UseStemAudioController {
         source.buffer = buffer;
         source.connect(gainNode);
         gainNode.connect(audioContextRef.current!.destination);
+        
+        // Debug audio connection
+        console.log(`🎵 Audio source created for ${stemId}:`, {
+          bufferChannels: buffer.numberOfChannels,
+          gainNodeExists: !!gainNode,
+          destinationExists: !!audioContextRef.current!.destination,
+          initialVolume,
+          isSoloed,
+          isMaster: stemId === masterId
+        });
         
         // *** THE KEY FIX ***
         // Use the Web Audio API's native looping.
@@ -592,7 +608,7 @@ export function useStemAudioController(): UseStemAudioController {
     try {
       console.log('🎵 Testing audio output...');
       
-      // Create a simple test tone
+      // Create a stereo test tone
       const oscillator = audioContextRef.current.createOscillator();
       const gainNode = audioContextRef.current.createGain();
       
@@ -609,6 +625,48 @@ export function useStemAudioController(): UseStemAudioController {
       oscillator.stop(audioContextRef.current.currentTime + 0.5);
       
       console.log('🎵 Test tone played - you should hear a 440Hz tone for 0.5 seconds');
+      
+      // Test stereo separation
+      setTimeout(() => {
+        console.log('🎵 Testing stereo separation...');
+        
+        // Create left channel tone
+        const leftOsc = audioContextRef.current!.createOscillator();
+        const leftGain = audioContextRef.current!.createGain();
+        const leftPanner = audioContextRef.current!.createStereoPanner();
+        
+        leftOsc.frequency.setValueAtTime(330, audioContextRef.current!.currentTime); // E4 note
+        leftOsc.type = 'sine';
+        leftGain.gain.setValueAtTime(0.05, audioContextRef.current!.currentTime);
+        leftPanner.pan.setValueAtTime(-1, audioContextRef.current!.currentTime); // Full left
+        
+        leftOsc.connect(leftGain);
+        leftGain.connect(leftPanner);
+        leftPanner.connect(audioContextRef.current!.destination);
+        
+        leftOsc.start(audioContextRef.current!.currentTime);
+        leftOsc.stop(audioContextRef.current!.currentTime + 1);
+        
+        // Create right channel tone
+        const rightOsc = audioContextRef.current!.createOscillator();
+        const rightGain = audioContextRef.current!.createGain();
+        const rightPanner = audioContextRef.current!.createStereoPanner();
+        
+        rightOsc.frequency.setValueAtTime(550, audioContextRef.current!.currentTime); // C#5 note
+        rightOsc.type = 'sine';
+        rightGain.gain.setValueAtTime(0.05, audioContextRef.current!.currentTime);
+        rightPanner.pan.setValueAtTime(1, audioContextRef.current!.currentTime); // Full right
+        
+        rightOsc.connect(rightGain);
+        rightGain.connect(rightPanner);
+        rightPanner.connect(audioContextRef.current!.destination);
+        
+        rightOsc.start(audioContextRef.current!.currentTime);
+        rightOsc.stop(audioContextRef.current!.currentTime + 1);
+        
+        console.log('🎵 Stereo test - you should hear E4 on the left and C#5 on the right');
+      }, 600);
+      
     } catch (error) {
       console.error('❌ Audio output test failed:', error);
     }
