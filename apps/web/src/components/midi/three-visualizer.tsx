@@ -111,25 +111,13 @@ export function ThreeVisualizer({
     if (internalVisualizerRef.current && canvasSize.width > 0 && canvasSize.height > 0) {
       const visualizer = internalVisualizerRef.current;
       
-      // Update camera aspect ratio
-      if (visualizer['camera']) {
-        visualizer['camera'].aspect = canvasSize.width / canvasSize.height;
-        visualizer['camera'].updateProjectionMatrix();
-      }
+      // Use the new viewport resize method with the target aspect ratio
+      const targetAspectRatio = aspectRatioConfig.width / aspectRatioConfig.height;
+      visualizer.handleViewportResize(canvasSize.width, canvasSize.height, targetAspectRatio);
       
-      // Update renderer size
-      if (visualizer['renderer']) {
-        visualizer['renderer'].setSize(canvasSize.width, canvasSize.height);
-      }
-      
-      // Update bloom effect if available
-      if (visualizer['bloomEffect']) {
-        visualizer['bloomEffect'].handleResize?.(canvasSize.width, canvasSize.height);
-      }
-      
-      debugLog.log('🎨 Canvas resized to:', canvasSize.width, 'x', canvasSize.height);
+      debugLog.log('🎨 Canvas resized to:', canvasSize.width, 'x', canvasSize.height, 'with target aspect:', targetAspectRatio);
     }
-  }, [canvasSize]);
+  }, [canvasSize, aspectRatioConfig]);
 
   // Initialize visualizer
   useEffect(() => {
