@@ -234,11 +234,21 @@ export function ThreeVisualizer({
       // Update bounding box for effect (type guard)
       const effect = effectInstancesRef.current[layer.id];
       if (effect && typeof (effect as any).setBoundingBox === 'function') {
+        // Convert percentage position to pixel coordinates for the effect
+        const pixelX = (layer.position.x / 100) * canvasSize.width;
+        const pixelY = (layer.position.y / 100) * canvasSize.height;
+        
+        // Convert scale to pixel dimensions (using same default size as UI)
+        const defaultWidth = 200; // Default effect width in pixels
+        const defaultHeight = 150; // Default effect height in pixels
+        const pixelWidth = defaultWidth * layer.scale.x;
+        const pixelHeight = defaultHeight * layer.scale.y;
+        
         const bbox = {
-          x: layer.position.x,
-          y: layer.position.y,
-          width: layer.scale.x,
-          height: layer.scale.y
+          x: pixelX,
+          y: pixelY,
+          width: pixelWidth,
+          height: pixelHeight
         };
         (effect as any).setBoundingBox(bbox);
         console.log(`[ThreeVisualizer] Set bounding box for effect ${layer.id}:`, bbox);

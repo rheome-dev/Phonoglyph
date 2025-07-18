@@ -100,6 +100,7 @@ export function BoundingBoxOverlay({
   }, [dragging, resizing]);
 
   function onMouseDown(e: React.MouseEvent) {
+    console.log('[BoundingBoxOverlay] onMouseDown triggered', { x: e.clientX, y: e.clientY });
     if ((e.target as HTMLElement).classList.contains('transform-anchor')) return;
     setDragging(true);
     setDragStart({ x: e.clientX - x, y: e.clientY - y });
@@ -140,9 +141,19 @@ export function BoundingBoxOverlay({
         transition: 'background 0.2s',
         isolation: 'isolate',
       }}
-      onMouseDown={e => { onMouseDown(e); onSelect && onSelect(); }}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onMouseDown={e => { 
+        console.log('[BoundingBoxOverlay] Mouse down event received');
+        onMouseDown(e); 
+        onSelect && onSelect(); 
+      }}
+      onMouseEnter={() => {
+        console.log('[BoundingBoxOverlay] Mouse enter');
+        setIsHovered(true);
+      }}
+      onMouseLeave={() => {
+        console.log('[BoundingBoxOverlay] Mouse leave');
+        setIsHovered(false);
+      }}
     >
       {/* Photoshop-style transform anchors - only visible on hover */}
       {isHovered && ANCHORS.map(anchor => (
