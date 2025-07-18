@@ -46,6 +46,7 @@ interface ThreeVisualizerProps {
   layers: Layer[];
   selectedLayerId?: string | null;
   onLayerSelect?: (layerId: string) => void;
+  onLayerUpdate?: (layerId: string, updates: Partial<Layer>) => void;
 }
 
 export function ThreeVisualizer({
@@ -71,7 +72,8 @@ export function ThreeVisualizer({
   visualizerRef: externalVisualizerRef,
   layers,
   selectedLayerId,
-  onLayerSelect
+  onLayerSelect,
+  onLayerUpdate
 }: ThreeVisualizerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -317,6 +319,9 @@ export function ThreeVisualizer({
     return <ErrorDisplay message={error} />;
   }
 
+  // Helper: is the project truly empty (all layers are empty image lanes)?
+  const allLayersEmpty = layers.length === 0 || layers.every(l => l.type === 'image' && !l.src);
+
   return (
     <div 
       ref={containerRef}
@@ -361,16 +366,19 @@ export function ThreeVisualizer({
             parentWidth={canvasSize.width}
             parentHeight={canvasSize.height}
             onChange={box => {
-              // You may want to call onLayerUpdate here
+              onLayerUpdate?.(layer.id, {
+                position: { x: box.x, y: box.y },
+                scale: { x: box.width, y: box.height }
+              });
             }}
             onSelect={() => onLayerSelect?.(layer.id)}
           />
         ))}
-        {/* Show prompt if no layers are present */}
-        {layers.length === 0 && (
+        {/* Show prompt if all layers are empty */}
+        {allLayersEmpty && (
           <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-auto">
             <span className="text-white/60 text-sm font-mono text-center select-none">
-              Add an effect from the library
+              Add your first layer
             </span>
           </div>
         )}
