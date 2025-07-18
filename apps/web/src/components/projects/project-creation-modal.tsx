@@ -425,11 +425,12 @@ export function ProjectCreationModal({ isOpen, onClose, defaultMidiFilePath }: P
       setIsLoading(true)
       console.log('Form submission data:', data)
       
-      // TEMPORARY: Test with minimal hardcoded payload
+      // Use the actual form data
       const projectData = {
-        name: "Test Project",
-        privacy_setting: "private",
-        render_configuration: {}
+        name: data.name,
+        description: data.description || '',
+        privacy_setting: data.privacy_setting || 'private',
+        render_configuration: data.render_configuration || {}
       };
       
       // Debug: Log the exact payload being sent
