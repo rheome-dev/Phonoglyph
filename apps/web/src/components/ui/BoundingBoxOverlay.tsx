@@ -1,206 +1,170 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
+
+const ANCHORS = [
+  { key: 'nw', style: { left: 0, top: 0, cursor: 'nwse-resize' }, dx: -1, dy: -1 },
+  { key: 'n',  style: { left: '50%', top: 0, transform: 'translateX(-50%)', cursor: 'ns-resize' }, dx: 0, dy: -1 },
+  { key: 'ne', style: { right: 0, top: 0, cursor: 'nesw-resize' }, dx: 1, dy: -1 },
+  { key: 'e',  style: { right: 0, top: '50%', transform: 'translateY(-50%)', cursor: 'ew-resize' }, dx: 1, dy: 0 },
+  { key: 'se', style: { right: 0, bottom: 0, cursor: 'nwse-resize' }, dx: 1, dy: 1 },
+  { key: 's',  style: { left: '50%', bottom: 0, transform: 'translateX(-50%)', cursor: 'ns-resize' }, dx: 0, dy: 1 },
+  { key: 'sw', style: { left: 0, bottom: 0, cursor: 'nesw-resize' }, dx: -1, dy: 1 },
+  { key: 'w',  style: { left: 0, top: '50%', transform: 'translateY(-50%)', cursor: 'ew-resize' }, dx: -1, dy: 0 },
+];
 
 interface BoundingBoxOverlayProps {
   x: number;
   y: number;
   width: number;
   height: number;
-  selected: boolean;
+  selected?: boolean;
   parentWidth: number;
   parentHeight: number;
-  minWidth?: number;
-  minHeight?: number;
-  maxWidth?: number;
-  maxHeight?: number;
   onChange: (box: { x: number; y: number; width: number; height: number }) => void;
   onSelect?: () => void;
-  children?: React.ReactNode;
 }
 
-// 8 handles: corners (nw, ne, sw, se), sides (n, e, s, w)
-const handles = [
-  { key: 'nw', cursor: 'nwse-resize' },
-  { key: 'n', cursor: 'ns-resize' },
-  { key: 'ne', cursor: 'nesw-resize' },
-  { key: 'e', cursor: 'ew-resize' },
-  { key: 'se', cursor: 'nwse-resize' },
-  { key: 's', cursor: 'ns-resize' },
-  { key: 'sw', cursor: 'nesw-resize' },
-  { key: 'w', cursor: 'ew-resize' },
-];
+export function BoundingBoxOverlay({
+  x,
+  y,
+  width,
+  height,
+  selected = false,
+  parentWidth,
+  parentHeight,
+  onChange,
+  onSelect
+}: BoundingBoxOverlayProps) {
+  const [dragging, setDragging] = useState(false);
+  const [resizing, setResizing] = useState<string | null>(null); // anchor key
+  const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
+  const [resizeStart, setResizeStart] = useState<any>(null);
+  const [isHovered, setIsHovered] = useState(false);
 
-type HandleKey = typeof handles[number]['key'];
+  // Stable refs for event handlers
+  const onMouseMoveRef = useRef<(e: MouseEvent) => void>();
+  const onMouseUpRef = useRef<(e: MouseEvent) => void>();
 
-export const BoundingBoxOverlay: React.FC<BoundingBoxOverlayProps> = ({
-  x, y, width, height, selected, parentWidth, parentHeight,
-  minWidth = 32, minHeight = 32, maxWidth, maxHeight, onChange, onSelect, children
-}) => {
-  const [hovered, setHovered] = useState(false);
-  const [dragging, setDragging] = useState<null | { startX: number; startY: number; origX: number; origY: number }> (null);
-  const [resizing, setResizing] = useState<null | { handle: HandleKey; startX: number; startY: number; orig: { x: number; y: number; width: number; height: number } }>(null);
-  const boxRef = useRef<HTMLDivElement>(null);
-
-  // Mouse/touch move logic for drag/resize
-  React.useEffect(() => {
-    if (!dragging && !resizing) return;
-    const onMove = (e: MouseEvent | TouchEvent) => {
-      const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
-      const clientY = 'touches' in e ? e.touches[0].clientY : (e as MouseEvent).clientY;
-      if (dragging) {
-        let newX = dragging.origX + (clientX - dragging.startX);
-        let newY = dragging.origY + (clientY - dragging.startY);
-        // Clamp to parent
-        newX = Math.max(0, Math.min(parentWidth - width, newX));
-        newY = Math.max(0, Math.min(parentHeight - height, newY));
-        onChange({ x: newX, y: newY, width, height });
-      } else if (resizing) {
-        let { x: ox, y: oy, width: ow, height: oh } = resizing.orig;
-        let dx = clientX - resizing.startX;
-        let dy = clientY - resizing.startY;
-        let newBox = { x: ox, y: oy, width: ow, height: oh };
-        switch (resizing.handle) {
-          case 'nw':
-            newBox.x = Math.min(ox + dx, ox + ow - minWidth);
-            newBox.y = Math.min(oy + dy, oy + oh - minHeight);
-            newBox.width = ow - (newBox.x - ox);
-            newBox.height = oh - (newBox.y - oy);
-            break;
-          case 'n':
-            newBox.y = Math.min(oy + dy, oy + oh - minHeight);
-            newBox.height = oh - (newBox.y - oy);
-            break;
-          case 'ne':
-            newBox.y = Math.min(oy + dy, oy + oh - minHeight);
-            newBox.width = Math.max(minWidth, Math.min(maxWidth || parentWidth, ow + dx));
-            newBox.height = oh - (newBox.y - oy);
-            break;
-          case 'e':
-            newBox.width = Math.max(minWidth, Math.min(maxWidth || parentWidth, ow + dx));
-            break;
-          case 'se':
-            newBox.width = Math.max(minWidth, Math.min(maxWidth || parentWidth, ow + dx));
-            newBox.height = Math.max(minHeight, Math.min(maxHeight || parentHeight, oh + dy));
-            break;
-          case 's':
-            newBox.height = Math.max(minHeight, Math.min(maxHeight || parentHeight, oh + dy));
-            break;
-          case 'sw':
-            newBox.x = Math.min(ox + dx, ox + ow - minWidth);
-            newBox.width = ow - (newBox.x - ox);
-            newBox.height = Math.max(minHeight, Math.min(maxHeight || parentHeight, oh + dy));
-            break;
-          case 'w':
-            newBox.x = Math.min(ox + dx, ox + ow - minWidth);
-            newBox.width = ow - (newBox.x - ox);
-            break;
-        }
-        // Clamp to parent
-        newBox.x = Math.max(0, Math.min(parentWidth - newBox.width, newBox.x));
-        newBox.y = Math.max(0, Math.min(parentHeight - newBox.height, newBox.y));
-        newBox.width = Math.max(minWidth, Math.min(maxWidth || parentWidth, newBox.width));
-        newBox.height = Math.max(minHeight, Math.min(maxHeight || parentHeight, newBox.height));
-        onChange(newBox);
-      }
-    };
-    const onUp = () => {
-      setDragging(null);
-      setResizing(null);
-    };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('touchmove', onMove);
-    window.addEventListener('mouseup', onUp);
-    window.addEventListener('touchend', onUp);
-    return () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('touchmove', onMove);
-      window.removeEventListener('mouseup', onUp);
-      window.removeEventListener('touchend', onUp);
-    };
-  }, [dragging, resizing, parentWidth, parentHeight, minWidth, minHeight, maxWidth, maxHeight, width, height, onChange]);
-
-  // Keyboard nudge
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (!selected) return;
-    let dx = 0, dy = 0;
-    if (e.key === 'ArrowLeft') dx = -1;
-    if (e.key === 'ArrowRight') dx = 1;
-    if (e.key === 'ArrowUp') dy = -1;
-    if (e.key === 'ArrowDown') dy = 1;
-    if (dx !== 0 || dy !== 0) {
-      e.preventDefault();
-      let newX = Math.max(0, Math.min(parentWidth - width, x + dx));
-      let newY = Math.max(0, Math.min(parentHeight - height, y + dy));
+  // Mouse move handler
+  const onMouseMove = useCallback((e: MouseEvent) => {
+    if (dragging && dragStart) {
+      const newX = Math.max(0, Math.min(parentWidth - width, e.clientX - dragStart.x));
+      const newY = Math.max(0, Math.min(parentHeight - height, e.clientY - dragStart.y));
       onChange({ x: newX, y: newY, width, height });
     }
-  };
+    if (resizing && resizeStart) {
+      const anchor = ANCHORS.find(a => a.key === resizing);
+      if (!anchor) return;
+      let { x, y, width, height } = resizeStart;
+      const dx = e.clientX - resizeStart.startX;
+      const dy = e.clientY - resizeStart.startY;
+      // Corner/side logic
+      if (anchor.dx === -1) { width -= dx; x += dx; }
+      if (anchor.dx === 1)  { width += dx; }
+      if (anchor.dy === -1) { height -= dy; y += dy; }
+      if (anchor.dy === 1)  { height += dy; }
+      // Clamp to minimum size and parent bounds
+      width = Math.max(60, Math.min(parentWidth - x, width));
+      height = Math.max(40, Math.min(parentHeight - y, height));
+      x = Math.max(0, Math.min(parentWidth - width, x));
+      y = Math.max(0, Math.min(parentHeight - height, y));
+      onChange({ x, y, width, height });
+    }
+  }, [dragging, dragStart, resizing, resizeStart, onChange, width, height, parentWidth, parentHeight]);
+
+  // Mouse up handler
+  const onMouseUp = useCallback(() => {
+    setDragging(false);
+    setResizing(null);
+    setDragStart(null);
+    setResizeStart(null);
+  }, []);
+
+  // Keep refs up to date
+  useEffect(() => {
+    onMouseMoveRef.current = onMouseMove;
+    onMouseUpRef.current = onMouseUp;
+  }, [onMouseMove, onMouseUp]);
+
+  // Attach/detach listeners when dragging or resizing
+  useEffect(() => {
+    if (dragging || resizing) {
+      const move = (e: MouseEvent) => onMouseMoveRef.current && onMouseMoveRef.current(e);
+      const up = (e: MouseEvent) => onMouseUpRef.current && onMouseUpRef.current(e);
+      window.addEventListener('mousemove', move);
+      window.addEventListener('mouseup', up);
+      return () => {
+        window.removeEventListener('mousemove', move);
+        window.removeEventListener('mouseup', up);
+      };
+    }
+  }, [dragging, resizing]);
+
+  function onMouseDown(e: React.MouseEvent) {
+    if ((e.target as HTMLElement).classList.contains('transform-anchor')) return;
+    setDragging(true);
+    setDragStart({ x: e.clientX - x, y: e.clientY - y });
+  }
+
+  function onAnchorMouseDown(anchorKey: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    setResizing(anchorKey);
+    setResizeStart({
+      startX: e.clientX,
+      startY: e.clientY,
+      x: x,
+      y: y,
+      width: width,
+      height: height,
+    });
+  }
 
   // Always show the bounding box for debugging
   const show = true; // selected || hovered;
 
   return (
     <div
-      ref={boxRef}
-      tabIndex={0}
-      className="absolute z-30 group outline-none"
       style={{
+        position: 'absolute',
         left: x,
         top: y,
-        width,
-        height,
-        border: '2px solid red', // Debug: always visible red border
+        width: width,
+        height: height,
+        pointerEvents: 'auto',
         zIndex: 1000,
-        pointerEvents: 'auto', // Ensure overlay receives pointer events
-        boxSizing: 'border-box',
-        background: show ? 'rgba(255,0,0,0.05)' : 'transparent', // subtle debug bg
-        transition: 'border 0.1s',
-        userSelect: 'none',
+        borderRadius: 0,
+        background: show ? 'rgba(255,0,0,0.05)' : 'transparent',
+        userSelect: dragging || resizing ? 'none' : 'auto',
+        cursor: dragging ? 'grabbing' : 'grab',
+        border: '2px solid red', // Debug: always visible red border
+        boxShadow: selected ? '0 0 0 1px rgba(255,255,255,0.2)' : undefined,
+        transition: 'background 0.2s',
+        isolation: 'isolate',
       }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      onFocus={() => onSelect?.()}
-      onClick={e => { e.stopPropagation(); onSelect?.(); }}
-      onKeyDown={handleKeyDown}
-      aria-label="Bounding box overlay"
+      onMouseDown={e => { onMouseDown(e); onSelect && onSelect(); }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
-      {children}
-      {show && handles.map(h => (
+      {/* Photoshop-style transform anchors - only visible on hover */}
+      {isHovered && ANCHORS.map(anchor => (
         <div
-          key={h.key}
-          className="absolute bg-white border border-purple-500 rounded-full shadow-md"
+          key={anchor.key}
+          className="transform-anchor"
           style={{
-            width: 12, height: 12, zIndex: 2, cursor: h.cursor,
-            left: h.key.includes('w') ? -6 : h.key.includes('e') ? width - 6 : width / 2 - 6,
-            top: h.key.includes('n') ? -6 : h.key.includes('s') ? height - 6 : height / 2 - 6,
+            position: 'absolute',
+            width: 12,
+            height: 12,
+            background: '#fff',
+            border: '1px solid #ccc',
+            borderRadius: 2,
+            boxShadow: '0 1px 2px rgba(0,0,0,0.08)',
+            ...anchor.style,
+            zIndex: 20,
             opacity: 0.95,
-            boxShadow: '0 0 2px #7c3aed',
+            transition: 'background 0.2s, box-shadow 0.2s'
           }}
-          onMouseDown={e => {
-            e.stopPropagation();
-            setResizing({ handle: h.key as HandleKey, startX: e.clientX, startY: e.clientY, orig: { x, y, width, height } });
-          }}
-          onTouchStart={e => {
-            e.stopPropagation();
-            setResizing({ handle: h.key as HandleKey, startX: e.touches[0].clientX, startY: e.touches[0].clientY, orig: { x, y, width, height } });
-          }}
-          tabIndex={-1}
+          onMouseDown={e => onAnchorMouseDown(anchor.key, e)}
         />
       ))}
-      {/* Drag area (invisible, but pointer events) */}
-      {show && (
-        <div
-          className="absolute inset-0 cursor-move"
-          style={{ zIndex: 1, background: 'transparent' }}
-          onMouseDown={e => {
-            e.stopPropagation();
-            setDragging({ startX: e.clientX, startY: e.clientY, origX: x, origY: y });
-          }}
-          onTouchStart={e => {
-            e.stopPropagation();
-            setDragging({ startX: e.touches[0].clientX, startY: e.touches[0].clientY, origX: x, origY: y });
-          }}
-          tabIndex={-1}
-        />
-      )}
     </div>
   );
-}; 
+} 
