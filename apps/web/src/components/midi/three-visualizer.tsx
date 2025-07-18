@@ -200,7 +200,9 @@ export function ThreeVisualizer({
   useEffect(() => {
     if (!internalVisualizerRef.current) return;
     const manager = internalVisualizerRef.current;
+    console.log('[ThreeVisualizer] layers prop:', layers);
     const effectLayers = layers.filter(l => l.type === 'effect');
+    console.log('[ThreeVisualizer] effectLayers:', effectLayers);
     const currentIds = Object.keys(effectInstancesRef.current);
     const newIds = effectLayers.map(l => l.id);
 
@@ -209,6 +211,7 @@ export function ThreeVisualizer({
       if (!newIds.includes(id)) {
         manager.removeEffect(id);
         delete effectInstancesRef.current[id];
+        console.log(`[ThreeVisualizer] Removed effect instance: ${id}`);
       }
     }
 
@@ -217,6 +220,7 @@ export function ThreeVisualizer({
       if (!effectInstancesRef.current[layer.id]) {
         let effect: VisualEffect | null = null;
         if (layer.effectType === 'metaballs') {
+          console.log('[ThreeVisualizer] Instantiating MetaballsEffect for layer:', layer);
           effect = new MetaballsEffect(layer.settings || {});
         } else if (layer.effectType === 'particles') { // <-- correct type for ParticleNetworkEffect
           effect = new ParticleNetworkEffect();
@@ -224,17 +228,20 @@ export function ThreeVisualizer({
         if (effect) {
           effectInstancesRef.current[layer.id] = effect;
           manager.addEffect(effect);
+          console.log(`[ThreeVisualizer] Added effect instance: ${layer.id} (${layer.effectType})`);
         }
       }
       // Update bounding box for effect (type guard)
       const effect = effectInstancesRef.current[layer.id];
       if (effect && typeof (effect as any).setBoundingBox === 'function') {
-        (effect as any).setBoundingBox({
+        const bbox = {
           x: layer.position.x,
           y: layer.position.y,
           width: layer.scale.x,
           height: layer.scale.y
-        });
+        };
+        (effect as any).setBoundingBox(bbox);
+        console.log(`[ThreeVisualizer] Set bounding box for effect ${layer.id}:`, bbox);
       }
     }
 
@@ -243,6 +250,7 @@ export function ThreeVisualizer({
       for (const id of Object.keys(effectInstancesRef.current)) {
         manager.removeEffect(id);
         delete effectInstancesRef.current[id];
+        console.log(`[ThreeVisualizer] Removed effect instance (all cleared): ${id}`);
       }
     }
   }, [layers, internalVisualizerRef.current]);
