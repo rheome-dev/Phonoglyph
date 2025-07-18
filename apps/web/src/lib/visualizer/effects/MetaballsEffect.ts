@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { VisualEffect, AudioAnalysisData, LiveMIDIData, MetaballConfig } from '@/types/visualizer';
 
+export type BoundingBox = { x: number; y: number; width: number; height: number };
+
 export class MetaballsEffect implements VisualEffect {
   id = 'metaballs';
   name = 'MIDI Metaballs';
@@ -14,6 +16,7 @@ export class MetaballsEffect implements VisualEffect {
   private material!: THREE.ShaderMaterial;
   private mesh!: THREE.Mesh;
   private uniforms!: Record<string, THREE.IUniform>;
+  private boundingBox: BoundingBox = { x: 0, y: 0, width: 0, height: 0 };
 
   // Camera animation state
   private baseCameraDistance = 3.0;
@@ -36,6 +39,36 @@ export class MetaballsEffect implements VisualEffect {
     this.setupUniforms();
   }
 
+  setBoundingBox(box: BoundingBox) {
+    this.boundingBox = box;
+    // If mesh exists, update its position/scale
+    if (this.mesh && this.renderer) {
+      this.updateMeshTransform();
+    }
+    // Update shader resolution
+    if (this.uniforms?.uResolution) {
+      this.uniforms.uResolution.value.set(box.width, box.height);
+    }
+  }
+
+  private updateMeshTransform() {
+    // Position and scale the mesh to cover the bounding box in NDC
+    // Convert canvas px to NDC [-1,1] for position/scale
+    const { x, y, width, height } = this.boundingBox;
+    if (!this.renderer || !this.mesh) return;
+    const size = this.renderer.getSize(new THREE.Vector2());
+    const centerX = x + width / 2;
+    const centerY = y + height / 2;
+    // NDC: left=-1, right=1, top=1, bottom=-1
+    const ndcX = (centerX / size.x) * 2 - 1;
+    const ndcY = -((centerY / size.y) * 2 - 1); // Y is flipped
+    // Scale: mesh is 2x2 by default, so scale to width/height in NDC
+    const scaleX = width / size.x;
+    const scaleY = height / size.y;
+    this.mesh.position.set(ndcX, ndcY, 0);
+    this.mesh.scale.set(scaleX, scaleY, 1);
+  }
+
   private setupUniforms() {
     this.uniforms = {
       uTime: { value: 0.0 },
@@ -55,13 +88,12 @@ export class MetaballsEffect implements VisualEffect {
     this.scene = scene;
     this.camera = camera;
     this.renderer = renderer;
-    
     // Set resolution uniform based on renderer size
     const size = renderer.getSize(new THREE.Vector2());
     this.uniforms.uResolution.value.set(size.x, size.y);
-
     this.createMaterial();
     this.createMesh();
+    this.updateMeshTransform();
   }
 
   private createMaterial() {
@@ -305,6 +337,7 @@ export class MetaballsEffect implements VisualEffect {
     this.material.depthWrite = true; // write depth so underlying particles are hidden
     this.material.depthTest = true; // keep depth testing enabled
     this.scene.add(this.mesh);
+    this.updateMeshTransform();
   }
 
   updateParameter(paramName: string, value: any): void {
@@ -356,6 +389,11 @@ export class MetaballsEffect implements VisualEffect {
     // Debug log to see if we're getting MIDI data
     if (midiData.activeNotes.length > 0) {
       // Removed console.log to reduce console noise
+    }
+
+    // Update shader resolution to match bounding box
+    if (this.uniforms.uResolution && this.boundingBox.width && this.boundingBox.height) {
+      this.uniforms.uResolution.value.set(this.boundingBox.width, this.boundingBox.height);
     }
   }
 

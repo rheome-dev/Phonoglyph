@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { VisualEffect, AudioAnalysisData, LiveMIDIData } from '@/types/visualizer';
+import type { BoundingBox } from './MetaballsEffect';
 
 interface Particle {
   position: THREE.Vector3;
@@ -60,10 +61,54 @@ export class ParticleNetworkEffect implements VisualEffect {
   private instanceSizes!: Float32Array;
   private dummyMatrix: THREE.Matrix4 = new THREE.Matrix4();
 
+  private boundingBox: BoundingBox | null = null;
+
   constructor() {
     this.setupUniforms();
   }
-  
+
+  setBoundingBox(box: BoundingBox) {
+    this.boundingBox = box;
+  }
+
+  private getWorldBoundingBox(): { min: THREE.Vector3; max: THREE.Vector3 } {
+    // Convert bounding box px to world coordinates at z=0
+    if (!this.boundingBox || !this.renderer || !this.camera) {
+      // Default to full canvas
+      const size = this.renderer?.getSize(new THREE.Vector2()) || new THREE.Vector2(1024, 768);
+      return {
+        min: this.screenToWorld(0, size.y / 2),
+        max: this.screenToWorld(size.x, -size.y / 2)
+      };
+    }
+    const { x, y, width, height } = this.boundingBox;
+    // Top-left and bottom-right in px
+    const min = this.screenToWorld(x, y + height);
+    const max = this.screenToWorld(x + width, y);
+    return { min, max };
+  }
+
+  private screenToWorld(screenX: number, screenY: number): THREE.Vector3 {
+    // Convert screen px to NDC
+    if (!this.renderer || !this.camera) return new THREE.Vector3();
+    const size = this.renderer.getSize(new THREE.Vector2());
+    const ndcX = (screenX / size.x) * 2 - 1;
+    const ndcY = -((screenY / size.y) * 2 - 1);
+    // Project to world at z=0
+    const vector = new THREE.Vector3(ndcX, ndcY, 0.0);
+    vector.unproject(this.camera);
+    return vector;
+  }
+
+  private clampToBoundingBox(pos: THREE.Vector3): THREE.Vector3 {
+    const { min, max } = this.getWorldBoundingBox();
+    return new THREE.Vector3(
+      Math.max(min.x, Math.min(max.x, pos.x)),
+      Math.max(min.y, Math.min(max.y, pos.y)),
+      pos.z
+    );
+  }
+
   private setupUniforms() {
     this.uniforms = {
       uTime: { value: 0.0 },
@@ -187,19 +232,11 @@ export class ParticleNetworkEffect implements VisualEffect {
   }
   
   private getRandomSpawnPosition(): THREE.Vector3 {
-    // Spawn around z = 0 (the origin) but confined to camera frustum so it is visible
-    const spawnDepth = 0; // world-space Z where particles originate (scene origin)
-    const perspCam = this.camera as THREE.PerspectiveCamera;
-    const distance = perspCam.position.z - spawnDepth;
-    const vFov = THREE.MathUtils.degToRad(perspCam.fov); // vertical fov in radians
-    const frustumHeight = 2 * Math.tan(vFov / 2) * distance;
-    const frustumWidth = frustumHeight * perspCam.aspect;
-
-    // leave 10 % margin so particles don't start partially clipped
-    const x = (Math.random() - 0.5) * frustumWidth * 0.9;
-    const y = (Math.random() - 0.5) * frustumHeight * 0.9;
-    const z = spawnDepth;
-
+    // Spawn within bounding box in world coordinates
+    const { min, max } = this.getWorldBoundingBox();
+    const x = Math.random() * (max.x - min.x) + min.x;
+    const y = Math.random() * (max.y - min.y) + min.y;
+    const z = 0;
     return new THREE.Vector3(x, y, z);
   }
   
@@ -281,6 +318,8 @@ export class ParticleNetworkEffect implements VisualEffect {
       
       // Apply velocity
       particle.position.add(particle.velocity);
+      // Clamp to bounding box
+      particle.position.copy(this.clampToBoundingBox(particle.position));
     }
     
     this.updateBuffers();

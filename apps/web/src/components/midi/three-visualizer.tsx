@@ -18,6 +18,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { DroppableParameter } from '@/components/ui/droppable-parameter';
 import { getAspectRatioConfig, calculateCanvasSize } from '@/lib/visualizer/aspect-ratios';
+import { BoundingBoxOverlay } from '@/components/ui/BoundingBoxOverlay';
 
 interface ThreeVisualizerProps {
   midiData: MIDIData;
@@ -72,6 +73,13 @@ export function ThreeVisualizer({
   const [isInitialized, setIsInitialized] = useState(false);
   const [canvasSize, setCanvasSize] = useState({ width: 400, height: 711 });
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+  const [boundingBoxes, setBoundingBoxes] = useState({
+    metaballs: { x: 0, y: 0, width: 0, height: 0 },
+    particles: { x: 0, y: 0, width: 0, height: 0 },
+  });
+  const [selectedEffect, setSelectedEffect] = useState<string | null>(null);
+  const metaballsEffectRef = useRef<MetaballsEffect | null>(null);
+  const particleEffectRef = useRef<ParticleNetworkEffect | null>(null);
   
   // Get aspect ratio configuration
   const aspectRatioConfig = getAspectRatioConfig(aspectRatio);
@@ -146,6 +154,8 @@ export function ThreeVisualizer({
       // Add default effects
       const metaballsEffect = new MetaballsEffect();
       const particleEffect = new ParticleNetworkEffect();
+      metaballsEffectRef.current = metaballsEffect;
+      particleEffectRef.current = particleEffect;
       
       internalVisualizerRef.current.addEffect(metaballsEffect);
       internalVisualizerRef.current.addEffect(particleEffect);
@@ -167,6 +177,16 @@ export function ThreeVisualizer({
       debugLog.error('❌ Failed to initialize ThreeVisualizer:', err);
     }
   }, [canvasSize, aspectRatioConfig]);
+
+  // Update effect bounding boxes on change
+  useEffect(() => {
+    if (metaballsEffectRef.current) {
+      metaballsEffectRef.current.setBoundingBox(boundingBoxes.metaballs);
+    }
+    if (particleEffectRef.current) {
+      particleEffectRef.current.setBoundingBox(boundingBoxes.particles);
+    }
+  }, [boundingBoxes, canvasSize.width, canvasSize.height]);
 
   // Expose visualizer ref to parent
   useEffect(() => {
@@ -231,6 +251,26 @@ export function ThreeVisualizer({
     return () => clearInterval(interval);
   }, [onFpsUpdate]);
 
+  // Set initial bounding boxes when canvas size changes
+  useEffect(() => {
+    if (canvasSize.width > 0 && canvasSize.height > 0) {
+      setBoundingBoxes(prev => ({
+        metaballs: prev.metaballs.width === 0 ? {
+          x: canvasSize.width * 0.2,
+          y: canvasSize.height * 0.2,
+          width: canvasSize.width * 0.6,
+          height: canvasSize.height * 0.6,
+        } : prev.metaballs,
+        particles: prev.particles.width === 0 ? {
+          x: canvasSize.width * 0.25,
+          y: canvasSize.height * 0.25,
+          width: canvasSize.width * 0.5,
+          height: canvasSize.height * 0.5,
+        } : prev.particles,
+      }));
+    }
+  }, [canvasSize.width, canvasSize.height]);
+
   // Handle effect parameter changes
   const handleParameterChange = (effectId: string, paramName: string, value: any) => {
     if (!internalVisualizerRef.current) return;
@@ -285,7 +325,29 @@ export function ThreeVisualizer({
             height: `${canvasSize.height}px`
           }}
         />
-        
+        {/* Bounding box overlays for effects */}
+        <BoundingBoxOverlay
+          x={boundingBoxes.metaballs.x}
+          y={boundingBoxes.metaballs.y}
+          width={boundingBoxes.metaballs.width}
+          height={boundingBoxes.metaballs.height}
+          selected={selectedEffect === 'metaballs'}
+          parentWidth={canvasSize.width}
+          parentHeight={canvasSize.height}
+          onChange={box => setBoundingBoxes(prev => ({ ...prev, metaballs: box }))}
+          onSelect={() => setSelectedEffect('metaballs')}
+        />
+        <BoundingBoxOverlay
+          x={boundingBoxes.particles.x}
+          y={boundingBoxes.particles.y}
+          width={boundingBoxes.particles.width}
+          height={boundingBoxes.particles.height}
+          selected={selectedEffect === 'particles'}
+          parentWidth={canvasSize.width}
+          parentHeight={canvasSize.height}
+          onChange={box => setBoundingBoxes(prev => ({ ...prev, particles: box }))}
+          onSelect={() => setSelectedEffect('particles')}
+        />
         {/* Modals are now rendered within the full-width edit canvas */}
         {Object.entries(openEffectModals).map(([effectId, isOpen], index) => {
           if (!isOpen) return null;
