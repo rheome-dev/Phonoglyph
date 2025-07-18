@@ -169,13 +169,8 @@ export class VisualizerManager {
       const width = this.canvas.clientWidth;
       const height = this.canvas.clientHeight;
       
-      // Update renderer size to match canvas
-      this.renderer.setSize(width, height);
-      
-      // Update bloom effect size
-      if (this.bloomEffect) {
-        this.bloomEffect.handleResize(width, height);
-      }
+      // Use the new responsive resize method
+      this.handleViewportResize(width, height);
     };
     
     window.addEventListener('resize', handleResize);
@@ -755,6 +750,14 @@ export class VisualizerManager {
     this.renderer.setSize(canvasWidth, canvasHeight);
     this.camera.aspect = canvasWidth / canvasHeight;
     this.camera.updateProjectionMatrix();
+    
+    // Update resolution uniforms for all effects
+    this.effects.forEach(effect => {
+      if ('uniforms' in effect && (effect as any).uniforms?.uResolution) {
+        (effect as any).uniforms.uResolution.value.set(canvasWidth, canvasHeight);
+      }
+    });
+    
     if (this.bloomEffect) {
       this.bloomEffect.handleResize(canvasWidth, canvasHeight);
     }

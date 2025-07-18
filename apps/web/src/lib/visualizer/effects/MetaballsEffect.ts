@@ -227,6 +227,11 @@ export class MetaballsEffect implements VisualEffect {
 
       void main() {
         vec2 uv = (vUv - 0.5) * 2.0;
+        
+        // Apply aspect ratio correction to prevent stretching
+        float aspectRatio = uResolution.x / uResolution.y;
+        uv.x *= aspectRatio;
+        
         vec3 cameraPos = uCameraPos;
         vec3 cameraTarget = uCameraTarget;
         vec3 cameraDir = normalize(cameraTarget - cameraPos);
