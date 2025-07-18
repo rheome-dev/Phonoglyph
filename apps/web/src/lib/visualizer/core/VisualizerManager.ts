@@ -69,9 +69,9 @@ export class VisualizerManager {
     this.scene.background = new THREE.Color(0x000000); // Pure black for bloom effect
     this.scene.fog = new THREE.Fog(0x000000, 10, 50);
     
-      // Camera setup - use a fixed aspect ratio (16:9) for consistent visual effects
+      // Camera setup - use a fixed aspect ratio (1:1) for consistent visual effects
   // This ensures effects maintain their proportions regardless of canvas container size
-  const fixedAspectRatio = 16 / 9; // Standard widescreen aspect ratio
+  const fixedAspectRatio = 1; // Square aspect ratio for consistent visual effects
   
   this.camera = new THREE.PerspectiveCamera(
     75,
