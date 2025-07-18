@@ -750,43 +750,14 @@ export class VisualizerManager {
     });
   }
 
-  // Method to handle viewport-based resizing while maintaining effect proportions
-  public handleViewportResize(canvasWidth: number, canvasHeight: number, targetAspectRatio?: number) {
-    // Update renderer size to match canvas
+  // Method to handle responsive resizing (no letterboxing, always fill canvas)
+  public handleViewportResize(canvasWidth: number, canvasHeight: number) {
     this.renderer.setSize(canvasWidth, canvasHeight);
-    
-    // Calculate viewport to maintain aspect ratio and prevent stretching
-    const canvasAspect = canvasWidth / canvasHeight;
-    const targetAspect = targetAspectRatio || 1; // Default to 1:1 if not specified
-    
-    let viewportWidth, viewportHeight, viewportX, viewportY;
-    
-    if (canvasAspect > targetAspect) {
-      // Canvas is wider than target - letterbox on sides
-      viewportHeight = canvasHeight;
-      viewportWidth = canvasHeight * targetAspect;
-      viewportX = (canvasWidth - viewportWidth) / 2;
-      viewportY = 0;
-    } else {
-      // Canvas is taller than target - letterbox on top/bottom
-      viewportWidth = canvasWidth;
-      viewportHeight = canvasWidth / targetAspect;
-      viewportX = 0;
-      viewportY = (canvasHeight - viewportHeight) / 2;
-    }
-    
-    // Set the viewport to maintain aspect ratio
-    this.renderer.setViewport(viewportX, viewportY, viewportWidth, viewportHeight);
-    
-    // Update camera aspect ratio to match target (not canvas)
-    this.camera.aspect = targetAspect;
+    this.camera.aspect = canvasWidth / canvasHeight;
     this.camera.updateProjectionMatrix();
-    
-    // Update bloom effect size
     if (this.bloomEffect) {
       this.bloomEffect.handleResize(canvasWidth, canvasHeight);
     }
-    
-    debugLog.log('🎨 Viewport resized to:', canvasWidth, 'x', canvasHeight, 'with viewport:', viewportX, viewportY, viewportWidth, viewportHeight, 'aspect:', targetAspect);
+    debugLog.log('🎨 Responsive resize:', canvasWidth, canvasHeight, 'aspect:', this.camera.aspect);
   }
 } 
