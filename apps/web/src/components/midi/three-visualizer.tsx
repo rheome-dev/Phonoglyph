@@ -284,18 +284,18 @@ export function ThreeVisualizer({
   };
 
   // Handler to add an effect (stub, e.g., adds metaballs)
-  const handleAddEffect = (type: 'metaballs' | 'particles') => {
-    const id = `${type}-${Date.now()}`;
-    const box = {
-      x: canvasSize.width * 0.2,
-      y: canvasSize.height * 0.2,
-      width: canvasSize.width * 0.6,
-      height: canvasSize.height * 0.6,
-    };
-    setEffects(prev => [...prev, { id, type, boundingBox: box }]);
-    setSelectedEffectId(id);
-    // TODO: Actually instantiate and add the effect to the visualizer manager
-  };
+  // const handleAddEffect = (type: 'metaballs' | 'particles') => {
+  //   const id = `${type}-${Date.now()}`;
+  //   const box = {
+  //     x: canvasSize.width * 0.2,
+  //     y: canvasSize.height * 0.2,
+  //     width: canvasSize.width * 0.6,
+  //     height: canvasSize.height * 0.6,
+  //   };
+  //   setEffects(prev => [...prev, { id, type, boundingBox: box }]);
+  //   setSelectedEffectId(id);
+  //   // TODO: Actually instantiate and add the effect to the visualizer manager
+  // };
 
   // Cleanup on unmount
   useEffect(() => {
@@ -357,16 +357,12 @@ export function ThreeVisualizer({
             onSelect={() => setSelectedEffectId(effect.id)}
           />
         ))}
-        {/* Show placeholder/cue if no effects */}
+        {/* Show prompt if no effects are present */}
         {effects.length === 0 && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center z-20 pointer-events-auto">
-            <div className="text-white/80 text-lg font-mono mb-4">Add an effect from the library</div>
-            <button
-              className="px-4 py-2 bg-purple-600 text-white rounded shadow hover:bg-purple-700 focus:outline-none"
-              onClick={() => handleAddEffect('metaballs')}
-            >
-              + Add Metaballs Effect
-            </button>
+          <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-auto">
+            <span className="text-white/60 text-sm font-mono text-center select-none">
+              Add an effect from the library
+            </span>
           </div>
         )}
         {/* Modals are now rendered within the full-width edit canvas */}
