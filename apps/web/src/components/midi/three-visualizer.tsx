@@ -398,7 +398,9 @@ export function ThreeVisualizer({
           width: `${canvasSize.width}px`,
           height: `${canvasSize.height}px`,
           maxWidth: '100%',
-          maxHeight: '100%'
+          maxHeight: '100%',
+          pointerEvents: 'auto', // Ensure overlays receive pointer events
+          zIndex: 10 // Ensure overlays are above the canvas
         }}
       >
         <canvas 
@@ -407,7 +409,7 @@ export function ThreeVisualizer({
           style={{
             width: `${canvasSize.width}px`,
             height: `${canvasSize.height}px`,
-            pointerEvents: 'none', // Allow overlays to receive events
+            pointerEvents: 'none', // Only the canvas ignores pointer events
             zIndex: 1
           }}
         />
