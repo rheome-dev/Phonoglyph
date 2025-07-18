@@ -69,13 +69,14 @@ export class VisualizerManager {
     this.scene.background = new THREE.Color(0x000000); // Pure black for bloom effect
     this.scene.fog = new THREE.Fog(0x000000, 10, 50);
     
-      // Camera setup - use a fixed aspect ratio (1:1) for consistent visual effects
-  // This ensures effects maintain their proportions regardless of canvas container size
-  const fixedAspectRatio = 1; // Square aspect ratio for consistent visual effects
+      // Camera setup - use aspect ratio from config if available, otherwise use 1:1
+  const initialAspectRatio = config.aspectRatio 
+    ? config.aspectRatio.width / config.aspectRatio.height 
+    : 1; // Default to square aspect ratio
   
   this.camera = new THREE.PerspectiveCamera(
     75,
-    fixedAspectRatio,
+    initialAspectRatio,
     0.1,
     1000
   );
@@ -754,14 +755,38 @@ export class VisualizerManager {
     // Update renderer size to match canvas
     this.renderer.setSize(canvasWidth, canvasHeight);
     
-    // DO NOT change camera aspect ratio - keep it fixed for consistent visual effects
-    // The camera aspect ratio remains constant to prevent stretching/compression
+    // Calculate viewport to maintain aspect ratio and prevent stretching
+    const canvasAspect = canvasWidth / canvasHeight;
+    const targetAspect = targetAspectRatio || 1; // Default to 1:1 if not specified
+    
+    let viewportWidth, viewportHeight, viewportX, viewportY;
+    
+    if (canvasAspect > targetAspect) {
+      // Canvas is wider than target - letterbox on sides
+      viewportHeight = canvasHeight;
+      viewportWidth = canvasHeight * targetAspect;
+      viewportX = (canvasWidth - viewportWidth) / 2;
+      viewportY = 0;
+    } else {
+      // Canvas is taller than target - letterbox on top/bottom
+      viewportWidth = canvasWidth;
+      viewportHeight = canvasWidth / targetAspect;
+      viewportX = 0;
+      viewportY = (canvasHeight - viewportHeight) / 2;
+    }
+    
+    // Set the viewport to maintain aspect ratio
+    this.renderer.setViewport(viewportX, viewportY, viewportWidth, viewportHeight);
+    
+    // Update camera aspect ratio to match target (not canvas)
+    this.camera.aspect = targetAspect;
+    this.camera.updateProjectionMatrix();
     
     // Update bloom effect size
     if (this.bloomEffect) {
       this.bloomEffect.handleResize(canvasWidth, canvasHeight);
     }
     
-    debugLog.log('🎨 Viewport resized to:', canvasWidth, 'x', canvasHeight, 'with fixed camera aspect:', this.camera.aspect);
+    debugLog.log('🎨 Viewport resized to:', canvasWidth, 'x', canvasHeight, 'with viewport:', viewportX, viewportY, viewportWidth, viewportHeight, 'aspect:', targetAspect);
   }
 } 

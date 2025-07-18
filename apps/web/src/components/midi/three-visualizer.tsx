@@ -111,12 +111,13 @@ export function ThreeVisualizer({
     if (internalVisualizerRef.current && canvasSize.width > 0 && canvasSize.height > 0) {
       const visualizer = internalVisualizerRef.current;
       
-      // Use the new viewport resize method - camera aspect ratio stays fixed
-      visualizer.handleViewportResize(canvasSize.width, canvasSize.height);
+      // Use the new viewport resize method with target aspect ratio
+      const targetAspectRatio = aspectRatioConfig.width / aspectRatioConfig.height;
+      visualizer.handleViewportResize(canvasSize.width, canvasSize.height, targetAspectRatio);
       
-      debugLog.log('🎨 Canvas resized to:', canvasSize.width, 'x', canvasSize.height, 'with fixed camera aspect');
+      debugLog.log('🎨 Canvas resized to:', canvasSize.width, 'x', canvasSize.height, 'with target aspect:', targetAspectRatio);
     }
-  }, [canvasSize]);
+  }, [canvasSize, aspectRatioConfig]);
 
   // Initialize visualizer
   useEffect(() => {
