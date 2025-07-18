@@ -525,8 +525,8 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
             // Convert effect to a layer
             onLayerUpdate(targetLayerId, {
               type: 'effect',
-              src: item.name || item.effectId,
-              effectType: item.effectId,
+              src: item.name || item.id,
+              effectType: item.id,
               settings: item.parameters || {}
             });
             break;
@@ -560,8 +560,8 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
           // Convert effect to a layer
           onLayerUpdate(emptyLane.id, {
             type: 'effect',
-            src: item.name || item.effectId,
-            effectType: item.effectId,
+            src: item.name || item.id,
+            effectType: item.id,
             settings: item.parameters || {}
           });
           break;
@@ -615,8 +615,8 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
           const effectLayer: Layer = {
             id: `effect-${Date.now()}`,
             type: 'effect',
-            src: item.name || item.effectId,
-            effectType: item.effectId,
+            src: item.name || item.id,
+            effectType: item.id,
             settings: item.parameters || {},
             position: { x: 50, y: 50 },
             scale: { x: 1, y: 1 },
