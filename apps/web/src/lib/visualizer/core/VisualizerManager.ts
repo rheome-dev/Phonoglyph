@@ -117,7 +117,7 @@ export class VisualizerManager {
     }
     
     this.renderer.setSize(config.canvas.width, config.canvas.height);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, config.canvas.pixelRatio));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, config.canvas.pixelRatio || 2));
     this.renderer.setClearColor(0x000000, 1); // Pure black background
     
     debugLog.log('🎮 Renderer configured with size:', config.canvas.width, 'x', config.canvas.height);
