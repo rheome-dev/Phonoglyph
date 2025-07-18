@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { VisualEffect, AudioAnalysisData, LiveMIDIData } from '@/types/visualizer';
-import type { BoundingBox } from './MetaballsEffect';
 
 interface Particle {
   position: THREE.Vector3;
@@ -61,32 +60,12 @@ export class ParticleNetworkEffect implements VisualEffect {
   private instanceSizes!: Float32Array;
   private dummyMatrix: THREE.Matrix4 = new THREE.Matrix4();
 
-  private boundingBox: BoundingBox | null = null;
 
   constructor() {
     this.setupUniforms();
   }
 
-  setBoundingBox(box: BoundingBox) {
-    this.boundingBox = box;
-  }
-
-  private getWorldBoundingBox(): { min: THREE.Vector3; max: THREE.Vector3 } {
-    // Convert bounding box px to world coordinates at z=0
-    if (!this.boundingBox || !this.renderer || !this.camera) {
-      // Default to full canvas
-      const size = this.renderer?.getSize(new THREE.Vector2()) || new THREE.Vector2(1024, 768);
-      return {
-        min: this.screenToWorld(0, size.y / 2),
-        max: this.screenToWorld(size.x, -size.y / 2)
-      };
-    }
-    const { x, y, width, height } = this.boundingBox;
-    // Top-left and bottom-right in px
-    const min = this.screenToWorld(x, y + height);
-    const max = this.screenToWorld(x + width, y);
-    return { min, max };
-  }
+  
 
   private screenToWorld(screenX: number, screenY: number): THREE.Vector3 {
     // Convert screen px to NDC
@@ -100,14 +79,6 @@ export class ParticleNetworkEffect implements VisualEffect {
     return vector;
   }
 
-  private clampToBoundingBox(pos: THREE.Vector3): THREE.Vector3 {
-    const { min, max } = this.getWorldBoundingBox();
-    return new THREE.Vector3(
-      Math.max(min.x, Math.min(max.x, pos.x)),
-      Math.max(min.y, Math.min(max.y, pos.y)),
-      pos.z
-    );
-  }
 
   private setupUniforms() {
     this.uniforms = {
@@ -232,10 +203,9 @@ export class ParticleNetworkEffect implements VisualEffect {
   }
   
   private getRandomSpawnPosition(): THREE.Vector3 {
-    // Spawn within bounding box in world coordinates
-    const { min, max } = this.getWorldBoundingBox();
-    const x = Math.random() * (max.x - min.x) + min.x;
-    const y = Math.random() * (max.y - min.y) + min.y;
+    // Spawn across entire viewport in world coordinates
+    const x = (Math.random() - 0.5) * 4; // -2 to +2 in world space
+    const y = (Math.random() - 0.5) * 4; // -2 to +2 in world space
     const z = 0;
     return new THREE.Vector3(x, y, z);
   }
@@ -318,8 +288,6 @@ export class ParticleNetworkEffect implements VisualEffect {
       
       // Apply velocity
       particle.position.add(particle.velocity);
-      // Clamp to bounding box
-      particle.position.copy(this.clampToBoundingBox(particle.position));
     }
     
     this.updateBuffers();

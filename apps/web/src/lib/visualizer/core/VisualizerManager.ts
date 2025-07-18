@@ -763,4 +763,55 @@ export class VisualizerManager {
     }
     debugLog.log('🎨 Responsive resize:', canvasWidth, canvasHeight, 'aspect:', this.camera.aspect);
   }
+
+  // 2D Composition Layer for future video/image integration
+  public createCompositionLayer() {
+    // Create an orthographic camera for 2D composition
+    const aspectRatio = this.camera.aspect;
+    const frustumSize = 2;
+    const orthographicCamera = new THREE.OrthographicCamera(
+      frustumSize * aspectRatio / -2,
+      frustumSize * aspectRatio / 2,
+      frustumSize / 2,
+      frustumSize / -2,
+      0.1,
+      1000
+    );
+    orthographicCamera.position.set(0, 0, 1);
+    orthographicCamera.lookAt(0, 0, 0);
+
+    // Create a composition scene for 2D elements
+    const compositionScene = new THREE.Scene();
+    
+    return {
+      scene: compositionScene,
+      camera: orthographicCamera,
+      addVideoLayer: (video: HTMLVideoElement, position: {x: number, y: number}, scale: {x: number, y: number}) => {
+        const texture = new THREE.VideoTexture(video);
+        const plane = new THREE.PlaneGeometry(1, 1);
+        const material = new THREE.MeshBasicMaterial({ map: texture });
+        const mesh = new THREE.Mesh(plane, material);
+        
+        // Position in 2D space (orthographic camera)
+        mesh.position.set(position.x, position.y, 0);
+        mesh.scale.set(scale.x, scale.y, 1);
+        
+        compositionScene.add(mesh);
+        return mesh;
+      },
+      addImageLayer: (image: HTMLImageElement, position: {x: number, y: number}, scale: {x: number, y: number}) => {
+        const texture = new THREE.TextureLoader().load(image.src);
+        const plane = new THREE.PlaneGeometry(1, 1);
+        const material = new THREE.MeshBasicMaterial({ map: texture });
+        const mesh = new THREE.Mesh(plane, material);
+        
+        // Position in 2D space (orthographic camera)
+        mesh.position.set(position.x, position.y, 0);
+        mesh.scale.set(scale.x, scale.y, 1);
+        
+        compositionScene.add(mesh);
+        return mesh;
+      }
+    };
+  }
 } 

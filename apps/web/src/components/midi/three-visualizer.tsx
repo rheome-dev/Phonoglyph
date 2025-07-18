@@ -18,7 +18,6 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { DroppableParameter } from '@/components/ui/droppable-parameter';
 import { getAspectRatioConfig, calculateCanvasSize } from '@/lib/visualizer/aspect-ratios';
-import { BoundingBoxOverlay } from '@/components/ui/BoundingBoxOverlay';
 import { Layer } from '@/types/video-composition';
 
 interface ThreeVisualizerProps {
@@ -82,14 +81,6 @@ export function ThreeVisualizer({
   const [isInitialized, setIsInitialized] = useState(false);
   const [canvasSize, setCanvasSize] = useState({ width: 400, height: 711 });
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
-  const [boundingBoxes, setBoundingBoxes] = useState({
-    metaballs: { x: 0, y: 0, width: 0, height: 0 },
-    particles: { x: 0, y: 0, width: 0, height: 0 },
-  });
-  const [effects, setEffects] = useState<any[]>([]); // [{id, type, boundingBox, ...}]
-  const [selectedEffectId, setSelectedEffectId] = useState<string | null>(null);
-  const metaballsEffectRef = useRef<MetaballsEffect | null>(null);
-  const particleEffectRef = useRef<ParticleNetworkEffect | null>(null);
   const effectInstancesRef = useRef<{ [id: string]: VisualEffect }>({});
   
   // Get aspect ratio configuration
@@ -186,16 +177,6 @@ export function ThreeVisualizer({
     }
   }, [canvasSize, aspectRatioConfig]);
 
-  // Update effect bounding boxes on change
-  useEffect(() => {
-    if (metaballsEffectRef.current) {
-      metaballsEffectRef.current.setBoundingBox(boundingBoxes.metaballs);
-    }
-    if (particleEffectRef.current) {
-      particleEffectRef.current.setBoundingBox(boundingBoxes.particles);
-    }
-  }, [boundingBoxes, canvasSize.width, canvasSize.height]);
-
   // Dynamic scene synchronization
   useEffect(() => {
     if (!internalVisualizerRef.current) return;
@@ -230,28 +211,6 @@ export function ThreeVisualizer({
           manager.addEffect(effect);
           console.log(`[ThreeVisualizer] Added effect instance: ${layer.id} (${layer.effectType})`);
         }
-      }
-      // Update bounding box for effect (type guard)
-      const effect = effectInstancesRef.current[layer.id];
-      if (effect && typeof (effect as any).setBoundingBox === 'function') {
-        // Convert percentage position to pixel coordinates for the effect
-        const pixelX = (layer.position.x / 100) * canvasSize.width;
-        const pixelY = (layer.position.y / 100) * canvasSize.height;
-        
-        // Convert scale to pixel dimensions (using same default size as UI)
-        const defaultWidth = 200; // Default effect width in pixels
-        const defaultHeight = 150; // Default effect height in pixels
-        const pixelWidth = defaultWidth * layer.scale.x;
-        const pixelHeight = defaultHeight * layer.scale.y;
-        
-        const bbox = {
-          x: pixelX,
-          y: pixelY,
-          width: pixelWidth,
-          height: pixelHeight
-        };
-        (effect as any).setBoundingBox(bbox);
-        console.log(`[ThreeVisualizer] Set bounding box for effect ${layer.id}:`, bbox);
       }
     }
 
@@ -328,25 +287,7 @@ export function ThreeVisualizer({
     return () => clearInterval(interval);
   }, [onFpsUpdate]);
 
-  // Set initial bounding boxes when canvas size changes
-  useEffect(() => {
-    if (canvasSize.width > 0 && canvasSize.height > 0) {
-      setBoundingBoxes(prev => ({
-        metaballs: prev.metaballs.width === 0 ? {
-          x: canvasSize.width * 0.2,
-          y: canvasSize.height * 0.2,
-          width: canvasSize.width * 0.6,
-          height: canvasSize.height * 0.6,
-        } : prev.metaballs,
-        particles: prev.particles.width === 0 ? {
-          x: canvasSize.width * 0.25,
-          y: canvasSize.height * 0.25,
-          width: canvasSize.width * 0.5,
-          height: canvasSize.height * 0.5,
-        } : prev.particles,
-      }));
-    }
-  }, [canvasSize.width, canvasSize.height]);
+ 
 
   // Handle effect parameter changes
   const handleParameterChange = (effectId: string, paramName: string, value: any) => {
@@ -368,7 +309,7 @@ export function ThreeVisualizer({
   //     width: canvasSize.width * 0.6,
   //     height: canvasSize.height * 0.6,
   //   };
-  //   setEffects(prev => [...prev, { id, type, boundingBox: box }]);
+  //   setEffects(prev => [...prev, { id, type, }]);
   //   setSelectedEffectId(id);
   //   // TODO: Actually instantiate and add the effect to the visualizer manager
   // };
@@ -412,7 +353,7 @@ export function ThreeVisualizer({
           pointerEvents: 'auto', // Ensure overlays receive pointer events
           zIndex: 10 // Ensure overlays are above the canvas
         }}
-      >
+        >
         <canvas 
           ref={canvasRef} 
           className="absolute top-0 left-0 w-full h-full"
@@ -423,64 +364,6 @@ export function ThreeVisualizer({
             zIndex: 1
           }}
         />
-        {/* Render bounding box overlays for each layer */}
-        {layers.map(layer => {
-          // Only show bounding box for effect layers
-          if (layer.type !== 'effect') return null;
-          
-          // Convert percentage position to pixel coordinates
-          const pixelX = (layer.position.x / 100) * canvasSize.width;
-          const pixelY = (layer.position.y / 100) * canvasSize.height;
-          
-          // Convert scale to pixel dimensions (assuming a default size)
-          const defaultWidth = 200; // Default effect width in pixels
-          const defaultHeight = 150; // Default effect height in pixels
-          const pixelWidth = defaultWidth * layer.scale.x;
-          const pixelHeight = defaultHeight * layer.scale.y;
-          
-          console.log('[ThreeVisualizer] Rendering BoundingBoxOverlay for layer:', layer.id, {
-            originalPosition: layer.position,
-            originalScale: layer.scale,
-            pixelX,
-            pixelY,
-            pixelWidth,
-            pixelHeight,
-            selected: selectedLayerId === layer.id
-          });
-          
-          return (
-            <BoundingBoxOverlay
-              key={layer.id}
-              x={pixelX}
-              y={pixelY}
-              width={pixelWidth}
-              height={pixelHeight}
-              selected={selectedLayerId === layer.id}
-              parentWidth={canvasSize.width}
-              parentHeight={canvasSize.height}
-              onChange={box => {
-                console.log('[ThreeVisualizer] BoundingBoxOverlay onChange:', box);
-                // Convert pixel coordinates back to percentage
-                const newPosition = {
-                  x: (box.x / canvasSize.width) * 100,
-                  y: (box.y / canvasSize.height) * 100
-                };
-                const newScale = {
-                  x: box.width / defaultWidth,
-                  y: box.height / defaultHeight
-                };
-                onLayerUpdate?.(layer.id, {
-                  position: newPosition,
-                  scale: newScale
-                });
-              }}
-              onSelect={() => {
-                console.log('[ThreeVisualizer] BoundingBoxOverlay onSelect:', layer.id);
-                onLayerSelect?.(layer.id);
-              }}
-            />
-          );
-        })}
         {/* Show prompt if all layers are empty */}
         {allLayersEmpty && (
           <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-auto">
