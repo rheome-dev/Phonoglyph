@@ -69,17 +69,16 @@ export class VisualizerManager {
     this.scene.background = new THREE.Color(0x000000); // Pure black for bloom effect
     this.scene.fog = new THREE.Fog(0x000000, 10, 50);
     
-    // Camera setup - use aspect ratio from config if available, otherwise calculate from canvas
-    const aspectRatio = config.aspectRatio 
-      ? config.aspectRatio.width / config.aspectRatio.height 
-      : config.canvas.width / config.canvas.height;
-    
-    this.camera = new THREE.PerspectiveCamera(
-      75,
-      aspectRatio,
-      0.1,
-      1000
-    );
+      // Camera setup - use a fixed aspect ratio (16:9) for consistent visual effects
+  // This ensures effects maintain their proportions regardless of canvas container size
+  const fixedAspectRatio = 16 / 9; // Standard widescreen aspect ratio
+  
+  this.camera = new THREE.PerspectiveCamera(
+    75,
+    fixedAspectRatio,
+    0.1,
+    1000
+  );
     this.camera.position.set(0, 0, 5);
     
     // Renderer setup with error handling and fallbacks
@@ -755,17 +754,14 @@ export class VisualizerManager {
     // Update renderer size to match canvas
     this.renderer.setSize(canvasWidth, canvasHeight);
     
-    // If target aspect ratio is provided, use it; otherwise maintain current camera aspect
-    if (targetAspectRatio) {
-      this.camera.aspect = targetAspectRatio;
-      this.camera.updateProjectionMatrix();
-    }
+    // DO NOT change camera aspect ratio - keep it fixed for consistent visual effects
+    // The camera aspect ratio remains constant to prevent stretching/compression
     
     // Update bloom effect size
     if (this.bloomEffect) {
       this.bloomEffect.handleResize(canvasWidth, canvasHeight);
     }
     
-    debugLog.log('🎨 Viewport resized to:', canvasWidth, 'x', canvasHeight, 'with aspect:', this.camera.aspect);
+    debugLog.log('🎨 Viewport resized to:', canvasWidth, 'x', canvasHeight, 'with fixed camera aspect:', this.camera.aspect);
   }
 } 
