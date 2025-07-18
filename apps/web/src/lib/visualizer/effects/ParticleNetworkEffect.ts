@@ -216,8 +216,8 @@ export class ParticleNetworkEffect implements VisualEffect {
       new THREE.InstancedBufferAttribute(this.instanceSizes, 1, false)
     );
 
-    // Initialize with some default particles to ensure rendering
-    this.initializeDefaultParticles();
+    // Do NOT initialize with default particles
+    // this.initializeDefaultParticles();
 
     this.scene.add(this.instancedMesh);
   }

@@ -119,7 +119,6 @@ export class MetaballsEffect implements VisualEffect {
       uniform float uNoiseIntensity;
       uniform float uAnimationSpeed;
       uniform vec3 uHighlightColor;
-
       varying vec2 vUv;
 
       const int MAX_STEPS = 32;
@@ -395,6 +394,8 @@ export class MetaballsEffect implements VisualEffect {
     if (this.uniforms.uResolution && this.boundingBox.width && this.boundingBox.height) {
       this.uniforms.uResolution.value.set(this.boundingBox.width, this.boundingBox.height);
     }
+
+    // No conditional visibility logic here
   }
 
   private updateCameraAnimation(midiData: LiveMIDIData, audioData: AudioAnalysisData): void {
