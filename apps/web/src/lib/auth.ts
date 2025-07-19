@@ -2,6 +2,35 @@ import { supabase } from './supabase'
 import type { LoginCredentials, SignupCredentials, AuthProvider, User } from '../types/auth'
 
 export class AuthService {
+  // Helper function to detect if we're in a preview deployment
+  private static isPreviewDeployment(): boolean {
+    if (typeof window === 'undefined') return false
+    
+    const hostname = window.location.hostname
+    // Check if it's a Vercel preview deployment (contains vercel.app and has a git branch pattern)
+    return hostname.includes('vercel.app') && 
+           (hostname.includes('-git-') || hostname.includes('-pr-') || hostname.includes('-preview'))
+  }
+
+  // Helper function to save preview URL to localStorage
+  private static savePreviewUrl(): void {
+    if (typeof window === 'undefined') return
+    
+    if (this.isPreviewDeployment()) {
+      const previewUrl = window.location.origin
+      localStorage.setItem('phonoglyph_preview_url', previewUrl)
+      console.log('Saved preview URL:', previewUrl)
+    }
+  }
+
+  // Helper function to get the correct redirect URL
+  private static getRedirectUrl(path: string = '/auth/callback'): string {
+    // Use environment variable or fallback to a reasonable default
+    const productionUrl = process.env.NEXT_PUBLIC_SITE_URL || 
+                         (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000')
+    return `${productionUrl}${path}`
+  }
+
   // Email/Password Authentication
   static async signUpWithEmail({ email, password, name }: SignupCredentials) {
     const { data, error } = await supabase.auth.signUp({
@@ -36,10 +65,23 @@ export class AuthService {
 
   // OAuth Authentication
   static async signInWithOAuth({ provider, redirectTo }: AuthProvider) {
+    // Save preview URL before starting OAuth flow
+    this.savePreviewUrl()
+    
+    // If we're in a preview deployment, use the preview redirect mechanism
+    let finalRedirectTo = redirectTo || this.getRedirectUrl('/auth/callback')
+    
+    if (this.isPreviewDeployment()) {
+      // Add a parameter to indicate this is a preview redirect
+      const url = new URL(finalRedirectTo)
+      url.searchParams.set('preview_redirect', 'true')
+      finalRedirectTo = url.toString()
+    }
+    
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: redirectTo || `${window.location.origin}/auth/callback`,
+        redirectTo: finalRedirectTo,
       },
     })
 
@@ -88,7 +130,7 @@ export class AuthService {
   // Password Reset
   static async resetPassword(email: string) {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/reset-password`,
+      redirectTo: this.getRedirectUrl('/auth/reset-password'),
     })
 
     if (error) {
