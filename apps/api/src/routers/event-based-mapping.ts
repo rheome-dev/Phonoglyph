@@ -63,7 +63,7 @@ const ExtractAudioEventsSchema = z.object({
   forceRecompute: z.boolean().optional()
 });
 
-export const eventBasedMappingRouter: any = router({
+export const eventBasedMappingRouter = router({
   /**
    * Create a new event-based mapping
    */
@@ -92,7 +92,7 @@ export const eventBasedMappingRouter: any = router({
           cause: error
         });
       }
-    }) as any,
+    }),
 
   /**
    * Update an existing mapping
@@ -537,9 +537,50 @@ export const eventBasedMappingRouter: any = router({
       try {
         const service = new EventBasedMappingService();
         
-        // Get the preset (this would normally be from a database)
-        const presetsResponse = await eventBasedMappingRouter.createCaller(ctx).getPresets();
-        const preset = presetsResponse.data.find((p: any) => p.id === input.presetId);
+        // Get the preset from predefined list
+        const presets = [
+          {
+            id: 'kick-drum-trigger',
+            name: 'Kick Drum Trigger',
+            description: 'Maps drum transients to particle bursts',
+            mappings: [
+              {
+                eventType: 'transient' as const,
+                targetParameter: 'particleCount',
+                mappingConfig: {
+                  source: 'transient' as const,
+                  transform: 'envelope' as const,
+                  range: [10, 100] as [number, number],
+                  sensitivity: 75,
+                  envelope: {
+                    attack: 0.01,
+                    decay: 0.05,
+                    sustain: 0.3,
+                    release: 0.2
+                  }
+                }
+              }
+            ]
+          },
+          {
+            id: 'melodic-color-mapping',
+            name: 'Melodic Color Mapping',
+            description: 'Maps pitch changes to color variations',
+            mappings: [
+              {
+                eventType: 'chroma' as const,
+                targetParameter: 'hue',
+                mappingConfig: {
+                  source: 'chroma' as const,
+                  transform: 'linear' as const,
+                  range: [0, 360] as [number, number],
+                  sensitivity: 50
+                }
+              }
+            ]
+          }
+        ];
+        const preset = presets.find((p) => p.id === input.presetId);
         
         if (!preset) {
           throw new TRPCError({

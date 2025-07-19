@@ -219,12 +219,19 @@ export class EventBasedMappingService {
       if (currentTime - lastOnsetTime < minInterval) continue;
       
       // Detect onset using RMS and spectral centroid changes
-      const rmsIncrease = rms[i] > rms[i-1] * (1 + threshold);
-      const centroidChange = Math.abs(spectralCentroid[i] - spectralCentroid[i-1]) > threshold * 1000;
+      const rmsValue = rms[i];
+      const rmsPrev = rms[i-1];
+      const centroidValue = spectralCentroid[i];
+      const centroidPrev = spectralCentroid[i-1];
+      
+      if (!rmsValue || !rmsPrev || !centroidValue || !centroidPrev) continue;
+      
+      const rmsIncrease = rmsValue > rmsPrev * (1 + threshold);
+      const centroidChange = Math.abs(centroidValue - centroidPrev) > threshold * 1000;
       
       if (rmsIncrease && centroidChange) {
-        const amplitude = rms[i];
-        const frequency = spectralCentroid[i];
+        const amplitude = rmsValue;
+        const frequency = centroidValue;
         const duration = this.estimateTransientDurationFromRMS(rms, i);
         const confidence = Math.min(1, amplitude * 2); // Simple confidence measure
         
@@ -258,92 +265,181 @@ export class EventBasedMappingService {
   ): ChromaEvent[] {
     const chromaEvents: ChromaEvent[] = [];
     
-    // For now, create simplified chroma events from spectral data
-    // This would need to be enhanced with actual chromagram analysis
-    if (!meydaData.spectralCentroid) {
+    if (!meydaData.chroma) {
       return chromaEvents;
     }
-    
-    const spectralCentroid = meydaData.spectralCentroid;
+
+    const chromaData = meydaData.chroma;
     const threshold = config.sensitivity.chroma / 100;
+    const minDuration = 0.1; // 100ms minimum duration
     
-    for (let i = 0; i < spectralCentroid.length; i++) {
-      const timestamp = i * 0.025; // 25ms hop size
+    let currentEvent: ChromaEvent | undefined;
+    let eventStart = 0;
+    
+    for (let i = 0; i < chromaData.length; i++) {
+      const chroma = chromaData[i];
+      if (!chroma || !Array.isArray(chroma)) continue;
       
-      // Convert spectral centroid to rough pitch estimate
-      const estimatedPitch = this.centroidToPitchClass(spectralCentroid[i]);
-      const confidence = Math.min(1, spectralCentroid[i] / 3000); // Normalize
+      const confidence = chroma.reduce((a, b) => a + (b || 0), 0) / chroma.length;
       
       if (confidence > threshold) {
-        // Create a simple chroma vector with the dominant note
-        const chroma = new Array(12).fill(0);
-        chroma[estimatedPitch] = confidence;
+        const rootNote = this.findDominantNote(chroma);
+        const keySignature = this.detectKeySignature(chroma);
         
-        chromaEvents.push({
-          timestamp,
-          chroma,
-          rootNote: estimatedPitch,
+        const event: ChromaEvent = {
+          timestamp: i * 0.025,
+          chroma: [...chroma],
+          rootNote,
           confidence,
-          keySignature: this.estimateKeyFromPitchClass(estimatedPitch)
-        });
+          keySignature
+        };
+        
+        if (!currentEvent) {
+          currentEvent = event;
+          eventStart = event.timestamp;
+        } else if (event.rootNote !== currentEvent.rootNote) {
+          if (currentEvent.timestamp - eventStart >= minDuration) {
+            chromaEvents.push(currentEvent);
+          }
+          eventStart = event.timestamp;
+          currentEvent = event;
+        } else {
+          // Keep the event with higher confidence
+          if (event.confidence > currentEvent.confidence) {
+            currentEvent = event;
+          }
+        }
       }
     }
     
-    // Filter to reduce rapid changes
-    return this.filterChromaEventsByStability(chromaEvents);
+    // Add the last event if it meets duration requirement
+    if (currentEvent && currentEvent.timestamp - eventStart >= minDuration) {
+      chromaEvents.push(currentEvent);
+    }
+    
+    return chromaEvents;
   }
 
   /**
-   * Helper methods for Meyda data processing
+   * Estimate transient duration from RMS envelope
    */
   private estimateTransientDurationFromRMS(rms: number[], startIndex: number): number {
-    const peakRMS = rms[startIndex];
-    const threshold = peakRMS * 0.1;
+    if (!rms || startIndex >= rms.length) return 0.1;
     
-    for (let i = startIndex + 1; i < rms.length; i++) {
-      if (rms[i] < threshold) {
-        return (i - startIndex) * 0.025; // Convert to seconds
+    const peakRMS = Math.max(...rms.slice(startIndex, Math.min(startIndex + 20, rms.length)));
+    if (!peakRMS) return 0.1;
+    
+    const threshold = peakRMS * 0.1;
+    let duration = 0;
+    
+    for (let i = startIndex; i < rms.length; i++) {
+      const rmsValue = rms[i];
+      if (!rmsValue || rmsValue < threshold) {
+        duration = (i - startIndex) * 0.025; // Convert to seconds
+        break;
       }
     }
     
-    return 0.5; // Default max duration
+    return Math.max(0.01, Math.min(0.5, duration)); // Clamp between 10ms and 500ms
   }
 
-  private centroidToPitchClass(centroid: number): number {
-    // Very rough approximation - convert spectral centroid to pitch class
-    // This is simplified; real chroma analysis would use FFT bins
-    const normalizedCentroid = Math.max(0, Math.min(8000, centroid)) / 8000;
-    return Math.floor(normalizedCentroid * 12);
+  /**
+   * Find dominant note from chroma vector
+   */
+  private findDominantNote(chroma: number[]): number {
+    if (!chroma || chroma.length === 0) return 0;
+    
+    let maxValue = 0;
+    let dominantNote = 0;
+    
+    for (let i = 0; i < chroma.length; i++) {
+      const value = chroma[i];
+      if (value && value > maxValue) {
+        maxValue = value;
+        dominantNote = i;
+      }
+    }
+    
+    return dominantNote;
   }
 
-  private estimateKeyFromPitchClass(pitchClass: number): string {
-    const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-    return `${noteNames[pitchClass]} major`;
+  /**
+   * Detect key signature from chroma vector
+   */
+  private detectKeySignature(chroma: number[]): string {
+    if (!chroma || chroma.length === 0) return 'C';
+    
+    // Simple key detection based on strongest notes
+    const keyProfiles = {
+      'C': [1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0],
+      'G': [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
+      'D': [0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0],
+      'A': [0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0],
+      'E': [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1],
+      'B': [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1],
+      'F#': [0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0],
+      'C#': [0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0],
+      'F': [0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0],
+      'Bb': [0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0],
+      'Eb': [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0],
+      'Ab': [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1]
+    };
+    
+    let bestKey = 'C';
+    let bestCorrelation = 0;
+    
+    for (const [key, profile] of Object.entries(keyProfiles)) {
+      let correlation = 0;
+      
+      for (let i = 0; i < 12; i++) {
+        const chromaValue = chroma[i];
+        const profileValue = profile[i];
+        if (chromaValue && profileValue) {
+          correlation += chromaValue * profileValue;
+        }
+      }
+      
+      if (correlation > bestCorrelation) {
+        bestCorrelation = correlation;
+        bestKey = key;
+      }
+    }
+    
+    return bestKey;
   }
 
+  /**
+   * Filter chroma events by stability
+   */
   private filterChromaEventsByStability(events: ChromaEvent[]): ChromaEvent[] {
     if (events.length === 0) return events;
     
     const filtered: ChromaEvent[] = [];
-    const minDuration = 0.1; // 100ms minimum
+    const minDuration = 0.1; // 100ms minimum duration
     
-    let currentEvent = events[0];
-    let eventStart = currentEvent.timestamp;
+    let currentEvent: ChromaEvent | undefined = events[0];
+    let eventStart = currentEvent?.timestamp || 0;
     
     for (let i = 1; i < events.length; i++) {
       const event = events[i];
+      if (!event || !currentEvent) continue;
       
       if (event.rootNote !== currentEvent.rootNote) {
         if (currentEvent.timestamp - eventStart >= minDuration) {
           filtered.push(currentEvent);
         }
-        currentEvent = event;
         eventStart = event.timestamp;
+        currentEvent = event;
+      } else {
+        // Keep the event with higher confidence
+        if (event.confidence > currentEvent.confidence) {
+          currentEvent = event;
+        }
       }
     }
     
-    // Add the last event
-    if (currentEvent.timestamp - eventStart >= minDuration) {
+    // Add the last event if it meets duration requirement
+    if (currentEvent && currentEvent.timestamp - eventStart >= minDuration) {
       filtered.push(currentEvent);
     }
     
@@ -495,50 +591,63 @@ export class EventBasedMappingService {
   }
 
   /**
-   * Calculate RMS energy over time
+   * Calculate RMS from audio buffer
    */
   private calculateRMS(audioBuffer: Float32Array, sampleRate: number): number[] {
-    const hopSize = Math.floor(sampleRate * 0.025); // 25ms hop
-    const windowSize = Math.floor(sampleRate * 0.05); // 50ms window
+    if (!audioBuffer || audioBuffer.length === 0) return [];
+    
+    const frameSize = Math.floor(sampleRate * 0.025); // 25ms frames
+    const hopSize = Math.floor(frameSize / 2); // 50% overlap
     const rms: number[] = [];
-
-    for (let i = 0; i < audioBuffer.length - windowSize; i += hopSize) {
+    
+    for (let i = 0; i < audioBuffer.length - frameSize; i += hopSize) {
       let sum = 0;
-      for (let j = i; j < i + windowSize && j < audioBuffer.length; j++) {
-        sum += audioBuffer[j] * audioBuffer[j];
+      
+      for (let j = 0; j < frameSize; j++) {
+        const sample = audioBuffer[i + j];
+        if (sample !== undefined) {
+          sum += sample * sample;
+        }
       }
-      rms.push(Math.sqrt(sum / windowSize));
+      
+      rms.push(Math.sqrt(sum / frameSize));
     }
-
+    
     return rms;
   }
 
   /**
-   * Calculate spectral features over time
+   * Calculate spectral features from audio buffer
    */
   private calculateSpectralFeatures(audioBuffer: Float32Array, sampleRate: number) {
-    const hopSize = Math.floor(sampleRate * 0.025); // 25ms hop
-    const windowSize = 2048;
+    if (!audioBuffer || audioBuffer.length === 0) {
+      return { centroid: [], rolloff: [], flatness: [] };
+    }
+    
+    const frameSize = Math.floor(sampleRate * 0.025); // 25ms frames
+    const hopSize = Math.floor(frameSize / 2); // 50% overlap
     const centroid: number[] = [];
     const rolloff: number[] = [];
     const flatness: number[] = [];
-
-    for (let i = 0; i < audioBuffer.length - windowSize; i += hopSize) {
-      const frame = audioBuffer.slice(i, i + windowSize);
+    
+    for (let i = 0; i < audioBuffer.length - frameSize; i += hopSize) {
+      const frame = audioBuffer.slice(i, i + frameSize);
       const spectrum = this.calculateMagnitudeSpectrum(frame);
       
       centroid.push(this.calculateSpectralCentroid(spectrum, sampleRate));
       rolloff.push(this.calculateSpectralRolloff(spectrum, sampleRate));
       flatness.push(this.calculateSpectralFlatness(spectrum));
     }
-
+    
     return { centroid, rolloff, flatness };
   }
 
   /**
-   * Calculate magnitude spectrum
+   * Calculate magnitude spectrum using FFT
    */
   private calculateMagnitudeSpectrum(frame: Float32Array): Float32Array {
+    if (!frame || frame.length === 0) return new Float32Array();
+    
     const spectrum = new Float32Array(Math.floor(frame.length / 2));
     
     for (let k = 0; k < spectrum.length; k++) {
@@ -546,9 +655,12 @@ export class EventBasedMappingService {
       let imag = 0;
       
       for (let n = 0; n < frame.length; n++) {
-        const angle = -2 * Math.PI * k * n / frame.length;
-        real += frame[n] * Math.cos(angle);
-        imag += frame[n] * Math.sin(angle);
+        const sample = frame[n];
+        if (sample !== undefined) {
+          const angle = -2 * Math.PI * k * n / frame.length;
+          real += sample * Math.cos(angle);
+          imag += sample * Math.sin(angle);
+        }
       }
       
       spectrum[k] = Math.sqrt(real * real + imag * imag);
@@ -561,13 +673,18 @@ export class EventBasedMappingService {
    * Calculate spectral centroid
    */
   private calculateSpectralCentroid(spectrum: Float32Array, sampleRate: number): number {
+    if (!spectrum || spectrum.length === 0) return 0;
+    
     let weightedSum = 0;
     let magnitudeSum = 0;
     
     for (let i = 0; i < spectrum.length; i++) {
-      const frequency = (i * sampleRate) / (2 * spectrum.length);
-      weightedSum += frequency * spectrum[i];
-      magnitudeSum += spectrum[i];
+      const magnitude = spectrum[i];
+      if (magnitude !== undefined) {
+        const frequency = (i * sampleRate) / (2 * spectrum.length);
+        weightedSum += frequency * magnitude;
+        magnitudeSum += magnitude;
+      }
     }
     
     return magnitudeSum > 0 ? weightedSum / magnitudeSum : 0;
@@ -577,40 +694,57 @@ export class EventBasedMappingService {
    * Calculate spectral rolloff
    */
   private calculateSpectralRolloff(spectrum: Float32Array, sampleRate: number): number {
-    const totalEnergy = spectrum.reduce((sum, val) => sum + val, 0);
-    const threshold = totalEnergy * 0.85; // 85% rolloff
+    if (!spectrum || spectrum.length === 0) return 0;
     
+    const threshold = 0.85; // 85% energy threshold
+    let totalEnergy = 0;
     let cumulativeEnergy = 0;
+    
     for (let i = 0; i < spectrum.length; i++) {
-      cumulativeEnergy += spectrum[i];
-      if (cumulativeEnergy >= threshold) {
-        return (i * sampleRate) / (2 * spectrum.length);
+      const magnitude = spectrum[i];
+      if (magnitude !== undefined) {
+        totalEnergy += magnitude * magnitude;
       }
     }
     
-    return (spectrum.length * sampleRate) / (2 * spectrum.length);
+    const targetEnergy = threshold * totalEnergy;
+    
+    for (let i = 0; i < spectrum.length; i++) {
+      const magnitude = spectrum[i];
+      if (magnitude !== undefined) {
+        cumulativeEnergy += magnitude * magnitude;
+        if (cumulativeEnergy >= targetEnergy) {
+          return (i * sampleRate) / (2 * spectrum.length);
+        }
+      }
+    }
+    
+    return sampleRate / 2; // Nyquist frequency as fallback
   }
 
   /**
    * Calculate spectral flatness
    */
   private calculateSpectralFlatness(spectrum: Float32Array): number {
+    if (!spectrum || spectrum.length === 0) return 0;
+    
     let geometricMean = 0;
     let arithmeticMean = 0;
-    let count = 0;
+    let validSamples = 0;
     
-    for (let i = 1; i < spectrum.length; i++) { // Skip DC component
-      if (spectrum[i] > 0) {
-        geometricMean += Math.log(spectrum[i]);
-        arithmeticMean += spectrum[i];
-        count++;
+    for (let i = 0; i < spectrum.length; i++) {
+      const magnitude = spectrum[i];
+      if (magnitude !== undefined && magnitude > 0) {
+        geometricMean += Math.log(magnitude);
+        arithmeticMean += magnitude;
+        validSamples++;
       }
     }
     
-    if (count === 0) return 0;
+    if (validSamples === 0) return 0;
     
-    geometricMean = Math.exp(geometricMean / count);
-    arithmeticMean = arithmeticMean / count;
+    geometricMean = Math.exp(geometricMean / validSamples);
+    arithmeticMean /= validSamples;
     
     return arithmeticMean > 0 ? geometricMean / arithmeticMean : 0;
   }
@@ -623,26 +757,26 @@ export class EventBasedMappingService {
     transients: TransientEvent[],
     currentTime: number
   ): number {
-    // Find the most recent transient event
-    let activeTransient: TransientEvent | null = null;
-    let timeFromOnset = Infinity;
+    if (!transients || transients.length === 0) return 0;
     
-    for (const transient of transients) {
-      const timeDiff = currentTime - transient.timestamp;
-      if (timeDiff >= 0 && timeDiff < transient.duration && timeDiff < timeFromOnset) {
+    // Find the most recent transient before current time
+    let activeTransient: TransientEvent | null = null;
+    
+    for (let i = transients.length - 1; i >= 0; i--) {
+      const transient = transients[i];
+      if (transient && transient.timestamp <= currentTime) {
         activeTransient = transient;
-        timeFromOnset = timeDiff;
+        break;
       }
     }
     
-    if (!activeTransient) return mapping.mapping.range[0];
+    if (!activeTransient) return 0;
     
-    // Apply envelope shaping
-    let value = activeTransient.amplitude;
-    if (mapping.mapping.transform === 'envelope' && activeTransient.envelope) {
-      value *= this.calculateEnvelopeValue(timeFromOnset, activeTransient.envelope);
-    }
+    const timeFromOnset = currentTime - activeTransient.timestamp;
+    const envelopeValue = this.calculateEnvelopeValue(timeFromOnset, activeTransient.envelope);
     
+    // Apply mapping transform
+    const value = activeTransient.amplitude * envelopeValue;
     return this.applyTransform(value, mapping);
   }
 
@@ -654,63 +788,65 @@ export class EventBasedMappingService {
     chromaEvents: ChromaEvent[],
     currentTime: number
   ): number {
-    // Find the current chroma event
+    if (!chromaEvents || chromaEvents.length === 0) return 0;
+    
+    // Find the most recent chroma event before current time
     let activeChroma: ChromaEvent | null = null;
     
     for (let i = chromaEvents.length - 1; i >= 0; i--) {
-      if (chromaEvents[i].timestamp <= currentTime) {
-        activeChroma = chromaEvents[i];
+      const event = chromaEvents[i];
+      if (event && event.timestamp <= currentTime) {
+        activeChroma = event;
         break;
       }
     }
     
-    if (!activeChroma) return mapping.mapping.range[0];
+    if (!activeChroma) return 0;
     
-    // Use the dominant note value or overall confidence
-    const value = activeChroma.chroma[activeChroma.rootNote] || activeChroma.confidence;
-    
+    // Use root note as the primary value
+    const value = activeChroma.rootNote / 11; // Normalize to 0-1
     return this.applyTransform(value, mapping);
   }
 
   /**
-   * Get mapped value for volume (RMS)
+   * Get mapped value for volume events
    */
   private getVolumeMappedValue(
     mapping: AudioEventMapping,
     rms: number[],
     currentTime: number
   ): number {
-    if (rms.length === 0) return mapping.mapping.range[0];
+    if (!rms || rms.length === 0) return 0;
     
-    // Convert time to RMS array index
-    const hopDuration = 0.025; // 25ms hop size
-    const index = Math.floor(currentTime / hopDuration);
+    const frameIndex = Math.floor(currentTime / 0.025); // 25ms hop size
+    if (frameIndex < 0 || frameIndex >= rms.length) return 0;
     
-    if (index < 0 || index >= rms.length) return mapping.mapping.range[0];
+    const rmsValue = rms[frameIndex];
+    if (rmsValue === undefined) return 0;
     
-    const value = rms[index];
-    return this.applyTransform(value, mapping);
+    return this.applyTransform(rmsValue, mapping);
   }
 
   /**
-   * Get mapped value for brightness (spectral centroid)
+   * Get mapped value for brightness events
    */
   private getBrightnessMappedValue(
     mapping: AudioEventMapping,
     spectralFeatures: AudioEventData['spectralFeatures'],
     currentTime: number
   ): number {
-    if (spectralFeatures.centroid.length === 0) return mapping.mapping.range[0];
+    if (!spectralFeatures || !spectralFeatures.centroid || spectralFeatures.centroid.length === 0) {
+      return 0;
+    }
     
-    // Convert time to array index
-    const hopDuration = 0.025; // 25ms hop size
-    const index = Math.floor(currentTime / hopDuration);
+    const frameIndex = Math.floor(currentTime / 0.025); // 25ms hop size
+    if (frameIndex < 0 || frameIndex >= spectralFeatures.centroid.length) return 0;
     
-    if (index < 0 || index >= spectralFeatures.centroid.length) return mapping.mapping.range[0];
+    const centroidValue = spectralFeatures.centroid[frameIndex];
+    if (centroidValue === undefined) return 0;
     
-    // Normalize centroid to 0-1 range (assuming max 8kHz)
-    const normalizedCentroid = Math.min(1, spectralFeatures.centroid[index] / 8000);
-    
+    // Normalize spectral centroid to 0-1 range
+    const normalizedCentroid = Math.min(1, centroidValue / 8000);
     return this.applyTransform(normalizedCentroid, mapping);
   }
 
