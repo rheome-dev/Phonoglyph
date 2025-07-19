@@ -10,6 +10,8 @@ import { useToast } from '@/hooks/use-toast';
  * 2. Extracts events from Meyda features (RMS, spectral centroid, etc.)
  * 3. Provides MIDI-like interface for visualization parameter mapping
  * 4. Works with existing audio analysis workers
+ * 
+ * Updated: Fixed tRPC import path for Vercel deployment
  */
 
 // Types (imported from shared types or redefined for frontend)
