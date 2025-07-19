@@ -900,8 +900,190 @@ self.onerror = function(error) {
   });
 };
 
+// Event detection functions (using existing Meyda analysis)
+function detectTransientEvents(analysisData, sensitivity = 50) {
+  const transients = [];
+  
+  if (!analysisData.rms || !analysisData.spectralCentroid) {
+    return transients;
+  }
+
+  const rms = analysisData.rms;
+  const spectralCentroid = analysisData.spectralCentroid;
+  const threshold = (sensitivity / 100) * 0.1;
+  const minInterval = 0.05; // 50ms minimum between transients
+  
+  let lastOnsetTime = -minInterval;
+  
+  for (let i = 1; i < rms.length - 1; i++) {
+    const currentTime = i * 0.025; // 25ms hop size
+    
+    if (currentTime - lastOnsetTime < minInterval) continue;
+    
+    // Detect onset using RMS and spectral centroid changes
+    const rmsIncrease = rms[i] > rms[i-1] * (1 + threshold);
+    const centroidChange = Math.abs(spectralCentroid[i] - spectralCentroid[i-1]) > threshold * 1000;
+    
+    if (rmsIncrease && centroidChange) {
+      const amplitude = rms[i];
+      const frequency = spectralCentroid[i];
+      const duration = estimateTransientDuration(rms, i);
+      const confidence = Math.min(1, amplitude * 2);
+      
+      transients.push({
+        timestamp: currentTime,
+        amplitude,
+        frequency,
+        duration,
+        confidence,
+        envelope: {
+          attack: 0.01,
+          decay: duration * 0.3,
+          sustain: 0.7,
+          release: duration * 0.5
+        }
+      });
+      
+      lastOnsetTime = currentTime;
+    }
+  }
+  
+  return transients;
+}
+
+function estimateTransientDuration(rms, startIndex) {
+  const peakRMS = rms[startIndex];
+  const threshold = peakRMS * 0.1;
+  
+  for (let i = startIndex + 1; i < rms.length; i++) {
+    if (rms[i] < threshold) {
+      return (i - startIndex) * 0.025; // Convert to seconds
+    }
+  }
+  
+  return 0.5; // Default max duration
+}
+
+function detectChromaEvents(analysisData, sensitivity = 30) {
+  const chromaEvents = [];
+  
+  if (!analysisData.spectralCentroid) {
+    return chromaEvents;
+  }
+  
+  const spectralCentroid = analysisData.spectralCentroid;
+  const threshold = sensitivity / 100;
+  
+  for (let i = 0; i < spectralCentroid.length; i++) {
+    const timestamp = i * 0.025; // 25ms hop size
+    
+    // Convert spectral centroid to rough pitch estimate
+    const estimatedPitch = centroidToPitchClass(spectralCentroid[i]);
+    const confidence = Math.min(1, spectralCentroid[i] / 3000);
+    
+    if (confidence > threshold) {
+      // Create a simple chroma vector with the dominant note
+      const chroma = new Array(12).fill(0);
+      chroma[estimatedPitch] = confidence;
+      
+      chromaEvents.push({
+        timestamp,
+        chroma,
+        rootNote: estimatedPitch,
+        confidence,
+        keySignature: estimateKeyFromPitchClass(estimatedPitch)
+      });
+    }
+  }
+  
+  return filterChromaEventsByStability(chromaEvents);
+}
+
+function centroidToPitchClass(centroid) {
+  const normalizedCentroid = Math.max(0, Math.min(8000, centroid)) / 8000;
+  return Math.floor(normalizedCentroid * 12);
+}
+
+function estimateKeyFromPitchClass(pitchClass) {
+  const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  return `${noteNames[pitchClass]} major`;
+}
+
+function filterChromaEventsByStability(events) {
+  if (events.length === 0) return events;
+  
+  const filtered = [];
+  const minDuration = 0.1; // 100ms minimum
+  
+  let currentEvent = events[0];
+  let eventStart = currentEvent.timestamp;
+  
+  for (let i = 1; i < events.length; i++) {
+    const event = events[i];
+    
+    if (event.rootNote !== currentEvent.rootNote) {
+      if (currentEvent.timestamp - eventStart >= minDuration) {
+        filtered.push(currentEvent);
+      }
+      currentEvent = event;
+      eventStart = event.timestamp;
+    }
+  }
+  
+  // Add the last event
+  if (currentEvent.timestamp - eventStart >= minDuration) {
+    filtered.push(currentEvent);
+  }
+  
+  return filtered;
+}
+
+// Add event detection to existing analysis
+function enhanceAnalysisWithEvents(analysisData, config = {}) {
+  const eventConfig = {
+    features: {
+      transient: true,
+      chroma: true,
+      volume: true,
+      brightness: true,
+      ...config.features
+    },
+    sensitivity: {
+      transient: 50,
+      chroma: 30,
+      volume: 50,
+      brightness: 50,
+      ...config.sensitivity
+    }
+  };
+
+  const events = {
+    transients: [],
+    chroma: [],
+    rms: analysisData.rms || [],
+    spectralFeatures: {
+      centroid: analysisData.spectralCentroid || [],
+      rolloff: analysisData.spectralRolloff || [],
+      flatness: analysisData.spectralFlatness || []
+    },
+    eventCount: 0
+  };
+
+  if (eventConfig.features.transient) {
+    events.transients = detectTransientEvents(analysisData, eventConfig.sensitivity.transient);
+  }
+
+  if (eventConfig.features.chroma) {
+    events.chroma = detectChromaEvents(analysisData, eventConfig.sensitivity.chroma);
+  }
+
+  events.eventCount = events.transients.length + events.chroma.length;
+
+  return events;
+}
+
 // Initialize worker immediately when loaded
-console.log('🎵 Audio Analysis Worker loaded and ready');
+console.log('🎵 Audio Analysis Worker loaded and ready with event detection capabilities');
 
 // Send ready message immediately
 const capabilities = {
