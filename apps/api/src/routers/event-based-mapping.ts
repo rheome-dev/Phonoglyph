@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { createTRPCRouter, protectedProcedure } from '../trpc';
+import { router, protectedProcedure } from '../trpc';
 import { EventBasedMappingService } from '../services/event-based-mapping';
 import { TRPCError } from '@trpc/server';
 
@@ -63,7 +63,7 @@ const ExtractAudioEventsSchema = z.object({
   forceRecompute: z.boolean().optional()
 });
 
-export const eventBasedMappingRouter = createTRPCRouter({
+export const eventBasedMappingRouter = router({
   /**
    * Create a new event-based mapping
    */
