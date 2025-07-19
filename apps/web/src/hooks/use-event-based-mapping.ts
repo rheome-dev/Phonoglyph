@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { api } from '@/lib/api';
+import { trpc } from '@/lib/trpc';
 import { useToast } from '@/hooks/use-toast';
 
 /**
@@ -176,12 +176,12 @@ export const useEventBasedMapping = (options: UseEventBasedMappingOptions): UseE
   const [syncInterval_id, setSyncIntervalId] = useState<NodeJS.Timeout | null>(null);
 
   // API hooks
-  const getMappings = api.eventBasedMapping.getByProject.useQuery(
+  const getMappings = trpc.eventBasedMapping.getByProject.useQuery(
     { projectId },
     { enabled: !!projectId }
   );
 
-  const createMappingMutation = api.eventBasedMapping.create.useMutation({
+  const createMappingMutation = trpc.eventBasedMapping.create.useMutation({
     onSuccess: () => {
       getMappings.refetch();
       toast({ title: "Mapping created successfully" });
@@ -192,7 +192,7 @@ export const useEventBasedMapping = (options: UseEventBasedMappingOptions): UseE
     }
   });
 
-  const updateMappingMutation = api.eventBasedMapping.update.useMutation({
+  const updateMappingMutation = trpc.eventBasedMapping.update.useMutation({
     onSuccess: () => {
       getMappings.refetch();
       toast({ title: "Mapping updated successfully" });
@@ -203,7 +203,7 @@ export const useEventBasedMapping = (options: UseEventBasedMappingOptions): UseE
     }
   });
 
-  const deleteMappingMutation = api.eventBasedMapping.delete.useMutation({
+  const deleteMappingMutation = trpc.eventBasedMapping.delete.useMutation({
     onSuccess: () => {
       getMappings.refetch();
       toast({ title: "Mapping deleted successfully" });
@@ -214,7 +214,7 @@ export const useEventBasedMapping = (options: UseEventBasedMappingOptions): UseE
     }
   });
 
-  const toggleMappingMutation = api.eventBasedMapping.toggle.useMutation({
+  const toggleMappingMutation = trpc.eventBasedMapping.toggle.useMutation({
     onSuccess: () => {
       getMappings.refetch();
     },
@@ -224,7 +224,7 @@ export const useEventBasedMapping = (options: UseEventBasedMappingOptions): UseE
     }
   });
 
-  const extractEventsMutation = api.eventBasedMapping.extractAudioEvents.useMutation({
+  const extractEventsMutation = trpc.eventBasedMapping.extractAudioEvents.useMutation({
     onSuccess: (data) => {
       setAudioEventDataState(data.data);
       toast({ 
@@ -238,9 +238,9 @@ export const useEventBasedMapping = (options: UseEventBasedMappingOptions): UseE
     }
   });
 
-  const getPresetsQuery = api.eventBasedMapping.getPresets.useQuery();
+  const getPresetsQuery = trpc.eventBasedMapping.getPresets.useQuery();
 
-  const applyPresetMutation = api.eventBasedMapping.applyPreset.useMutation({
+  const applyPresetMutation = trpc.eventBasedMapping.applyPreset.useMutation({
     onSuccess: (data) => {
       getMappings.refetch();
       toast({ 
@@ -254,7 +254,7 @@ export const useEventBasedMapping = (options: UseEventBasedMappingOptions): UseE
     }
   });
 
-  const createBulkMappingsMutation = api.eventBasedMapping.createBulk.useMutation({
+  const createBulkMappingsMutation = trpc.eventBasedMapping.createBulk.useMutation({
     onSuccess: (data) => {
       getMappings.refetch();
       toast({ 
