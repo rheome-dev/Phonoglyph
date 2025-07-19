@@ -63,7 +63,7 @@ const ExtractAudioEventsSchema = z.object({
   forceRecompute: z.boolean().optional()
 });
 
-export const eventBasedMappingRouter = router({
+export const eventBasedMappingRouter: any = router({
   /**
    * Create a new event-based mapping
    */
@@ -92,7 +92,7 @@ export const eventBasedMappingRouter = router({
           cause: error
         });
       }
-    }),
+    }) as any,
 
   /**
    * Update an existing mapping
