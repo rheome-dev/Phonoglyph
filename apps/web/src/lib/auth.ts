@@ -6,29 +6,43 @@ export class AuthService {
   private static isPreviewDeployment(): boolean {
     if (typeof window === 'undefined') return false
     
-    const hostname = window.location.hostname
-    // Check if it's a Vercel preview deployment (contains vercel.app and has a git branch pattern)
-    return hostname.includes('vercel.app') && 
-           (hostname.includes('-git-') || hostname.includes('-pr-') || hostname.includes('-preview'))
+    try {
+      const hostname = window.location.hostname
+      // Check if it's a Vercel preview deployment (contains vercel.app and has a git branch pattern)
+      return hostname.includes('vercel.app') && 
+             (hostname.includes('-git-') || hostname.includes('-pr-') || hostname.includes('-preview'))
+    } catch (error) {
+      console.warn('Error detecting preview deployment:', error)
+      return false
+    }
   }
 
   // Helper function to save preview URL to localStorage
   private static savePreviewUrl(): void {
     if (typeof window === 'undefined') return
     
-    if (this.isPreviewDeployment()) {
-      const previewUrl = window.location.origin
-      localStorage.setItem('phonoglyph_preview_url', previewUrl)
-      console.log('Saved preview URL:', previewUrl)
+    try {
+      if (this.isPreviewDeployment()) {
+        const previewUrl = window.location.origin
+        localStorage.setItem('phonoglyph_preview_url', previewUrl)
+        console.log('Saved preview URL:', previewUrl)
+      }
+    } catch (error) {
+      console.warn('Error saving preview URL:', error)
     }
   }
 
   // Helper function to get the correct redirect URL
   private static getRedirectUrl(path: string = '/auth/callback'): string {
-    // Use environment variable or fallback to a reasonable default
-    const productionUrl = process.env.NEXT_PUBLIC_SITE_URL || 
-                         (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000')
-    return `${productionUrl}${path}`
+    try {
+      // Use environment variable or fallback to a reasonable default
+      const productionUrl = process.env.NEXT_PUBLIC_SITE_URL || 
+                           (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000')
+      return `${productionUrl}${path}`
+    } catch (error) {
+      console.warn('Error getting redirect URL:', error)
+      return `http://localhost:3000${path}`
+    }
   }
 
   // Email/Password Authentication
