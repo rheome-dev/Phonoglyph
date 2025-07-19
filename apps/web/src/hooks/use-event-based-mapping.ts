@@ -2,6 +2,16 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { api } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 
+/**
+ * Event-Based Mapping Hook
+ * 
+ * This hook integrates with your existing Meyda.js audio analysis pipeline:
+ * 1. Uses existing audio analysis cache from `audio_analysis_cache` table
+ * 2. Extracts events from Meyda features (RMS, spectral centroid, etc.)
+ * 3. Provides MIDI-like interface for visualization parameter mapping
+ * 4. Works with existing audio analysis workers
+ */
+
 // Types (imported from shared types or redefined for frontend)
 interface TransientEvent {
   timestamp: number;
@@ -405,6 +415,8 @@ export const useEventBasedMapping = (options: UseEventBasedMappingOptions): UseE
     forceRecompute: boolean = false
   ) => {
     setError(null);
+    
+    // This now uses your existing Meyda analysis cache
     await extractEventsMutation.mutateAsync({
       fileMetadataId,
       stemType,

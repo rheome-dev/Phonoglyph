@@ -138,33 +138,47 @@ export class EventBasedMappingService {
   }
 
   /**
-   * Extract audio events from audio buffer
+   * Extract audio events from existing Meyda analysis cache
    */
-  public async extractAudioEvents(
-    audioBuffer: Float32Array,
-    config: EventBasedMappingConfig,
-    sampleRate: number = 44100
+  public async extractAudioEventsFromCache(
+    fileMetadataId: string,
+    stemType: string,
+    config: EventBasedMappingConfig
   ): Promise<AudioEventData> {
-    // Initialize services with correct sample rate
-    const transientDetection = new TransientDetectionService(sampleRate);
-    const chromaAnalysis = new ChromaAnalysisService(sampleRate);
+    // Get existing analysis from cache
+    const { data: cachedAnalysis, error } = await supabase
+      .from('audio_analysis_cache')
+      .select('analysis_data')
+      .eq('file_metadata_id', fileMetadataId)
+      .eq('stem_type', stemType)
+      .single();
 
-    // Extract different types of events
+    if (error || !cachedAnalysis) {
+      throw new Error(`No cached analysis found for file ${fileMetadataId}, stem ${stemType}`);
+    }
+
+    const analysisData = cachedAnalysis.analysis_data;
+    
+    // Extract events from the existing Meyda analysis
     const transients = config.features.transient 
-      ? transientDetection.detectTransients(audioBuffer, config)
+      ? this.extractTransientsFromMeydaData(analysisData, config)
       : [];
 
     const chroma = config.features.chroma 
-      ? chromaAnalysis.extractChroma(audioBuffer, config)
+      ? this.extractChromaFromMeydaData(analysisData, config)
       : [];
 
-    // Calculate continuous features
-    const rms = config.features.volume 
-      ? this.calculateRMS(audioBuffer, sampleRate)
+    // Use existing RMS and spectral features from Meyda cache
+    const rms = config.features.volume && analysisData.rms 
+      ? analysisData.rms
       : [];
 
     const spectralFeatures = config.features.brightness 
-      ? this.calculateSpectralFeatures(audioBuffer, sampleRate)
+      ? {
+          centroid: analysisData.spectralCentroid || [],
+          rolloff: analysisData.spectralRolloff || [],
+          flatness: analysisData.spectralFlatness || []
+        }
       : { centroid: [], rolloff: [], flatness: [] };
 
     return {
@@ -174,6 +188,166 @@ export class EventBasedMappingService {
       spectralFeatures,
       eventCount: transients.length + chroma.length
     };
+  }
+
+  /**
+   * Extract transient events from Meyda analysis data
+   */
+  private extractTransientsFromMeydaData(
+    meydaData: any,
+    config: EventBasedMappingConfig
+  ): TransientEvent[] {
+    const transients: TransientEvent[] = [];
+    
+    if (!meydaData.rms || !meydaData.spectralCentroid) {
+      return transients;
+    }
+
+    const rms = meydaData.rms;
+    const spectralCentroid = meydaData.spectralCentroid;
+    const zcr = meydaData.zcr || [];
+    
+    // Simple onset detection using RMS and spectral centroid changes
+    const threshold = (config.sensitivity.transient / 100) * 0.1; // Adjust based on sensitivity
+    const minInterval = 0.05; // 50ms minimum between transients
+    
+    let lastOnsetTime = -minInterval;
+    
+    for (let i = 1; i < rms.length - 1; i++) {
+      const currentTime = i * 0.025; // Assuming 25ms hop size from Meyda analysis
+      
+      if (currentTime - lastOnsetTime < minInterval) continue;
+      
+      // Detect onset using RMS and spectral centroid changes
+      const rmsIncrease = rms[i] > rms[i-1] * (1 + threshold);
+      const centroidChange = Math.abs(spectralCentroid[i] - spectralCentroid[i-1]) > threshold * 1000;
+      
+      if (rmsIncrease && centroidChange) {
+        const amplitude = rms[i];
+        const frequency = spectralCentroid[i];
+        const duration = this.estimateTransientDurationFromRMS(rms, i);
+        const confidence = Math.min(1, amplitude * 2); // Simple confidence measure
+        
+        transients.push({
+          timestamp: currentTime,
+          amplitude,
+          frequency,
+          duration,
+          confidence,
+          envelope: {
+            attack: 0.01,
+            decay: duration * 0.3,
+            sustain: 0.7,
+            release: duration * 0.5
+          }
+        });
+        
+        lastOnsetTime = currentTime;
+      }
+    }
+    
+    return transients;
+  }
+
+  /**
+   * Extract chroma events from Meyda analysis data
+   */
+  private extractChromaFromMeydaData(
+    meydaData: any,
+    config: EventBasedMappingConfig
+  ): ChromaEvent[] {
+    const chromaEvents: ChromaEvent[] = [];
+    
+    // For now, create simplified chroma events from spectral data
+    // This would need to be enhanced with actual chromagram analysis
+    if (!meydaData.spectralCentroid) {
+      return chromaEvents;
+    }
+    
+    const spectralCentroid = meydaData.spectralCentroid;
+    const threshold = config.sensitivity.chroma / 100;
+    
+    for (let i = 0; i < spectralCentroid.length; i++) {
+      const timestamp = i * 0.025; // 25ms hop size
+      
+      // Convert spectral centroid to rough pitch estimate
+      const estimatedPitch = this.centroidToPitchClass(spectralCentroid[i]);
+      const confidence = Math.min(1, spectralCentroid[i] / 3000); // Normalize
+      
+      if (confidence > threshold) {
+        // Create a simple chroma vector with the dominant note
+        const chroma = new Array(12).fill(0);
+        chroma[estimatedPitch] = confidence;
+        
+        chromaEvents.push({
+          timestamp,
+          chroma,
+          rootNote: estimatedPitch,
+          confidence,
+          keySignature: this.estimateKeyFromPitchClass(estimatedPitch)
+        });
+      }
+    }
+    
+    // Filter to reduce rapid changes
+    return this.filterChromaEventsByStability(chromaEvents);
+  }
+
+  /**
+   * Helper methods for Meyda data processing
+   */
+  private estimateTransientDurationFromRMS(rms: number[], startIndex: number): number {
+    const peakRMS = rms[startIndex];
+    const threshold = peakRMS * 0.1;
+    
+    for (let i = startIndex + 1; i < rms.length; i++) {
+      if (rms[i] < threshold) {
+        return (i - startIndex) * 0.025; // Convert to seconds
+      }
+    }
+    
+    return 0.5; // Default max duration
+  }
+
+  private centroidToPitchClass(centroid: number): number {
+    // Very rough approximation - convert spectral centroid to pitch class
+    // This is simplified; real chroma analysis would use FFT bins
+    const normalizedCentroid = Math.max(0, Math.min(8000, centroid)) / 8000;
+    return Math.floor(normalizedCentroid * 12);
+  }
+
+  private estimateKeyFromPitchClass(pitchClass: number): string {
+    const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    return `${noteNames[pitchClass]} major`;
+  }
+
+  private filterChromaEventsByStability(events: ChromaEvent[]): ChromaEvent[] {
+    if (events.length === 0) return events;
+    
+    const filtered: ChromaEvent[] = [];
+    const minDuration = 0.1; // 100ms minimum
+    
+    let currentEvent = events[0];
+    let eventStart = currentEvent.timestamp;
+    
+    for (let i = 1; i < events.length; i++) {
+      const event = events[i];
+      
+      if (event.rootNote !== currentEvent.rootNote) {
+        if (currentEvent.timestamp - eventStart >= minDuration) {
+          filtered.push(currentEvent);
+        }
+        currentEvent = event;
+        eventStart = event.timestamp;
+      }
+    }
+    
+    // Add the last event
+    if (currentEvent.timestamp - eventStart >= minDuration) {
+      filtered.push(currentEvent);
+    }
+    
+    return filtered;
   }
 
   /**

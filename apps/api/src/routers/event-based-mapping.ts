@@ -206,7 +206,7 @@ export const eventBasedMappingRouter = createTRPCRouter({
     }),
 
   /**
-   * Extract audio events from file
+   * Extract audio events from existing Meyda analysis
    */
   extractAudioEvents: protectedProcedure
     .input(ExtractAudioEventsSchema)
@@ -214,7 +214,7 @@ export const eventBasedMappingRouter = createTRPCRouter({
       try {
         const service = new EventBasedMappingService();
         
-        // Check if events are already cached
+        // Check if events are already cached in our event cache
         if (!input.forceRecompute) {
           const cachedEvents = await service.getCachedAudioEvents(
             input.fileMetadataId,
@@ -230,34 +230,27 @@ export const eventBasedMappingRouter = createTRPCRouter({
           }
         }
 
-        // Get audio file data (this would need to be implemented based on your file storage)
-        // For now, we'll return a placeholder response
-        throw new TRPCError({
-          code: 'NOT_IMPLEMENTED',
-          message: 'Audio file loading not yet implemented - requires integration with existing audio analysis system'
-        });
-
-        // TODO: Implement audio file loading and processing
-        // const audioBuffer = await loadAudioFile(input.fileMetadataId, input.stemType);
-        // const eventData = await service.extractAudioEvents(
-        //   audioBuffer,
-        //   input.config,
-        //   44100 // sample rate
-        // );
+        // Extract events from existing Meyda analysis cache
+        const eventData = await service.extractAudioEventsFromCache(
+          input.fileMetadataId,
+          input.stemType,
+          input.config
+        );
         
-        // Cache the results
-        // await service.cacheAudioEvents(
-        //   ctx.session.user.id,
-        //   input.fileMetadataId,
-        //   input.stemType,
-        //   eventData
-        // );
+        // Cache the event results for faster future access
+        await service.cacheAudioEvents(
+          ctx.session.user.id,
+          input.fileMetadataId,
+          input.stemType,
+          eventData
+        );
 
-        // return {
-        //   success: true,
-        //   data: eventData,
-        //   cached: false
-        // };
+        return {
+          success: true,
+          data: eventData,
+          cached: false,
+          source: 'meyda_analysis'
+        };
       } catch (error) {
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
