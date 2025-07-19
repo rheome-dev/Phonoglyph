@@ -539,7 +539,7 @@ export const eventBasedMappingRouter: any = router({
         
         // Get the preset (this would normally be from a database)
         const presetsResponse = await eventBasedMappingRouter.createCaller(ctx).getPresets();
-        const preset = presetsResponse.data.find(p => p.id === input.presetId);
+        const preset = presetsResponse.data.find((p: any) => p.id === input.presetId);
         
         if (!preset) {
           throw new TRPCError({
