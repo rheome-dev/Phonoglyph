@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { AuthService } from '@/lib/auth'
 import { guestUserService, type GuestUser } from '@/lib/guest-user'
 import { trpc } from '@/lib/trpc'
-import type { User } from '@/types/auth'
+import type { User } from 'phonoglyph-types'
 
 export type AuthUser = User | GuestUser
 

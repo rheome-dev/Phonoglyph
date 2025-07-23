@@ -7,8 +7,8 @@ import { TRPCProvider } from '@/components/providers/trpc-provider'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata = {
-  title: 'Phonoglyph - MIDI Visualization Platform',
-  description: 'Transform MIDI files into stunning visual experiences',
+  title: 'Phonoglyph - Music Visualization Platform',
+  description: 'Transform your music into reactive visual experiences',
 }
 
 export default function RootLayout({

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { router, protectedProcedure } from '../trpc';
 import { TRPCError } from '@trpc/server';
-import type { UserProfile } from '../types/auth';
+import type { UserProfile } from 'phonoglyph-types';
 
 const updateProfileSchema = z.object({
   display_name: z.string().min(1, 'Display name is required').max(100, 'Display name too long').optional(),
@@ -17,8 +17,8 @@ export const userRouter = router({
       return {
         id: ctx.user.id,
         email: ctx.user.email,
-        name: ctx.user.name,
-        avatar_url: ctx.user.image,
+        name: ctx.user.user_metadata?.name,
+        avatar_url: ctx.user.user_metadata?.avatar_url,
         created_at: ctx.user.created_at,
       }
     }),

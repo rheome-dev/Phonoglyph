@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { LoginCredentials, SignupCredentials, AuthProvider, User } from '../types/auth'
+import type { LoginCredentials, SignupCredentials, AuthProvider, User } from 'phonoglyph-types'
 
 export class AuthService {
   // Email/Password Authentication

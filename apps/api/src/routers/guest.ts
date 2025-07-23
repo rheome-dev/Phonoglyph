@@ -1,6 +1,6 @@
 import { router, guestFriendlyProcedure, flexibleProcedure } from '../trpc';
 import { isGuestUser, type GuestUser } from '../types/guest';
-import type { User } from '../types/auth';
+import type { User } from 'phonoglyph-types';
 
 export const guestRouter = router({
     // Get session info for any user type
@@ -42,7 +42,7 @@ export const guestRouter = router({
           user: {
             id: authUser.id,
             email: authUser.email,
-            name: authUser.name,
+            name: authUser.user_metadata?.name,
           },
           limitations: null,
         }
