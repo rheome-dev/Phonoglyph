@@ -125,16 +125,7 @@ app.get('/health', (req: any, res: any) => {
   })
 })
 
-// Test endpoint for debugging
-app.post('/test', (req: any, res: any) => {
-  console.log('🧪 Test endpoint hit');
-  console.log('Request body:', JSON.stringify(req.body, null, 2));
-  res.status(200).json({ 
-    message: 'Test endpoint working',
-    receivedBody: req.body,
-    timestamp: new Date().toISOString()
-  })
-})
+// Test endpoint removed - use tRPC health router for debugging
 
 // Basic route
 app.get('/', (req: any, res: any) => {
