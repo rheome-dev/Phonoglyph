@@ -1,11 +1,22 @@
 import * as THREE from 'three';
 
+export interface EffectParameter {
+  value: number | string | boolean | number[];
+  min?: number;
+  max?: number;
+  step?: number;
+  type: 'number' | 'string' | 'boolean' | 'color' | 'vector2' | 'vector3' | 'vector4';
+  label: string;
+  description?: string;
+  category?: string;
+}
+
 export interface VisualEffect {
   id: string;
   name: string;
   description: string;
   enabled: boolean;
-  parameters: Record<string, any>;
+  parameters: Record<string, EffectParameter>;
   init(scene: THREE.Scene, camera: THREE.Camera, renderer: THREE.WebGLRenderer): void;
   update(deltaTime: number, audioData: AudioAnalysisData, midiData: LiveMIDIData): void;
   destroy(): void;

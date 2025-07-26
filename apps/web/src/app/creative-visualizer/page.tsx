@@ -35,6 +35,9 @@ import { useFeatureValue } from '@/hooks/use-feature-value';
 import { HudOverlayProvider, useHudOverlayContext } from '@/components/hud/HudOverlayManager';
 import { AspectRatioSelector } from '@/components/ui/aspect-ratio-selector';
 import { getAspectRatioConfig } from '@/lib/visualizer/aspect-ratios';
+import { PerformanceTestPanel } from '@/components/debug/PerformanceTestPanel';
+import { VideoExportPanel } from '@/components/export/VideoExportPanel';
+import { TestingGuide } from '@/components/debug/TestingGuide';
 
 // Derived boolean: are stem URLs ready?
 // const stemUrlsReady = Object.keys(asyncStemUrlMap).length > 0; // This line was moved
@@ -968,10 +971,16 @@ function CreativeVisualizerPage() {
     let cachedMappings: [string, string][] = [];
     let lastUpdateTime = 0;
     let frameCount = 0;
-    
+
     // Pre-calculate analysis data for better performance
     let analysisCache: Record<string, any> = {};
     let lastAnalysisCacheTime = 0;
+
+    // Pre-computed lookup tables for performance optimization
+    let featureAnalysisLookup: Record<string, any> = {};
+    let analysisKeyLookup: Record<string, string> = {};
+    let parameterLookup: Record<string, { effectId: string; paramName: string; maxValue: number }> = {};
+    let lastMappingCacheTime = 0;
 
     const animationLoop = () => {
       if (!isPlaying || !visualizerRef.current) {
@@ -1007,14 +1016,41 @@ function CreativeVisualizerPage() {
       const compensatedTime = audioPlaybackTime - measuredLatency + (syncOffsetMs / 1000);
       const syncTime = Math.max(0, compensatedTime);
 
-      // Cache analysis data to avoid repeated lookups
-      // if (!cachedAnalysis || cachedAnalysis.fileMetadataId !== activeTrackId) {
-      //   cachedAnalysis = cachedStemAnalysis.cachedAnalysis.find(a => a.fileMetadataId === activeTrackId);
-      // }
-
-      // Cache mappings to avoid repeated Object.entries calls
-      if (cachedMappings.length !== Object.keys(mappings).length) {
+      // Pre-compute lookup tables when mappings change (performance optimization)
+      const currentMappingCount = Object.keys(mappings).length;
+      if (cachedMappings.length !== currentMappingCount || now - lastMappingCacheTime > 1000) {
         cachedMappings = Object.entries(mappings).filter(([, featureId]) => featureId !== null) as [string, string][];
+
+        // Pre-compute all lookups to avoid repeated calculations in the hot loop
+        featureAnalysisLookup = {};
+        analysisKeyLookup = {};
+        parameterLookup = {};
+
+        for (const [paramKey, featureId] of cachedMappings) {
+          // Pre-compute stem type and analysis lookup
+          const featureStemType = getStemTypeFromFeatureId(featureId);
+          if (featureStemType) {
+            const featureAnalysis = cachedStemAnalysis.cachedAnalysis.find(a => a.stemType === featureStemType);
+            if (featureAnalysis) {
+              featureAnalysisLookup[featureId] = featureAnalysis;
+            }
+          }
+
+          // Pre-compute analysis key lookup
+          analysisKeyLookup[featureId] = getAnalysisKeyFromFeatureId(featureId);
+
+          // Pre-compute parameter parsing
+          const [effectId, paramName] = paramKey.split('-', 2);
+          if (effectId && paramName) {
+            parameterLookup[paramKey] = {
+              effectId,
+              paramName,
+              maxValue: getSliderMax(paramName)
+            };
+          }
+        }
+
+        lastMappingCacheTime = now;
       }
 
       // REMOVED VERBOSE LOGGING - Only log errors
@@ -1032,27 +1068,19 @@ function CreativeVisualizerPage() {
           lastAnalysisCacheTime = now;
         }
         
-        // Process all mappings in a single pass for better performance
+        // Process all mappings in a single pass using pre-computed lookups (OPTIMIZED)
         for (const [paramKey, featureId] of cachedMappings) {
           if (!featureId) continue;
 
-          // Get the stem type from the feature ID
-          const featureStemType = getStemTypeFromFeatureId(featureId);
-          if (!featureStemType) {
-            continue;
-          }
-
-          // Find the analysis data for the specific stem type of this feature
-          const featureAnalysis = cachedStemAnalysis.cachedAnalysis.find(a => 
-            a.stemType === featureStemType
-          );
-
+          // Use pre-computed lookups instead of repeated searches and calculations
+          const featureAnalysis = featureAnalysisLookup[featureId];
           if (!featureAnalysis || !featureAnalysis.analysisData) {
             continue;
           }
 
-          // Convert frontend feature ID to backend analysis key
-          const analysisKey = getAnalysisKeyFromFeatureId(featureId);
+          const analysisKey = analysisKeyLookup[featureId];
+          if (!analysisKey) continue;
+
           const featureData = featureAnalysis.analysisData[analysisKey];
           
           if (!featureData || featureData.length === 0) {
@@ -1079,13 +1107,14 @@ function CreativeVisualizerPage() {
             analysisCache[cacheKey] = featureData[lower];
           }
 
-          const [effectId, paramName] = paramKey.split('-', 2);
-          if (!effectId || !paramName) {
+          // Use pre-computed parameter lookup instead of string splitting every frame
+          const paramInfo = parameterLookup[paramKey];
+          if (!paramInfo) {
             continue;
           }
 
-          const maxValue = getSliderMax(paramName);
-          const minValue = 0; 
+          const { effectId, paramName, maxValue } = paramInfo;
+          const minValue = 0;
           
           const scaledValue = rawValue * (maxValue - minValue) + minValue;
 
@@ -1700,9 +1729,34 @@ function CreativeVisualizerPage() {
               />
             </CollapsibleEffectsSidebar>
 
-
-
         </main>
+
+        {/* Debug and Export Panels */}
+        <PerformanceTestPanel
+          visualizerRef={visualizerRef}
+          cachedAnalysis={cachedStemAnalysis.cachedAnalysis}
+          midiData={midiData}
+        />
+
+        {/* Testing Guide */}
+        <TestingGuide />
+
+        {/* Video Export Panel - positioned in top-left */}
+        {midiData && cachedStemAnalysis.cachedAnalysis.length > 0 && (
+          <div className="fixed top-4 left-4 z-40">
+            <VideoExportPanel
+              projectId={activeTrackId || 'default'}
+              midiData={midiData}
+              cachedAnalysis={cachedStemAnalysis.cachedAnalysis}
+              layers={{
+                video: [],
+                image: [],
+                effect: []
+              }}
+              className="w-80"
+            />
+          </div>
+        )}
       </div>
       </DndProvider>
     </HudOverlayProvider>
