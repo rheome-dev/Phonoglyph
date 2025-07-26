@@ -1,5 +1,63 @@
 import { z } from 'zod'
 
+// Import our comprehensive type definitions
+export * from './audio'
+export * from './visualization'
+export {
+  PerformanceMetrics,
+  DetailedPerformanceMetrics,
+  PerformanceAlert,
+  OptimizationRecommendation,
+  PerformanceMonitorConfig,
+  DeviceCapabilities,
+  PerformanceHistory,
+  PerformanceAnalysis,
+  OptimizationStrategy,
+  PerformanceTest,
+  PerformanceTestResult,
+  RealTimeMonitor,
+  isPerformanceMetrics,
+  isPerformanceAlert,
+  isDeviceCapabilities,
+  isOptimizationRecommendation
+} from './performance'
+
+// ===== RENDER CONFIGURATION SCHEMA =====
+const renderConfigurationSchema = z.object({
+  resolution: z.object({
+    width: z.number().min(1).max(7680),
+    height: z.number().min(1).max(4320),
+  }).optional(),
+  frameRate: z.number().min(1).max(120).optional(),
+  quality: z.enum(['draft', 'preview', 'high', 'ultra']).optional(),
+  effects: z.array(z.string()).optional(),
+  colorScheme: z.object({
+    primary: z.string(),
+    secondary: z.string(),
+    accent: z.string(),
+  }).optional(),
+  audioSync: z.boolean().optional(),
+  duration: z.number().min(0).optional(),
+}).default({})
+
+// ===== RENDER CONFIGURATION TYPES =====
+export interface RenderConfiguration {
+  resolution?: {
+    width: number
+    height: number
+  }
+  frameRate?: number
+  quality?: 'draft' | 'preview' | 'high' | 'ultra'
+  effects?: string[]
+  colorScheme?: {
+    primary: string
+    secondary: string
+    accent: string
+  }
+  audioSync?: boolean
+  duration?: number
+}
+
 // ===== VALIDATION SCHEMAS =====
 export const createProjectSchema = z.object({
   name: z.string().min(1, 'Project name is required').max(100, 'Project name too long'),
@@ -8,7 +66,7 @@ export const createProjectSchema = z.object({
   midi_file_path: z.string().optional(),
   audio_file_path: z.string().optional(),
   user_video_path: z.string().optional(),
-  render_configuration: z.record(z.any()).default({}),
+  render_configuration: renderConfigurationSchema,
 })
 
 export const updateProjectSchema = z.object({
@@ -20,7 +78,7 @@ export const updateProjectSchema = z.object({
   primary_midi_file_id: z.string().uuid('Invalid file ID').optional(),
   audio_file_path: z.string().optional(),
   user_video_path: z.string().optional(),
-  render_configuration: z.record(z.any()).optional(),
+  render_configuration: renderConfigurationSchema.optional(),
 })
 
 export const loginCredentialsSchema = z.object({
@@ -57,12 +115,32 @@ export interface NormalizedUser {
   updated_at: string
 }
 
+export interface UserPreferences {
+  theme: 'light' | 'dark' | 'auto'
+  language: string
+  notifications: {
+    email: boolean
+    push: boolean
+    marketing: boolean
+  }
+  visualization: {
+    defaultQuality: 'draft' | 'preview' | 'high' | 'ultra'
+    autoPlay: boolean
+    showFPS: boolean
+  }
+  audio: {
+    defaultVolume: number
+    enableSpatialAudio: boolean
+    bufferSize: number
+  }
+}
+
 export interface UserProfile {
   id: string // UUID from auth.users
   display_name?: string
   avatar_url?: string
   bio?: string
-  preferences: Record<string, any>
+  preferences: UserPreferences
   subscription_tier: 'free' | 'premium' | 'enterprise'
   created_at: string
   updated_at: string
@@ -80,7 +158,7 @@ export interface Project {
   midi_file_path: string
   audio_file_path?: string
   user_video_path?: string
-  render_configuration: Record<string, any>
+  render_configuration: RenderConfiguration
   description?: string
   privacy_setting: 'private' | 'unlisted' | 'public'
   thumbnail_url?: string
@@ -147,20 +225,53 @@ export interface AuthError {
   code?: string
 }
 
+export interface AuthSession {
+  access_token: string
+  refresh_token: string
+  expires_in: number
+  expires_at: number
+  token_type: string
+  user: User
+}
+
+export interface SupabaseClient {
+  auth: {
+    signIn: (credentials: any) => Promise<any>
+    signOut: () => Promise<any>
+    getUser: () => Promise<any>
+    onAuthStateChange: (callback: (event: string, session: AuthSession | null) => void) => any
+  }
+  from: (table: string) => any
+  storage: any
+}
+
 export interface AuthContext {
   user: User | null
-  session: any | null
-  supabase: any
+  session: AuthSession | null
+  supabase: SupabaseClient
 }
 
 // ===== AUDIT & SYSTEM TYPES =====
+export interface AuditLogMetadata {
+  oldValue?: unknown
+  newValue?: unknown
+  changes?: Record<string, { from: unknown; to: unknown }>
+  context?: {
+    userAgent?: string
+    ipAddress?: string
+    sessionId?: string
+    requestId?: string
+  }
+  additionalData?: Record<string, unknown>
+}
+
 export interface AuditLog {
   id: string
   user_id?: string // UUID from auth.users
   action: string
   resource_type: string
   resource_id?: string
-  metadata: Record<string, any>
+  metadata: AuditLogMetadata
   ip_address?: string
   user_agent?: string
   created_at: string

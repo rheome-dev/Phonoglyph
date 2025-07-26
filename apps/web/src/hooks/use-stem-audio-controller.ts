@@ -5,6 +5,13 @@ import { FallbackSystem } from '@/lib/fallback-system';
 import { StemAnalysis, AudioFeature, PerformanceMetrics } from '@/types/stem-audio-analysis';
 import { AudioAnalysisData } from '@/types/visualizer';
 
+interface FallbackState {
+  reason: string;
+  timestamp: number;
+  recoveryAttempts: number;
+  lastError?: string;
+}
+
 interface Stem {
   id: string;
   url: string;
@@ -31,7 +38,7 @@ interface UseStemAudioController {
   testAudioOutput: () => Promise<void>;
   performanceMetrics: PerformanceMetrics;
   deviceProfile: string;
-  fallbackState: any;
+  fallbackState: FallbackState;
   visualizationData: AudioAnalysisData | null;
   stemsLoaded: boolean;
   isLooping: boolean;
