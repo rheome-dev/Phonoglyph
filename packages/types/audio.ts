@@ -66,7 +66,7 @@ export interface StemMetadata {
 
 // ===== AUDIO FEATURE DATA COLLECTION =====
 
-export interface AudioFeatureData {
+export type AudioFeatureData = {
   [K in StemType]?: StemAnalysisData;
 }
 
@@ -95,7 +95,7 @@ export interface AudioAnalysisData {
   timestamp: number;
 }
 
-export interface RealtimeAudioFeatures {
+export type RealtimeAudioFeatures = {
   [K in StemType]?: AudioAnalysisData;
 }
 
