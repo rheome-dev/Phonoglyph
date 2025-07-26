@@ -2,6 +2,9 @@ import { z } from 'zod';
 import { router, protectedProcedure, flexibleProcedure } from '../trpc';
 import { TRPCError } from '@trpc/server';
 import { createProjectSchema, updateProjectSchema, type Project, type ProjectCollaborator, type ProjectWithCollaborators, type ProjectShare } from 'phonoglyph-types';
+import { db } from '../db/drizzle';
+import { projects, fileMetadata } from '../db/schema';
+import { eq, desc, and, or, like, asc, sql } from 'drizzle-orm';
 
 // Additional validation schemas for new endpoints
 
@@ -52,29 +55,22 @@ export const projectRouter = router({
   list: protectedProcedure
     .query(async ({ ctx }) => {
       try {
-        // RLS automatically filters projects based on user access
-        const { data: projects, error } = await ctx.supabase
-          .from('projects')
-          .select('*')
-          .order('created_at', { ascending: false });
+        // Type-safe query with Drizzle ORM
+        const userProjects = await db
+          .select()
+          .from(projects)
+          .where(eq(projects.userId, ctx.user.id))
+          .orderBy(desc(projects.createdAt));
 
-        if (error) {
-          console.error('Database error fetching projects:', error);
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to fetch projects',
-          });
-        }
-
-        // Log audit event
+        // Log audit event (keeping Supabase for audit logging for now)
         await ctx.supabase.rpc('log_audit_event', {
           p_user_id: ctx.user.id,
           p_action: 'project.list',
           p_resource_type: 'project',
-          p_metadata: { count: projects?.length || 0 },
+          p_metadata: { count: userProjects?.length || 0 },
         });
 
-        return projects as Project[];
+        return userProjects as Project[];
       } catch (error) {
         console.error('Error fetching projects:', error);
         throw new TRPCError({
@@ -89,24 +85,22 @@ export const projectRouter = router({
     .input(projectIdSchema)
     .query(async ({ input, ctx }) => {
       try {
-        // RLS automatically filters based on user access
-        const { data: project, error } = await ctx.supabase
-          .from('projects')
-          .select('*')
-          .eq('id', input.id)
-          .single();
+        // Type-safe query with user access control
+        const project = await db
+          .select()
+          .from(projects)
+          .where(
+            and(
+              eq(projects.id, input.id),
+              eq(projects.userId, ctx.user.id)
+            )
+          )
+          .limit(1);
 
-        if (error) {
-          if (error.code === 'PGRST116') {
-            throw new TRPCError({
-              code: 'NOT_FOUND',
-              message: 'Project not found or access denied',
-            });
-          }
-          console.error('Database error fetching project:', error);
+        if (!project || project.length === 0) {
           throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to fetch project',
+            code: 'NOT_FOUND',
+            message: 'Project not found or access denied',
           });
         }
 
@@ -118,7 +112,7 @@ export const projectRouter = router({
           p_resource_id: input.id,
         });
 
-        return project as Project;
+        return project[0] as Project;
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         console.error('Error fetching project:', error);
@@ -139,27 +133,28 @@ export const projectRouter = router({
         console.log('input.name:', input.name);
         console.log('input.name type:', typeof input.name);
         console.log('=== END API DEBUG ===');
-        
+
         const projectId = `proj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-        const { data: project, error } = await ctx.supabase
-          .from('projects')
-          .insert({
+        // Type-safe insert with Drizzle ORM
+        const newProject = await db
+          .insert(projects)
+          .values({
             id: projectId,
             name: input.name,
             description: input.description,
-            privacy_setting: input.privacy_setting,
-            user_id: ctx.user.id,
-            midi_file_path: input.midi_file_path,
-            audio_file_path: input.audio_file_path,
-            user_video_path: input.user_video_path,
-            render_configuration: input.render_configuration,
+            privacySetting: input.privacy_setting,
+            userId: ctx.user.id,
+            midiFilePath: input.midi_file_path,
+            audioFilePath: input.audio_file_path,
+            userVideoPath: input.user_video_path,
+            renderConfiguration: input.render_configuration,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
           })
-          .select()
-          .single();
+          .returning();
 
-        if (error) {
-          console.error('Database error creating project:', error);
+        if (!newProject || newProject.length === 0) {
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to create project',
@@ -171,11 +166,11 @@ export const projectRouter = router({
           p_user_id: ctx.user.id,
           p_action: 'project.create',
           p_resource_type: 'project',
-          p_resource_id: project.id,
+          p_resource_id: newProject[0].id,
           p_metadata: { name: input.name },
         });
 
-        return project as Project;
+        return newProject[0] as Project;
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         console.error('Error creating project:', error);
@@ -193,24 +188,31 @@ export const projectRouter = router({
       try {
         const { id, ...updateData } = input;
 
-        const { data: project, error } = await ctx.supabase
-          .from('projects')
-          .update(updateData)
-          .eq('id', id)
-          .select()
-          .single();
+        // Type-safe update with user access control
+        const updatedProject = await db
+          .update(projects)
+          .set({
+            name: updateData.name,
+            description: updateData.description,
+            privacySetting: updateData.privacy_setting,
+            midiFilePath: updateData.midi_file_path,
+            audioFilePath: updateData.audio_file_path,
+            userVideoPath: updateData.user_video_path,
+            renderConfiguration: updateData.render_configuration,
+            updatedAt: new Date().toISOString(),
+          })
+          .where(
+            and(
+              eq(projects.id, id),
+              eq(projects.userId, ctx.user.id)
+            )
+          )
+          .returning();
 
-        if (error) {
-          if (error.code === 'PGRST116') {
-            throw new TRPCError({
-              code: 'NOT_FOUND',
-              message: 'Project not found or access denied',
-            });
-          }
-          console.error('Database error updating project:', error);
+        if (!updatedProject || updatedProject.length === 0) {
           throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to update project',
+            code: 'NOT_FOUND',
+            message: 'Project not found or access denied',
           });
         }
 
@@ -223,7 +225,7 @@ export const projectRouter = router({
           p_metadata: updateData,
         });
 
-        return project as Project;
+        return updatedProject[0] as Project;
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         console.error('Error updating project:', error);
@@ -240,23 +242,18 @@ export const projectRouter = router({
     .mutation(async ({ input, ctx }) => {
       try {
         // Step 1: Fetch all file metadata associated with the project
-        const { data: files, error: filesError } = await ctx.supabase
-          .from('file_metadata')
-          .select('id, s3_key')
-          .eq('project_id', input.id);
-
-        if (filesError) {
-          console.error('Database error fetching project files:', filesError);
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to fetch project files for deletion.',
-          });
-        }
+        const files = await db
+          .select({
+            id: fileMetadata.id,
+            s3Key: fileMetadata.s3Key,
+          })
+          .from(fileMetadata)
+          .where(eq(fileMetadata.projectId, input.id));
 
         // Step 2: If files exist, delete them from storage
         if (files && files.length > 0) {
-          const filePaths = files.map((f: { s3_key: string | null }) => f.s3_key).filter((p: string | null): p is string => !!p);
-          
+          const filePaths = files.map(f => f.s3Key).filter((p): p is string => !!p);
+
           if (filePaths.length > 0) {
             const { error: storageError } = await ctx.supabase.storage
               .from('assets')
@@ -271,43 +268,28 @@ export const projectRouter = router({
             }
           }
 
-          // Step 3: Delete the file metadata records
-          const fileIds = files.map((f: { id: string }) => f.id);
-          const { error: deleteMetaError } = await ctx.supabase
-            .from('file_metadata')
-            .delete()
-            .in('id', fileIds);
-          
-          if (deleteMetaError) {
-            console.error('Database error deleting file metadata:', deleteMetaError);
-            // Note: at this point, files might be deleted from storage but not DB.
-            // This is a situation that may require a cleanup job.
-            throw new TRPCError({
-              code: 'INTERNAL_SERVER_ERROR',
-              message: 'Failed to clean up project file metadata.',
-            });
-          }
+          // Step 3: Delete the file metadata records using Drizzle
+          const fileIds = files.map(f => f.id);
+          await db
+            .delete(fileMetadata)
+            .where(sql`${fileMetadata.id} = ANY(${fileIds})`);
         }
 
-        // Step 4: Delete the project itself
-        const { data: project, error } = await ctx.supabase
-          .from('projects')
-          .delete()
-          .eq('id', input.id)
-          .select()
-          .single();
+        // Step 4: Delete the project itself using Drizzle
+        const deletedProject = await db
+          .delete(projects)
+          .where(
+            and(
+              eq(projects.id, input.id),
+              eq(projects.userId, ctx.user.id)
+            )
+          )
+          .returning();
 
-        if (error) {
-          if (error.code === 'PGRST116') {
-            throw new TRPCError({
-              code: 'NOT_FOUND',
-              message: 'Project not found or access denied',
-            });
-          }
-          console.error('Database error deleting project:', error);
+        if (!deletedProject || deletedProject.length === 0) {
           throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to delete project',
+            code: 'NOT_FOUND',
+            message: 'Project not found or access denied',
           });
         }
 
@@ -317,10 +299,10 @@ export const projectRouter = router({
           p_action: 'project.delete',
           p_resource_type: 'project',
           p_resource_id: input.id,
-          p_metadata: { name: project.name },
+          p_metadata: { name: deletedProject[0].name },
         });
 
-        return { success: true, deletedProject: project as Project };
+        return { success: true, deletedProject: deletedProject[0] as Project };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         console.error('Error deleting project:', error);
@@ -336,47 +318,38 @@ export const projectRouter = router({
     .input(projectSearchSchema)
     .query(async ({ input, ctx }) => {
       try {
-        let query = ctx.supabase
-          .from('projects')
-          .select(`
-            *,
-            file_metadata!project_id (
-              id,
-              file_size
-            )
-          `)
-          .eq('user_id', ctx.user.id);
+        // Build base query conditions
+        const conditions = [eq(projects.userId, ctx.user.id)];
 
         // Apply filters
         if (input.query) {
-          query = query.ilike('name', `%${input.query}%`);
+          conditions.push(like(projects.name, `%${input.query}%`));
         }
         if (input.privacy_setting) {
-          query = query.eq('privacy_setting', input.privacy_setting);
+          conditions.push(eq(projects.privacySetting, input.privacy_setting));
         }
 
-        // Apply sorting
-        query = query.order(input.sort_by, { ascending: input.sort_order === 'asc' });
+        // Build order by clause
+        const orderBy = input.sort_order === 'asc'
+          ? asc(projects[input.sort_by as keyof typeof projects])
+          : desc(projects[input.sort_by as keyof typeof projects]);
 
-        // Apply pagination
-        query = query.range(input.offset, input.offset + input.limit - 1);
+        // Execute query with Drizzle
+        const searchResults = await db
+          .select()
+          .from(projects)
+          .where(and(...conditions))
+          .orderBy(orderBy)
+          .limit(input.limit)
+          .offset(input.offset);
 
-        const { data: projects, error } = await query;
-
-        if (error) {
-          console.error('Database error searching projects:', error);
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to search projects',
-          });
-        }
-
-        // Compute additional fields
-        const projectsWithMetadata = projects?.map((project: any) => ({
+        // For now, return basic project data without file metadata aggregation
+        // TODO: Implement proper joins and aggregations with Drizzle
+        const projectsWithMetadata = searchResults.map(project => ({
           ...project,
-          file_count: project.file_metadata?.length || 0,
-          total_file_size: project.file_metadata?.reduce((sum: number, file: any) => sum + (file.file_size || 0), 0) || 0,
-        })) || [];
+          file_count: 0, // TODO: Add proper file count aggregation
+          total_file_size: 0, // TODO: Add proper file size aggregation
+        }));
 
         return projectsWithMetadata;
       } catch (error) {

@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import { router, protectedProcedure } from '../trpc';
-import { TRPCError } from '@trpc/server';
+import { TRPCError } from '@trpc/server'
+import { db } from '../db/drizzle'
+import { auditLogs } from '../db/schema'
+import { eq, desc } from 'drizzle-orm';
 import type { UserProfile } from 'phonoglyph-types';
 
 const updateProfileSchema = z.object({
@@ -93,20 +96,14 @@ export const userRouter = router({
     }))
     .query(async ({ input, ctx }) => {
       try {
-        const { data: logs, error } = await ctx.supabase
-          .from('audit_logs')
-          .select('*')
-          .eq('user_id', ctx.user.id)
-          .order('created_at', { ascending: false })
-          .range(input.offset, input.offset + input.limit - 1);
-
-        if (error) {
-          console.error('Database error fetching audit logs:', error);
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to fetch audit logs',
-          });
-        }
+        // Fetch audit logs using Drizzle
+        const logs = await db
+          .select()
+          .from(auditLogs)
+          .where(eq(auditLogs.userId, ctx.user.id))
+          .orderBy(desc(auditLogs.createdAt))
+          .limit(input.limit)
+          .offset(input.offset);
 
         return logs || [];
       } catch (error) {

@@ -5,6 +5,9 @@ import { Reader } from 'wav';
 import { Writable } from 'stream';
 import ffmpeg from 'fluent-ffmpeg';
 import { PassThrough } from 'stream';
+import { db } from '../db/drizzle';
+import { audioAnalysisCache } from '../db/schema';
+import { eq, and } from 'drizzle-orm';
 
 // Audio analysis types
 
@@ -95,33 +98,32 @@ export class AudioAnalyzer {
         analysisDuration
       };
       
-      // Cache the analysis results
-      const { data: cachedAnalysis, error } = await this.supabase
-        .from('audio_analysis_cache')
-        .insert({
-          user_id: userId,
-          file_metadata_id: fileMetadataId,
-          stem_type: stemType,
-          analysis_version: '1.0',
-          sample_rate: metadata.sampleRate,
+      // Cache the analysis results using Drizzle ORM
+      const cachedAnalysis = await db
+        .insert(audioAnalysisCache)
+        .values({
+          userId: userId,
+          fileMetadataId: fileMetadataId,
+          stemType: stemType,
+          analysisVersion: '1.0',
+          sampleRate: metadata.sampleRate,
           duration: metadata.duration,
-          buffer_size: metadata.bufferSize,
-          features_extracted: metadata.featuresExtracted,
-          analysis_data: analysisData,
-          waveform_data: waveformData,
-          analysis_duration: analysisDuration
+          bufferSize: metadata.bufferSize,
+          featuresExtracted: metadata.featuresExtracted,
+          analysisData: analysisData,
+          waveformData: waveformData,
+          analysisDuration: analysisDuration
         })
-        .select()
-        .single();
-      
-      if (error) {
-        throw new Error(`Failed to cache analysis: ${error.message}`);
+        .returning();
+
+      if (!cachedAnalysis || cachedAnalysis.length === 0) {
+        throw new Error('Failed to cache analysis: No data returned');
       }
       
       logger.log(`✅ Audio analysis completed for ${stemType} stem in ${analysisDuration}ms`);
-      
+
       return {
-        id: cachedAnalysis.id,
+        id: cachedAnalysis[0]!.id,
         fileMetadataId,
         stemType,
         analysisData,
@@ -146,49 +148,45 @@ export class AudioAnalyzer {
     try {
       // Check if this is a guest user
       const isGuestUser = userId.startsWith('guest_');
-      
-      let query = this.supabase
-        .from('audio_analysis_cache')
-        .select('*')
-        .eq('file_metadata_id', fileMetadataId);
-      
-      // Only filter by user_id for authenticated users
-      if (!isGuestUser) {
-        query = query.eq('user_id', userId);
-      }
-      
-      if (stemType) {
-        query = query.eq('stem_type', stemType);
-      }
-      
-      const { data, error } = await query;
-      
-      console.log('getCachedAnalysis query:', { fileMetadataId, userId, stemType });
-      console.log('getCachedAnalysis result:', data);
-      
-      if (error) {
-        throw new Error(`Failed to retrieve cached analysis: ${error.message}`);
-      }
-      
+
       // For guest users, return null since they won't have cached analysis
       if (isGuestUser) {
         return null;
       }
-      
-      if (Array.isArray(data) && data.length > 0) {
-        const row = data[0];
+
+      // Build type-safe query with Drizzle
+      const whereConditions = [
+        eq(audioAnalysisCache.fileMetadataId, fileMetadataId),
+        eq(audioAnalysisCache.userId, userId)
+      ];
+
+      if (stemType) {
+        whereConditions.push(eq(audioAnalysisCache.stemType, stemType));
+      }
+
+      const data = await db
+        .select()
+        .from(audioAnalysisCache)
+        .where(and(...whereConditions))
+        .limit(1);
+
+      console.log('getCachedAnalysis query:', { fileMetadataId, userId, stemType });
+      console.log('getCachedAnalysis result:', data);
+
+      if (data && data.length > 0) {
+        const row = data[0]!;
         return {
           id: row.id,
-          fileMetadataId: row.file_metadata_id,
-          stemType: row.stem_type,
-          analysisData: row.analysis_data,
-          waveformData: row.waveform_data,
+          fileMetadataId: row.fileMetadataId,
+          stemType: row.stemType,
+          analysisData: row.analysisData as AudioAnalysisData,
+          waveformData: row.waveformData,
           metadata: {
-            sampleRate: row.sample_rate,
+            sampleRate: row.sampleRate,
             duration: row.duration,
-            bufferSize: row.buffer_size,
-            featuresExtracted: row.features_extracted,
-            analysisDuration: row.analysis_duration
+            bufferSize: row.bufferSize,
+            featuresExtracted: row.featuresExtracted,
+            analysisDuration: row.analysisDuration
           }
         };
       }

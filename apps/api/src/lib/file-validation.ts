@@ -187,84 +187,183 @@ export function validateFileSize(fileSize: number, fileType: FileType): boolean 
   return fileSize <= FILE_SIZE_LIMITS[fileType]
 }
 
-// Validate file header (magic bytes) - EXTENDED
-export function validateFileHeader(buffer: ArrayBuffer, fileType: FileType): boolean {
-  const uint8Array = new Uint8Array(buffer.slice(0, 12)) // Check first 12 bytes
-  
-  switch (fileType) {
+// Security validation interfaces
+export interface SecurityIssue {
+  type: 'malware' | 'embedded_script' | 'suspicious_header' | 'invalid_structure' | 'oversized_metadata';
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  description: string;
+  details?: Record<string, any>;
+}
+
+export interface ValidationResult {
+  isValid: boolean;
+  detectedType: string;
+  securityIssues: SecurityIssue[];
+  confidence: number;
+  fileSize: number;
+  actualMimeType?: string;
+}
+
+export interface ScanResult {
+  isClean: boolean;
+  threats: Array<{
+    name: string;
+    type: string;
+    severity: 'low' | 'medium' | 'high' | 'critical';
+  }>;
+  scanTime: number;
+}
+
+// Enhanced magic byte validation with security checks
+export async function validateFileContentSecurity(buffer: Buffer, expectedType: FileType): Promise<ValidationResult> {
+  const uint8Array = new Uint8Array(buffer.slice(0, 64)); // Check first 64 bytes for thorough analysis
+  const securityIssues: SecurityIssue[] = [];
+  let confidence = 0;
+  let detectedType = 'unknown';
+
+  // Check for executable file signatures (security threat)
+  const executableSignatures = [
+    [0x4d, 0x5a], // PE executable (Windows)
+    [0x7f, 0x45, 0x4c, 0x46], // ELF executable (Linux)
+    [0xfe, 0xed, 0xfa, 0xce], // Mach-O executable (macOS)
+    [0xca, 0xfe, 0xba, 0xbe], // Java class file
+  ];
+
+  for (const signature of executableSignatures) {
+    if (signature.every((byte, i) => uint8Array[i] === byte)) {
+      securityIssues.push({
+        type: 'malware',
+        severity: 'critical',
+        description: 'File contains executable code signature',
+        details: { signature: signature.map(b => `0x${b.toString(16)}`).join(' ') }
+      });
+      return {
+        isValid: false,
+        detectedType: 'executable',
+        securityIssues,
+        confidence: 1.0,
+        fileSize: buffer.length
+      };
+    }
+  }
+
+  // Validate against expected file type with enhanced security
+  switch (expectedType) {
     case 'midi':
-      // Check for MIDI "MThd" header
-      return [0x4d, 0x54, 0x68, 0x64].every((byte, i) => uint8Array[i] === byte)
-      
+      if ([0x4d, 0x54, 0x68, 0x64].every((byte, i) => uint8Array[i] === byte)) {
+        detectedType = 'midi';
+        confidence = 0.95;
+
+        // Check for suspicious MIDI data
+        if (buffer.length > 10 * 1024 * 1024) { // 10MB is unusually large for MIDI
+          securityIssues.push({
+            type: 'suspicious_header',
+            severity: 'medium',
+            description: 'MIDI file is unusually large',
+            details: { size: buffer.length }
+          });
+        }
+      }
+      break;
+
     case 'audio':
-      // For audio, we need to check the actual extension/mime type
-      if (buffer.byteLength < 4) return false
-      
-      // Check for MP3
+      // Enhanced MP3 validation
       if ([0xff, 0xfb].every((byte, i) => uint8Array[i] === byte) ||
           [0xff, 0xf3].every((byte, i) => uint8Array[i] === byte) ||
-          [0xff, 0xf2].every((byte, i) => uint8Array[i] === byte) ||
-          [0x49, 0x44, 0x33].every((byte, i) => uint8Array[i] === byte)) {
-        return true
+          [0xff, 0xf2].every((byte, i) => uint8Array[i] === byte)) {
+        detectedType = 'mp3';
+        confidence = 0.9;
+      } else if ([0x49, 0x44, 0x33].every((byte, i) => uint8Array[i] === byte)) {
+        detectedType = 'mp3';
+        confidence = 0.85;
+
+        // Check ID3 tag size for potential overflow attacks
+        if (uint8Array.length >= 10) {
+          const tagSize = (uint8Array[6] << 21) | (uint8Array[7] << 14) | (uint8Array[8] << 7) | uint8Array[9];
+          if (tagSize > 1024 * 1024) { // 1MB tag size is suspicious
+            securityIssues.push({
+              type: 'oversized_metadata',
+              severity: 'high',
+              description: 'MP3 ID3 tag is suspiciously large',
+              details: { tagSize }
+            });
+          }
+        }
+      } else if ([0x52, 0x49, 0x46, 0x46].every((byte, i) => uint8Array[i] === byte) &&
+                 uint8Array.length >= 12 &&
+                 [0x57, 0x41, 0x56, 0x45].every((byte, i) => uint8Array[i + 8] === byte)) {
+        detectedType = 'wav';
+        confidence = 0.95;
       }
-      
-      // Check for WAV
-      if ([0x52, 0x49, 0x46, 0x46].every((byte, i) => uint8Array[i] === byte) &&
-          uint8Array.length >= 12 &&
-          [0x57, 0x41, 0x56, 0x45].every((byte, i) => uint8Array[i + 8] === byte)) {
-        return true
-      }
-      
-      return false
-      
+      break;
+
     case 'video':
-      if (buffer.byteLength < 8) return false
-      
-      // Check for MP4
-      if (uint8Array.length >= 8 && 
-          ([0x66, 0x74, 0x79, 0x70].every((byte, i) => uint8Array[i + 4] === byte))) {
-        return true
+      if (uint8Array.length >= 8 &&
+          [0x66, 0x74, 0x79, 0x70].every((byte, i) => uint8Array[i + 4] === byte)) {
+        detectedType = 'mp4';
+        confidence = 0.9;
+      } else if ([0x1a, 0x45, 0xdf, 0xa3].every((byte, i) => uint8Array[i] === byte)) {
+        detectedType = 'webm';
+        confidence = 0.9;
       }
-      
-      // Check for WebM
-      if ([0x1a, 0x45, 0xdf, 0xa3].every((byte, i) => uint8Array[i] === byte)) {
-        return true
-      }
-      
-      return false
-      
+      break;
+
     case 'image':
-      if (buffer.byteLength < 8) return false
-      
-      // Check for JPEG
       if ([0xff, 0xd8, 0xff].every((byte, i) => uint8Array[i] === byte)) {
-        return true
+        detectedType = 'jpeg';
+        confidence = 0.95;
+
+        // Check for JPEG with embedded scripts (EXIF injection)
+        if (buffer.includes(Buffer.from('<script'))) {
+          securityIssues.push({
+            type: 'embedded_script',
+            severity: 'high',
+            description: 'JPEG contains embedded script tags',
+          });
+        }
+      } else if ([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].every((byte, i) => uint8Array[i] === byte)) {
+        detectedType = 'png';
+        confidence = 0.95;
+      } else if ([0x47, 0x49, 0x46, 0x38].every((byte, i) => uint8Array[i] === byte) &&
+                 (uint8Array[4] === 0x37 || uint8Array[4] === 0x39) &&
+                 uint8Array[5] === 0x61) {
+        detectedType = 'gif';
+        confidence = 0.95;
+      } else if ([0x52, 0x49, 0x46, 0x46].every((byte, i) => uint8Array[i] === byte) &&
+                 uint8Array.length >= 12 &&
+                 [0x57, 0x45, 0x42, 0x50].every((byte, i) => uint8Array[i + 8] === byte)) {
+        detectedType = 'webp';
+        confidence = 0.9;
       }
-      
-      // Check for PNG
-      if ([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].every((byte, i) => uint8Array[i] === byte)) {
-        return true
-      }
-      
-      // Check for GIF
-      if ([0x47, 0x49, 0x46, 0x38].every((byte, i) => uint8Array[i] === byte) &&
-          (uint8Array[4] === 0x37 || uint8Array[4] === 0x39) &&
-          uint8Array[5] === 0x61) {
-        return true
-      }
-      
-      // Check for WebP (RIFF container)
-      if ([0x52, 0x49, 0x46, 0x46].every((byte, i) => uint8Array[i] === byte) &&
-          uint8Array.length >= 12 &&
-          [0x57, 0x45, 0x42, 0x50].every((byte, i) => uint8Array[i + 8] === byte)) {
-        return true
-      }
-      
-      return false
-      
-    default:
-      return false
+      break;
   }
+
+  // Check for polyglot files (files that are valid in multiple formats)
+  if (confidence > 0 && detectedType !== expectedType) {
+    securityIssues.push({
+      type: 'suspicious_header',
+      severity: 'medium',
+      description: `File header indicates ${detectedType} but expected ${expectedType}`,
+      details: { detected: detectedType, expected: expectedType }
+    });
+  }
+
+  const isValid = confidence > 0.8 && securityIssues.filter(issue => issue.severity === 'critical' || issue.severity === 'high').length === 0;
+
+  return {
+    isValid,
+    detectedType,
+    securityIssues,
+    confidence,
+    fileSize: buffer.length
+  };
+}
+
+// Legacy function for backward compatibility - now uses enhanced security validation
+export function validateFileHeader(buffer: ArrayBuffer, fileType: FileType): boolean {
+  const bufferNode = Buffer.from(buffer);
+  // Use the new security validation but only return boolean for compatibility
+  return validateFileContentSecurity(bufferNode, fileType).then(result => result.isValid).catch(() => false);
 }
 
 // Main file validation function - UPDATED

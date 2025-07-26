@@ -3,15 +3,18 @@ import { router, protectedProcedure } from '../trpc'
 import { TRPCError } from '@trpc/server'
 import { generateUploadUrl, generateDownloadUrl, generateS3Key, deleteFile, r2Client, BUCKET_NAME, uploadThumbnail, generateThumbnailKey, generateThumbnailUrl } from '../services/r2-storage'
 import { PutObjectCommand } from '@aws-sdk/client-s3'
-import { 
-  validateFile, 
-  FileUploadSchema, 
+import {
+  validateFile,
+  FileUploadSchema,
   createUploadRateLimit,
   isExecutableFile,
-  sanitizeFileName 
+  sanitizeFileName
 } from '../lib/file-validation'
 import { MediaProcessor } from '../services/media-processor'
 import { AssetManager } from '../services/asset-manager'
+import { db } from '../db/drizzle'
+import { fileMetadata, projects, audioAnalysisCache } from '../db/schema'
+import { eq, and, desc, asc } from 'drizzle-orm'
 
 // Create rate limiter instance
 const uploadRateLimit = createUploadRateLimit()
@@ -69,24 +72,25 @@ export const fileRouter = router({
         // Generate pre-signed URL
         const uploadUrl = await generateUploadUrl(s3Key, input.mimeType, 3600) // 1 hour expiry
 
-        // Create file metadata record in database
+        // Create file metadata record in database using Drizzle
         const fileId = `file_${Date.now()}_${Math.random().toString(36).substring(2)}`
-        
-        const { error: dbError } = await ctx.supabase
-          .from('file_metadata')
-          .insert({
-            id: fileId,
-            user_id: userId,
-            file_name: sanitizedFileName,
-            file_type: validation.fileType,
-            mime_type: input.mimeType,
-            file_size: input.fileSize,
-            s3_key: s3Key,
-            s3_bucket: process.env.CLOUDFLARE_R2_BUCKET || 'phonoglyph-uploads',
-            processing_status: MediaProcessor.requiresProcessing(validation.fileType) ? 'pending' : 'completed',
-          })
 
-        if (dbError) {
+        try {
+          await db.insert(fileMetadata).values({
+            id: fileId,
+            userId: userId,
+            fileName: sanitizedFileName,
+            fileType: validation.fileType,
+            mimeType: input.mimeType,
+            fileSize: input.fileSize,
+            s3Key: s3Key,
+            s3Bucket: process.env.CLOUDFLARE_R2_BUCKET || 'phonoglyph-uploads',
+            processingStatus: MediaProcessor.requiresProcessing(validation.fileType) ? 'pending' : 'completed',
+            uploadStatus: 'uploading',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          });
+        } catch (dbError) {
           console.error('Database error creating file metadata:', dbError)
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
@@ -180,33 +184,33 @@ export const fileRouter = router({
 
         await (r2Client as any).send(command)
 
-        // Create file metadata record
-        const { data, error: dbError } = await ctx.supabase
-          .from('file_metadata')
-          .insert({
-            user_id: userId,
-            file_name: sanitizedFileName,
-            file_type: validation.fileType,
-            mime_type: input.mimeType,
-            file_size: input.fileSize,
-            s3_key: s3Key,
-            s3_bucket: BUCKET_NAME,
-            upload_status: 'completed',
-            processing_status: MediaProcessor.requiresProcessing(validation.fileType) ? 'pending' : 'completed',
-            project_id: input.projectId, // NEW: Associate with project
-            is_master: input.isMaster || false, // NEW: Store master tag
-            stem_type: input.stemType || null, // NEW: Store stem type
-          })
-          .select('id')
-          .single();
+        // Create file metadata record using Drizzle
+        const newFileRecord = await db.insert(fileMetadata).values({
+          userId: userId,
+          fileName: sanitizedFileName,
+          fileType: validation.fileType,
+          mimeType: input.mimeType,
+          fileSize: input.fileSize,
+          s3Key: s3Key,
+          s3Bucket: BUCKET_NAME,
+          uploadStatus: 'completed',
+          processingStatus: MediaProcessor.requiresProcessing(validation.fileType) ? 'pending' : 'completed',
+          projectId: input.projectId, // NEW: Associate with project
+          isMaster: input.isMaster || false, // NEW: Store master tag
+          stemType: input.stemType || null, // NEW: Store stem type
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }).returning({ id: fileMetadata.id });
 
-        if (dbError) {
-          console.error('Database error creating file metadata:', dbError)
+        if (!newFileRecord || newFileRecord.length === 0) {
+          console.error('Database error creating file metadata')
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to create file record',
           })
         }
+
+        const data = newFileRecord[0];
 
         // Trigger audio analysis and caching for audio files
         if (validation.fileType === 'audio') {
@@ -297,35 +301,44 @@ export const fileRouter = router({
       const userId = ctx.user.id
 
       try {
-        // Get file metadata
-        const { data: fileData, error: fetchError } = await ctx.supabase
-          .from('file_metadata')
-          .select('*')
-          .eq('id', input.fileId)
-          .eq('user_id', userId)
-          .single()
+        // Get file metadata using Drizzle
+        const fileData = await db
+          .select()
+          .from(fileMetadata)
+          .where(
+            and(
+              eq(fileMetadata.id, input.fileId),
+              eq(fileMetadata.userId, userId)
+            )
+          )
+          .limit(1);
 
-        if (fetchError || !fileData) {
+        if (!fileData || fileData.length === 0) {
           throw new TRPCError({
             code: 'NOT_FOUND',
             message: 'File not found or access denied',
           })
         }
 
-        // Update upload status
+        // Update upload status using Drizzle
         const newStatus = input.success ? 'completed' : 'failed'
-        
-        const { error: updateError } = await ctx.supabase
-          .from('file_metadata')
-          .update({ 
-            upload_status: newStatus,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', input.fileId)
-          .eq('user_id', userId)
 
-        if (updateError) {
-          console.error('Database error updating file status:', updateError)
+        const updatedFile = await db
+          .update(fileMetadata)
+          .set({
+            uploadStatus: newStatus,
+            updatedAt: new Date().toISOString(),
+          })
+          .where(
+            and(
+              eq(fileMetadata.id, input.fileId),
+              eq(fileMetadata.userId, userId)
+            )
+          )
+          .returning();
+
+        if (!updatedFile || updatedFile.length === 0) {
+          console.error('Database error updating file status')
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to update file status',
@@ -432,31 +445,28 @@ export const fileRouter = router({
       const userId = ctx.user.id
 
       try {
-        let query = ctx.supabase
-          .from('file_metadata')
-          .select('*')
-          .eq('user_id', userId)
-          .eq('upload_status', 'completed')
-          .order('created_at', { ascending: false })
-          .range(input.offset, input.offset + input.limit - 1)
+        // Build query conditions
+        const conditions = [
+          eq(fileMetadata.userId, userId),
+          eq(fileMetadata.uploadStatus, 'completed')
+        ];
 
         if (input.fileType !== 'all') {
-          query = query.eq('file_type', input.fileType)
+          conditions.push(eq(fileMetadata.fileType, input.fileType));
         }
 
         if (input.projectId) {
-          query = query.eq('project_id', input.projectId)
+          conditions.push(eq(fileMetadata.projectId, input.projectId));
         }
 
-        const { data: files, error } = await query
-
-        if (error) {
-          console.error('Database error fetching user files:', error)
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message: 'Failed to fetch files',
-          })
-        }
+        // Execute query with Drizzle
+        const files = await db
+          .select()
+          .from(fileMetadata)
+          .where(and(...conditions))
+          .orderBy(desc(fileMetadata.createdAt))
+          .limit(input.limit)
+          .offset(input.offset);
 
         // Generate thumbnail URLs for files that have them
         const filesWithThumbnails = await Promise.all(
@@ -542,15 +552,19 @@ export const fileRouter = router({
       const userId = ctx.user.id
 
       try {
-        // Get file metadata
-        const { data: fileData, error: fetchError } = await ctx.supabase
-          .from('file_metadata')
-          .select('*')
-          .eq('id', input.fileId)
-          .eq('user_id', userId)
-          .single()
+        // Get file metadata using Drizzle
+        const fileData = await db
+          .select()
+          .from(fileMetadata)
+          .where(
+            and(
+              eq(fileMetadata.id, input.fileId),
+              eq(fileMetadata.userId, userId)
+            )
+          )
+          .limit(1);
 
-        if (fetchError || !fileData) {
+        if (!fileData || fileData.length === 0) {
           throw new TRPCError({
             code: 'NOT_FOUND',
             message: 'File not found or access denied',
@@ -558,17 +572,21 @@ export const fileRouter = router({
         }
 
         // Delete from S3
-        await deleteFile(fileData.s3_key)
+        await deleteFile(fileData[0].s3Key)
 
-        // Delete from database
-        const { error: deleteError } = await ctx.supabase
-          .from('file_metadata')
-          .delete()
-          .eq('id', input.fileId)
-          .eq('user_id', userId)
+        // Delete from database using Drizzle
+        const deletedFile = await db
+          .delete(fileMetadata)
+          .where(
+            and(
+              eq(fileMetadata.id, input.fileId),
+              eq(fileMetadata.userId, userId)
+            )
+          )
+          .returning();
 
-        if (deleteError) {
-          console.error('Database error deleting file:', deleteError)
+        if (!deletedFile || deletedFile.length === 0) {
+          console.error('Database error deleting file')
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to delete file record',

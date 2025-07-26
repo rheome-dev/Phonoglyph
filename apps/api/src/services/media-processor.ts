@@ -1,94 +1,69 @@
-import { VideoMetadata, ImageMetadata } from '../lib/file-validation'
+import { VideoMetadata, ImageMetadata, FileType } from '../lib/file-validation'
+import { SecureMediaProcessor, ProcessingResult } from './SecureMediaProcessor'
 
 export class MediaProcessor {
   
   /**
-   * Extract video metadata from buffer
-   * For now, this is a placeholder implementation - in production would use ffprobe
+   * Extract video metadata from buffer using secure processing
    */
   static async extractVideoMetadata(buffer: Buffer, fileName: string): Promise<VideoMetadata> {
-    // Placeholder implementation - would use ffprobe in production
-    // For development, return mock data based on file extension
-    const extension = fileName.toLowerCase().split('.').pop()
-    
-    // Mock metadata for development
-    const mockMetadata: VideoMetadata = {
-      duration: 60, // 1 minute default
-      width: 1920,
-      height: 1080,
-      frameRate: 30,
-      codec: extension === 'webm' ? 'vp9' : 'h264',
-      bitrate: 5000, // 5 Mbps
-      aspectRatio: '16:9'
-    }
-    
-    // TODO: Replace with actual ffprobe implementation
-    // const metadata = await this.runFFProbe(buffer);
-    
-    return mockMetadata
+    // Use secure media processor for metadata extraction
+    const metadata = await SecureMediaProcessor.extractMetadataSafely(buffer, 'video');
+
+    // Convert to VideoMetadata format
+    return {
+      duration: metadata.duration || 0,
+      width: metadata.width || 0,
+      height: metadata.height || 0,
+      frameRate: metadata.frameRate || 0,
+      codec: metadata.codec || 'unknown',
+      bitrate: metadata.bitrate || 0,
+      aspectRatio: metadata.width && metadata.height
+        ? `${metadata.width}:${metadata.height}`
+        : '16:9'
+    };
   }
   
   /**
-   * Generate video thumbnail from buffer
-   * For now, this is a placeholder - in production would use ffmpeg
+   * Generate video thumbnail from buffer using secure processing
    */
   static async generateVideoThumbnail(
-    buffer: Buffer, 
+    buffer: Buffer,
     fileName: string,
     timestampSec: number = 1
   ): Promise<Buffer> {
-    // Placeholder implementation - would use ffmpeg in production
-    // Return a minimal 1x1 pixel JPEG as placeholder
-    const placeholderJpeg = Buffer.from([
-      0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01,
-      0x01, 0x01, 0x00, 0x48, 0x00, 0x48, 0x00, 0x00, 0xff, 0xdb, 0x00, 0x43,
-      0x00, 0x08, 0x06, 0x06, 0x07, 0x06, 0x05, 0x08, 0x07, 0x07, 0x07, 0x09,
-      0x09, 0x08, 0x0a, 0x0c, 0x14, 0x0d, 0x0c, 0x0b, 0x0b, 0x0c, 0x19, 0x12,
-      0x13, 0x0f, 0x14, 0x1d, 0x1a, 0x1f, 0x1e, 0x1d, 0x1a, 0x1c, 0x1c, 0x20,
-      0x24, 0x2e, 0x27, 0x20, 0x22, 0x2c, 0x23, 0x1c, 0x1c, 0x28, 0x37, 0x29,
-      0x2c, 0x30, 0x31, 0x34, 0x34, 0x34, 0x1f, 0x27, 0x39, 0x3d, 0x38, 0x32,
-      0x3c, 0x2e, 0x33, 0x34, 0x32, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x00, 0x01,
-      0x00, 0x01, 0x01, 0x01, 0x11, 0x00, 0x02, 0x11, 0x01, 0x03, 0x11, 0x01,
-      0xff, 0xc4, 0x00, 0x14, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08, 0xff, 0xc4,
-      0x00, 0x14, 0x10, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xda, 0x00, 0x0c,
-      0x03, 0x01, 0x00, 0x02, 0x11, 0x03, 0x11, 0x00, 0x3f, 0x00, 0xb2, 0xc0,
-      0x07, 0xff, 0xd9
-    ])
-    
-    // TODO: Replace with actual ffmpeg thumbnail generation
-    // const thumbnail = await this.runFFMpeg(buffer, timestampSec);
-    
-    return placeholderJpeg
+    // Use secure media processor for thumbnail generation
+    return await SecureMediaProcessor.generateSecureThumbnail(
+      buffer,
+      'video',
+      {
+        width: 300,
+        height: 300,
+        timestamp: timestampSec
+      }
+    );
   }
   
   /**
-   * Extract image metadata from buffer
-   * For now, this is a placeholder - in production would use sharp
+   * Extract image metadata from buffer using secure processing
    */
   static async extractImageMetadata(buffer: Buffer, fileName: string): Promise<ImageMetadata> {
-    const extension = fileName.toLowerCase().split('.').pop()
-    
-    // Mock metadata for development
-    const mockMetadata: ImageMetadata = {
-      width: 1920,
-      height: 1080,
-      colorProfile: 'sRGB',
-      orientation: 1, // Normal orientation
-      hasAlpha: extension === 'png' || extension === 'gif' || extension === 'webp',
-      fileFormat: extension?.toUpperCase() || 'JPEG'
-    }
-    
-    // TODO: Replace with actual sharp implementation
-    // const metadata = await sharp(buffer).metadata();
-    
-    return mockMetadata
+    // Use secure media processor for metadata extraction
+    const metadata = await SecureMediaProcessor.extractMetadataSafely(buffer, 'image');
+
+    // Convert to ImageMetadata format
+    return {
+      width: metadata.width || 0,
+      height: metadata.height || 0,
+      colorProfile: metadata.colorProfile || 'sRGB',
+      orientation: metadata.orientation || 1,
+      hasAlpha: metadata.hasAlpha || false,
+      fileFormat: metadata.format?.toUpperCase() || 'UNKNOWN'
+    };
   }
   
   /**
-   * Generate image thumbnail
-   * For now, this is a placeholder - in production would use sharp
+   * Generate image thumbnail using secure processing
    */
   static async generateImageThumbnail(
     buffer: Buffer,
@@ -96,37 +71,20 @@ export class MediaProcessor {
     maxWidth: number = 300,
     maxHeight: number = 300
   ): Promise<Buffer> {
-    // Placeholder implementation - return a small JPEG thumbnail
-    const placeholderThumbnail = Buffer.from([
-      0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01,
-      0x01, 0x01, 0x00, 0x48, 0x00, 0x48, 0x00, 0x00, 0xff, 0xdb, 0x00, 0x43,
-      0x00, 0x08, 0x06, 0x06, 0x07, 0x06, 0x05, 0x08, 0x07, 0x07, 0x07, 0x09,
-      0x09, 0x08, 0x0a, 0x0c, 0x14, 0x0d, 0x0c, 0x0b, 0x0b, 0x0c, 0x19, 0x12,
-      0x13, 0x0f, 0x14, 0x1d, 0x1a, 0x1f, 0x1e, 0x1d, 0x1a, 0x1c, 0x1c, 0x20,
-      0x24, 0x2e, 0x27, 0x20, 0x22, 0x2c, 0x23, 0x1c, 0x1c, 0x28, 0x37, 0x29,
-      0x2c, 0x30, 0x31, 0x34, 0x34, 0x34, 0x1f, 0x27, 0x39, 0x3d, 0x38, 0x32,
-      0x3c, 0x2e, 0x33, 0x34, 0x32, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x00, 0x01,
-      0x00, 0x01, 0x01, 0x01, 0x11, 0x00, 0x02, 0x11, 0x01, 0x03, 0x11, 0x01,
-      0xff, 0xc4, 0x00, 0x14, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08, 0xff, 0xc4,
-      0x00, 0x14, 0x10, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xda, 0x00, 0x0c,
-      0x03, 0x01, 0x00, 0x02, 0x11, 0x03, 0x11, 0x00, 0x3f, 0x00, 0xb2, 0xc0,
-      0x07, 0xff, 0xd9
-    ])
-    
-    // TODO: Replace with actual sharp thumbnail generation
-    // const thumbnail = await sharp(buffer)
-    //   .resize(maxWidth, maxHeight, { fit: 'inside', withoutEnlargement: true })
-    //   .jpeg({ quality: 80 })
-    //   .toBuffer();
-    
-    return placeholderThumbnail
+    // Use secure media processor for thumbnail generation
+    return await SecureMediaProcessor.generateSecureThumbnail(
+      buffer,
+      'image',
+      {
+        width: maxWidth,
+        height: maxHeight
+      }
+    );
   }
   
   /**
-   * Process uploaded file - extract metadata and generate thumbnails
-   * This would run in background after file upload
+   * Process uploaded file with comprehensive security validation
+   * This runs with full security checks and safe processing
    */
   static async processUploadedFile(
     buffer: Buffer,
@@ -137,32 +95,55 @@ export class MediaProcessor {
     metadata: VideoMetadata | ImageMetadata;
     thumbnail: Buffer;
     thumbnailKey: string;
+    securityReport?: any;
   }> {
     try {
-      let metadata: VideoMetadata | ImageMetadata
-      let thumbnail: Buffer
-      
-      if (fileType === 'video') {
-        metadata = await this.extractVideoMetadata(buffer, fileName)
-        thumbnail = await this.generateVideoThumbnail(buffer, fileName)
-      } else {
-        metadata = await this.extractImageMetadata(buffer, fileName)
-        thumbnail = await this.generateImageThumbnail(buffer, fileName)
+      // Initialize secure processor
+      await SecureMediaProcessor.initialize();
+
+      // Validate file content security first
+      const validationResult = await SecureMediaProcessor.validateFileContent(buffer, fileType as FileType);
+      if (!validationResult.isValid) {
+        throw new Error(`File security validation failed: ${validationResult.securityIssues.map(i => i.description).join(', ')}`);
       }
-      
-      // Generate thumbnail key for storage
-      const extension = fileName.split('.').pop()
-      const thumbnailKey = `thumbnails/${fileId}_thumb.jpg`
-      
+
+      // Scan for malware
+      const scanResult = await SecureMediaProcessor.scanForMalware(buffer);
+      if (!scanResult.isClean) {
+        throw new Error(`File contains security threats: ${scanResult.threats.map(t => t.name).join(', ')}`);
+      }
+
+      // Sanitize filename
+      const sanitizedFileName = SecureMediaProcessor.sanitizeFileName(fileName);
+
+      let metadata: VideoMetadata | ImageMetadata;
+      let thumbnail: Buffer;
+
+      if (fileType === 'video') {
+        metadata = await this.extractVideoMetadata(buffer, sanitizedFileName);
+        thumbnail = await this.generateVideoThumbnail(buffer, sanitizedFileName);
+      } else {
+        metadata = await this.extractImageMetadata(buffer, sanitizedFileName);
+        thumbnail = await this.generateImageThumbnail(buffer, sanitizedFileName);
+      }
+
+      // Generate secure thumbnail key
+      const thumbnailKey = `thumbnails/${fileId}_thumb.jpg`;
+
       return {
         metadata,
         thumbnail,
-        thumbnailKey
-      }
-      
+        thumbnailKey,
+        securityReport: {
+          validationResult,
+          scanResult,
+          sanitizedFileName
+        }
+      };
+
     } catch (error) {
-      console.error('Error processing media file:', error)
-      throw error
+      console.error('Error processing media file:', error);
+      throw error;
     }
   }
   
