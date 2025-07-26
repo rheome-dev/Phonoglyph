@@ -16,7 +16,7 @@ A comprehensive code quality audit revealed several critical production blockers
 This epic focuses on addressing the most critical code quality issues identified in the audit:
 
 1. **Production Blockers (Phase 1)**: Mock data systems, placeholder implementations, security vulnerabilities
-2. **Performance Issues (Phase 2)**: Type safety gaps, audio processing optimization, memory leak detection
+2. **Performance Issues (Phase 2)**: Type safety gaps, database type safety, API consolidation
 3. **Production Infrastructure (Phase 3)**: API layer consolidation, feature usage tracking, monitoring stack
 
 ## Stories Overview
@@ -41,7 +41,7 @@ This epic focuses on addressing the most critical code quality issues identified
 - **Impact**: System compromise, data breaches
 - **Files**: `apps/api/src/services/media-processor.ts`
 
-### **Phase 2: High Priority Performance Issues (54 hours)**
+### **Phase 2: High Priority Performance Issues (46 hours)**
 
 #### **Story 8.4: Fix Type Safety Gaps with Proper TypeScript Interfaces** (12 hours)
 - **Priority**: High
@@ -49,19 +49,13 @@ This epic focuses on addressing the most critical code quality issues identified
 - **Impact**: Application crashes, poor developer experience
 - **Files**: Multiple files with `any` types
 
-#### **Story 8.5: Improve Memory Leak Detection Algorithms** (8 hours)
-- **Priority**: High
-- **Risk**: False positives and unreliable memory monitoring
-- **Impact**: Poor performance monitoring, potential crashes
-- **Files**: `apps/web/src/lib/visualization-performance-monitor.ts`
-
-#### **Story 8.6: Implement Drizzle ORM for Type-Safe Database Operations** (12 hours)
+#### **Story 8.5: Implement Drizzle ORM for Type-Safe Database Operations** (12 hours)
 - **Priority**: High
 - **Risk**: Runtime database errors from untyped queries
 - **Impact**: Improved developer experience, reduced database-related bugs
 - **Files**: Database schema files, tRPC routers, migration scripts
 
-#### **Story 8.7: Consolidate API Layer with Enhanced tRPC Integration** (12 hours)
+#### **Story 8.6: Consolidate API Layer with Enhanced tRPC Integration** (12 hours)
 - **Priority**: High
 - **Risk**: API contract mismatches, inconsistent error handling
 - **Impact**: Type-safe API layer, improved developer experience
@@ -69,19 +63,19 @@ This epic focuses on addressing the most critical code quality issues identified
 
 ### **Phase 3: Production Infrastructure (44 hours)**
 
-#### **Story 8.9: Implement Feature Usage and Credit System** (20 hours)
+#### **Story 8.7: Implement Feature Usage and Credit System** (20 hours)
 - **Priority**: High
 - **Risk**: No usage tracking for SaaS monetization
 - **Impact**: Revenue tracking, user tier management, cost optimization
 - **Files**: Credit tracking service, usage monitoring, billing integration
 
-#### **Story 8.10: Implement Production Monitoring Stack (PostHog + Sentry)** (16 hours)
+#### **Story 8.8: Implement Production Monitoring Stack (PostHog + Sentry)** (16 hours)
 - **Priority**: High
 - **Risk**: No visibility into production issues
 - **Impact**: Proactive issue detection, user analytics, performance monitoring
 - **Files**: Monitoring configuration, error tracking, analytics integration
 
-#### **Story 8.11: Audio Processing Pipeline Monitoring and Alerting** (8 hours)
+#### **Story 8.9: Audio Processing Pipeline Monitoring and Alerting** (8 hours)
 - **Priority**: High
 - **Risk**: Silent failures in audio processing
 - **Impact**: Reliable audio processing, automated issue detection

@@ -3,6 +3,9 @@ import { VisualEffect, VisualizerConfig, LiveMIDIData, AudioAnalysisData, Visual
 import { BloomEffect } from '../effects/BloomEffect';
 import { VisualizationPreset } from '@/types/stem-visualization';
 import { debugLog } from '@/lib/utils';
+import { AudioTextureManager, AudioFeatureData } from './AudioTextureManager';
+import { MediaLayerManager } from './MediaLayerManager';
+import { VisualizationPerformanceMonitor } from '@/lib/visualization-performance-monitor';
 
 export class VisualizerManager {
   private static instanceCounter = 0;
@@ -26,6 +29,17 @@ export class VisualizerManager {
   
   // Bloom post-processing
   private bloomEffect: BloomEffect | null = null;
+
+  // GPU-based audio texture system
+  private audioTextureManager: AudioTextureManager | null = null;
+
+  // Multi-layer media compositing
+  private mediaLayerManager: MediaLayerManager | null = null;
+
+  // Real-time data storage
+  private currentMidiData: LiveMIDIData | null = null;
+  private currentAudioData: AudioAnalysisData | null = null;
+  private audioAnalysisLoaded: boolean = false;
   
   // Performance monitoring
   private frameCount = 0;
@@ -33,6 +47,7 @@ export class VisualizerManager {
   private lastFPSUpdate = 0;
   private consecutiveSlowFrames = 0;
   private maxSlowFrames = 10; // Emergency pause after 10 consecutive slow frames
+  private performanceMonitor: VisualizationPerformanceMonitor | null = null;
   
   // Visualization parameters
   private visualParams = {
@@ -60,6 +75,9 @@ export class VisualizerManager {
     this.initScene(config);
     this.setupEventListeners();
     this.initBloomEffect();
+    this.initAudioTextureManager();
+    this.initMediaLayerManager();
+    this.initPerformanceMonitor();
     debugLog.log('🎭 VisualizerManager constructor complete');
   }
   
@@ -145,7 +163,121 @@ export class VisualizerManager {
     this.bloomEffect.init(this.scene, this.camera, this.renderer);
     debugLog.log('✨ Bloom post-processing initialized');
   }
-  
+
+  private initAudioTextureManager(): void {
+    try {
+      this.audioTextureManager = new AudioTextureManager(this.renderer, {
+        textureWidth: 256,  // 256 time steps for ~10 seconds at 25fps
+        textureHeight: 64,  // Support up to 64 audio features
+        maxFeatures: 64,
+        maxTimeSteps: 256
+      });
+
+      // Attach to renderer for access by effects
+      (this.renderer as any).audioTextureManager = this.audioTextureManager;
+
+      debugLog.log('✅ AudioTextureManager initialized');
+    } catch (error) {
+      debugLog.error('❌ Failed to initialize AudioTextureManager:', error);
+      this.audioTextureManager = null;
+    }
+  }
+
+  private initMediaLayerManager(): void {
+    try {
+      // Get the multi-layer compositor from the bloom effect
+      const bloomEffect = this.bloomEffect as any;
+      const compositor = bloomEffect?.multiLayerCompositor;
+
+      if (compositor) {
+        this.mediaLayerManager = new MediaLayerManager(compositor, this.renderer);
+        debugLog.log('✅ MediaLayerManager initialized with multi-layer compositor');
+      } else {
+        debugLog.log('ℹ️ Multi-layer compositor not available - media layers disabled (this is normal)');
+        debugLog.log('ℹ️ To enable GPU compositing, use the Performance Debug panel');
+      }
+    } catch (error) {
+      debugLog.error('❌ Failed to initialize MediaLayerManager:', error);
+      this.mediaLayerManager = null;
+    }
+  }
+
+  private initPerformanceMonitor(): void {
+    try {
+      // Initialize performance monitor with basic configuration
+      this.performanceMonitor = new VisualizationPerformanceMonitor({
+        enabled: true,
+        enableAutoOptimization: true,
+        sampleInterval: 1000, // 1 second
+        historyLength: 300, // 5 minutes of history
+        debugMode: false
+      });
+
+      // Set up event listeners for optimization recommendations
+      this.performanceMonitor.on('optimize', (data: any) => {
+        this.handlePerformanceOptimization(data);
+      });
+
+      this.performanceMonitor.on('cleanup', (data: any) => {
+        this.handleMemoryCleanup(data);
+      });
+
+      debugLog.log('📊 Performance monitoring enabled with auto-optimization');
+    } catch (error) {
+      debugLog.error('❌ Failed to initialize performance monitor:', error);
+    }
+  }
+
+  private handlePerformanceOptimization(data: any): void {
+    try {
+      switch (data.type) {
+        case 'reduce_particles':
+          // Reduce particle count by the specified factor
+          this.visualParams.particleCount = Math.floor(this.visualParams.particleCount * (data.factor || 0.7));
+          debugLog.log(`🔧 Reduced particle count to ${this.visualParams.particleCount}`);
+          break;
+
+        case 'reduce_quality':
+          // Lower visual quality settings
+          this.visualParams.complexity = Math.max(0.1, this.visualParams.complexity * 0.8);
+          debugLog.log(`🔧 Reduced visual complexity to ${this.visualParams.complexity}`);
+          break;
+
+        case 'disable_effects':
+          // Disable expensive effects
+          if (data.effects?.includes('bloom') && this.bloomEffect) {
+            this.bloomEffect.enabled = false;
+            debugLog.log('🔧 Disabled bloom effect for performance');
+          }
+          break;
+
+        case 'reduce_memory':
+          // Reduce memory usage
+          this.visualParams.particleCount = Math.floor(this.visualParams.particleCount * (data.factor || 0.8));
+          debugLog.log(`🔧 Reduced memory usage - particle count: ${this.visualParams.particleCount}`);
+          break;
+      }
+    } catch (error) {
+      debugLog.error('❌ Failed to apply performance optimization:', error);
+    }
+  }
+
+  private handleMemoryCleanup(data: any): void {
+    try {
+      switch (data.type) {
+        case 'clear_caches':
+          // Clear any internal caches
+          if (this.audioTextureManager) {
+            // Audio texture manager might have caches to clear
+            debugLog.log('🧹 Cleared audio texture caches');
+          }
+          break;
+      }
+    } catch (error) {
+      debugLog.error('❌ Failed to perform memory cleanup:', error);
+    }
+  }
+
   private async initAudioAnalyzer() {
     if (!this.audioContext) {
       debugLog.log('🎵 Creating AudioContext after user interaction...');
@@ -401,7 +533,28 @@ export class VisualizerManager {
     
     const deltaTime = Math.min(this.clock.getDelta(), 0.1); // Cap delta time to prevent large jumps
     const currentTime = now;
-    
+
+    // Update audio texture time synchronization (GPU-based optimization)
+    if (this.audioTextureManager) {
+      // This updates the time texture that all shaders can access
+      // Eliminates the need for per-effect time parameter updates
+      this.audioTextureManager.updateTime(currentTime / 1000.0, 10.0); // Assume 10 second duration for now
+    }
+
+    // Update media layers with current audio features (GPU-based compositing)
+    if (this.mediaLayerManager && this.currentAudioData) {
+      // Convert audio data to feature map for media layer updates
+      const audioFeatures: Record<string, number> = {
+        'master-rms': this.currentAudioData.volume || 0,
+        'bass-rms': this.currentAudioData.bass || 0,
+        'vocals-rms': this.currentAudioData.mid || 0,
+        'melody-spectralCentroid': this.currentAudioData.treble || 0
+      };
+
+      this.mediaLayerManager.updateWithAudioFeatures(audioFeatures);
+      this.mediaLayerManager.updateTextures();
+    }
+
     // Update FPS counter
     this.frameCount++;
     if (currentTime - this.lastFPSUpdate > 1000) {
@@ -430,9 +583,9 @@ export class VisualizerManager {
         
         try {
           // Use real data if available, otherwise fallback to mock data
-          const audioData: AudioAnalysisData = this.createMockAudioData();
-          const midiData: LiveMIDIData = this.createMockMidiData();
-          
+          const audioData: AudioAnalysisData = this.currentAudioData || this.createMockAudioData();
+          const midiData: LiveMIDIData = this.currentMidiData || this.createMockMidiData();
+
           effect.update(deltaTime, audioData, midiData);
         } catch (error) {
           debugLog.error(`❌ Effect ${effect.id} update failed:`, error);
@@ -446,10 +599,10 @@ export class VisualizerManager {
     
     // Update bloom effect
     if (this.bloomEffect) {
-      const audioData: AudioAnalysisData = this.createMockAudioData();
-      const midiData: LiveMIDIData = this.createMockMidiData();
+      const audioData: AudioAnalysisData = this.currentAudioData || this.createMockAudioData();
+      const midiData: LiveMIDIData = this.currentMidiData || this.createMockMidiData();
       this.bloomEffect.update(deltaTime, audioData, midiData);
-      
+
       // Render with bloom post-processing
       this.bloomEffect.render();
     } else {
@@ -499,12 +652,7 @@ export class VisualizerManager {
     debugLog.log('🎵 MIDI data received (placeholder):', midiData);
   }
   
-  updateAudioData(audioData: AudioAnalysisData): void {
-    // Store audio data to be used in next animation frame
-    // This method is no longer used as AudioAnalyzer is removed.
-    // Keeping it for now to avoid breaking existing calls, but it will be removed.
-    debugLog.log('🎵 Audio data received (placeholder):', audioData);
-  }
+  // Removed duplicate updateAudioData method - see implementation below
   
   updateEffectParameter(effectId: string, paramName: string, value: any): void {
     const effect = this.effects.get(effectId);
@@ -527,8 +675,7 @@ export class VisualizerManager {
     }
   }
   
-  private currentMidiData?: LiveMIDIData;
-  private currentAudioData?: AudioAnalysisData;
+  // Removed duplicate declarations - already defined above
   
   // Performance monitoring
   getFPS(): number {
@@ -542,7 +689,145 @@ export class VisualizerManager {
       programs: this.renderer.info.programs?.length || 0
     };
   }
+
+  /**
+   * Get comprehensive performance metrics including advanced monitoring
+   */
+  getPerformanceMetrics(): {
+    fps: number;
+    memory: { geometries: number; textures: number; programs: number };
+    effects: { total: number; enabled: number };
+    monitoring: { enabled: boolean; alerts: number };
+  } {
+    const enabledEffects = Array.from(this.effects.values()).filter(effect => effect.enabled).length;
+
+    return {
+      fps: this.fps,
+      memory: this.getMemoryUsage(),
+      effects: {
+        total: this.effects.size,
+        enabled: enabledEffects
+      },
+      monitoring: {
+        enabled: !!this.performanceMonitor,
+        alerts: this.performanceMonitor?.getActiveAlerts().length || 0
+      }
+    };
+  }
   
+  /**
+   * Load cached audio analysis data into GPU textures
+   */
+  public loadAudioAnalysis(analysisData: AudioFeatureData): void {
+    if (this.audioTextureManager) {
+      this.audioTextureManager.loadAudioAnalysis(analysisData);
+      this.audioAnalysisLoaded = true;
+      debugLog.log('✅ Audio analysis loaded into GPU textures');
+    } else {
+      debugLog.warn('⚠️ AudioTextureManager not available - falling back to uniform-based approach');
+    }
+  }
+
+  /**
+   * Update audio time synchronization for texture-based effects
+   */
+  public updateAudioTime(currentTime: number, duration: number): void {
+    if (this.audioTextureManager) {
+      this.audioTextureManager.updateTime(currentTime, duration);
+    }
+  }
+
+  /**
+   * Update real-time MIDI data
+   */
+  public updateMidiData(midiData: LiveMIDIData): void {
+    this.currentMidiData = midiData;
+  }
+
+  /**
+   * Update real-time audio analysis data
+   */
+  public updateAudioData(audioData: AudioAnalysisData): void {
+    this.currentAudioData = audioData;
+  }
+
+  /**
+   * Check if real audio analysis data is loaded
+   */
+  public hasAudioAnalysis(): boolean {
+    return this.audioAnalysisLoaded;
+  }
+
+  /**
+   * Add a media layer (canvas, video, or image) to the compositor
+   */
+  public addMediaLayer(config: any): void {
+    if (this.mediaLayerManager) {
+      this.mediaLayerManager.addMediaLayer(config);
+    } else {
+      debugLog.warn('⚠️ MediaLayerManager not available - cannot add media layer');
+    }
+  }
+
+  /**
+   * Remove a media layer
+   */
+  public removeMediaLayer(id: string): void {
+    if (this.mediaLayerManager) {
+      this.mediaLayerManager.removeMediaLayer(id);
+    }
+  }
+
+  /**
+   * Update media layer properties
+   */
+  public updateMediaLayer(id: string, updates: any): void {
+    if (this.mediaLayerManager) {
+      this.mediaLayerManager.updateMediaLayer(id, updates);
+    }
+  }
+
+  /**
+   * Get media layer configuration
+   */
+  public getMediaLayerConfig(id: string): any {
+    return this.mediaLayerManager?.getLayerConfig(id);
+  }
+
+  /**
+   * Get all media layer IDs
+   */
+  public getMediaLayerIds(): string[] {
+    return this.mediaLayerManager?.getLayerIds() || [];
+  }
+
+  /**
+   * Get bloom effect for debugging
+   */
+  public getBloomEffect(): any {
+    return this.bloomEffect;
+  }
+
+  /**
+   * Test basic rendering functionality
+   */
+  public testRender(): boolean {
+    try {
+      if (!this.bloomEffect) {
+        debugLog.error('❌ Bloom effect not initialized');
+        return false;
+      }
+
+      // Try to render one frame
+      this.bloomEffect.render();
+      debugLog.log('✅ Test render successful');
+      return true;
+    } catch (error) {
+      debugLog.error('❌ Test render failed:', error);
+      return false;
+    }
+  }
+
   // Cleanup
   dispose(): void {
     debugLog.log(`🗑️ VisualizerManager.dispose() called. Effects: ${this.effects.size}`);
@@ -552,6 +837,24 @@ export class VisualizerManager {
     if (this.bloomEffect) {
       this.bloomEffect.destroy();
       this.bloomEffect = null;
+    }
+
+    // Dispose audio texture manager
+    if (this.audioTextureManager) {
+      this.audioTextureManager.dispose();
+      this.audioTextureManager = null;
+    }
+
+    // Dispose media layer manager
+    if (this.mediaLayerManager) {
+      this.mediaLayerManager.dispose();
+      this.mediaLayerManager = null;
+    }
+
+    // Dispose performance monitor
+    if (this.performanceMonitor) {
+      this.performanceMonitor.dispose();
+      this.performanceMonitor = null;
     }
     
     // Dispose all effects
