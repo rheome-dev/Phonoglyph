@@ -68,7 +68,7 @@ export interface StemMetadata {
 
 export type AudioFeatureData = {
   [K in StemType]?: StemAnalysisData;
-}
+};
 
 export interface CachedStemAnalysis {
   id: string;
@@ -97,7 +97,7 @@ export interface AudioAnalysisData {
 
 export type RealtimeAudioFeatures = {
   [K in StemType]?: AudioAnalysisData;
-}
+};
 
 // ===== GPU TEXTURE DATA TYPES =====
 
