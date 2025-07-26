@@ -1,12 +1,13 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { trpc } from '@/lib/trpc';
+import { StemType } from '@/types/stem-audio-analysis';
 import { AudioAnalysisDataForTrack } from '@/types/stem-audio-analysis';
-import { WaveformData, FeatureMarker } from '@/components/stem-visualization/stem-waveform';
+import { WaveformData } from '@/components/stem-visualization/stem-waveform';
 
 interface CachedStemAnalysis {
   id: string;
   fileMetadataId: string;
-  stemType: string;
+  stemType: StemType;
   analysisData: AudioAnalysisDataForTrack;
   waveformData: WaveformData;
   metadata: {
@@ -78,7 +79,14 @@ export function useCachedStemAnalysis(): UseCachedStemAnalysis {
           break;
         case 'ANALYSIS_ERROR':
           console.error(`Analysis error for ${data.fileId}:`, data.error);
-          setAnalysisProgress(prev => ({ ...prev, [data.fileId]: { progress: 1, message: `Error: ${data.error}` } }));
+          console.error('Analysis error details:', data.details);
+
+          // Provide user-friendly error message
+          const userMessage = data.error.includes('Meyda')
+            ? 'Audio analysis unavailable. Please refresh the page and try again.'
+            : `Analysis failed: ${data.error}`;
+
+          setAnalysisProgress(prev => ({ ...prev, [data.fileId]: { progress: 1, message: `Error: ${userMessage}` } }));
           break;
       }
     };
@@ -128,15 +136,18 @@ export function useCachedStemAnalysis(): UseCachedStemAnalysis {
       console.error("Analysis worker not ready.");
       return;
     }
+    
+    // Check if already cached or in progress
     if (cachedAnalysis.some(a => a.fileMetadataId === fileId) || analysisProgress[fileId]) {
-      console.log('🎵 Skipping analysis - already cached or in progress:', { fileId, hasCached: cachedAnalysis.some(a => a.fileMetadataId === fileId), inProgress: !!analysisProgress[fileId] });
+      console.log('🎵 Skipping analysis - already cached or in progress');
       return;
     }
 
+    // Direct analysis without fallback system
     console.log('🎵 Starting analysis for:', fileId, stemType);
-    setAnalysisProgress(prev => ({ ...prev, [fileId]: { progress: 0, message: 'Queued for analysis...' } }));
+    setAnalysisProgress(prev => ({ ...prev, [fileId]: { progress: 0, message: 'Starting analysis...' } }));
     
-    const channelData = audioBuffer.getChannelData(0); // Using first channel for analysis
+    const channelData = audioBuffer.getChannelData(0);
     workerRef.current.postMessage({
       type: 'ANALYZE_BUFFER',
       data: { 
@@ -146,7 +157,7 @@ export function useCachedStemAnalysis(): UseCachedStemAnalysis {
         duration: audioBuffer.duration,
         stemType,
       }
-    }, [channelData.buffer]); // Transfer the underlying buffer
+    }, [channelData.buffer]);
   }, [cachedAnalysis, analysisProgress]);
 
   useEffect(() => {
@@ -170,7 +181,7 @@ export function useCachedStemAnalysis(): UseCachedStemAnalysis {
           }
           // Type guard to filter out old data from backend cache.
           // The new format from client-side worker won't have a `volume` property on analysisData.
-          if (a.analysisData && typeof (a.analysisData as any).volume !== 'undefined') {
+          if (a.analysisData && 'volume' in a.analysisData && typeof (a.analysisData as Record<string, unknown>).volume !== 'undefined') {
             console.warn(`Skipping cached analysis for ${a.fileMetadataId} due to outdated format.`);
             return false;
           }

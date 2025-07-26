@@ -1,5 +1,10 @@
 // Audio Analysis Web Worker for Story 5.2
 // Handles intensive audio analysis without blocking main thread
+// PRODUCTION SAFE: No mock data generation systems
+
+// Production environment detection
+const isProduction = process.env.NODE_ENV === 'production' || 
+                    typeof window !== 'undefined' && window.location.hostname !== 'localhost';
 
 // Import Meyda for audio analysis
 let Meyda = null;
@@ -52,16 +57,9 @@ loadMeyda();
 
 console.log('🔧 Audio analysis worker script loaded');
 
-let audioContext = null;
-let analyzers = new Map();
-let isRunning = false;
-let performanceMetrics = {
-  fps: 0,
-  analysisLatency: 0,
-  memoryUsage: 0,
-  frameDrops: 0,
-  lastFrameTime: 0
-};
+// Removed unused variables for real-time analysis:
+// - audioContext, analyzers, isRunning, performanceMetrics
+// These were only used by the removed real-time analysis loop
 
 // Optimized feature sets for different stem types
 const STEM_FEATURES = {
@@ -104,21 +102,9 @@ self.onmessage = function(event) {
           }
         });
         break;
-      case 'SETUP_STEM_ANALYSIS':
-        setupStemAnalysis(data);
-        break;
-      case 'START_ANALYSIS':
-        startAnalysis();
-        break;
-      case 'STOP_ANALYSIS':
-        stopAnalysis();
-        break;
-      case 'UPDATE_QUALITY':
-        updateQuality(data);
-        break;
-      case 'GET_METRICS':
-        sendMetrics();
-        break;
+      // Removed unused message handlers:
+      // - SETUP_STEM_ANALYSIS, START_ANALYSIS, STOP_ANALYSIS (real-time analysis)
+      // - UPDATE_QUALITY, GET_METRICS (performance monitoring)
       case 'ANALYZE_BUFFER':
         analyzeBuffer(data);
         break;
@@ -135,7 +121,7 @@ self.onmessage = function(event) {
   }
 };
 
-function initializeWorker(config) {
+function initializeWorker() {
   try {
     console.log('🔧 Starting worker initialization...');
     
@@ -148,23 +134,7 @@ function initializeWorker(config) {
       postMessage: typeof self.postMessage !== 'undefined'
     };
     
-    // Try to initialize AudioContext (optional)
-    try {
-      if (typeof self.AudioContext !== 'undefined') {
-        audioContext = new self.AudioContext();
-        capabilities.audioContext = true;
-        console.log('✅ AudioContext initialized');
-      } else if (typeof self.webkitAudioContext !== 'undefined') {
-        audioContext = new self.webkitAudioContext();
-        capabilities.audioContext = true;
-        console.log('✅ WebkitAudioContext initialized');
-      } else {
-        console.warn('⚠️ AudioContext not available in worker');
-      }
-    } catch (audioError) {
-      console.warn('⚠️ Failed to create AudioContext:', audioError);
-      audioContext = null;
-    }
+    // AudioContext not needed for cached analysis
     
     console.log('🔧 Worker capabilities:', capabilities);
     
@@ -210,7 +180,9 @@ async function analyzeBuffer(data) {
   try {
     await loadMeyda();
     if (!Meyda) {
-      throw new Error("Meyda library not loaded.");
+      const errorMsg = "Audio analysis unavailable - Meyda library failed to load. Please refresh the page and try again.";
+      console.error('🚨 Critical: Meyda not available for analysis');
+      throw new Error(errorMsg);
     }
 
     self.postMessage({
@@ -254,9 +226,27 @@ async function analyzeBuffer(data) {
 
   } catch (error) {
     console.error(`❌ Error analyzing buffer for file ${fileId}:`, error);
+
+    // Enhanced error reporting for production debugging
+    const errorDetails = {
+      fileId,
+      stemType,
+      error: error.message,
+      meydaAvailable: !!Meyda,
+      isProduction,
+      timestamp: Date.now(),
+      stack: error.stack
+    };
+
+    console.error('🚨 Buffer analysis failure details:', errorDetails);
+
     self.postMessage({
       type: 'ANALYSIS_ERROR',
-      data: { fileId, error: error.message }
+      data: {
+        fileId,
+        error: `Analysis failed: ${error.message}`,
+        details: errorDetails
+      }
     });
   }
 }
@@ -346,11 +336,7 @@ async function performFullAnalysis(channelData, sampleRate, stemType, onProgress
   const hopSize = 512;
   
   let currentPosition = 0;
-  const totalSteps = Math.floor((channelData.length - bufferSize) / hopSize);
-
-  // For now, we'll work with mono data only
-  // TODO: Add stereo support when we have access to multi-channel audio data
-  let rightChannelData = null;
+  // Removed unused variables: totalSteps, rightChannelData
 
   while (currentPosition + bufferSize <= channelData.length) {
     const buffer = channelData.slice(currentPosition, currentPosition + bufferSize);
@@ -454,7 +440,7 @@ async function performFullAnalysis(channelData, sampleRate, stemType, onProgress
       
       // Calculate frequency band energies (simplified)
       const spectralCentroid = features.spectralCentroid || 0;
-      const spectralRolloff = features.spectralRolloff || 0;
+      // Removed unused variable: spectralRolloff
       
       // Map spectral features to frequency bands
       featureFrames.bass.push(spectralCentroid < 200 ? rms : 0);
@@ -499,22 +485,11 @@ async function performFullAnalysis(channelData, sampleRate, stemType, onProgress
       //   sampleFftValues: flatFeatures.fft.slice(0, 5)
       // });
       
-      // If we don't have amplitude spectrum data, generate a fallback FFT
+      // Production safe: No fallback FFT generation with fake data
       if (flatFeatures.fft.length === 0) {
-        // console.log('🎵 No amplitude spectrum data, generating fallback FFT');
-        const fallbackFft = [];
-        const fftSize = 512; // Smaller FFT for fallback
-        for (let i = 0; i < fftSize; i++) {
-          // Generate some realistic-looking frequency data
-          const frequency = (i * sampleRate) / fftSize;
-          const magnitude = Math.random() * 0.1 + (frequency < 1000 ? 0.2 : 0.05);
-          fallbackFft.push(magnitude);
-        }
-        flatFeatures.fft = fallbackFft;
-        // console.log('🎵 Fallback FFT generated:', {
-        //   fallbackFftLength: fallbackFft.length,
-        //   sampleFallbackValues: fallbackFft.slice(0, 5)
-        // });
+        console.warn('⚠️ No amplitude spectrum data available - FFT will be empty');
+        // Leave FFT empty rather than generating fake data
+        flatFeatures.fft = [];
       }
       
       // Calculate frequency bins for amplitude spectrum
@@ -544,348 +519,15 @@ async function performFullAnalysis(channelData, sampleRate, stemType, onProgress
   return flatFeatures;
 }
 
-function setupStemAnalysis(data) {
-  const { stemType, audioBufferData, config } = data;
-  
-  try {
-    console.log(`🔧 Setting up stem analysis for ${stemType}`);
-    
-    // Validate quality and provide fallback
-    const quality = config.quality || 'medium';
-    if (!QUALITY_PRESETS[quality]) {
-      console.warn(`⚠️ Invalid quality "${quality}", falling back to "medium"`);
-      config.quality = 'medium';
-    }
-    
-    const features = getStemFeatures(stemType, config.quality);
-    const bufferSize = QUALITY_PRESETS[config.quality].bufferSize;
-    
-    // Store analyzer configuration
-    analyzers.set(stemType, {
-      stemType,
-      features,
-      bufferSize,
-      config,
-      lastAnalysis: null,
-      meydaAvailable: !!Meyda
-    });
-    
-    // Update Meyda availability if it loads after setup
-    if (!Meyda && meydaLoadingPromise) {
-      meydaLoadingPromise.then((meydaLoaded) => {
-        if (meydaLoaded && analyzers.has(stemType)) {
-          analyzers.get(stemType).meydaAvailable = true;
-          console.log(`✅ Meyda became available for ${stemType} analysis`);
-        }
-      });
-    }
-    
-    console.log(`✅ Stem analysis setup complete for ${stemType} (Meyda: ${!!Meyda})`);
-    
-    self.postMessage({
-      type: 'STEM_SETUP_COMPLETE',
-      stemType,
-      data: {
-        features: features.length,
-        bufferSize,
-        meydaAvailable: !!Meyda,
-        timestamp: Date.now()
-      }
-    });
-    
-  } catch (error) {
-    console.error(`❌ Stem setup error for ${stemType}:`, error);
-    self.postMessage({
-      type: 'STEM_SETUP_ERROR',
-      stemType,
-      error: error.message,
-      data: {
-        timestamp: Date.now()
-      }
-    });
-  }
-}
+// REMOVED: setupStemAnalysis and getStemFeatures functions
+// These were used by the real-time analysis system that's no longer needed
 
-function getStemFeatures(stemType, quality) {
-  const baseFeatures = STEM_FEATURES[stemType] || STEM_FEATURES.other;
-  
-  switch (quality) {
-    case 'high':
-      return baseFeatures.concat(['spectralRolloff']); // Only add features we know exist
-    case 'medium':
-      return baseFeatures;
-    case 'low':
-      return baseFeatures.slice(0, 2); // Only first 2 features
-    default:
-      return baseFeatures;
-  }
-}
+// REMOVED: Real-time analysis loop functions (startAnalysis, stopAnalysis, analysisLoop, performMeydaAnalysis)
+// These were part of the legacy real-time analysis system that's no longer used.
+// The current system uses cached server-side analysis instead of real-time client-side analysis.
 
-function startAnalysis() {
-  if (isRunning) return;
-  
-  isRunning = true;
-  performanceMetrics.lastFrameTime = performance.now();
-  
-  // Start analysis loop
-  analysisLoop();
-  
-  self.postMessage({
-    type: 'ANALYSIS_STARTED',
-    data: {
-      analyzers: analyzers.size,
-      timestamp: Date.now()
-    }
-  });
-}
-
-function stopAnalysis() {
-  isRunning = false;
-  
-  self.postMessage({
-    type: 'ANALYSIS_STOPPED',
-    data: {
-      timestamp: Date.now()
-    }
-  });
-}
-
-function analysisLoop() {
-  if (!isRunning) return;
-  
-  const startTime = performance.now();
-  const frameTime = startTime - performanceMetrics.lastFrameTime;
-  
-  // Process each stem analyzer
-  analyzers.forEach((analyzer, stemType) => {
-    try {
-      let analysisFeatures;
-      
-      if (analyzer.meydaAvailable && Meyda) {
-        // Use Meyda for real audio analysis
-        analysisFeatures = performMeydaAnalysis(analyzer);
-      } else {
-        // Fallback to mock analysis
-        analysisFeatures = generateMockAnalysis(analyzer);
-      }
-      
-      // Convert to our format
-      const stemAnalysis = {
-        stemId: `${stemType}-${Date.now()}`,
-        stemType,
-        features: {
-          rhythm: analysisFeatures.rhythm || [],
-          pitch: analysisFeatures.pitch || [],
-          intensity: analysisFeatures.intensity || [],
-          timbre: analysisFeatures.timbre || []
-        },
-        metadata: {
-          bpm: analysisFeatures.bpm || 120,
-          key: analysisFeatures.key || 'C',
-          energy: analysisFeatures.energy || 0.5,
-          clarity: analysisFeatures.clarity || 0.8
-        },
-        timestamp: startTime,
-        analysisMethod: analyzer.meydaAvailable ? 'meyda' : 'mock'
-      };
-      
-      // Send result to main thread
-      self.postMessage({
-        type: 'STEM_ANALYSIS',
-        stemType,
-        analysis: stemAnalysis
-      });
-      
-    } catch (error) {
-      console.error(`❌ Analysis error for ${stemType}:`, error);
-      self.postMessage({
-        type: 'ANALYSIS_ERROR',
-        stemType,
-        error: error.message,
-        data: {
-          timestamp: Date.now()
-        }
-      });
-    }
-  });
-  
-  // Update performance metrics
-  const analysisTime = performance.now() - startTime;
-  updatePerformanceMetrics(frameTime, analysisTime);
-  
-  // Schedule next analysis frame
-  const targetFrameTime = 1000 / getTargetFrameRate();
-  const nextFrameDelay = Math.max(0, targetFrameTime - analysisTime);
-  
-  setTimeout(analysisLoop, nextFrameDelay);
-  performanceMetrics.lastFrameTime = performance.now();
-}
-
-function performMeydaAnalysis(analyzer) {
-  try {
-    // This would be called with actual audio data in a real implementation
-    // For now, we'll simulate Meyda analysis with realistic values
-    
-    const time = performance.now() / 1000;
-    const features = analyzer.features;
-    
-    // Simulate Meyda feature extraction
-    const meydaFeatures = {};
-    
-    if (features.includes('rms')) {
-      meydaFeatures.rms = Math.sin(time * 2) * 0.5 + 0.5;
-    }
-    
-    if (features.includes('spectralCentroid')) {
-      meydaFeatures.spectralCentroid = Math.sin(time * 1.5) * 1000 + 2000;
-    }
-    
-    if (features.includes('spectralRolloff')) {
-      meydaFeatures.spectralRolloff = Math.sin(time * 0.8) * 2000 + 4000;
-    }
-    
-    if (features.includes('spectralFlatness')) {
-      meydaFeatures.spectralFlatness = Math.sin(time * 1.2) * 0.3 + 0.7;
-    }
-    
-    if (features.includes('zcr')) {
-      meydaFeatures.zcr = Math.sin(time * 3) * 0.2 + 0.3;
-    }
-    
-    // Convert Meyda features to our format
-    return {
-      rms: meydaFeatures.rms || 0.5,
-      spectralCentroid: meydaFeatures.spectralCentroid || 2000,
-      energy: meydaFeatures.rms || 0.5,
-      bpm: 120 + Math.sin(time * 0.1) * 20,
-      key: 'C',
-      clarity: meydaFeatures.spectralFlatness || 0.8,
-      rhythm: [{
-        type: 'rhythm',
-        value: meydaFeatures.rms || 0.5,
-        confidence: 0.8,
-        timestamp: time
-      }],
-      pitch: [{
-        type: 'pitch',
-        value: meydaFeatures.spectralCentroid ? meydaFeatures.spectralCentroid / 5000 : 0.5,
-        confidence: 0.7,
-        timestamp: time
-      }],
-      intensity: [{
-        type: 'intensity',
-        value: meydaFeatures.rms || 0.5,
-        confidence: 0.9,
-        timestamp: time
-      }],
-      timbre: [{
-        type: 'timbre',
-        value: meydaFeatures.spectralFlatness || 0.5,
-        confidence: 0.6,
-        timestamp: time
-      }]
-    };
-    
-  } catch (error) {
-    console.error('❌ Meyda analysis error:', error);
-    // Fallback to mock analysis
-    return generateMockAnalysis(analyzer);
-  }
-}
-
-function generateMockAnalysis(analyzer) {
-  // Generate realistic mock data for demonstration
-  const time = performance.now() / 1000;
-  
-  return {
-    rms: Math.sin(time * 2) * 0.5 + 0.5,
-    spectralCentroid: Math.sin(time * 1.5) * 1000 + 2000,
-    energy: Math.sin(time * 3) * 0.3 + 0.7,
-    bpm: 120 + Math.sin(time * 0.1) * 20,
-    key: 'C',
-    clarity: 0.8 + Math.sin(time * 0.5) * 0.2,
-    rhythm: [{
-      type: 'rhythm',
-      value: Math.sin(time * 4) * 0.5 + 0.5,
-      confidence: 0.8,
-      timestamp: time
-    }],
-    pitch: [{
-      type: 'pitch',
-      value: Math.sin(time * 1.5) * 0.5 + 0.5,
-      confidence: 0.7,
-      timestamp: time
-    }],
-    intensity: [{
-      type: 'intensity',
-      value: Math.sin(time * 2) * 0.5 + 0.5,
-      confidence: 0.9,
-      timestamp: time
-    }],
-    timbre: [{
-      type: 'timbre',
-      value: Math.sin(time * 0.8) * 0.5 + 0.5,
-      confidence: 0.6,
-      timestamp: time
-    }]
-  };
-}
-
-function updatePerformanceMetrics(frameTime, analysisTime) {
-  performanceMetrics.analysisLatency = analysisTime;
-  performanceMetrics.fps = frameTime > 0 ? Math.round(1000 / frameTime) : 0;
-  
-  // Track frame drops
-  const targetFrameTime = 1000 / getTargetFrameRate();
-  if (frameTime > targetFrameTime * 1.5) {
-    performanceMetrics.frameDrops++;
-  }
-  
-  // Estimate memory usage
-  performanceMetrics.memoryUsage = analyzers.size * 5; // Simplified estimate
-}
-
-function getTargetFrameRate() {
-  // Return target frame rate based on current quality settings
-  const hasHighQuality = Array.from(analyzers.values()).some(a => a.config?.quality === 'high');
-  return hasHighQuality ? 60 : 30;
-}
-
-function updateQuality(data) {
-  const { quality } = data;
-  
-  // Validate quality and provide fallback
-  const validQuality = QUALITY_PRESETS[quality] ? quality : 'medium';
-  if (quality !== validQuality) {
-    console.warn(`⚠️ Invalid quality "${quality}", using "medium" instead`);
-  }
-  
-  // Update all analyzers with new quality settings
-  analyzers.forEach((analyzer, stemType) => {
-    analyzer.config.quality = validQuality;
-    analyzer.features = getStemFeatures(stemType, validQuality);
-    analyzer.bufferSize = QUALITY_PRESETS[validQuality].bufferSize;
-  });
-  
-  self.postMessage({
-    type: 'QUALITY_UPDATED',
-    data: {
-      quality: validQuality,
-      analyzers: analyzers.size,
-      timestamp: Date.now()
-    }
-  });
-}
-
-function sendMetrics() {
-  self.postMessage({
-    type: 'PERFORMANCE_METRICS',
-    metrics: { ...performanceMetrics },
-    data: {
-      timestamp: Date.now()
-    }
-  });
-}
+// REMOVED: updateQuality and sendMetrics functions
+// These were used by the real-time analysis system that's no longer needed
 
 // Error handling
 self.onerror = function(error) {
@@ -899,6 +541,9 @@ self.onerror = function(error) {
     }
   });
 };
+
+// REMOVED: restart-analysis capability
+// This was part of the real-time analysis system that's no longer needed
 
 // Initialize worker immediately when loaded
 console.log('🎵 Audio Analysis Worker loaded and ready');
