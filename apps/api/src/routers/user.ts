@@ -33,7 +33,7 @@ export const userRouter = router({
       avatar_url: z.string().url().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      const { error } = await ctx.supabase.auth.updateUser({
+      const { error } = await (ctx.supabase.auth as any).updateUser({
         data: input,
       })
 
@@ -67,7 +67,7 @@ export const userRouter = router({
         });
 
         // Delete user from Supabase auth (this will cascade delete all related data)
-        const { error } = await ctx.supabase.auth.admin.deleteUser(ctx.user.id);
+        const { error } = await (ctx.supabase.auth as any).admin.deleteUser(ctx.user.id);
 
         if (error) {
           console.error('Database error deleting user account:', error);
