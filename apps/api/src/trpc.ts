@@ -94,7 +94,7 @@ export const createTRPCContext = async (opts: CreateExpressContextOptions) => {
   return {
     req,
     res,
-    supabase,
+    supabase: supabase as any, // Type assertion to handle interface mismatch
     user,
     session,
     isGuest,
