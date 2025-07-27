@@ -702,7 +702,11 @@ export function useStemAudioController(): UseStemAudioController {
       frameDrops: 0
     },
     deviceProfile: 'medium',
-    fallbackState: {},
+    fallbackState: {
+      reason: 'none',
+      timestamp: Date.now(),
+      recoveryAttempts: 0
+    },
     visualizationData,
     stemsLoaded,
     isLooping,
