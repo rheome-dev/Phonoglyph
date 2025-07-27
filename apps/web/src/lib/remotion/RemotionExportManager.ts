@@ -1,6 +1,6 @@
 import { AudioFeatureData } from '../visualizer/core/AudioTextureManager';
-import { MIDIData, LiveMIDIData } from '@/types/midi';
-import { AudioAnalysisData } from '@/types/visualizer';
+import { MIDIData } from '@/types/midi';
+import { AudioAnalysisData, LiveMIDIData } from '@/types/visualizer';
 
 /**
  * RemotionExportManager - High-quality video export pipeline
