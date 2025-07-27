@@ -1735,7 +1735,13 @@ function CreativeVisualizerPage() {
         <PerformanceTestPanel
           visualizerRef={visualizerRef}
           cachedAnalysis={cachedStemAnalysis.cachedAnalysis}
-          midiData={midiData || sampleMidiData}
+          midiData={{
+            activeNotes: [],
+            currentTime: currentTime,
+            tempo: 120,
+            totalNotes: (midiData || sampleMidiData).tracks.reduce((sum, track) => sum + track.notes.length, 0),
+            trackActivity: {}
+          }}
         />
 
         {/* Testing Guide */}
