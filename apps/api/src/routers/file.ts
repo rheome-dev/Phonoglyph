@@ -349,9 +349,9 @@ export const fileRouter = router({
         }
 
         // If upload failed, clean up S3
-        if (!input.success) {
+        if (!input.success && updatedFile[0]) {
           try {
-            await deleteFile(fileData.s3_key)
+            await deleteFile(updatedFile[0].s3Key)
           } catch (cleanupError) {
             console.error('Failed to cleanup failed upload:', cleanupError)
             // Don't throw - the database update was successful
