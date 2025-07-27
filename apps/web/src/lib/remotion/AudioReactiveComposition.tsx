@@ -1,9 +1,28 @@
 import React, { useEffect, useRef, useMemo } from 'react';
-import { useCurrentFrame, useVideoConfig, Img, Video, Audio } from 'remotion';
 import { VisualizerManager } from '../visualizer/core/VisualizerManager';
 import { VisualizerConfig } from '@/types/visualizer';
 import { RemotionExportManager, FrameRenderData } from './RemotionExportManager';
 import { Layer } from '@/types/video-composition';
+
+// Conditional Remotion imports - only available when Remotion is installed
+let useCurrentFrame: any, useVideoConfig: any, Img: any, Video: any, Audio: any;
+
+try {
+  const remotion = require('remotion');
+  useCurrentFrame = remotion.useCurrentFrame;
+  useVideoConfig = remotion.useVideoConfig;
+  Img = remotion.Img;
+  Video = remotion.Video;
+  Audio = remotion.Audio;
+} catch (error) {
+  // Remotion not available - provide fallbacks
+  console.warn('Remotion not available. Video export functionality will be limited.');
+  useCurrentFrame = () => 0;
+  useVideoConfig = () => ({ fps: 60, width: 1920, height: 1080 });
+  Img = 'img';
+  Video = 'video';
+  Audio = 'audio';
+}
 
 /**
  * AudioReactiveComposition - Remotion component for high-quality video export
