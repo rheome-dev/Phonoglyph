@@ -143,8 +143,8 @@ export const AudioReactiveComposition: React.FC<AudioReactiveCompositionProps> =
       const effectParams = frameData.visualParameters[effect.id];
       if (effectParams) {
         Object.entries(effectParams).forEach(([paramName, value]) => {
-          if (typeof effect.updateParameter === 'function') {
-            effect.updateParameter(paramName, value);
+          if (typeof (effect as any).updateParameter === 'function') {
+            (effect as any).updateParameter(paramName, value);
           }
         });
       }
