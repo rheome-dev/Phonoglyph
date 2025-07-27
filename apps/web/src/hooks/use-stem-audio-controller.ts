@@ -1,7 +1,6 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { PerformanceMonitor } from '@/lib/performance-monitor';
 import { DeviceOptimizer } from '@/lib/device-optimizer';
-import { FallbackSystem } from '@/lib/fallback-system';
 import { StemAnalysis, AudioFeature, PerformanceMetrics } from '@/types/stem-audio-analysis';
 import { AudioAnalysisData } from '@/types/visualizer';
 
