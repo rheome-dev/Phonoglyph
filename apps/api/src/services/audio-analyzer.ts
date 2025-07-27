@@ -187,7 +187,7 @@ export class AudioAnalyzer {
           waveformData: row.waveformData as WaveformData,
           metadata: {
             sampleRate: row.sampleRate,
-            duration: row.duration,
+            duration: parseFloat(row.duration), // Convert string back to number
             bufferSize: row.bufferSize,
             featuresExtracted: row.featuresExtracted,
             analysisDuration: row.analysisDuration
