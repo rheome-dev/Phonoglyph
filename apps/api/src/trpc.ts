@@ -121,37 +121,40 @@ const t = initTRPC.context<Context>().create({
 });
 
 // Enhanced error handling middleware
-const errorHandlingMiddleware = t.middleware(({ next, path, type, input }) => {
+const errorHandlingMiddleware = t.middleware(async ({ next, path, type, input }) => {
   const start = Date.now();
 
-  return next({
-    onError: ({ error, path, input, type }) => {
-      const duration = Date.now() - start;
+  try {
+    const result = await next();
+    const duration = Date.now() - start;
 
-      // Log error with context
-      logger.error('tRPC Error:', {
-        path,
-        type,
-        code: error.code,
-        message: error.message,
-        duration,
-        input: type === 'mutation' ? '[REDACTED]' : input, // Don't log sensitive mutation data
-      });
+    // Log successful operations (only in development to avoid noise)
+    if (process.env.NODE_ENV === 'development') {
+      logger.debug('tRPC Success:', { path, type, duration });
+    }
 
-      // In development, log full error details
-      if (process.env.NODE_ENV === 'development') {
-        console.error('Full tRPC Error Details:', error);
-      }
-    },
-    onSuccess: ({ path, type }) => {
-      const duration = Date.now() - start;
+    return result;
+  } catch (error: any) {
+    const duration = Date.now() - start;
 
-      // Log successful operations (only in development to avoid noise)
-      if (process.env.NODE_ENV === 'development') {
-        logger.debug('tRPC Success:', { path, type, duration });
-      }
-    },
-  });
+    // Log error with context
+    logger.error('tRPC Error:', {
+      path,
+      type,
+      code: error.code,
+      message: error.message,
+      duration,
+      input: type === 'mutation' ? '[REDACTED]' : input, // Don't log sensitive mutation data
+    });
+
+    // In development, log full error details
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Full tRPC Error Details:', error);
+    }
+
+    // Re-throw the error so it can be handled by tRPC's error formatter
+    throw error;
+  }
 });
 
 // Export reusable router and procedure helpers
