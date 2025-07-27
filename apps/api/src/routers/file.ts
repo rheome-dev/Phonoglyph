@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { router, protectedProcedure } from '../trpc'
 import { TRPCError } from '@trpc/server'
+import { randomUUID } from 'crypto'
 import { generateUploadUrl, generateDownloadUrl, generateS3Key, deleteFile, r2Client, BUCKET_NAME, uploadThumbnail, generateThumbnailKey, generateThumbnailUrl } from '../services/r2-storage'
 import { PutObjectCommand } from '@aws-sdk/client-s3'
 import {
@@ -185,7 +186,9 @@ export const fileRouter = router({
         await (r2Client as any).send(command)
 
         // Create file metadata record using Drizzle
+        const fileId = randomUUID();
         const newFileRecord = await db.insert(fileMetadata).values({
+          id: fileId,
           userId: userId,
           fileName: sanitizedFileName,
           fileType: validation.fileType,
