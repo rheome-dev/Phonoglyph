@@ -86,7 +86,12 @@ export const AudioReactiveComposition: React.FC<AudioReactiveCompositionProps> =
         height,
         pixelRatio: renderQuality === 'ultra' ? 2 : 1
       },
-      aspectRatio: { width, height },
+      aspectRatio: {
+        id: 'remotion-export',
+        name: 'Remotion Export',
+        width,
+        height
+      },
       performance: {
         targetFPS: fps,
         enableBloom: true,
