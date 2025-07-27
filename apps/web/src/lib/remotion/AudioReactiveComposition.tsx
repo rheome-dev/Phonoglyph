@@ -95,8 +95,7 @@ export const AudioReactiveComposition: React.FC<AudioReactiveCompositionProps> =
       performance: {
         targetFPS: fps,
         enableBloom: true,
-        enableShadows: renderQuality === 'ultra',
-        enableAntialiasing: enableAntialiasing
+        enableShadows: renderQuality === 'ultra'
       },
       midi: {
         velocitySensitivity: 1.0,
