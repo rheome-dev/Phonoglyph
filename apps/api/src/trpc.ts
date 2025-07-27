@@ -112,7 +112,9 @@ const t = initTRPC.context<Context>().create({
         ...shape.data,
         // Add additional error context for debugging
         timestamp: new Date().toISOString(),
-        path: error.cause?.path || 'unknown',
+        path: (error.cause && typeof error.cause === 'object' && 'path' in error.cause)
+          ? (error.cause as any).path
+          : 'unknown',
       },
     };
   },
