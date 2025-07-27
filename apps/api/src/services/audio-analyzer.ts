@@ -184,7 +184,7 @@ export class AudioAnalyzer {
           fileMetadataId: row.fileMetadataId,
           stemType: row.stemType,
           analysisData: row.analysisData as AudioAnalysisData,
-          waveformData: row.waveformData,
+          waveformData: row.waveformData as WaveformData,
           metadata: {
             sampleRate: row.sampleRate,
             duration: row.duration,
