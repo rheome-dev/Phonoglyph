@@ -1735,7 +1735,7 @@ function CreativeVisualizerPage() {
         <PerformanceTestPanel
           visualizerRef={visualizerRef}
           cachedAnalysis={cachedStemAnalysis.cachedAnalysis}
-          midiData={midiData}
+          midiData={midiData || sampleMidiData}
         />
 
         {/* Testing Guide */}
