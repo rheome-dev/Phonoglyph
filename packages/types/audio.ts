@@ -53,6 +53,21 @@ export interface AudioMarker {
   value?: string | number;
 }
 
+export interface AudioEvent {
+  timestamp: number;
+  type: string;
+  data: Record<string, unknown>;
+  confidence?: number;
+}
+
+export interface AudioTimeline {
+  events: AudioEvent[];
+  markers: AudioMarker[];
+  duration: number;
+  sampleRate: number;
+  metadata?: Record<string, unknown>;
+}
+
 export interface StemMetadata {
   bpm: number;
   key: string;
