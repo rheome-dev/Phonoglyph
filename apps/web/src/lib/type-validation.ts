@@ -15,18 +15,21 @@ import {
   validateAndTransform,
   safeValidate,
   assertType
-} from '@/types/type-guards';
+} from 'phonoglyph-types';
 
 import {
   AudioFeatureData,
   CachedStemAnalysis,
-  AudioAnalysisData,
-  LiveMIDIData,
   PerformanceMetrics,
   DetailedPerformanceMetrics,
   PerformanceAlert,
   DeviceCapabilities
-} from '@/types/audio';
+} from 'phonoglyph-types';
+
+import {
+  AudioAnalysisData,
+  LiveMIDIData
+} from '@/types/visualizer';
 
 export interface ValidationError {
   field: string;
