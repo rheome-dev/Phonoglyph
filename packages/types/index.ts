@@ -3,7 +3,8 @@ import { z } from 'zod'
 // Import our comprehensive type definitions
 export * from './audio'
 export * from './visualization'
-export {
+// Export types from performance module
+export type {
   PerformanceMetrics,
   DetailedPerformanceMetrics,
   PerformanceAlert,
@@ -16,6 +17,16 @@ export {
   PerformanceTest,
   PerformanceTestResult,
   RealTimeMonitor,
+  PerformanceHistoryEntry,
+  TrendData,
+  OptimizationAction,
+  PerformanceTestSuite,
+  MonitoringEvent,
+  PerformanceThresholds
+} from './performance'
+
+// Export functions from performance module
+export {
   isPerformanceMetrics,
   isPerformanceAlert,
   isDeviceCapabilities,
