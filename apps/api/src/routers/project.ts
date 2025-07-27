@@ -209,18 +209,22 @@ export const projectRouter = router({
         const { id, ...updateData } = input;
 
         // Type-safe update with user access control
+        // Map snake_case input to camelCase Drizzle schema
+        const drizzleUpdateData: any = {};
+        if (updateData.name !== undefined) drizzleUpdateData.name = updateData.name;
+        if (updateData.description !== undefined) drizzleUpdateData.description = updateData.description;
+        if (updateData.privacy_setting !== undefined) drizzleUpdateData.privacySetting = updateData.privacy_setting;
+        if (updateData.midi_file_path !== undefined) drizzleUpdateData.midiFilePath = updateData.midi_file_path;
+        if (updateData.audio_file_path !== undefined) drizzleUpdateData.audioFilePath = updateData.audio_file_path;
+        if (updateData.user_video_path !== undefined) drizzleUpdateData.userVideoPath = updateData.user_video_path;
+        if (updateData.render_configuration !== undefined) drizzleUpdateData.renderConfiguration = updateData.render_configuration;
+        if (updateData.thumbnail_url !== undefined) drizzleUpdateData.thumbnailUrl = updateData.thumbnail_url;
+        if (updateData.primary_midi_file_id !== undefined) drizzleUpdateData.primaryMidiFileId = updateData.primary_midi_file_id;
+        drizzleUpdateData.updatedAt = new Date().toISOString();
+
         const updatedProject = await db
           .update(projects)
-          .set({
-            name: updateData.name,
-            description: updateData.description,
-            privacySetting: updateData.privacy_setting,
-            midiFilePath: updateData.midi_file_path,
-            audioFilePath: updateData.audio_file_path,
-            userVideoPath: updateData.user_video_path,
-            renderConfiguration: updateData.render_configuration,
-            updatedAt: new Date().toISOString(),
-          })
+          .set(drizzleUpdateData)
           .where(
             and(
               eq(projects.id, id),
