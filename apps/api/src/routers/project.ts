@@ -214,7 +214,6 @@ export const projectRouter = router({
         if (updateData.name !== undefined) drizzleUpdateData.name = updateData.name;
         if (updateData.description !== undefined) drizzleUpdateData.description = updateData.description;
         if (updateData.privacy_setting !== undefined) drizzleUpdateData.privacySetting = updateData.privacy_setting;
-        if (updateData.midi_file_path !== undefined) drizzleUpdateData.midiFilePath = updateData.midi_file_path;
         if (updateData.audio_file_path !== undefined) drizzleUpdateData.audioFilePath = updateData.audio_file_path;
         if (updateData.user_video_path !== undefined) drizzleUpdateData.userVideoPath = updateData.user_video_path;
         if (updateData.render_configuration !== undefined) drizzleUpdateData.renderConfiguration = updateData.render_configuration;
