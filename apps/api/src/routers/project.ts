@@ -50,6 +50,25 @@ const updateCollaboratorSchema = z.object({
   role: z.enum(['owner', 'editor', 'viewer']),
 });
 
+// Helper function to transform Drizzle project result to Project type
+function transformDrizzleProject(drizzleProject: any): Project {
+  return {
+    id: drizzleProject.id,
+    name: drizzleProject.name,
+    user_id: drizzleProject.userId,
+    midi_file_path: drizzleProject.midiFilePath || '',
+    audio_file_path: drizzleProject.audioFilePath,
+    user_video_path: drizzleProject.userVideoPath,
+    render_configuration: drizzleProject.renderConfiguration,
+    description: drizzleProject.description,
+    privacy_setting: drizzleProject.privacySetting as 'private' | 'unlisted' | 'public' || 'private',
+    thumbnail_url: drizzleProject.thumbnailUrl,
+    primary_midi_file_id: drizzleProject.primaryMidiFileId,
+    created_at: drizzleProject.createdAt,
+    updated_at: drizzleProject.updatedAt,
+  };
+}
+
 export const projectRouter = router({
   // Get all projects for the authenticated user
   list: protectedProcedure
@@ -70,7 +89,8 @@ export const projectRouter = router({
           p_metadata: { count: userProjects?.length || 0 },
         });
 
-        return userProjects as Project[];
+        // Transform Drizzle result to match Project type (camelCase -> snake_case)
+        return userProjects.map(transformDrizzleProject);
       } catch (error) {
         console.error('Error fetching projects:', error);
         throw new TRPCError({
@@ -112,7 +132,7 @@ export const projectRouter = router({
           p_resource_id: input.id,
         });
 
-        return project[0] as Project;
+        return transformDrizzleProject(project[0]);
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         console.error('Error fetching project:', error);
@@ -170,7 +190,7 @@ export const projectRouter = router({
           p_metadata: { name: input.name },
         });
 
-        return newProject[0] as Project;
+        return transformDrizzleProject(newProject[0]);
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         console.error('Error creating project:', error);
@@ -225,7 +245,7 @@ export const projectRouter = router({
           p_metadata: updateData,
         });
 
-        return updatedProject[0] as Project;
+        return transformDrizzleProject(updatedProject[0]);
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         console.error('Error updating project:', error);
@@ -302,7 +322,7 @@ export const projectRouter = router({
           p_metadata: { name: deletedProject[0].name },
         });
 
-        return { success: true, deletedProject: deletedProject[0] as Project };
+        return { success: true, deletedProject: transformDrizzleProject(deletedProject[0]) };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         console.error('Error deleting project:', error);
@@ -418,7 +438,7 @@ export const projectRouter = router({
           p_metadata: { original_project_id: input.project_id, new_name: input.new_name },
         });
 
-        return newProject as Project;
+        return transformDrizzleProject(newProject);
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         console.error('Error duplicating project:', error);
