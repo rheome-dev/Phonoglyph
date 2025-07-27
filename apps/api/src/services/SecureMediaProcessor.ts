@@ -326,7 +326,9 @@ export class SecureMediaProcessor {
           duration: metadata.format.duration,
           format: metadata.format.format_name || 'unknown',
           codec: videoStream?.codec_name,
-          bitrate: parseInt(metadata.format.bit_rate || '0'),
+          bitrate: typeof metadata.format.bit_rate === 'number'
+            ? metadata.format.bit_rate
+            : parseInt(metadata.format.bit_rate || '0'),
           frameRate: videoStream?.r_frame_rate ? eval(videoStream.r_frame_rate) : undefined,
           fileSize,
           checksum
