@@ -1,8 +1,10 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { trpc } from '@/lib/trpc';
-import { StemType } from '@/types/stem-audio-analysis';
 import { AudioAnalysisDataForTrack } from '@/types/stem-audio-analysis';
 import { WaveformData } from '@/components/stem-visualization/stem-waveform';
+
+// Define StemType locally to match the type used in StemAnalysis
+type StemType = 'drums' | 'bass' | 'vocals' | 'other' | 'piano' | 'master';
 
 interface CachedStemAnalysis {
   id: string;
