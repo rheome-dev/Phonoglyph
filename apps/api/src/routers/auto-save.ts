@@ -77,7 +77,7 @@ export const autoSaveRouter = router({
         }
 
         // Log audit event
-        await ctx.supabase.rpc('log_audit_event', {
+        await (ctx.supabase as any).rpc('log_audit_event', {
           p_user_id: ctx.user.id,
           p_action: 'auto_save.save_state',
           p_resource_type: 'edit_state',
@@ -188,15 +188,15 @@ export const autoSaveRouter = router({
         }
 
         // Log audit event
-        await ctx.supabase.rpc('log_audit_event', {
+        await (ctx.supabase as any).rpc('log_audit_event', {
           p_user_id: ctx.user.id,
           p_action: 'auto_save.restore_state',
           p_resource_type: 'edit_state',
           p_resource_id: newState.id,
-          p_metadata: { 
+          p_metadata: {
             original_state_id: input.stateId,
             project_id: editState.project_id,
-            version: newState.version 
+            version: newState.version
           },
         });
 
@@ -305,14 +305,14 @@ export const autoSaveRouter = router({
         }
 
         // Log audit event
-        await ctx.supabase.rpc('log_audit_event', {
+        await (ctx.supabase as any).rpc('log_audit_event', {
           p_user_id: ctx.user.id,
           p_action: 'auto_save.delete_state',
           p_resource_type: 'edit_state',
           p_resource_id: input.stateId,
-          p_metadata: { 
+          p_metadata: {
             was_current: editState.is_current,
-            project_id: editState.project_id 
+            project_id: editState.project_id
           },
         });
 
@@ -348,7 +348,7 @@ export const autoSaveRouter = router({
         }
 
         // Log audit event
-        await ctx.supabase.rpc('log_audit_event', {
+        await (ctx.supabase as any).rpc('log_audit_event', {
           p_user_id: ctx.user.id,
           p_action: 'auto_save.clear_history',
           p_resource_type: 'project',
