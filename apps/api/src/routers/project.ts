@@ -352,10 +352,15 @@ export const projectRouter = router({
           conditions.push(eq(projects.privacySetting, input.privacy_setting));
         }
 
-        // Build order by clause
-        const orderBy = input.sort_order === 'asc'
-          ? asc(projects[input.sort_by as keyof typeof projects])
-          : desc(projects[input.sort_by as keyof typeof projects]);
+        // Build order by clause - map snake_case to camelCase
+        const sortColumnMap = {
+          'created_at': projects.createdAt,
+          'updated_at': projects.updatedAt,
+          'name': projects.name,
+        } as const;
+
+        const sortColumn = sortColumnMap[input.sort_by as keyof typeof sortColumnMap];
+        const orderBy = input.sort_order === 'asc' ? asc(sortColumn) : desc(sortColumn);
 
         // Execute query with Drizzle
         const searchResults = await db
