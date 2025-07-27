@@ -360,10 +360,15 @@ export async function validateFileContentSecurity(buffer: Buffer, expectedType: 
 }
 
 // Legacy function for backward compatibility - now uses enhanced security validation
-export function validateFileHeader(buffer: ArrayBuffer, fileType: FileType): boolean {
+export async function validateFileHeader(buffer: ArrayBuffer, fileType: FileType): Promise<boolean> {
   const bufferNode = Buffer.from(buffer);
   // Use the new security validation but only return boolean for compatibility
-  return validateFileContentSecurity(bufferNode, fileType).then(result => result.isValid).catch(() => false);
+  try {
+    const result = await validateFileContentSecurity(bufferNode, fileType);
+    return result.isValid;
+  } catch {
+    return false;
+  }
 }
 
 // Main file validation function - UPDATED
