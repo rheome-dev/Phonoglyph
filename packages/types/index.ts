@@ -22,6 +22,33 @@ export {
   isOptimizationRecommendation
 } from './performance'
 
+// Export all type guards from type-guards.ts (excluding duplicates already exported from performance)
+export {
+  isString,
+  isNumber,
+  isBoolean,
+  isArray,
+  isObject,
+  isStemType,
+  isAudioFeature,
+  isExtendedAudioFeature,
+  isAudioMarker,
+  isStemMetadata,
+  isStemAnalysisData,
+  isAudioFeatureData,
+  isCachedStemAnalysis,
+  isAudioAnalysisData,
+  isMIDINote,
+  isLiveMIDIData,
+  isDetailedPerformanceMetrics,
+  validateAndTransform,
+  safeValidate,
+  createArrayValidator,
+  createOptionalValidator,
+  assertType,
+  isValidEnum
+} from './type-guards'
+
 // ===== RENDER CONFIGURATION SCHEMA =====
 const renderConfigurationSchema = z.object({
   resolution: z.object({

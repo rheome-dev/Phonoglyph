@@ -279,7 +279,7 @@ export async function validateFileContentSecurity(buffer: Buffer, expectedType: 
 
         // Check ID3 tag size for potential overflow attacks
         if (uint8Array.length >= 10) {
-          const tagSize = (uint8Array[6] << 21) | (uint8Array[7] << 14) | (uint8Array[8] << 7) | uint8Array[9];
+          const tagSize = (uint8Array[6]! << 21) | (uint8Array[7]! << 14) | (uint8Array[8]! << 7) | uint8Array[9]!;
           if (tagSize > 1024 * 1024) { // 1MB tag size is suspicious
             securityIssues.push({
               type: 'oversized_metadata',

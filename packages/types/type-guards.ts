@@ -3,20 +3,20 @@
  * Ensures type safety at runtime for all audio processing data
  */
 
-import { 
-  AudioFeatureData, 
-  StemAnalysisData, 
-  AudioAnalysisData, 
+import {
+  AudioFeatureData,
+  StemAnalysisData,
+  AudioAnalysisData,
   CachedStemAnalysis,
   StemType,
   AudioFeature,
   ExtendedAudioFeature,
   StemMetadata,
-  AudioMarker
+  AudioMarker,
+  VisualizationParameters
 } from './audio';
 
 import {
-  VisualizationParameters,
   LiveMIDIData,
   MIDINote,
   VisualEffect,
@@ -74,8 +74,8 @@ export function isAudioFeature(value: unknown): value is AudioFeature {
 
 export function isExtendedAudioFeature(value: unknown): value is ExtendedAudioFeature {
   if (!isAudioFeature(value)) return false;
-  
-  const extended = value as Record<string, unknown>;
+
+  const extended = value as unknown as Record<string, unknown>;
   return isNumber(extended.spectralRolloff) &&
          isNumber(extended.loudness) &&
          isNumber(extended.perceptualSpread) &&
@@ -210,8 +210,8 @@ export function isPerformanceMetrics(value: unknown): value is PerformanceMetric
 
 export function isDetailedPerformanceMetrics(value: unknown): value is DetailedPerformanceMetrics {
   if (!isPerformanceMetrics(value)) return false;
-  
-  const detailed = value as Record<string, unknown>;
+
+  const detailed = value as unknown as Record<string, unknown>;
   return isNumber(detailed.drawCalls) &&
          isNumber(detailed.triangles) &&
          isNumber(detailed.geometries) &&

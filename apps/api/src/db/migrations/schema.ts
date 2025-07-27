@@ -4,6 +4,10 @@ import { sql } from "drizzle-orm"
 export const exportStatus = pgEnum("export_status", ['queued', 'rendering', 'uploading', 'completed', 'failed', 'cancelled'])
 export const fileTypeEnum = pgEnum("file_type_enum", ['midi', 'audio', 'video', 'image'])
 
+// Reference to Supabase auth.users table
+export const users = pgTable("users", {
+	id: uuid().primaryKey().notNull(),
+});
 
 export const migrations = pgTable("migrations", {
 	id: serial().primaryKey().notNull(),
@@ -14,7 +18,7 @@ export const migrations = pgTable("migrations", {
 ]);
 
 export const editStates = pgTable("edit_states", {
-	id: text().default((uuid_generate_v4())).primaryKey().notNull(),
+	id: text().default(sql`uuid_generate_v4()`).primaryKey().notNull(),
 	userId: uuid("user_id").notNull(),
 	projectId: text("project_id").notNull(),
 	timestamp: timestamp({ precision: 3, mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
@@ -41,8 +45,8 @@ export const editStates = pgTable("edit_states", {
 	pgPolicy("Users can view project edit states", { as: "permissive", for: "select", to: ["authenticated"] }),
 ]);
 
-export const projects = pgTable("projects", {
-	id: text().default((uuid_generate_v4())).primaryKey().notNull(),
+export const projects: any = pgTable("projects", {
+	id: text().default(sql`uuid_generate_v4()`).primaryKey().notNull(),
 	name: text().notNull(),
 	userId: uuid("user_id").notNull(),
 	midiFilePath: text("midi_file_path"),
@@ -243,7 +247,7 @@ export const projectCollaborators = pgTable("project_collaborators", {
 ]);
 
 export const eventBasedMappings = pgTable("event_based_mappings", {
-	id: text().default((uuid_generate_v4())).primaryKey().notNull(),
+	id: text().default(sql`uuid_generate_v4()`).primaryKey().notNull(),
 	userId: uuid("user_id").notNull(),
 	projectId: text("project_id").notNull(),
 	eventType: text("event_type").notNull(),
@@ -327,7 +331,7 @@ export const projectStorageQuotas = pgTable("project_storage_quotas", {
   WHERE ((projects.id = project_storage_quotas.project_id) AND (projects.user_id = auth.uid()))))` }),
 ]);
 
-export const assetFolders = pgTable("asset_folders", {
+export const assetFolders: any = pgTable("asset_folders", {
 	id: uuid().defaultRandom().primaryKey().notNull(),
 	projectId: text("project_id").notNull(),
 	name: text().notNull(),
@@ -396,7 +400,7 @@ export const assetTagRelationships = pgTable("asset_tag_relationships", {
 ]);
 
 export const audioEventCache = pgTable("audio_event_cache", {
-	id: text().default((uuid_generate_v4())).primaryKey().notNull(),
+	id: text().default(sql`uuid_generate_v4()`).primaryKey().notNull(),
 	userId: uuid("user_id").notNull(),
 	fileMetadataId: uuid("file_metadata_id").notNull(),
 	stemType: text("stem_type").notNull(),
@@ -446,7 +450,7 @@ export const stemSeparationJobs = pgTable("stem_separation_jobs", {
 	check("stem_separation_jobs_status_check", sql`status = ANY (ARRAY['queued'::text, 'processing'::text, 'completed'::text, 'failed'::text])`),
 ]);
 
-export const fileMetadata = pgTable("file_metadata", {
+export const fileMetadata: any = pgTable("file_metadata", {
 	id: uuid().defaultRandom().primaryKey().notNull(),
 	userId: uuid("user_id").notNull(),
 	fileName: varchar("file_name", { length: 255 }).notNull(),

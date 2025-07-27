@@ -41,25 +41,25 @@ export interface CompositorConfig {
 
 export class MultiLayerCompositor {
   private renderer: THREE.WebGLRenderer;
-  private composer: EffectComposer;
+  private composer!: EffectComposer;
   private config: CompositorConfig;
-  
+
   // Layer management
   private layers: Map<string, LayerRenderTarget> = new Map();
   private layerOrder: string[] = [];
-  
+
   // Render targets
-  private mainRenderTarget: THREE.WebGLRenderTarget;
-  private bloomRenderTarget: THREE.WebGLRenderTarget;
-  
+  private mainRenderTarget!: THREE.WebGLRenderTarget;
+  private bloomRenderTarget!: THREE.WebGLRenderTarget;
+
   // Shader passes
-  private layerCompositePass: ShaderPass;
+  private layerCompositePass!: ShaderPass;
   private bloomPass: UnrealBloomPass | null = null;
-  private finalPass: ShaderPass;
-  
+  private finalPass!: ShaderPass;
+
   // Geometry for full-screen quads
-  private quadGeometry: THREE.PlaneGeometry;
-  private quadCamera: THREE.OrthographicCamera;
+  private quadGeometry!: THREE.PlaneGeometry;
+  private quadCamera!: THREE.OrthographicCamera;
   
   constructor(renderer: THREE.WebGLRenderer, config: CompositorConfig) {
     this.renderer = renderer;

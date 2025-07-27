@@ -2,6 +2,7 @@ import { db } from '../db/drizzle';
 import { audioEventCache } from '../db/schema';
 import { eq, and } from 'drizzle-orm';
 import type { AudioTimeline } from 'phonoglyph-types';
+import { randomUUID } from 'crypto';
 
 /**
  * Type-safe Audio Events Cache Service using Drizzle ORM
@@ -47,11 +48,14 @@ export class AudioEventsCacheService {
   ): Promise<void> {
     try {
       await db.insert(audioEventCache).values({
+        id: randomUUID(),
         fileMetadataId,
         stemType,
         userId,
         eventData: timeline,
         analysisVersion: '1.0',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       });
     } catch (error) {
       console.error('Error caching audio events:', error);

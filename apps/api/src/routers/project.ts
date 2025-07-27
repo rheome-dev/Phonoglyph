@@ -186,11 +186,11 @@ export const projectRouter = router({
           p_user_id: ctx.user.id,
           p_action: 'project.create',
           p_resource_type: 'project',
-          p_resource_id: newProject[0].id,
+          p_resource_id: newProject[0]!.id,
           p_metadata: { name: input.name },
         });
 
-        return transformDrizzleProject(newProject[0]);
+        return transformDrizzleProject(newProject[0]!);
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         console.error('Error creating project:', error);
@@ -322,10 +322,10 @@ export const projectRouter = router({
           p_action: 'project.delete',
           p_resource_type: 'project',
           p_resource_id: input.id,
-          p_metadata: { name: deletedProject[0].name },
+          p_metadata: { name: deletedProject[0]!.name },
         });
 
-        return { success: true, deletedProject: transformDrizzleProject(deletedProject[0]) };
+        return { success: true, deletedProject: transformDrizzleProject(deletedProject[0]!) };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         console.error('Error deleting project:', error);

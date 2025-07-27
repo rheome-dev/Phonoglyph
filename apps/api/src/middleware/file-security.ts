@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { SecureMediaProcessor } from '../services/SecureMediaProcessor';
 import { FileQuarantineService } from '../services/FileQuarantineService';
 import { SecurityAuditService } from '../services/SecurityAuditService';
-import { FileType } from '../lib/file-validation';
+import { FileType, ScanResult } from '../lib/file-validation';
 import { SECURITY_CONFIG } from '../lib/security-config';
 import { createHash } from 'crypto';
 
@@ -102,7 +102,7 @@ export function fileSecurityMiddleware(options: SecurityMiddlewareOptions = {}) 
 
       // Malware scanning - currently disabled for MVP
       // Will be enabled when enterprise Cloudflare account or VirusTotal integration is available
-      let scanResult = { isClean: true, threats: [], scanTime: 0 };
+      let scanResult: ScanResult = { isClean: true, threats: [], scanTime: 0 };
       if (enableMalwareScanning && SECURITY_CONFIG.malwareScanning.enabled) {
         scanResult = await SecureMediaProcessor.scanForMalware(buffer);
       }

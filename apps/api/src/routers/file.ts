@@ -213,7 +213,7 @@ export const fileRouter = router({
           })
         }
 
-        const data = newFileRecord[0];
+        const data = newFileRecord[0]!; // Safe because we checked above
 
         // Trigger audio analysis and caching for audio files
         if (validation.fileType === 'audio') {
@@ -575,7 +575,7 @@ export const fileRouter = router({
         }
 
         // Delete from S3
-        await deleteFile(fileData[0].s3Key)
+        await deleteFile(fileData[0]!.s3Key)
 
         // Delete from database using Drizzle
         const deletedFile = await db

@@ -1,14 +1,14 @@
 import { relations } from "drizzle-orm/relations";
-import { projects, editStates, usersInAuth, fileMetadata, projectShares, userProfiles, auditLogs, midiFiles, visualizationSettings, projectCollaborators, eventBasedMappings, assetUsage, projectStorageQuotas, assetFolders, assetTags, assetTagRelationships, audioEventCache, stemSeparationJobs, stemSeparations, exportJobs, audioAnalysisCache, audioAnalysisJobs } from "./schema";
+import { projects, editStates, users, fileMetadata, projectShares, userProfiles, auditLogs, midiFiles, visualizationSettings, projectCollaborators, eventBasedMappings, assetUsage, projectStorageQuotas, assetFolders, assetTags, assetTagRelationships, audioEventCache, stemSeparationJobs, stemSeparations, exportJobs, audioAnalysisCache, audioAnalysisJobs } from "./schema";
 
 export const editStatesRelations = relations(editStates, ({one}) => ({
 	project: one(projects, {
 		fields: [editStates.projectId],
 		references: [projects.id]
 	}),
-	usersInAuth: one(usersInAuth, {
+	users: one(users, {
 		fields: [editStates.userId],
-		references: [usersInAuth.id]
+		references: [users.id]
 	}),
 }));
 
@@ -19,9 +19,9 @@ export const projectsRelations = relations(projects, ({one, many}) => ({
 		references: [fileMetadata.id],
 		relationName: "projects_primaryMidiFileId_fileMetadata_id"
 	}),
-	usersInAuth: one(usersInAuth, {
+	users: one(users, {
 		fields: [projects.userId],
-		references: [usersInAuth.id]
+		references: [users.id]
 	}),
 	projectShares: many(projectShares),
 	projectCollaborators: many(projectCollaborators),
@@ -35,7 +35,7 @@ export const projectsRelations = relations(projects, ({one, many}) => ({
 	}),
 }));
 
-export const usersInAuthRelations = relations(usersInAuth, ({many}) => ({
+export const usersRelations = relations(users, ({many}) => ({
 	editStates: many(editStates),
 	projects: many(projects),
 	userProfiles: many(userProfiles),
@@ -69,9 +69,9 @@ export const fileMetadataRelations = relations(fileMetadata, ({one, many}) => ({
 		references: [projects.id],
 		relationName: "fileMetadata_projectId_projects_id"
 	}),
-	usersInAuth: one(usersInAuth, {
+	users: one(users, {
 		fields: [fileMetadata.userId],
-		references: [usersInAuth.id]
+		references: [users.id]
 	}),
 	stemSeparations: many(stemSeparations),
 	audioAnalysisCaches: many(audioAnalysisCache),
@@ -86,16 +86,16 @@ export const projectSharesRelations = relations(projectShares, ({one}) => ({
 }));
 
 export const userProfilesRelations = relations(userProfiles, ({one}) => ({
-	usersInAuth: one(usersInAuth, {
+	users: one(users, {
 		fields: [userProfiles.id],
-		references: [usersInAuth.id]
+		references: [users.id]
 	}),
 }));
 
 export const auditLogsRelations = relations(auditLogs, ({one}) => ({
-	usersInAuth: one(usersInAuth, {
+	users: one(users, {
 		fields: [auditLogs.userId],
-		references: [usersInAuth.id]
+		references: [users.id]
 	}),
 }));
 
@@ -104,17 +104,17 @@ export const visualizationSettingsRelations = relations(visualizationSettings, (
 		fields: [visualizationSettings.midiFileId],
 		references: [midiFiles.id]
 	}),
-	usersInAuth: one(usersInAuth, {
+	users: one(users, {
 		fields: [visualizationSettings.userId],
-		references: [usersInAuth.id]
+		references: [users.id]
 	}),
 }));
 
 export const midiFilesRelations = relations(midiFiles, ({one, many}) => ({
 	visualizationSettings: many(visualizationSettings),
-	usersInAuth: one(usersInAuth, {
+	users: one(users, {
 		fields: [midiFiles.userId],
-		references: [usersInAuth.id]
+		references: [users.id]
 	}),
 }));
 
@@ -123,9 +123,9 @@ export const projectCollaboratorsRelations = relations(projectCollaborators, ({o
 		fields: [projectCollaborators.projectId],
 		references: [projects.id]
 	}),
-	usersInAuth: one(usersInAuth, {
+	users: one(users, {
 		fields: [projectCollaborators.userId],
-		references: [usersInAuth.id]
+		references: [users.id]
 	}),
 }));
 
@@ -134,9 +134,9 @@ export const eventBasedMappingsRelations = relations(eventBasedMappings, ({one})
 		fields: [eventBasedMappings.projectId],
 		references: [projects.id]
 	}),
-	usersInAuth: one(usersInAuth, {
+	users: one(users, {
 		fields: [eventBasedMappings.userId],
-		references: [usersInAuth.id]
+		references: [users.id]
 	}),
 }));
 
@@ -198,16 +198,16 @@ export const audioEventCacheRelations = relations(audioEventCache, ({one}) => ({
 		fields: [audioEventCache.fileMetadataId],
 		references: [fileMetadata.id]
 	}),
-	usersInAuth: one(usersInAuth, {
+	users: one(users, {
 		fields: [audioEventCache.userId],
-		references: [usersInAuth.id]
+		references: [users.id]
 	}),
 }));
 
 export const stemSeparationJobsRelations = relations(stemSeparationJobs, ({one}) => ({
-	usersInAuth: one(usersInAuth, {
+	users: one(users, {
 		fields: [stemSeparationJobs.userId],
-		references: [usersInAuth.id]
+		references: [users.id]
 	}),
 }));
 
@@ -216,16 +216,16 @@ export const stemSeparationsRelations = relations(stemSeparations, ({one}) => ({
 		fields: [stemSeparations.fileMetadataId],
 		references: [fileMetadata.id]
 	}),
-	usersInAuth: one(usersInAuth, {
+	users: one(users, {
 		fields: [stemSeparations.userId],
-		references: [usersInAuth.id]
+		references: [users.id]
 	}),
 }));
 
 export const exportJobsRelations = relations(exportJobs, ({one}) => ({
-	usersInAuth: one(usersInAuth, {
+	users: one(users, {
 		fields: [exportJobs.userId],
-		references: [usersInAuth.id]
+		references: [users.id]
 	}),
 }));
 
@@ -234,9 +234,9 @@ export const audioAnalysisCacheRelations = relations(audioAnalysisCache, ({one})
 		fields: [audioAnalysisCache.fileMetadataId],
 		references: [fileMetadata.id]
 	}),
-	usersInAuth: one(usersInAuth, {
+	users: one(users, {
 		fields: [audioAnalysisCache.userId],
-		references: [usersInAuth.id]
+		references: [users.id]
 	}),
 }));
 
@@ -245,8 +245,8 @@ export const audioAnalysisJobsRelations = relations(audioAnalysisJobs, ({one}) =
 		fields: [audioAnalysisJobs.fileMetadataId],
 		references: [fileMetadata.id]
 	}),
-	usersInAuth: one(usersInAuth, {
+	users: one(users, {
 		fields: [audioAnalysisJobs.userId],
-		references: [usersInAuth.id]
+		references: [users.id]
 	}),
 }));

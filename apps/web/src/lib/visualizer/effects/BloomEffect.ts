@@ -3,7 +3,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
-import { VisualEffect, AudioAnalysisData, LiveMIDIData } from '@/types/visualizer';
+import { VisualEffect, AudioAnalysisData, LiveMIDIData, EffectParameter } from '@/types/visualizer';
 import { MultiLayerCompositor } from '../core/MultiLayerCompositor';
 
 export class BloomEffect implements VisualEffect {
@@ -11,11 +11,43 @@ export class BloomEffect implements VisualEffect {
   name = 'Bloom Post-Processing';
   description = 'Global bloom effect for all visualizations';
   enabled = true;
-  parameters = {
-    threshold: 0.25,  // Increased threshold to make bloom less sensitive
-    strength: 0.1,    // Reduced strength for a softer glow
-    radius: 0.4,      // Tighter radius for the glow
-    exposure: 0.8     // Keep exposure neutral
+  parameters: Record<string, EffectParameter> = {
+    threshold: {
+      value: 0.25,
+      min: 0.0,
+      max: 1.0,
+      step: 0.01,
+      type: 'number',
+      label: 'Threshold',
+      description: 'Brightness threshold for bloom effect'
+    },
+    strength: {
+      value: 0.1,
+      min: 0.0,
+      max: 2.0,
+      step: 0.01,
+      type: 'number',
+      label: 'Strength',
+      description: 'Intensity of the bloom effect'
+    },
+    radius: {
+      value: 0.4,
+      min: 0.0,
+      max: 1.0,
+      step: 0.01,
+      type: 'number',
+      label: 'Radius',
+      description: 'Radius of the bloom glow'
+    },
+    exposure: {
+      value: 0.8,
+      min: 0.0,
+      max: 2.0,
+      step: 0.01,
+      type: 'number',
+      label: 'Exposure',
+      description: 'Overall exposure adjustment'
+    }
   };
 
   private scene!: THREE.Scene;
@@ -84,9 +116,9 @@ export class BloomEffect implements VisualEffect {
     const size = this.renderer.getSize(new THREE.Vector2());
     this.bloomPass = new UnrealBloomPass(
       new THREE.Vector2(size.x, size.y),
-      this.parameters.strength,
-      this.parameters.radius,
-      this.parameters.threshold
+      this.parameters.strength.value as number,
+      this.parameters.radius.value as number,
+      this.parameters.threshold.value as number
     );
     this.composer.addPass(this.bloomPass);
 
@@ -94,7 +126,7 @@ export class BloomEffect implements VisualEffect {
     const finalPassShader = {
       uniforms: {
         tDiffuse: { value: null },
-        uExposure: { value: this.parameters.exposure }
+        uExposure: { value: this.parameters.exposure.value }
       },
       vertexShader: `
         varying vec2 vUv;
@@ -135,16 +167,16 @@ export class BloomEffect implements VisualEffect {
     // Update bloom pass if available (traditional composer mode)
     if (this.bloomPass) {
       // Much more subtle dynamic bloom - less variation to avoid color shifts
-      this.bloomPass.strength = this.parameters.strength * (0.9 + intensity * 0.1);
+      this.bloomPass.strength = (this.parameters.strength.value as number) * (0.9 + intensity * 0.1);
 
       // Keep threshold more stable
-      this.bloomPass.threshold = this.parameters.threshold * (1.0 + intensity * 0.1);
+      this.bloomPass.threshold = (this.parameters.threshold.value as number) * (1.0 + intensity * 0.1);
     }
 
     // Update final pass if available
     if (this.finalPass && this.finalPass.uniforms && this.finalPass.uniforms.uExposure) {
       // Keep exposure stable for consistent white color
-      this.finalPass.uniforms.uExposure.value = this.parameters.exposure;
+      this.finalPass.uniforms.uExposure.value = this.parameters.exposure.value;
     }
 
     // For multi-layer compositor mode, we might need different update logic

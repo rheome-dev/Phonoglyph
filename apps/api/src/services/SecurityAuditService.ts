@@ -225,12 +225,14 @@ export class SecurityAuditService {
       
       // Daily timeline
       const dateKey = event.timestamp.toISOString().split('T')[0];
-      const dayStats = dailyActivity.get(dateKey) || { events: 0, violations: 0 };
-      dayStats.events++;
-      if (event.severity === 'high' || event.severity === 'critical') {
-        dayStats.violations++;
+      if (dateKey) {
+        const dayStats = dailyActivity.get(dateKey) || { events: 0, violations: 0 };
+        dayStats.events++;
+        if (event.severity === 'high' || event.severity === 'critical') {
+          dayStats.violations++;
+        }
+        dailyActivity.set(dateKey, dayStats);
       }
-      dailyActivity.set(dateKey, dayStats);
     });
 
     // Top threats

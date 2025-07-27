@@ -29,14 +29,14 @@ export interface AudioTextureConfig {
 
 export class AudioTextureManager {
   private gl: WebGLRenderingContext;
-  private audioTexture: THREE.DataTexture;
-  private featureTexture: THREE.DataTexture;
-  private timeTexture: THREE.DataTexture;
-  
+  private audioTexture!: THREE.DataTexture;
+  private featureTexture!: THREE.DataTexture;
+  private timeTexture!: THREE.DataTexture;
+
   // Texture data arrays
-  private audioData: Float32Array;
-  private featureData: Float32Array;
-  private timeData: Float32Array;
+  private audioData!: Float32Array;
+  private featureData!: Float32Array;
+  private timeData!: Float32Array;
   
   // Configuration
   private config: AudioTextureConfig;
