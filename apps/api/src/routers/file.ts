@@ -680,7 +680,7 @@ export const fileRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const userId = ctx.user.id
-      const assetManager = new AssetManager(ctx.supabase)
+      const assetManager = new AssetManager(ctx.supabase as any)
 
       try {
         let query = ctx.supabase
@@ -775,7 +775,7 @@ export const fileRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.user.id
-      const assetManager = new AssetManager(ctx.supabase)
+      const assetManager = new AssetManager(ctx.supabase as any)
 
       try {
         // Verify file belongs to user and project
@@ -821,7 +821,7 @@ export const fileRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.user.id
-      const assetManager = new AssetManager(ctx.supabase)
+      const assetManager = new AssetManager(ctx.supabase as any)
 
       try {
         // Verify usage record belongs to user
@@ -866,7 +866,7 @@ export const fileRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const userId = ctx.user.id
-      const assetManager = new AssetManager(ctx.supabase)
+      const assetManager = new AssetManager(ctx.supabase as any)
 
       try {
         // Verify project belongs to user
@@ -909,7 +909,7 @@ export const fileRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.user.id
-      const assetManager = new AssetManager(ctx.supabase)
+      const assetManager = new AssetManager(ctx.supabase as any)
 
       try {
         // Verify project belongs to user
@@ -954,7 +954,7 @@ export const fileRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const userId = ctx.user.id
-      const assetManager = new AssetManager(ctx.supabase)
+      const assetManager = new AssetManager(ctx.supabase as any)
 
       try {
         // Verify project belongs to user
@@ -996,7 +996,7 @@ export const fileRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.user.id
-      const assetManager = new AssetManager(ctx.supabase)
+      const assetManager = new AssetManager(ctx.supabase as any)
 
       try {
         // Verify project belongs to user
@@ -1040,7 +1040,7 @@ export const fileRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const userId = ctx.user.id
-      const assetManager = new AssetManager(ctx.supabase)
+      const assetManager = new AssetManager(ctx.supabase as any)
 
       try {
         // Verify project belongs to user
@@ -1081,7 +1081,7 @@ export const fileRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.user.id
-      const assetManager = new AssetManager(ctx.supabase)
+      const assetManager = new AssetManager(ctx.supabase as any)
 
       try {
         // Verify file belongs to user
@@ -1122,7 +1122,7 @@ export const fileRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.user.id
-      const assetManager = new AssetManager(ctx.supabase)
+      const assetManager = new AssetManager(ctx.supabase as any)
 
       try {
         // Verify file belongs to user
@@ -1164,7 +1164,7 @@ export const fileRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.user.id
-      const assetManager = new AssetManager(ctx.supabase)
+      const assetManager = new AssetManager(ctx.supabase as any)
 
       try {
         // Verify both files belong to user
