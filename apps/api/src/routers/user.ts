@@ -58,7 +58,7 @@ export const userRouter = router({
     .mutation(async ({ input, ctx }) => {
       try {
         // Log audit event before deletion
-        await ctx.supabase.rpc('log_audit_event', {
+        await (ctx.supabase as any).rpc('log_audit_event', {
           p_user_id: ctx.user.id,
           p_action: 'user.delete_account',
           p_resource_type: 'user',
