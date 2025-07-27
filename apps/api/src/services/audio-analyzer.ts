@@ -190,7 +190,7 @@ export class AudioAnalyzer {
             duration: parseFloat(row.duration), // Convert string back to number
             bufferSize: row.bufferSize,
             featuresExtracted: row.featuresExtracted,
-            analysisDuration: row.analysisDuration
+            analysisDuration: row.analysisDuration || 0 // Default to 0 if null
           }
         };
       }
