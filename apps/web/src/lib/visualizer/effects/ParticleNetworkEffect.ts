@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { VisualEffect, AudioAnalysisData, LiveMIDIData } from '@/types/visualizer';
+import { VisualEffect, AudioAnalysisData, LiveMIDIData, EffectParameter } from '@/types/visualizer';
 
 interface Particle {
   position: THREE.Vector3;
@@ -12,20 +12,25 @@ interface Particle {
   track: string;
 }
 
+interface ParticleConfig {
+  maxParticles: number;
+  connectionDistance: number;
+  particleLifetime: number;
+  glowIntensity: number;
+  glowSoftness: number;
+  particleColor: number[];
+  particleSize: number;
+}
+
 export class ParticleNetworkEffect implements VisualEffect {
   id = 'particleNetwork';
   name = 'MIDI Particle Network';
   description = 'Glowing particle network that responds to MIDI notes';
   enabled = true;
-  parameters = {
-    maxParticles: 50,
-    connectionDistance: 1.0,
-    particleLifetime: 3.0,
-    glowIntensity: 0.6, // Reset to a reasonable default
-    glowSoftness: 3.0, // exponent for bloom falloff
-    particleColor: [1.0, 1.0, 1.0], // RGB array for base particle color
-    particleSize: 15.0 // Base particle size multiplier
-  };
+  parameters: Record<string, EffectParameter>;
+
+  // Internal config for easier access
+  private config: ParticleConfig;
 
   private scene!: THREE.Scene;
   private camera!: THREE.Camera;
@@ -62,6 +67,81 @@ export class ParticleNetworkEffect implements VisualEffect {
 
 
   constructor() {
+    // Set up internal config
+    this.config = {
+      maxParticles: 50,
+      connectionDistance: 1.0,
+      particleLifetime: 3.0,
+      glowIntensity: 0.6,
+      glowSoftness: 3.0,
+      particleColor: [1.0, 1.0, 1.0],
+      particleSize: 15.0
+    };
+
+    // Convert to EffectParameter format for interface compliance
+    this.parameters = {
+      maxParticles: {
+        value: this.config.maxParticles,
+        min: 10,
+        max: 200,
+        step: 1,
+        type: 'number',
+        label: 'Max Particles',
+        description: 'Maximum number of particles'
+      },
+      connectionDistance: {
+        value: this.config.connectionDistance,
+        min: 0.1,
+        max: 3.0,
+        step: 0.1,
+        type: 'number',
+        label: 'Connection Distance',
+        description: 'Distance for particle connections'
+      },
+      particleLifetime: {
+        value: this.config.particleLifetime,
+        min: 1.0,
+        max: 10.0,
+        step: 0.1,
+        type: 'number',
+        label: 'Particle Lifetime',
+        description: 'How long particles live'
+      },
+      glowIntensity: {
+        value: this.config.glowIntensity,
+        min: 0.0,
+        max: 2.0,
+        step: 0.1,
+        type: 'number',
+        label: 'Glow Intensity',
+        description: 'Intensity of particle glow'
+      },
+      glowSoftness: {
+        value: this.config.glowSoftness,
+        min: 1.0,
+        max: 10.0,
+        step: 0.1,
+        type: 'number',
+        label: 'Glow Softness',
+        description: 'Softness of particle glow'
+      },
+      particleColor: {
+        value: this.config.particleColor,
+        type: 'vector3',
+        label: 'Particle Color',
+        description: 'RGB color for particles'
+      },
+      particleSize: {
+        value: this.config.particleSize,
+        min: 1.0,
+        max: 50.0,
+        step: 1.0,
+        type: 'number',
+        label: 'Particle Size',
+        description: 'Size multiplier for particles'
+      }
+    };
+
     this.setupUniforms();
   }
 
@@ -84,8 +164,8 @@ export class ParticleNetworkEffect implements VisualEffect {
     this.uniforms = {
       uTime: { value: 0.0 },
       uIntensity: { value: 1.0 },
-      uGlowIntensity: { value: 1.0 }, // Reset to a reasonable default
-      uGlowSoftness: { value: this.parameters.glowSoftness },
+      uGlowIntensity: { value: this.config.glowIntensity },
+      uGlowSoftness: { value: this.config.glowSoftness },
       uSizeMultiplier: { value: 1.0 } // Size control uniform
     };
   }
@@ -101,7 +181,7 @@ export class ParticleNetworkEffect implements VisualEffect {
     
     // Initialize size multiplier based on current particleSize parameter
     if (this.uniforms) {
-      this.uniforms.uSizeMultiplier.value = this.parameters.particleSize;
+      this.uniforms.uSizeMultiplier.value = this.config.particleSize;
     }
     
     console.log('🌟 Particle Network initialized');
@@ -165,7 +245,7 @@ export class ParticleNetworkEffect implements VisualEffect {
       vertexColors: true
     });
 
-    const maxParticles = this.parameters.maxParticles;
+    const maxParticles = this.config.maxParticles;
     this.instancedMesh = new THREE.InstancedMesh(quad, this.material, maxParticles);
 
     // Per-instance dynamic attributes
@@ -225,7 +305,7 @@ export class ParticleNetworkEffect implements VisualEffect {
       position,
       velocity: vel,
       life: 1.0,
-      maxLife: this.parameters.particleLifetime,
+      maxLife: this.config.particleLifetime,
       size: 3.0 + (velocity / 127) * 5.0, // Base visual size
       note,
       noteVelocity: velocity,
@@ -244,9 +324,9 @@ export class ParticleNetworkEffect implements VisualEffect {
     
     // Blend with configurable base color
     const baseColor = new THREE.Color(
-      this.parameters.particleColor[0],
-      this.parameters.particleColor[1], 
-      this.parameters.particleColor[2]
+      this.config.particleColor[0],
+      this.config.particleColor[1],
+      this.config.particleColor[2]
     );
     
     // Mix 70% note-based color with 30% base color for variety while maintaining user control
@@ -257,7 +337,7 @@ export class ParticleNetworkEffect implements VisualEffect {
   private updateParticles(deltaTime: number, midiData: LiveMIDIData) {
     // Add new particles for active notes
     midiData.activeNotes.forEach(noteData => {
-      if (this.particles.length < this.parameters.maxParticles) {
+      if (this.particles.length < this.config.maxParticles) {
         // Check if we already have a recent particle for this note
         const hasRecentParticle = this.particles.some(p => 
           p.note === noteData.note && p.life > 0.8
@@ -300,11 +380,11 @@ export class ParticleNetworkEffect implements VisualEffect {
     // Update per-instance data
     let index = 0;
     this.particles.forEach((particle) => {
-      if (index >= this.parameters.maxParticles) return;
+      if (index >= this.config.maxParticles) return;
       // Compose matrix facing camera
       const baseFactor = 0.02; // world units per size unit
       // Clamp scale so full visible range reached at ~60% of slider (slider max ~50)
-      const scaleMult = Math.min(this.parameters.particleSize, 30); // stop growing after 60%
+      const scaleMult = Math.min(this.config.particleSize, 30); // stop growing after 60%
       const scaleValue = particle.size * baseFactor * scaleMult;
       const scale = new THREE.Vector3(scaleValue, scaleValue, 1);
       this.dummyMatrix.compose(particle.position, cameraQuat, scale);
@@ -367,7 +447,7 @@ export class ParticleNetworkEffect implements VisualEffect {
         const p2 = this.particles[j];
         const distance = p1.position.distanceTo(p2.position);
         
-        if (distance < this.parameters.connectionDistance) {
+        if (distance < this.config.connectionDistance) {
           this.createConnection(p1, p2, distance, connectionCount);
           connectionCount++;
         }
@@ -381,7 +461,7 @@ export class ParticleNetworkEffect implements VisualEffect {
   }
 
   private createConnection(p1: Particle, p2: Particle, distance: number, index: number) {
-    const strength = (1.0 - distance / this.parameters.connectionDistance) * 
+    const strength = (1.0 - distance / this.config.connectionDistance) *
                     Math.min(p1.life, p2.life) * 
                     ((p1.noteVelocity + p2.noteVelocity) / 254);
     
@@ -411,6 +491,16 @@ export class ParticleNetworkEffect implements VisualEffect {
   }
 
   updateParameter(paramName: string, value: any): void {
+    // Update both the parameters interface and internal config
+    if (this.parameters[paramName]) {
+      this.parameters[paramName].value = value;
+    }
+
+    // Update internal config
+    if (paramName in this.config) {
+      (this.config as any)[paramName] = value;
+    }
+
     // Immediately update parameters for real-time control
     switch (paramName) {
       case 'maxParticles':
@@ -426,7 +516,6 @@ export class ParticleNetworkEffect implements VisualEffect {
         if (this.uniforms) this.uniforms.uGlowIntensity.value = value;
         break;
       case 'glowSoftness':
-        this.parameters.glowSoftness = value;
         if (this.uniforms) this.uniforms.uGlowSoftness.value = value;
         break;
       case 'particleColor':
@@ -434,7 +523,6 @@ export class ParticleNetworkEffect implements VisualEffect {
         break;
       case 'particleSize':
         // just store; scale applied in updateBuffers
-        this.parameters.particleSize = value;
         break;
     }
   }
@@ -442,18 +530,18 @@ export class ParticleNetworkEffect implements VisualEffect {
   update(deltaTime: number, audioData: AudioAnalysisData, midiData: LiveMIDIData): void {
     if (!this.uniforms) return;
 
-    // Generic: sync all parameters to uniforms
-    for (const key in this.parameters) {
+    // Generic: sync all config values to uniforms
+    for (const key in this.config) {
       const uniformKey = 'u' + key.charAt(0).toUpperCase() + key.slice(1);
       if (this.uniforms[uniformKey]) {
-        this.uniforms[uniformKey].value = this.parameters[key as keyof typeof this.parameters];
+        this.uniforms[uniformKey].value = this.config[key as keyof ParticleConfig];
       }
     }
 
     // Always update time and uniforms for smooth animation
     this.uniforms.uTime.value += deltaTime;
     this.uniforms.uIntensity.value = Math.max(0.5, Math.min(midiData.activeNotes.length / 3.0, 2.0));
-    this.uniforms.uGlowIntensity.value = this.parameters.glowIntensity;
+    this.uniforms.uGlowIntensity.value = this.config.glowIntensity;
     
     // Ensure the instanced mesh is visible
     if (this.instancedMesh) {
