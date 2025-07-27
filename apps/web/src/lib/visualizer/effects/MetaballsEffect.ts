@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { VisualEffect, AudioAnalysisData, LiveMIDIData, MetaballConfig } from '@/types/visualizer';
+import { VisualEffect, AudioAnalysisData, LiveMIDIData, MetaballConfig, EffectParameter } from '@/types/visualizer';
 
 
 export class MetaballsEffect implements VisualEffect {
@@ -7,7 +7,10 @@ export class MetaballsEffect implements VisualEffect {
   name = 'MIDI Metaballs';
   description = 'Fluid droplet-like spheres that respond to MIDI notes';
   enabled = true;
-  parameters: MetaballConfig;
+  parameters: Record<string, EffectParameter>;
+
+  // Internal config for easier access
+  private config: MetaballConfig;
 
   private scene!: THREE.Scene;
   private camera!: THREE.Camera;
@@ -23,7 +26,8 @@ export class MetaballsEffect implements VisualEffect {
   private cameraSmoothing = 0.02;
 
   constructor(config: Partial<MetaballConfig> = {}) {
-    this.parameters = {
+    // Set up internal config
+    this.config = {
       trailLength: 15,
       baseRadius: 0.25,
       smoothingFactor: 0.3,
@@ -33,7 +37,62 @@ export class MetaballsEffect implements VisualEffect {
       highlightColor: [0.8, 0.5, 1.0], // default purple
       ...config
     };
-    
+
+    // Convert to EffectParameter format for interface compliance
+    this.parameters = {
+      trailLength: {
+        value: this.config.trailLength,
+        min: 1,
+        max: 50,
+        step: 1,
+        type: 'number',
+        label: 'Trail Length',
+        description: 'Number of metaballs in the trail'
+      },
+      baseRadius: {
+        value: this.config.baseRadius,
+        min: 0.1,
+        max: 1.0,
+        step: 0.01,
+        type: 'number',
+        label: 'Base Radius',
+        description: 'Base size of metaballs'
+      },
+      smoothingFactor: {
+        value: this.config.smoothingFactor,
+        min: 0.1,
+        max: 1.0,
+        step: 0.01,
+        type: 'number',
+        label: 'Smoothing Factor',
+        description: 'Smoothness of metaball blending'
+      },
+      animationSpeed: {
+        value: this.config.animationSpeed,
+        min: 0.1,
+        max: 3.0,
+        step: 0.1,
+        type: 'number',
+        label: 'Animation Speed',
+        description: 'Speed of animation'
+      },
+      noiseIntensity: {
+        value: this.config.noiseIntensity,
+        min: 0.0,
+        max: 3.0,
+        step: 0.1,
+        type: 'number',
+        label: 'Noise Intensity',
+        description: 'Intensity of noise distortion'
+      },
+      highlightColor: {
+        value: this.config.highlightColor,
+        type: 'vector3',
+        label: 'Highlight Color',
+        description: 'RGB color for highlights'
+      }
+    };
+
     this.setupUniforms();
   }
 
@@ -45,11 +104,11 @@ export class MetaballsEffect implements VisualEffect {
       uResolution: { value: new THREE.Vector2(1024, 1024) },
       uCameraPos: { value: new THREE.Vector3(0.0, 0.0, 3.0) },
       uCameraTarget: { value: new THREE.Vector3(0.0, 0.0, 0.0) },
-      uBaseRadius: { value: this.parameters.baseRadius },
-      uSmoothingFactor: { value: this.parameters.smoothingFactor },
-      uNoiseIntensity: { value: this.parameters.noiseIntensity },
-      uAnimationSpeed: { value: this.parameters.animationSpeed },
-      uHighlightColor: { value: new THREE.Color(...this.parameters.highlightColor) },
+      uBaseRadius: { value: this.config.baseRadius },
+      uSmoothingFactor: { value: this.config.smoothingFactor },
+      uNoiseIntensity: { value: this.config.noiseIntensity },
+      uAnimationSpeed: { value: this.config.animationSpeed },
+      uHighlightColor: { value: new THREE.Color(...this.config.highlightColor) },
     };
   }
 
@@ -309,9 +368,19 @@ export class MetaballsEffect implements VisualEffect {
   }
 
   updateParameter(paramName: string, value: any): void {
+    // Update both the parameters interface and internal config
+    if (this.parameters[paramName]) {
+      this.parameters[paramName].value = value;
+    }
+
+    // Update internal config
+    if (paramName in this.config) {
+      (this.config as any)[paramName] = value;
+    }
+
     // Immediately update uniforms when parameters change
     if (!this.uniforms) return;
-    
+
     switch (paramName) {
       case 'animationSpeed':
         this.uniforms.uAnimationSpeed.value = value;
@@ -334,16 +403,16 @@ export class MetaballsEffect implements VisualEffect {
   update(deltaTime: number, audioData: AudioAnalysisData, midiData: LiveMIDIData): void {
     if (!this.uniforms) return;
 
-    // Generic: sync all parameters to uniforms
-    for (const key in this.parameters) {
+    // Generic: sync all config values to uniforms
+    for (const key in this.config) {
       const uniformKey = 'u' + key.charAt(0).toUpperCase() + key.slice(1);
       if (this.uniforms[uniformKey]) {
-        this.uniforms[uniformKey].value = this.parameters[key as keyof MetaballConfig];
+        this.uniforms[uniformKey].value = this.config[key as keyof MetaballConfig];
       }
     }
 
     // Update time
-    this.uniforms.uTime.value += deltaTime * this.parameters.animationSpeed;
+    this.uniforms.uTime.value += deltaTime * this.config.animationSpeed;
 
     // Calculate intensity based on both audio and MIDI activity
     const midiIntensity = Math.min(midiData.activeNotes.length / 3.0, 1.0);
