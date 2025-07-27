@@ -5,6 +5,7 @@ import { Reader } from 'wav';
 import { Writable } from 'stream';
 import ffmpeg from 'fluent-ffmpeg';
 import { PassThrough } from 'stream';
+import { randomUUID } from 'crypto';
 import { db } from '../db/drizzle';
 import { audioAnalysisCache } from '../db/schema';
 import { eq, and } from 'drizzle-orm';
@@ -102,17 +103,20 @@ export class AudioAnalyzer {
       const cachedAnalysis = await db
         .insert(audioAnalysisCache)
         .values({
+          id: randomUUID(),
           userId: userId,
           fileMetadataId: fileMetadataId,
           stemType: stemType,
           analysisVersion: '1.0',
           sampleRate: metadata.sampleRate,
-          duration: metadata.duration,
+          duration: metadata.duration.toString(), // Convert to string for numeric field
           bufferSize: metadata.bufferSize,
           featuresExtracted: metadata.featuresExtracted,
           analysisData: analysisData,
           waveformData: waveformData,
-          analysisDuration: analysisDuration
+          analysisDuration: analysisDuration,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
         })
         .returning();
 
