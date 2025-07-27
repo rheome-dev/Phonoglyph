@@ -63,7 +63,7 @@ export const projectRouter = router({
           .orderBy(desc(projects.createdAt));
 
         // Log audit event (keeping Supabase for audit logging for now)
-        await ctx.supabase.rpc('log_audit_event', {
+        await (ctx.supabase as any).rpc('log_audit_event', {
           p_user_id: ctx.user.id,
           p_action: 'project.list',
           p_resource_type: 'project',
@@ -105,7 +105,7 @@ export const projectRouter = router({
         }
 
         // Log audit event
-        await ctx.supabase.rpc('log_audit_event', {
+        await (ctx.supabase as any).rpc('log_audit_event', {
           p_user_id: ctx.user.id,
           p_action: 'project.get',
           p_resource_type: 'project',
@@ -162,7 +162,7 @@ export const projectRouter = router({
         }
 
         // Log audit event
-        await ctx.supabase.rpc('log_audit_event', {
+        await (ctx.supabase as any).rpc('log_audit_event', {
           p_user_id: ctx.user.id,
           p_action: 'project.create',
           p_resource_type: 'project',
@@ -217,7 +217,7 @@ export const projectRouter = router({
         }
 
         // Log audit event
-        await ctx.supabase.rpc('log_audit_event', {
+        await (ctx.supabase as any).rpc('log_audit_event', {
           p_user_id: ctx.user.id,
           p_action: 'project.update',
           p_resource_type: 'project',
@@ -294,7 +294,7 @@ export const projectRouter = router({
         }
 
         // Log audit event
-        await ctx.supabase.rpc('log_audit_event', {
+        await (ctx.supabase as any).rpc('log_audit_event', {
           p_user_id: ctx.user.id,
           p_action: 'project.delete',
           p_resource_type: 'project',
@@ -410,7 +410,7 @@ export const projectRouter = router({
         }
 
         // Log audit event
-        await ctx.supabase.rpc('log_audit_event', {
+        await (ctx.supabase as any).rpc('log_audit_event', {
           p_user_id: ctx.user.id,
           p_action: 'project.duplicate',
           p_resource_type: 'project',
@@ -472,7 +472,7 @@ export const projectRouter = router({
         }
 
         // Log audit event
-        await ctx.supabase.rpc('log_audit_event', {
+        await (ctx.supabase as any).rpc('log_audit_event', {
           p_user_id: ctx.user.id,
           p_action: 'project.share',
           p_resource_type: 'project',
@@ -550,7 +550,7 @@ export const projectRouter = router({
     .mutation(async ({ input, ctx }) => {
       try {
         // Check if user can manage this project (owner only)
-        const { data: canAccess } = await ctx.supabase
+        const { data: canAccess } = await (ctx.supabase as any)
           .rpc('user_can_access_project', {
             p_project_id: input.project_id,
             p_user_id: ctx.user.id,
@@ -588,7 +588,7 @@ export const projectRouter = router({
         }
 
         // Log audit event
-        await ctx.supabase.rpc('log_audit_event', {
+        await (ctx.supabase as any).rpc('log_audit_event', {
           p_user_id: ctx.user.id,
           p_action: 'project.add_collaborator',
           p_resource_type: 'project',
@@ -635,7 +635,7 @@ export const projectRouter = router({
         }
 
         // Log audit event
-        await ctx.supabase.rpc('log_audit_event', {
+        await (ctx.supabase as any).rpc('log_audit_event', {
           p_user_id: ctx.user.id,
           p_action: 'project.update_collaborator',
           p_resource_type: 'project',
@@ -685,7 +685,7 @@ export const projectRouter = router({
         }
 
         // Log audit event
-        await ctx.supabase.rpc('log_audit_event', {
+        await (ctx.supabase as any).rpc('log_audit_event', {
           p_user_id: ctx.user.id,
           p_action: 'project.remove_collaborator',
           p_resource_type: 'project',
