@@ -3,6 +3,8 @@ import { VisualEffect, VisualizerConfig, LiveMIDIData, AudioAnalysisData, Visual
 import { BloomEffect } from '../effects/BloomEffect';
 import { VisualizationPreset } from '@/types/stem-visualization';
 import { debugLog } from '@/lib/utils';
+import { AudioTextureManager, AudioFeatureData } from './AudioTextureManager';
+import { MediaLayerManager } from './MediaLayerManager';
 
 export class VisualizerManager {
   private static instanceCounter = 0;
@@ -26,6 +28,10 @@ export class VisualizerManager {
   
   // Bloom post-processing
   private bloomEffect: BloomEffect | null = null;
+  
+  // GPU compositing system
+  private audioTextureManager: AudioTextureManager | null = null;
+  private mediaLayerManager: MediaLayerManager | null = null;
   
   // Performance monitoring
   private frameCount = 0;
@@ -60,6 +66,8 @@ export class VisualizerManager {
     this.initScene(config);
     this.setupEventListeners();
     this.initBloomEffect();
+    this.initAudioTextureManager();
+    this.initMediaLayerManager();
     debugLog.log('🎭 VisualizerManager constructor complete');
   }
   
@@ -144,6 +152,16 @@ export class VisualizerManager {
     this.bloomEffect = new BloomEffect();
     this.bloomEffect.init(this.scene, this.camera, this.renderer);
     debugLog.log('✨ Bloom post-processing initialized');
+  }
+
+  private initAudioTextureManager() {
+    this.audioTextureManager = new AudioTextureManager();
+    debugLog.log('🎵 AudioTextureManager initialized');
+  }
+
+  private initMediaLayerManager() {
+    this.mediaLayerManager = new MediaLayerManager(this.scene, this.camera, this.renderer);
+    debugLog.log('🎬 MediaLayerManager initialized');
   }
   
   private async initAudioAnalyzer() {
@@ -443,6 +461,35 @@ export class VisualizerManager {
         activeEffectCount++; // Count but don't update this frame
       }
     });
+    
+    // Update GPU audio texture system
+    if (this.audioTextureManager && this.currentAudioData) {
+      // Convert audio analysis to GPU texture format using existing structure
+      const audioFeatureData: AudioFeatureData = {
+        features: {
+          'main': [this.currentAudioData.volume, this.currentAudioData.bass, this.currentAudioData.mid, this.currentAudioData.treble]
+        },
+        duration: 0, // Will be set when real audio is loaded
+        sampleRate: 44100,
+        stemTypes: ['main']
+      };
+      
+      // Update audio texture with current time
+      this.audioTextureManager.updateTime(currentTime / 1000, audioFeatureData.duration);
+    }
+    
+    // Update media layers with audio features
+    if (this.mediaLayerManager && this.currentAudioData) {
+      const audioFeatures: Record<string, number> = {
+        'main-volume': this.currentAudioData.volume,
+        'main-bass': this.currentAudioData.bass,
+        'main-mid': this.currentAudioData.mid,
+        'main-treble': this.currentAudioData.treble
+      };
+      
+      this.mediaLayerManager.updateWithAudioFeatures(audioFeatures);
+      this.mediaLayerManager.updateTextures();
+    }
     
     // Update bloom effect
     if (this.bloomEffect) {
@@ -813,5 +860,36 @@ export class VisualizerManager {
         return mesh;
       }
     };
+  }
+
+  // GPU Compositing System Access Methods
+  
+  public getAudioTextureManager(): AudioTextureManager | null {
+    return this.audioTextureManager;
+  }
+
+  public getMediaLayerManager(): MediaLayerManager | null {
+    return this.mediaLayerManager;
+  }
+
+  public enableGPUCompositing(): void {
+    if (this.bloomEffect) {
+      this.bloomEffect.enableMultiLayerCompositing();
+      debugLog.log('🎨 GPU compositing enabled');
+    }
+  }
+
+  public disableGPUCompositing(): void {
+    if (this.bloomEffect) {
+      this.bloomEffect.disableMultiLayerCompositing();
+      debugLog.log('🎨 GPU compositing disabled');
+    }
+  }
+
+  public loadAudioAnalysisForGPU(analysisData: AudioFeatureData): void {
+    if (this.audioTextureManager) {
+      this.audioTextureManager.loadAudioAnalysis(analysisData);
+      debugLog.log('🎵 Audio analysis loaded into GPU textures');
+    }
   }
 } 

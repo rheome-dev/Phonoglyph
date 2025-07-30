@@ -4,6 +4,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { VisualEffect, AudioAnalysisData, LiveMIDIData } from '@/types/visualizer';
+import { MultiLayerCompositor } from '../core/MultiLayerCompositor';
 
 export class BloomEffect implements VisualEffect {
   id = 'bloom';
@@ -25,6 +26,10 @@ export class BloomEffect implements VisualEffect {
   private finalPass!: ShaderPass;
 
   private renderPass!: RenderPass;
+  
+  // GPU compositing integration
+  private useMultiLayerCompositing: boolean = false; // Disabled by default
+  private multiLayerCompositor: MultiLayerCompositor | null = null;
 
   constructor() {
     console.log('✨ BloomEffect constructor called');
@@ -37,6 +42,7 @@ export class BloomEffect implements VisualEffect {
     this.renderer = renderer;
 
     this.setupComposer();
+    this.setupMultiLayerCompositor();
     console.log('✨ Bloom effect initialized');
   }
 
@@ -96,6 +102,32 @@ export class BloomEffect implements VisualEffect {
     console.log('🎭 Bloom composer setup complete');
   }
 
+  private setupMultiLayerCompositor(): void {
+    try {
+      const size = this.renderer.getSize(new THREE.Vector2());
+      this.multiLayerCompositor = new MultiLayerCompositor(this.renderer, {
+        width: size.x,
+        height: size.y,
+        enableBloom: true,
+        enableAntialiasing: true,
+        pixelRatio: window.devicePixelRatio || 1
+      });
+      
+      // Create main 3D effects layer
+      this.multiLayerCompositor.createLayer('main-3d', this.scene, this.camera, {
+        blendMode: 'normal',
+        opacity: 1.0,
+        zIndex: 100,
+        enabled: true
+      });
+      
+      console.log('🎨 MultiLayerCompositor initialized (disabled by default)');
+    } catch (error) {
+      console.error('Failed to initialize MultiLayerCompositor:', error);
+      this.useMultiLayerCompositing = false;
+    }
+  }
+
   update(deltaTime: number, audioData: AudioAnalysisData, midiData: LiveMIDIData): void {
     // Keep bloom parameters more static for consistent white glow
     const intensity = Math.max(0.3, Math.min(midiData.activeNotes.length / 5.0, 1.0));
@@ -112,9 +144,30 @@ export class BloomEffect implements VisualEffect {
 
   // Custom render method to replace the normal renderer.render call
   render(): void {
-    if (this.composer) {
+    if (this.useMultiLayerCompositing && this.multiLayerCompositor) {
+      // Use GPU-based multi-layer compositing
+      this.multiLayerCompositor.render();
+    } else if (this.composer) {
+      // Fallback to traditional composer
       this.composer.render();
     }
+  }
+
+  // Enable GPU compositing (for testing)
+  public enableMultiLayerCompositing(): void {
+    this.useMultiLayerCompositing = true;
+    console.log('🎨 GPU compositing enabled');
+  }
+
+  // Disable GPU compositing (fallback to traditional)
+  public disableMultiLayerCompositing(): void {
+    this.useMultiLayerCompositing = false;
+    console.log('🎨 GPU compositing disabled');
+  }
+
+  // Get the multi-layer compositor for external access
+  public getMultiLayerCompositor(): MultiLayerCompositor | null {
+    return this.multiLayerCompositor;
   }
 
   // Method to handle window resize
@@ -123,11 +176,19 @@ export class BloomEffect implements VisualEffect {
       this.composer.setSize(width, height);
       this.bloomPass.setSize(width, height);
     }
+    
+    if (this.multiLayerCompositor) {
+      this.multiLayerCompositor.resize(width, height);
+    }
   }
 
   destroy(): void {
     if (this.composer) {
       this.composer.dispose();
+    }
+    
+    if (this.multiLayerCompositor) {
+      this.multiLayerCompositor.dispose();
     }
   }
 } 
