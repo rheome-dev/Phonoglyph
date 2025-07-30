@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { LoginCredentials, SignupCredentials, AuthProvider, User } from '../types/auth'
+import type { LoginCredentials, SignupCredentials, AuthProvider, User } from 'phonoglyph-types'
 
 export class AuthService {
   // Email/Password Authentication
@@ -61,7 +61,8 @@ export class AuthService {
     return {
       id: user.id,
       email: user.email || '',
-      user_metadata: user.user_metadata || {},
+      name: user.user_metadata?.name,
+      image: user.user_metadata?.avatar_url,
       created_at: user.created_at || '',
       updated_at: user.updated_at || '',
     }

@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.guestFriendlyProcedure = exports.flexibleProcedure = exports.protectedProcedure = exports.publicProcedure = exports.router = exports.createTRPCContext = void 0;
 const server_1 = require("@trpc/server");
 const supabase_1 = require("./lib/supabase");
-const auth_1 = require("./types/auth");
+const phonoglyph_types_1 = require("phonoglyph-types");
 const guest_1 = require("./types/guest");
 const logger_1 = require("./lib/logger");
 // Create tRPC context with Supabase authentication and guest support for Express
@@ -47,7 +47,7 @@ const createTRPCContext = async (opts) => {
             }
             logger_1.logger.auth('Backend - Supabase user lookup result:', { user: !!supabaseUser, error: !!error });
             if (!error && supabaseUser) {
-                user = (0, auth_1.transformSupabaseUser)(supabaseUser);
+                user = (0, phonoglyph_types_1.transformSupabaseUser)(supabaseUser);
                 // For server-side, we create a session object from the user data
                 // since getSession() doesn't work the same way on server
                 session = {

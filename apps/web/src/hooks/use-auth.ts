@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { AuthService } from '@/lib/auth'
 import { guestUserService, type GuestUser } from '@/lib/guest-user'
 import { trpc } from '@/lib/trpc'
-import type { User } from '@/types/auth'
+import type { User } from 'phonoglyph-types'
 
 export type AuthUser = User | GuestUser
 
@@ -66,7 +66,8 @@ export function useAuth() {
         const newUser: User = {
           id: session.user.id,
           email: session.user.email!,
-          user_metadata: session.user.user_metadata || {},
+          name: session.user.user_metadata?.name,
+          image: session.user.user_metadata?.avatar_url,
           created_at: session.user.created_at || '',
           updated_at: session.user.updated_at || ''
         }

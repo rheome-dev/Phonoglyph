@@ -1,6 +1,6 @@
 /// <reference types="node" />
 /// <reference types="node" />
-import { MIDIParsingResult } from '../types/midi.js';
+import { MIDIParsingResult } from 'phonoglyph-types';
 /**
  * Parse MIDI buffer and extract structured data
  */

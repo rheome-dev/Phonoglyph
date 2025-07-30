@@ -1,6 +1,6 @@
 import MidiParser from 'midi-parser-js';
 import { randomUUID } from 'crypto';
-import { MIDIData, MIDINote, MIDITrack, TempoEvent, MIDIParsingResult } from '../types/midi.js';
+import { MIDIData, MIDINote, MIDITrack, TempoEvent, MIDIParsingResult } from 'phonoglyph-types';
 
 // Color palette for track visualization
 const TRACK_COLORS = [
@@ -133,8 +133,10 @@ export async function parseMidiFile(buffer: Buffer, filename: string): Promise<M
               track: trackIndex,
               channel: noteOnEvent.channel || 0,
               note: noteOnEvent.data[0],
+              pitch: noteOnEvent.data[0], // Same as note for web compatibility
               velocity: noteOnEvent.data[1],
               startTime,
+              start: startTime, // Same as startTime for web compatibility
               duration,
               name: midiNoteToName(noteOnEvent.data[0])
             });

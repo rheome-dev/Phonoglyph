@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-// Shared validation schemas
+// ===== VALIDATION SCHEMAS =====
 export const createProjectSchema = z.object({
   name: z.string().min(1, 'Project name is required').max(100, 'Project name too long'),
   description: z.string().max(500, 'Description too long').optional(),
@@ -23,8 +23,56 @@ export const updateProjectSchema = z.object({
   render_configuration: z.record(z.any()).optional(),
 })
 
-// Shared type definitions
+export const loginCredentialsSchema = z.object({
+  email: z.string().email('Invalid email address'),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+})
+
+export const signupCredentialsSchema = z.object({
+  email: z.string().email('Invalid email address'),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+  name: z.string().min(1, 'Name is required').optional(),
+})
+
+// ===== CORE USER TYPES =====
+// Internal Supabase user interface for API use
+interface SupabaseUser {
+  id: string
+  email?: string
+  user_metadata?: {
+    name?: string
+    avatar_url?: string
+    provider?: string
+  }
+  created_at?: string
+  updated_at?: string
+}
+
+// Standardized User interface for both API and web
 export interface User {
+  id: string // UUID from Supabase auth.users
+  email: string
+  name?: string
+  image?: string
+  created_at: string // ISO timestamp
+  updated_at: string // ISO timestamp
+}
+
+// Web-specific User interface with user_metadata
+export interface WebUser {
+  id: string // UUID from Supabase auth.users
+  email: string
+  user_metadata: {
+    name?: string
+    avatar_url?: string
+    provider?: string
+  }
+  created_at: string // ISO timestamp
+  updated_at: string // ISO timestamp
+}
+
+// Normalized User interface for internal API use
+export interface NormalizedUser {
   id: string
   email: string
   name?: string
@@ -33,10 +81,26 @@ export interface User {
   updated_at: string
 }
 
+export interface UserProfile {
+  id: string // UUID from auth.users
+  display_name?: string
+  avatar_url?: string
+  bio?: string
+  preferences: Record<string, any>
+  subscription_tier: 'free' | 'premium' | 'enterprise'
+  created_at: string
+  updated_at: string
+}
+
+export interface UserWithProfile extends User {
+  profile: UserProfile
+}
+
+// ===== PROJECT TYPES =====
 export interface Project {
   id: string
   name: string
-  user_id: string
+  user_id: string // UUID from auth.users
   midi_file_path: string
   audio_file_path?: string
   user_video_path?: string
@@ -49,6 +113,192 @@ export interface Project {
   updated_at: string
 }
 
-// Export inferred types
+export interface ProjectCollaborator {
+  id: string
+  project_id: string
+  user_id: string // UUID from auth.users
+  role: 'owner' | 'editor' | 'viewer'
+  created_at: string
+}
+
+export interface ProjectShare {
+  id: string
+  project_id: string
+  share_token: string // unique URL token
+  access_type: 'view' | 'embed'
+  expires_at?: string
+  view_count: number
+  created_at: string
+  updated_at: string
+}
+
+export interface ProjectWithCollaborators extends Project {
+  collaborators: ProjectCollaborator[]
+}
+
+export interface ProjectExtended extends Project {
+  // Computed fields
+  file_count?: number
+  total_file_size?: number
+  last_accessed?: string
+}
+
+// ===== AUTH TYPES =====
+export interface AuthState {
+  user: User | null
+  loading: boolean
+  error: string | null
+}
+
+export interface LoginCredentials {
+  email: string
+  password: string
+}
+
+export interface SignupCredentials {
+  email: string
+  password: string
+  name?: string
+}
+
+export interface AuthProvider {
+  provider: 'google' | 'github' | 'discord'
+  redirectTo?: string
+}
+
+export interface AuthError {
+  message: string
+  code?: string
+}
+
+export interface AuthContext {
+  user: User | null
+  session: any | null
+  supabase: any
+}
+
+// ===== AUDIT TYPES =====
+export interface AuditLog {
+  id: string
+  user_id?: string // UUID from auth.users
+  action: string
+  resource_type: string
+  resource_id?: string
+  metadata: Record<string, any>
+  ip_address?: string
+  user_agent?: string
+  created_at: string
+}
+
+// ===== MIDI TYPES =====
+export interface MIDINote {
+  id: string
+  track: number | string
+  channel: number
+  note: number // MIDI note number (0-127)
+  pitch: number // Alternative name for note (required for web compatibility)
+  velocity: number // Note velocity (0-127)
+  startTime: number // Time in ticks or seconds
+  start: number // Alternative name for startTime (required for web compatibility)
+  duration: number // Note duration
+  name: string // Note name (e.g., "C4")
+  noteName?: string // Alternative name for name
+}
+
+export interface TempoEvent {
+  tick: number
+  bpm: number
+  microsecondsPerQuarter: number
+}
+
+export interface TempoChange {
+  tick: number
+  bpm: number
+  microsecondsPerQuarter: number
+}
+
+export interface MIDITrack {
+  id: string
+  name: string
+  instrument: string
+  channel: number
+  notes: MIDINote[]
+  color: string
+  visible?: boolean
+}
+
+export interface MIDIData {
+  file: {
+    name: string
+    size: number
+    duration: number
+    ticksPerQuarter: number
+    timeSignature: [number, number]
+    keySignature: string
+  }
+  tracks: MIDITrack[]
+  tempoChanges: TempoEvent[] | TempoChange[]
+}
+
+export interface MIDIParsingResult {
+  success: boolean
+  data?: MIDIData
+  error?: string
+}
+
+export interface VisualizationSettings {
+  colorScheme: 'sage' | 'slate' | 'dusty-rose' | 'mixed'
+  pixelsPerSecond: number
+  showTrackLabels: boolean
+  showVelocity: boolean
+  minKey: number
+  maxKey: number
+}
+
+// Color scheme mappings
+export const COLOR_SCHEMES = {
+  sage: '#84a98c',
+  slate: '#6b7c93', 
+  'dusty-rose': '#b08a8a',
+  mixed: ['#84a98c', '#6b7c93', '#b08a8a', '#a8a29e', '#8da3b0']
+} as const
+
+// Default visualization settings
+export const DEFAULT_VISUALIZATION_SETTINGS: VisualizationSettings = {
+  colorScheme: 'mixed',
+  pixelsPerSecond: 50,
+  showTrackLabels: true,
+  showVelocity: true,
+  minKey: 21,
+  maxKey: 108
+}
+
+// ===== UTILITY FUNCTIONS =====
+// Helper to convert Supabase user to our User type
+export function transformSupabaseUser(supabaseUser: SupabaseUser): User {
+  return {
+    id: supabaseUser.id,
+    email: supabaseUser.email || '',
+    name: supabaseUser.user_metadata?.name,
+    image: supabaseUser.user_metadata?.avatar_url,
+    created_at: supabaseUser.created_at || '',
+    updated_at: supabaseUser.updated_at || '',
+  }
+}
+
+export function normalizeUser(user: User): NormalizedUser {
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    image: user.image,
+    created_at: user.created_at,
+    updated_at: user.updated_at,
+  }
+}
+
+// ===== EXPORT INFERRED TYPES =====
 export type CreateProjectInput = z.infer<typeof createProjectSchema>
 export type UpdateProjectInput = z.infer<typeof updateProjectSchema>
+export type LoginCredentialsInput = z.infer<typeof loginCredentialsSchema>
+export type SignupCredentialsInput = z.infer<typeof signupCredentialsSchema>

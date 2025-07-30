@@ -3,7 +3,7 @@ import { router, protectedProcedure } from '../trpc';
 import { TRPCError } from '@trpc/server';
 import { getFileBuffer } from '../services/r2-storage';
 import { parseMidiFile, validateMidiBuffer } from '../services/midi-parser';
-import { MIDIData } from '../types/midi';
+import { MIDIData } from 'phonoglyph-types';
 
 // Validation schemas
 const VisualizationSettingsSchema = z.object({

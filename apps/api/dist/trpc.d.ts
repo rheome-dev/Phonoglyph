@@ -1,5 +1,5 @@
 import type { CreateExpressContextOptions } from '@trpc/server/adapters/express';
-import { type User, type AuthContext } from './types/auth';
+import { type User, type AuthContext } from 'phonoglyph-types';
 export declare const createTRPCContext: (opts: CreateExpressContextOptions) => Promise<AuthContext & {
     req: any;
     res: any;

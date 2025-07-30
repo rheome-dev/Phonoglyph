@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { router, protectedProcedure } from '../trpc';
 import { TRPCError } from '@trpc/server';
-import type { UserProfile } from '../types/auth';
+import type { UserProfile } from 'phonoglyph-types';
 
 const updateProfileSchema = z.object({
   display_name: z.string().min(1, 'Display name is required').max(100, 'Display name too long').optional(),

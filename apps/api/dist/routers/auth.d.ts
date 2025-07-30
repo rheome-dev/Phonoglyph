@@ -1,5 +1,5 @@
 export declare const authRouter: import("@trpc/server").CreateRouterInner<import("@trpc/server").RootConfig<{
-    ctx: import("../types/auth").AuthContext & {
+    ctx: import("phonoglyph-types").AuthContext & {
         req: any;
         res: any;
         isGuest: boolean;
@@ -10,7 +10,7 @@ export declare const authRouter: import("@trpc/server").CreateRouterInner<import
 }>, {
     session: import("@trpc/server").BuildProcedure<"query", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -19,7 +19,7 @@ export declare const authRouter: import("@trpc/server").CreateRouterInner<import
             errorShape: import("@trpc/server").DefaultErrorShape;
             transformer: import("@trpc/server").DefaultDataTransformer;
         }>;
-        _ctx_out: import("../types/auth").AuthContext & {
+        _ctx_out: import("phonoglyph-types").AuthContext & {
             req: any;
             res: any;
             isGuest: boolean;
@@ -31,11 +31,11 @@ export declare const authRouter: import("@trpc/server").CreateRouterInner<import
         _meta: object;
     }, {
         authenticated: boolean;
-        user: import("../types/auth").User | null;
+        user: import("phonoglyph-types").User | null;
     }>;
     me: import("@trpc/server").BuildProcedure<"query", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -48,7 +48,7 @@ export declare const authRouter: import("@trpc/server").CreateRouterInner<import
         _ctx_out: {
             req: any;
             res: any;
-            user: import("../types/auth").User;
+            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -58,7 +58,7 @@ export declare const authRouter: import("@trpc/server").CreateRouterInner<import
         _output_in: typeof import("@trpc/server").unsetMarker;
         _output_out: typeof import("@trpc/server").unsetMarker;
     }, {
-        user: import("../types/auth").User;
+        user: import("phonoglyph-types").User;
         session: boolean;
         authenticated: boolean;
     }>;

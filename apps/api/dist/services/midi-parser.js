@@ -117,8 +117,10 @@ async function parseMidiFile(buffer, filename) {
                             track: trackIndex,
                             channel: noteOnEvent.channel || 0,
                             note: noteOnEvent.data[0],
+                            pitch: noteOnEvent.data[0], // Same as note for web compatibility
                             velocity: noteOnEvent.data[1],
                             startTime,
+                            start: startTime, // Same as startTime for web compatibility
                             duration,
                             name: midiNoteToName(noteOnEvent.data[0])
                         });

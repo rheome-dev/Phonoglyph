@@ -1,5 +1,5 @@
 export declare const fileRouter: import("@trpc/server").CreateRouterInner<import("@trpc/server").RootConfig<{
-    ctx: import("../types/auth").AuthContext & {
+    ctx: import("phonoglyph-types").AuthContext & {
         req: any;
         res: any;
         isGuest: boolean;
@@ -10,7 +10,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
 }>, {
     getUploadUrl: import("@trpc/server").BuildProcedure<"mutation", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -23,20 +23,20 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         _ctx_out: {
             req: any;
             res: any;
-            user: import("../types/auth").User;
+            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
         };
         _input_in: {
             fileName: string;
-            fileSize: number;
             mimeType: string;
+            fileSize: number;
         };
         _input_out: {
             fileName: string;
-            fileSize: number;
             mimeType: string;
+            fileSize: number;
         };
         _output_in: typeof import("@trpc/server").unsetMarker;
         _output_out: typeof import("@trpc/server").unsetMarker;
@@ -53,7 +53,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
     }>;
     uploadFile: import("@trpc/server").BuildProcedure<"mutation", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -66,16 +66,16 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         _ctx_out: {
             req: any;
             res: any;
-            user: import("../types/auth").User;
+            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
         };
         _input_in: {
             fileName: string;
-            fileSize: number;
-            mimeType: string;
             fileType: "midi" | "audio" | "video" | "image";
+            mimeType: string;
+            fileSize: number;
             fileData: string;
             projectId?: string | undefined;
             isMaster?: boolean | undefined;
@@ -83,9 +83,9 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         };
         _input_out: {
             fileName: string;
-            fileSize: number;
-            mimeType: string;
             fileType: "midi" | "audio" | "video" | "image";
+            mimeType: string;
+            fileSize: number;
             fileData: string;
             projectId?: string | undefined;
             isMaster?: boolean | undefined;
@@ -104,7 +104,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
     }>;
     confirmUpload: import("@trpc/server").BuildProcedure<"mutation", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -117,7 +117,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         _ctx_out: {
             req: any;
             res: any;
-            user: import("../types/auth").User;
+            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -139,7 +139,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
     }>;
     saveAudioAnalysis: import("@trpc/server").BuildProcedure<"mutation", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -152,7 +152,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         _ctx_out: {
             req: any;
             res: any;
-            user: import("../types/auth").User;
+            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -172,7 +172,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
     }>;
     getUserFiles: import("@trpc/server").BuildProcedure<"query", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -185,7 +185,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         _ctx_out: {
             req: any;
             res: any;
-            user: import("../types/auth").User;
+            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -193,8 +193,8 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         _input_in: {
             limit?: number | undefined;
             offset?: number | undefined;
-            projectId?: string | undefined;
             fileType?: "midi" | "audio" | "video" | "image" | "all" | undefined;
+            projectId?: string | undefined;
         };
         _input_out: {
             limit: number;
@@ -210,7 +210,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
     }>;
     getDownloadUrl: import("@trpc/server").BuildProcedure<"mutation", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -223,7 +223,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         _ctx_out: {
             req: any;
             res: any;
-            user: import("../types/auth").User;
+            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -245,7 +245,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
     }>;
     deleteFile: import("@trpc/server").BuildProcedure<"mutation", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -258,7 +258,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         _ctx_out: {
             req: any;
             res: any;
-            user: import("../types/auth").User;
+            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -277,7 +277,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
     }>;
     getUploadStats: import("@trpc/server").BuildProcedure<"query", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -290,7 +290,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         _ctx_out: {
             req: any;
             res: any;
-            user: import("../types/auth").User;
+            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -306,7 +306,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
     }>;
     getProcessingStatus: import("@trpc/server").BuildProcedure<"query", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -319,7 +319,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         _ctx_out: {
             req: any;
             res: any;
-            user: import("../types/auth").User;
+            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -340,7 +340,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
     }>;
     getProjectAssets: import("@trpc/server").BuildProcedure<"query", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -353,7 +353,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         _ctx_out: {
             req: any;
             res: any;
-            user: import("../types/auth").User;
+            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -364,7 +364,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
             limit?: number | undefined;
             offset?: number | undefined;
             assetType?: "midi" | "audio" | "video" | "image" | "all" | undefined;
-            usageStatus?: "active" | "referenced" | "unused" | "all" | undefined;
+            usageStatus?: "all" | "active" | "referenced" | "unused" | undefined;
             folderId?: string | undefined;
             tagIds?: string[] | undefined;
         };
@@ -373,7 +373,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
             offset: number;
             projectId: string;
             assetType: "midi" | "audio" | "video" | "image" | "all";
-            usageStatus: "active" | "referenced" | "unused" | "all";
+            usageStatus: "all" | "active" | "referenced" | "unused";
             search?: string | undefined;
             folderId?: string | undefined;
             tagIds?: string[] | undefined;
@@ -386,7 +386,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
     }>;
     startAssetUsage: import("@trpc/server").BuildProcedure<"mutation", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -399,7 +399,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         _ctx_out: {
             req: any;
             res: any;
-            user: import("../types/auth").User;
+            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -423,7 +423,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
     }>;
     endAssetUsage: import("@trpc/server").BuildProcedure<"mutation", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -436,7 +436,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         _ctx_out: {
             req: any;
             res: any;
-            user: import("../types/auth").User;
+            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -454,7 +454,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
     }>;
     getStorageQuota: import("@trpc/server").BuildProcedure<"query", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -467,7 +467,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         _ctx_out: {
             req: any;
             res: any;
-            user: import("../types/auth").User;
+            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -483,7 +483,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
     }, import("../services/asset-manager").StorageQuota>;
     createAssetFolder: import("@trpc/server").BuildProcedure<"mutation", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -496,7 +496,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         _ctx_out: {
             req: any;
             res: any;
-            user: import("../types/auth").User;
+            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -518,7 +518,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
     }, import("../services/asset-manager").AssetFolder>;
     getAssetFolders: import("@trpc/server").BuildProcedure<"query", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -531,7 +531,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         _ctx_out: {
             req: any;
             res: any;
-            user: import("../types/auth").User;
+            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -547,7 +547,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
     }, import("../services/asset-manager").AssetFolder[]>;
     createAssetTag: import("@trpc/server").BuildProcedure<"mutation", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -560,7 +560,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         _ctx_out: {
             req: any;
             res: any;
-            user: import("../types/auth").User;
+            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -580,7 +580,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
     }, import("../services/asset-manager").AssetTag>;
     getAssetTags: import("@trpc/server").BuildProcedure<"query", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -593,7 +593,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         _ctx_out: {
             req: any;
             res: any;
-            user: import("../types/auth").User;
+            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -609,7 +609,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
     }, import("../services/asset-manager").AssetTag[]>;
     addTagToFile: import("@trpc/server").BuildProcedure<"mutation", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -622,7 +622,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         _ctx_out: {
             req: any;
             res: any;
-            user: import("../types/auth").User;
+            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -642,7 +642,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
     }>;
     removeTagFromFile: import("@trpc/server").BuildProcedure<"mutation", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -655,7 +655,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         _ctx_out: {
             req: any;
             res: any;
-            user: import("../types/auth").User;
+            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -675,7 +675,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
     }>;
     replaceAsset: import("@trpc/server").BuildProcedure<"mutation", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -688,7 +688,7 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         _ctx_out: {
             req: any;
             res: any;
-            user: import("../types/auth").User;
+            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;

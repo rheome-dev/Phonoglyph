@@ -1,6 +1,6 @@
-import type { User } from '../types/auth';
+import type { User } from 'phonoglyph-types';
 export declare const guestRouter: import("@trpc/server").CreateRouterInner<import("@trpc/server").RootConfig<{
-    ctx: import("../types/auth").AuthContext & {
+    ctx: import("phonoglyph-types").AuthContext & {
         req: any;
         res: any;
         isGuest: boolean;
@@ -11,7 +11,7 @@ export declare const guestRouter: import("@trpc/server").CreateRouterInner<impor
 }>, {
     sessionInfo: import("@trpc/server").BuildProcedure<"query", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -70,7 +70,7 @@ export declare const guestRouter: import("@trpc/server").CreateRouterInner<impor
     }>;
     listProjects: import("@trpc/server").BuildProcedure<"query", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;

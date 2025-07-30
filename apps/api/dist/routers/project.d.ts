@@ -1,6 +1,6 @@
-import type { Project, ProjectCollaborator, ProjectShare } from '../types/auth';
+import type { Project, ProjectCollaborator, ProjectShare } from 'phonoglyph-types';
 export declare const projectRouter: import("@trpc/server").CreateRouterInner<import("@trpc/server").RootConfig<{
-    ctx: import("../types/auth").AuthContext & {
+    ctx: import("phonoglyph-types").AuthContext & {
         req: any;
         res: any;
         isGuest: boolean;
@@ -11,7 +11,7 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
 }>, {
     list: import("@trpc/server").BuildProcedure<"query", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -24,7 +24,7 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
         _ctx_out: {
             req: any;
             res: any;
-            user: import("../types/auth").User;
+            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -36,7 +36,7 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
     }, Project[]>;
     get: import("@trpc/server").BuildProcedure<"query", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -49,7 +49,7 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
         _ctx_out: {
             req: any;
             res: any;
-            user: import("../types/auth").User;
+            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -65,7 +65,7 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
     }, Project>;
     create: import("@trpc/server").BuildProcedure<"mutation", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -78,7 +78,7 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
         _ctx_out: {
             req: any;
             res: any;
-            user: import("../types/auth").User;
+            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -90,42 +90,12 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
             midi_file_path?: string | undefined;
             audio_file_path?: string | undefined;
             user_video_path?: string | undefined;
-            render_configuration?: {
-                colorScheme?: {
-                    primary: string;
-                    secondary: string;
-                    accent: string;
-                } | undefined;
-                quality?: "high" | "ultra" | "draft" | "preview" | undefined;
-                duration?: number | undefined;
-                resolution?: {
-                    width: number;
-                    height: number;
-                } | undefined;
-                frameRate?: number | undefined;
-                effects?: string[] | undefined;
-                audioSync?: boolean | undefined;
-            } | undefined;
+            render_configuration?: Record<string, any> | undefined;
         };
         _input_out: {
             name: string;
             privacy_setting: "public" | "private" | "unlisted";
-            render_configuration: {
-                colorScheme?: {
-                    primary: string;
-                    secondary: string;
-                    accent: string;
-                } | undefined;
-                quality?: "high" | "ultra" | "draft" | "preview" | undefined;
-                duration?: number | undefined;
-                resolution?: {
-                    width: number;
-                    height: number;
-                } | undefined;
-                frameRate?: number | undefined;
-                effects?: string[] | undefined;
-                audioSync?: boolean | undefined;
-            };
+            render_configuration: Record<string, any>;
             description?: string | undefined;
             midi_file_path?: string | undefined;
             audio_file_path?: string | undefined;
@@ -136,7 +106,7 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
     }, Project>;
     update: import("@trpc/server").BuildProcedure<"mutation", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -149,7 +119,7 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
         _ctx_out: {
             req: any;
             res: any;
-            user: import("../types/auth").User;
+            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -161,22 +131,7 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
             privacy_setting?: "public" | "private" | "unlisted" | undefined;
             audio_file_path?: string | undefined;
             user_video_path?: string | undefined;
-            render_configuration?: {
-                colorScheme?: {
-                    primary: string;
-                    secondary: string;
-                    accent: string;
-                } | undefined;
-                quality?: "high" | "ultra" | "draft" | "preview" | undefined;
-                duration?: number | undefined;
-                resolution?: {
-                    width: number;
-                    height: number;
-                } | undefined;
-                frameRate?: number | undefined;
-                effects?: string[] | undefined;
-                audioSync?: boolean | undefined;
-            } | undefined;
+            render_configuration?: Record<string, any> | undefined;
             thumbnail_url?: string | undefined;
             primary_midi_file_id?: string | undefined;
         };
@@ -187,22 +142,7 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
             privacy_setting?: "public" | "private" | "unlisted" | undefined;
             audio_file_path?: string | undefined;
             user_video_path?: string | undefined;
-            render_configuration?: {
-                colorScheme?: {
-                    primary: string;
-                    secondary: string;
-                    accent: string;
-                } | undefined;
-                quality?: "high" | "ultra" | "draft" | "preview" | undefined;
-                duration?: number | undefined;
-                resolution?: {
-                    width: number;
-                    height: number;
-                } | undefined;
-                frameRate?: number | undefined;
-                effects?: string[] | undefined;
-                audioSync?: boolean | undefined;
-            } | undefined;
+            render_configuration?: Record<string, any> | undefined;
             thumbnail_url?: string | undefined;
             primary_midi_file_id?: string | undefined;
         };
@@ -211,7 +151,7 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
     }, Project>;
     delete: import("@trpc/server").BuildProcedure<"mutation", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -224,7 +164,7 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
         _ctx_out: {
             req: any;
             res: any;
-            user: import("../types/auth").User;
+            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -243,7 +183,7 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
     }>;
     search: import("@trpc/server").BuildProcedure<"query", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -256,7 +196,7 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
         _ctx_out: {
             req: any;
             res: any;
-            user: import("../types/auth").User;
+            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -282,7 +222,7 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
     }, any>;
     duplicate: import("@trpc/server").BuildProcedure<"mutation", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -295,7 +235,7 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
         _ctx_out: {
             req: any;
             res: any;
-            user: import("../types/auth").User;
+            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -315,7 +255,7 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
     }, Project>;
     share: import("@trpc/server").BuildProcedure<"mutation", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -328,7 +268,7 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
         _ctx_out: {
             req: any;
             res: any;
-            user: import("../types/auth").User;
+            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -348,7 +288,7 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
     }, ProjectShare>;
     getShared: import("@trpc/server").BuildProcedure<"query", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -361,7 +301,7 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
         _ctx_out: {
             req: any;
             res: any;
-            user: import("../types/auth").User;
+            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -383,7 +323,7 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
     }>;
     addCollaborator: import("@trpc/server").BuildProcedure<"mutation", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -396,7 +336,7 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
         _ctx_out: {
             req: any;
             res: any;
-            user: import("../types/auth").User;
+            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -416,7 +356,7 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
     }, ProjectCollaborator>;
     updateCollaborator: import("@trpc/server").BuildProcedure<"mutation", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -429,7 +369,7 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
         _ctx_out: {
             req: any;
             res: any;
-            user: import("../types/auth").User;
+            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -437,19 +377,19 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
         _input_in: {
             user_id: string;
             project_id: string;
-            role: "owner" | "editor" | "viewer";
+            role: "editor" | "viewer" | "owner";
         };
         _input_out: {
             user_id: string;
             project_id: string;
-            role: "owner" | "editor" | "viewer";
+            role: "editor" | "viewer" | "owner";
         };
         _output_in: typeof import("@trpc/server").unsetMarker;
         _output_out: typeof import("@trpc/server").unsetMarker;
     }, ProjectCollaborator>;
     removeCollaborator: import("@trpc/server").BuildProcedure<"mutation", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -462,7 +402,7 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
         _ctx_out: {
             req: any;
             res: any;
-            user: import("../types/auth").User;
+            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -483,7 +423,7 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
     }>;
     auditLogs: import("@trpc/server").BuildProcedure<"query", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -496,7 +436,7 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
         _ctx_out: {
             req: any;
             res: any;
-            user: import("../types/auth").User;
+            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;

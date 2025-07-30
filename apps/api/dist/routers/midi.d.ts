@@ -1,6 +1,6 @@
-import { MIDIData } from '../types/midi';
+import { MIDIData } from 'phonoglyph-types';
 export declare const midiRouter: import("@trpc/server").CreateRouterInner<import("@trpc/server").RootConfig<{
-    ctx: import("../types/auth").AuthContext & {
+    ctx: import("phonoglyph-types").AuthContext & {
         req: any;
         res: any;
         isGuest: boolean;
@@ -11,7 +11,7 @@ export declare const midiRouter: import("@trpc/server").CreateRouterInner<import
 }>, {
     parseMidiFile: import("@trpc/server").BuildProcedure<"mutation", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -24,7 +24,7 @@ export declare const midiRouter: import("@trpc/server").CreateRouterInner<import
         _ctx_out: {
             req: any;
             res: any;
-            user: import("../types/auth").User;
+            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -45,7 +45,7 @@ export declare const midiRouter: import("@trpc/server").CreateRouterInner<import
     }>;
     getVisualizationData: import("@trpc/server").BuildProcedure<"query", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -58,7 +58,7 @@ export declare const midiRouter: import("@trpc/server").CreateRouterInner<import
         _ctx_out: {
             req: any;
             res: any;
-            user: import("../types/auth").User;
+            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -87,7 +87,7 @@ export declare const midiRouter: import("@trpc/server").CreateRouterInner<import
     }>;
     saveVisualizationSettings: import("@trpc/server").BuildProcedure<"mutation", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -100,7 +100,7 @@ export declare const midiRouter: import("@trpc/server").CreateRouterInner<import
         _ctx_out: {
             req: any;
             res: any;
-            user: import("../types/auth").User;
+            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -135,7 +135,7 @@ export declare const midiRouter: import("@trpc/server").CreateRouterInner<import
     }>;
     getUserMidiFiles: import("@trpc/server").BuildProcedure<"query", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -148,7 +148,7 @@ export declare const midiRouter: import("@trpc/server").CreateRouterInner<import
         _ctx_out: {
             req: any;
             res: any;
-            user: import("../types/auth").User;
+            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;

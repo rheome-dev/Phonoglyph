@@ -1,5 +1,5 @@
 export declare const healthRouter: import("@trpc/server").CreateRouterInner<import("@trpc/server").RootConfig<{
-    ctx: import("../types/auth").AuthContext & {
+    ctx: import("phonoglyph-types").AuthContext & {
         req: any;
         res: any;
         isGuest: boolean;
@@ -10,7 +10,7 @@ export declare const healthRouter: import("@trpc/server").CreateRouterInner<impo
 }>, {
     check: import("@trpc/server").BuildProcedure<"query", {
         _config: import("@trpc/server").RootConfig<{
-            ctx: import("../types/auth").AuthContext & {
+            ctx: import("phonoglyph-types").AuthContext & {
                 req: any;
                 res: any;
                 isGuest: boolean;
@@ -19,7 +19,7 @@ export declare const healthRouter: import("@trpc/server").CreateRouterInner<impo
             errorShape: import("@trpc/server").DefaultErrorShape;
             transformer: import("@trpc/server").DefaultDataTransformer;
         }>;
-        _ctx_out: import("../types/auth").AuthContext & {
+        _ctx_out: import("phonoglyph-types").AuthContext & {
             req: any;
             res: any;
             isGuest: boolean;

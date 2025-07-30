@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { router, protectedProcedure, flexibleProcedure } from '../trpc';
 import { TRPCError } from '@trpc/server';
-import type { Project, ProjectCollaborator, ProjectWithCollaborators, ProjectShare } from '../types/auth';
+import type { Project, ProjectCollaborator, ProjectWithCollaborators, ProjectShare } from 'phonoglyph-types';
 import { createProjectSchema, updateProjectSchema } from 'phonoglyph-types';
 
 // Additional validation schemas for new endpoints
