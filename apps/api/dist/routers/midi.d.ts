@@ -154,13 +154,13 @@ export declare const midiRouter: import("@trpc/server").CreateRouterInner<import
             isGuest: boolean;
         };
         _input_in: {
-            status?: "completed" | "failed" | "all" | "pending" | undefined;
+            status?: "all" | "completed" | "failed" | "pending" | undefined;
             limit?: number | undefined;
             offset?: number | undefined;
             projectId?: string | undefined;
         };
         _input_out: {
-            status: "completed" | "failed" | "all" | "pending";
+            status: "all" | "completed" | "failed" | "pending";
             limit: number;
             offset: number;
             projectId?: string | undefined;
