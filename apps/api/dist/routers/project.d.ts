@@ -90,12 +90,42 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
             midi_file_path?: string | undefined;
             audio_file_path?: string | undefined;
             user_video_path?: string | undefined;
-            render_configuration?: Record<string, any> | undefined;
+            render_configuration?: {
+                colorScheme?: {
+                    primary: string;
+                    secondary: string;
+                    accent: string;
+                } | undefined;
+                quality?: "high" | "ultra" | "draft" | "preview" | undefined;
+                duration?: number | undefined;
+                resolution?: {
+                    width: number;
+                    height: number;
+                } | undefined;
+                frameRate?: number | undefined;
+                effects?: string[] | undefined;
+                audioSync?: boolean | undefined;
+            } | undefined;
         };
         _input_out: {
             name: string;
             privacy_setting: "public" | "private" | "unlisted";
-            render_configuration: Record<string, any>;
+            render_configuration: {
+                colorScheme?: {
+                    primary: string;
+                    secondary: string;
+                    accent: string;
+                } | undefined;
+                quality?: "high" | "ultra" | "draft" | "preview" | undefined;
+                duration?: number | undefined;
+                resolution?: {
+                    width: number;
+                    height: number;
+                } | undefined;
+                frameRate?: number | undefined;
+                effects?: string[] | undefined;
+                audioSync?: boolean | undefined;
+            };
             description?: string | undefined;
             midi_file_path?: string | undefined;
             audio_file_path?: string | undefined;
@@ -131,7 +161,22 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
             privacy_setting?: "public" | "private" | "unlisted" | undefined;
             audio_file_path?: string | undefined;
             user_video_path?: string | undefined;
-            render_configuration?: Record<string, any> | undefined;
+            render_configuration?: {
+                colorScheme?: {
+                    primary: string;
+                    secondary: string;
+                    accent: string;
+                } | undefined;
+                quality?: "high" | "ultra" | "draft" | "preview" | undefined;
+                duration?: number | undefined;
+                resolution?: {
+                    width: number;
+                    height: number;
+                } | undefined;
+                frameRate?: number | undefined;
+                effects?: string[] | undefined;
+                audioSync?: boolean | undefined;
+            } | undefined;
             thumbnail_url?: string | undefined;
             primary_midi_file_id?: string | undefined;
         };
@@ -142,7 +187,22 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
             privacy_setting?: "public" | "private" | "unlisted" | undefined;
             audio_file_path?: string | undefined;
             user_video_path?: string | undefined;
-            render_configuration?: Record<string, any> | undefined;
+            render_configuration?: {
+                colorScheme?: {
+                    primary: string;
+                    secondary: string;
+                    accent: string;
+                } | undefined;
+                quality?: "high" | "ultra" | "draft" | "preview" | undefined;
+                duration?: number | undefined;
+                resolution?: {
+                    width: number;
+                    height: number;
+                } | undefined;
+                frameRate?: number | undefined;
+                effects?: string[] | undefined;
+                audioSync?: boolean | undefined;
+            } | undefined;
             thumbnail_url?: string | undefined;
             primary_midi_file_id?: string | undefined;
         };

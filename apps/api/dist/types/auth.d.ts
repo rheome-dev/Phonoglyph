@@ -1,4 +1,13 @@
-import type { User as SupabaseUser } from '@supabase/supabase-js';
+interface SupabaseUser {
+    id: string;
+    email?: string;
+    user_metadata?: {
+        name?: string;
+        avatar_url?: string;
+    };
+    created_at?: string;
+    updated_at?: string;
+}
 export interface User {
     id: string;
     email: string;
@@ -77,4 +86,5 @@ export interface AuthContext {
     supabase: any;
 }
 export declare function transformSupabaseUser(supabaseUser: SupabaseUser): User;
+export {};
 //# sourceMappingURL=auth.d.ts.map

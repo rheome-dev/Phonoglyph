@@ -11,10 +11,10 @@ const createTRPCContext = async (opts) => {
     const { req, res } = opts;
     // Debug all headers
     logger_1.logger.debug('Backend - All headers:', req.headers);
-    logger_1.logger.debug('Backend - Authorization header:', req.headers.authorization);
-    logger_1.logger.debug('Backend - Content-Type header:', req.headers['content-type']);
+    logger_1.logger.debug('Backend - Authorization header:', req.headers?.authorization);
+    logger_1.logger.debug('Backend - Content-Type header:', req.headers?.['content-type']);
     // Extract authorization header
-    const authHeader = req.headers.authorization;
+    const authHeader = req.headers?.authorization;
     const accessToken = authHeader?.replace('Bearer ', '');
     logger_1.logger.auth('Backend - Auth header present:', !!authHeader);
     logger_1.logger.auth('Backend - Access token present:', !!accessToken);
@@ -26,7 +26,25 @@ const createTRPCContext = async (opts) => {
     // Try to get authenticated user session first
     if (accessToken) {
         try {
-            const { data: { user: supabaseUser }, error } = await supabase.auth.getUser(accessToken);
+            // Try different approaches for getting user data
+            let supabaseUser = null;
+            let error = null;
+            try {
+                // Use type assertion to access auth methods
+                const authClient = supabase.auth;
+                if (authClient.getUser) {
+                    const result = await authClient.getUser();
+                    supabaseUser = result.data?.user;
+                    error = result.error;
+                }
+                else if (authClient.getSession) {
+                    const { data: { session } } = await authClient.getSession();
+                    supabaseUser = session?.user || null;
+                }
+            }
+            catch (authError) {
+                error = authError;
+            }
             logger_1.logger.auth('Backend - Supabase user lookup result:', { user: !!supabaseUser, error: !!error });
             if (!error && supabaseUser) {
                 user = (0, auth_1.transformSupabaseUser)(supabaseUser);

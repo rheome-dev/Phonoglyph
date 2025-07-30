@@ -4,27 +4,8 @@ exports.projectRouter = void 0;
 const zod_1 = require("zod");
 const trpc_1 = require("../trpc");
 const server_1 = require("@trpc/server");
-// Input validation schemas
-const createProjectSchema = zod_1.z.object({
-    name: zod_1.z.string().min(1, 'Project name is required').max(100, 'Project name too long'),
-    description: zod_1.z.string().max(500, 'Description too long').optional(),
-    privacy_setting: zod_1.z.enum(['private', 'unlisted', 'public']).default('private'),
-    midi_file_path: zod_1.z.string().optional(),
-    audio_file_path: zod_1.z.string().optional(),
-    user_video_path: zod_1.z.string().optional(),
-    render_configuration: zod_1.z.record(zod_1.z.any()).default({}),
-});
-const updateProjectSchema = zod_1.z.object({
-    id: zod_1.z.string().min(1, 'Project ID is required'),
-    name: zod_1.z.string().min(1, 'Project name is required').max(100, 'Project name too long').optional(),
-    description: zod_1.z.string().max(500, 'Description too long').optional(),
-    privacy_setting: zod_1.z.enum(['private', 'unlisted', 'public']).optional(),
-    thumbnail_url: zod_1.z.string().url('Invalid thumbnail URL').optional(),
-    primary_midi_file_id: zod_1.z.string().uuid('Invalid file ID').optional(),
-    audio_file_path: zod_1.z.string().optional(),
-    user_video_path: zod_1.z.string().optional(),
-    render_configuration: zod_1.z.record(zod_1.z.any()).optional(),
-});
+const phonoglyph_types_1 = require("phonoglyph-types");
+// Additional validation schemas for new endpoints
 const projectIdSchema = zod_1.z.object({
     id: zod_1.z.string().min(1, 'Project ID is required'),
 });
@@ -139,9 +120,14 @@ exports.projectRouter = (0, trpc_1.router)({
     }),
     // Create a new project
     create: trpc_1.protectedProcedure
-        .input(createProjectSchema)
+        .input(phonoglyph_types_1.createProjectSchema)
         .mutation(async ({ input, ctx }) => {
         try {
+            console.log('=== API DEBUG PROJECT CREATION ===');
+            console.log('Raw input received:', JSON.stringify(input, null, 2));
+            console.log('input.name:', input.name);
+            console.log('input.name type:', typeof input.name);
+            console.log('=== END API DEBUG ===');
             const projectId = `proj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
             const { data: project, error } = await ctx.supabase
                 .from('projects')
@@ -187,7 +173,7 @@ exports.projectRouter = (0, trpc_1.router)({
     }),
     // Update an existing project
     update: trpc_1.protectedProcedure
-        .input(updateProjectSchema)
+        .input(phonoglyph_types_1.updateProjectSchema)
         .mutation(async ({ input, ctx }) => {
         try {
             const { id, ...updateData } = input;

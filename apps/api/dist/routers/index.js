@@ -10,6 +10,7 @@ const project_1 = require("./project");
 const file_1 = require("./file");
 const midi_1 = require("./midi");
 const stem_1 = require("./stem");
+const auto_save_1 = require("./auto-save");
 exports.appRouter = (0, trpc_1.router)({
     health: health_1.healthRouter,
     auth: auth_1.authRouter,
@@ -19,5 +20,6 @@ exports.appRouter = (0, trpc_1.router)({
     file: file_1.fileRouter,
     midi: midi_1.midiRouter,
     stem: stem_1.stemRouter,
+    autoSave: auto_save_1.autoSaveRouter,
 });
 //# sourceMappingURL=index.js.map
