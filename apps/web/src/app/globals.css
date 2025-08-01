@@ -30,6 +30,11 @@ body, .font-mono {
 @tailwind utilities;
 
 @layer base {
+  /* Creative visualizer text scaling - makes text 90% of normal size */
+  .creative-visualizer-text {
+    font-size: 90%;
+  }
+  
   :root {
     /* Typography System */
     --font-mono: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Consolas', monospace;

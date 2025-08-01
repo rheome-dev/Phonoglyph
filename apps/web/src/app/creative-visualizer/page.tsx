@@ -1431,7 +1431,7 @@ function CreativeVisualizerPage() {
       )}
       <DndProvider backend={HTML5Backend}>
         {/* Main visualizer UI */}
-        <div className="flex h-screen bg-stone-800 text-white min-w-0">
+        <div className="flex h-screen bg-stone-800 text-white min-w-0 creative-visualizer-text">
           <CollapsibleSidebar>
             <div className="space-y-4">
               <MappingSourcesPanel 
