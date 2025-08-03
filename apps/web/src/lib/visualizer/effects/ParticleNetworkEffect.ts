@@ -10,12 +10,16 @@ interface Particle {
   note: number;
   noteVelocity: number;
   track: string;
+  // Add audio feature data for audio-triggered particles
+  audioFeature?: string;
+  audioValue?: number;
+  spawnType: 'midi' | 'audio';
 }
 
 export class ParticleNetworkEffect implements VisualEffect {
   id = 'particleNetwork';
-  name = 'MIDI Particle Network';
-  description = 'Glowing particle network that responds to MIDI notes';
+  name = 'MIDI & Audio Particle Network';
+  description = 'Glowing particle network that responds to MIDI notes and audio features';
   enabled = true;
   parameters = {
     maxParticles: 50,
@@ -24,7 +28,17 @@ export class ParticleNetworkEffect implements VisualEffect {
     glowIntensity: 0.6, // Reset to a reasonable default
     glowSoftness: 3.0, // exponent for bloom falloff
     particleColor: [1.0, 1.0, 1.0], // RGB array for base particle color
-    particleSize: 15.0 // Base particle size multiplier
+    particleSize: 15.0, // Base particle size multiplier
+    
+    // Audio feature spawning parameters
+    enableAudioSpawning: true,
+    audioSpawnFeature: 'volume', // 'volume', 'bass', 'mid', 'treble', 'rms', 'spectralCentroid'
+    audioSpawnThreshold: 0.3, // Minimum value to trigger spawning
+    audioSpawnRate: 0.1, // Probability of spawning per frame when threshold is met
+    audioSpawnCooldown: 0.1, // Minimum time between audio spawns (seconds)
+    audioParticleSize: 10.0, // Size multiplier for audio-triggered particles
+    audioParticleColor: [0.8, 0.4, 1.0], // Purple tint for audio particles
+    audioSpawnIntensity: 1.0, // How much audio value affects particle properties
   };
 
   private scene!: THREE.Scene;
@@ -59,6 +73,10 @@ export class ParticleNetworkEffect implements VisualEffect {
   private instanceLives!: Float32Array;
   private instanceSizes!: Float32Array;
   private dummyMatrix: THREE.Matrix4 = new THREE.Matrix4();
+
+  // Audio spawning state
+  private lastAudioSpawnTime: number = 0;
+  private currentAudioData: AudioAnalysisData | null = null;
 
 
   constructor() {
@@ -210,7 +228,7 @@ export class ParticleNetworkEffect implements VisualEffect {
     return new THREE.Vector3(x, y, z);
   }
   
-  private createParticle(note: number, velocity: number, track: string): Particle {
+  private createParticle(note: number, velocity: number, track: string, spawnType: 'midi' | 'audio' = 'midi', audioFeature?: string, audioValue?: number): Particle {
     // Spawn inside current viewport bounds
     const position = this.getRandomSpawnPosition();
     
@@ -221,54 +239,90 @@ export class ParticleNetworkEffect implements VisualEffect {
       (Math.random() - 0.5) * 0.02
     );
     
+    // Calculate size based on spawn type
+    let size: number;
+    if (spawnType === 'audio' && audioValue !== undefined) {
+      // Audio particles: size based on audio value and intensity
+      const audioSize = audioValue * this.parameters.audioSpawnIntensity;
+      size = this.parameters.audioParticleSize * (1.0 + audioSize * 2.0);
+    } else {
+      // MIDI particles: size based on velocity
+      size = 3.0 + (velocity / 127) * 5.0;
+    }
+    
     return {
       position,
       velocity: vel,
       life: 1.0,
       maxLife: this.parameters.particleLifetime,
-      size: 3.0 + (velocity / 127) * 5.0, // Base visual size
+      size,
       note,
       noteVelocity: velocity,
-      track
+      track,
+      audioFeature,
+      audioValue,
+      spawnType
     };
   }
   
-  private getNoteColor(note: number, velocity: number): THREE.Color {
-    // Generate note-based color
-    const hue = (note % 12) / 12;
-    const saturation = 0.4 + (velocity / 127) * 0.3;
-    const lightness = 0.5 + (velocity / 127) * 0.2;
-    
-    const noteColor = new THREE.Color();
-    noteColor.setHSL(hue, saturation, lightness);
-    
-    // Blend with configurable base color
-    const baseColor = new THREE.Color(
-      this.parameters.particleColor[0],
-      this.parameters.particleColor[1], 
-      this.parameters.particleColor[2]
-    );
-    
-    // Mix 70% note-based color with 30% base color for variety while maintaining user control
-    const blendFactor = 0.3;
-    return noteColor.lerp(baseColor, blendFactor);
+  private getNoteColor(note: number, velocity: number, spawnType: 'midi' | 'audio' = 'midi', audioValue?: number): THREE.Color {
+    if (spawnType === 'audio' && audioValue !== undefined) {
+      // Audio particles: color based on audio value and audio particle color
+      const audioColor = new THREE.Color(
+        this.parameters.audioParticleColor[0],
+        this.parameters.audioParticleColor[1],
+        this.parameters.audioParticleColor[2]
+      );
+      
+      // Vary color based on audio value
+      const intensity = Math.min(audioValue * this.parameters.audioSpawnIntensity, 1.0);
+      const hue = (audioValue * 0.3) % 1.0; // Subtle hue variation
+      const audioHueColor = new THREE.Color().setHSL(hue, 0.7, 0.6);
+      
+      // Blend audio color with hue variation
+      return audioHueColor.lerp(audioColor, 0.7);
+    } else {
+      // MIDI particles: original note-based color logic
+      const hue = (note % 12) / 12;
+      const saturation = 0.4 + (velocity / 127) * 0.3;
+      const lightness = 0.5 + (velocity / 127) * 0.2;
+      
+      const noteColor = new THREE.Color();
+      noteColor.setHSL(hue, saturation, lightness);
+      
+      // Blend with configurable base color
+      const baseColor = new THREE.Color(
+        this.parameters.particleColor[0],
+        this.parameters.particleColor[1], 
+        this.parameters.particleColor[2]
+      );
+      
+      // Mix 70% note-based color with 30% base color for variety while maintaining user control
+      const blendFactor = 0.3;
+      return noteColor.lerp(baseColor, blendFactor);
+    }
   }
   
-  private updateParticles(deltaTime: number, midiData: LiveMIDIData) {
-    // Add new particles for active notes
+  private updateParticles(deltaTime: number, midiData: LiveMIDIData, audioData?: AudioAnalysisData) {
+    // Add new particles for active MIDI notes
     midiData.activeNotes.forEach(noteData => {
       if (this.particles.length < this.parameters.maxParticles) {
         // Check if we already have a recent particle for this note
         const hasRecentParticle = this.particles.some(p => 
-          p.note === noteData.note && p.life > 0.8
+          p.note === noteData.note && p.life > 0.8 && p.spawnType === 'midi'
         );
         
         if (!hasRecentParticle) {
-          const particle = this.createParticle(noteData.note, noteData.velocity, noteData.track);
+          const particle = this.createParticle(noteData.note, noteData.velocity, noteData.track, 'midi');
           this.particles.push(particle);
         }
       }
     });
+    
+    // Add new particles for audio features
+    if (this.parameters.enableAudioSpawning && audioData && this.currentAudioData) {
+      this.spawnAudioParticles(deltaTime, audioData);
+    }
     
     // Update existing particles
     for (let i = this.particles.length - 1; i >= 0; i--) {
@@ -294,6 +348,60 @@ export class ParticleNetworkEffect implements VisualEffect {
     this.updateConnections();
   }
   
+  private spawnAudioParticles(deltaTime: number, audioData: AudioAnalysisData) {
+    const currentTime = performance.now() / 1000;
+    
+    // Check cooldown
+    if (currentTime - this.lastAudioSpawnTime < this.parameters.audioSpawnCooldown) {
+      return;
+    }
+    
+    // Get the current audio feature value
+    const featureValue = this.getAudioFeatureValue(audioData, this.parameters.audioSpawnFeature);
+    
+    // Check if we should spawn based on threshold
+    if (featureValue >= this.parameters.audioSpawnThreshold) {
+      // Calculate spawn probability
+      const spawnProbability = this.parameters.audioSpawnRate * (featureValue / this.parameters.audioSpawnThreshold);
+      
+      if (Math.random() < spawnProbability && this.particles.length < this.parameters.maxParticles) {
+        // Create audio-triggered particle
+        const particle = this.createParticle(
+          60, // Default note for audio particles
+          Math.floor(featureValue * 127), // Map audio value to velocity
+          'audio',
+          'audio',
+          this.parameters.audioSpawnFeature,
+          featureValue
+        );
+        
+        this.particles.push(particle);
+        this.lastAudioSpawnTime = currentTime;
+      }
+    }
+  }
+  
+  private getAudioFeatureValue(audioData: AudioAnalysisData, featureName: string): number {
+    switch (featureName) {
+      case 'volume':
+        return audioData.volume;
+      case 'bass':
+        return audioData.bass;
+      case 'mid':
+        return audioData.mid;
+      case 'treble':
+        return audioData.treble;
+      case 'rms':
+        // Use volume as proxy for RMS
+        return audioData.volume;
+      case 'spectralCentroid':
+        // Use treble as proxy for spectral centroid
+        return audioData.treble;
+      default:
+        return audioData.volume; // Default fallback
+    }
+  }
+  
   private updateBuffers() {
     const cameraQuat = this.camera.quaternion;
 
@@ -311,7 +419,7 @@ export class ParticleNetworkEffect implements VisualEffect {
       this.instancedMesh.setMatrixAt(index, this.dummyMatrix);
 
       // Color
-      const color = this.getNoteColor(particle.note, particle.noteVelocity);
+      const color = this.getNoteColor(particle.note, particle.noteVelocity, particle.spawnType, particle.audioValue);
       this.instanceColors[index * 3] = color.r;
       this.instanceColors[index * 3 + 1] = color.g;
       this.instanceColors[index * 3 + 2] = color.b;
@@ -436,11 +544,39 @@ export class ParticleNetworkEffect implements VisualEffect {
         // just store; scale applied in updateBuffers
         this.parameters.particleSize = value;
         break;
+      // Audio spawning parameters
+      case 'enableAudioSpawning':
+        this.parameters.enableAudioSpawning = value;
+        break;
+      case 'audioSpawnFeature':
+        this.parameters.audioSpawnFeature = value;
+        break;
+      case 'audioSpawnThreshold':
+        this.parameters.audioSpawnThreshold = value;
+        break;
+      case 'audioSpawnRate':
+        this.parameters.audioSpawnRate = value;
+        break;
+      case 'audioSpawnCooldown':
+        this.parameters.audioSpawnCooldown = value;
+        break;
+      case 'audioParticleSize':
+        this.parameters.audioParticleSize = value;
+        break;
+      case 'audioParticleColor':
+        this.parameters.audioParticleColor = value;
+        break;
+      case 'audioSpawnIntensity':
+        this.parameters.audioSpawnIntensity = value;
+        break;
     }
   }
 
   update(deltaTime: number, audioData: AudioAnalysisData, midiData: LiveMIDIData): void {
     if (!this.uniforms) return;
+
+    // Store current audio data for particle spawning
+    this.currentAudioData = audioData;
 
     // Generic: sync all parameters to uniforms
     for (const key in this.parameters) {
@@ -464,7 +600,7 @@ export class ParticleNetworkEffect implements VisualEffect {
     this.frameSkipCounter++;
     if (this.frameSkipCounter >= this.frameSkipInterval) {
       this.frameSkipCounter = 0;
-      this.updateParticles(deltaTime * this.frameSkipInterval, midiData);
+      this.updateParticles(deltaTime * this.frameSkipInterval, midiData, audioData);
     }
   }
 
