@@ -469,6 +469,7 @@ function CreativeVisualizerPage() {
                 if (stem && !hasAnalysis) {
                   console.log('🎵 Triggering analysis for stem:', stemId, stem.stemType);
                   cachedStemAnalysis.analyzeAudioBuffer(stemId, audioBuffer, stem.stemType);
+                  enhancedAudioAnalysis.analyzeAudioBuffer(stemId, audioBuffer, stem.stemType);
                 } else {
                   console.log('🎵 Skipping analysis for stem:', stemId, 'reason:', !stem ? 'no stem found' : 'analysis already exists');
                 }
@@ -489,6 +490,7 @@ function CreativeVisualizerPage() {
                   if (stem && !hasAnalysis) {
                     console.log('🎵 Triggering analysis for master stem:', stemId, stem.stemType);
                     cachedStemAnalysis.analyzeAudioBuffer(stemId, audioBuffer, stem.stemType);
+                    enhancedAudioAnalysis.analyzeAudioBuffer(stemId, audioBuffer, stem.stemType);
                   } else {
                     console.log('🎵 Skipping analysis for master stem:', stemId, 'reason:', !stem ? 'no stem found' : 'analysis already exists');
                   }

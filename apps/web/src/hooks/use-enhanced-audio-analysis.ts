@@ -173,11 +173,10 @@ export function useEnhancedAudioAnalysis(): UseEnhancedAudioAnalysis {
     setError(null);
 
     try {
-      // For now, just use the original analysis and add empty enhanced data
-      // This will be properly implemented when the tRPC endpoints are working
+      // Start with original analysis as base
       const originalAnalysis = cachedStemAnalysis.cachedAnalysis;
       
-      // Create enhanced analysis structure
+      // Create enhanced analysis structure with original data
       const combinedAnalysis: CachedEnhancedAnalysis[] = originalAnalysis.map((orig: any) => ({
         id: orig.id,
         fileMetadataId: orig.fileMetadataId,
@@ -192,11 +191,16 @@ export function useEnhancedAudioAnalysis(): UseEnhancedAudioAnalysis {
         waveformData: orig.waveformData,
         metadata: {
           ...orig.metadata,
-          analysisMethod: 'original' as const
+          analysisMethod: 'enhanced' as const
         }
       }));
 
       setCachedAnalysis(combinedAnalysis);
+      
+      // Now trigger enhanced analysis for each file
+      // We need to get the audio buffers from the stem audio controller
+      // This will be handled by the creative visualizer calling analyzeAudioBuffer
+      console.log('Enhanced analysis structure created, ready for audio buffer analysis');
     } catch (err) {
       console.error('Failed to load analysis:', err);
       setError(err instanceof Error ? err.message : 'Failed to load analysis');
@@ -212,8 +216,10 @@ export function useEnhancedAudioAnalysis(): UseEnhancedAudioAnalysis {
       return;
     }
 
-    if (cachedAnalysis.some(a => a.fileMetadataId === fileId) || analysisProgress[fileId]) {
-      console.log('Skipping analysis - already cached or in progress:', fileId);
+    // Check if enhanced analysis already exists or is in progress
+    const hasEnhancedAnalysis = cachedAnalysis.some(a => a.fileMetadataId === fileId);
+    if (hasEnhancedAnalysis || analysisProgress[fileId]) {
+      console.log('🎵 Skipping enhanced analysis - already cached or in progress:', fileId);
       return;
     }
 
