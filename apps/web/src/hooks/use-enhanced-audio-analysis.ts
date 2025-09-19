@@ -1,0 +1,332 @@
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { trpc } from '@/lib/trpc';
+import { AudioAnalysisDataForTrack } from '@/types/stem-audio-analysis';
+import { WaveformData, FeatureMarker } from '@/components/stem-visualization/stem-waveform';
+
+interface EnhancedAnalysisData {
+  // Original analysis data
+  original: AudioAnalysisDataForTrack;
+  
+  // New analysis data
+  transients: Array<{
+    time: number;
+    intensity: number;
+    frequency: number;
+  }>;
+  chroma: Array<{
+    time: number;
+    pitch: number;
+    confidence: number;
+    note: string;
+  }>;
+  rms: Array<{
+    time: number;
+    value: number;
+  }>;
+  
+  // Analysis parameters used
+  analysisParams: {
+    transientThreshold: number;
+    onsetThreshold: number;
+    chromaSmoothing: number;
+    rmsWindowSize: number;
+    pitchConfidence: number;
+    minNoteDuration: number;
+  };
+}
+
+interface CachedEnhancedAnalysis {
+  id: string;
+  fileMetadataId: string;
+  stemType: string;
+  analysisData: EnhancedAnalysisData;
+  waveformData: WaveformData;
+  metadata: {
+    sampleRate: number;
+    duration: number;
+    bufferSize: number;
+    featuresExtracted: string[];
+    analysisDuration: number;
+    analysisMethod: 'original' | 'enhanced' | 'both';
+  };
+}
+
+interface AnalysisProgress {
+  progress: number;
+  message: string;
+}
+
+interface UseEnhancedAudioAnalysis {
+  cachedAnalysis: CachedEnhancedAnalysis[];
+  isLoading: boolean;
+  error: string | null;
+  analysisProgress: Record<string, AnalysisProgress | null>;
+  analysisMethod: 'original' | 'enhanced' | 'both';
+  analysisParams: {
+    transientThreshold: number;
+    onsetThreshold: number;
+    chromaSmoothing: number;
+    rmsWindowSize: number;
+    pitchConfidence: number;
+    minNoteDuration: number;
+  };
+  loadAnalysis: (fileIds: string[], stemType?: string) => Promise<void>;
+  analyzeAudioBuffer: (fileId: string, audioBuffer: AudioBuffer, stemType: string) => void;
+  setAnalysisMethod: (method: 'original' | 'enhanced' | 'both') => void;
+  updateAnalysisParams: (params: Partial<typeof analysisParams>) => void;
+  getFeatureValue: (fileId: string, feature: string, time: number) => number;
+}
+
+export function useEnhancedAudioAnalysis(): UseEnhancedAudioAnalysis {
+  const [cachedAnalysis, setCachedAnalysis] = useState<CachedEnhancedAnalysis[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [analysisProgress, setAnalysisProgress] = useState<Record<string, AnalysisProgress | null>>({});
+  const [analysisMethod, setAnalysisMethod] = useState<'original' | 'enhanced' | 'both'>('both');
+  const [analysisParams, setAnalysisParams] = useState({
+    transientThreshold: 0.3,
+    onsetThreshold: 0.2,
+    chromaSmoothing: 0.8,
+    rmsWindowSize: 1024,
+    pitchConfidence: 0.7,
+    minNoteDuration: 0.1
+  });
+
+  const workerRef = useRef<Worker | null>(null);
+
+  // Initialize worker
+  useEffect(() => {
+    if (typeof window !== 'undefined' && !workerRef.current) {
+      workerRef.current = new Worker('/workers/audio-analysis-worker.js');
+      
+      workerRef.current.onmessage = (event) => {
+        const { type, data } = event.data;
+        
+        if (type === 'ANALYSIS_PROGRESS') {
+          setAnalysisProgress(prev => ({
+            ...prev,
+            [data.fileId]: { progress: data.progress, message: data.message }
+          }));
+        } else if (type === 'ANALYSIS_COMPLETE') {
+          const { fileId, result } = data;
+          
+          // Process the enhanced analysis result
+          const enhancedAnalysis = processEnhancedAnalysis(result, analysisParams);
+          
+          setCachedAnalysis(prev => {
+            const existing = prev.find(a => a.fileMetadataId === fileId);
+            if (existing) {
+              return prev.map(a => 
+                a.fileMetadataId === fileId 
+                  ? { ...a, analysisData: enhancedAnalysis }
+                  : a
+              );
+            } else {
+              return [...prev, {
+                id: result.id,
+                fileMetadataId: fileId,
+                stemType: result.stemType,
+                analysisData: enhancedAnalysis,
+                waveformData: result.waveformData,
+                metadata: {
+                  ...result.metadata,
+                  analysisMethod: 'enhanced' as const
+                }
+              }];
+            }
+          });
+          
+          setAnalysisProgress(prev => ({
+            ...prev,
+            [fileId]: null
+          }));
+        } else if (type === 'ANALYSIS_ERROR') {
+          const { fileId, error: analysisError } = data;
+          setError(`Analysis failed for ${fileId}: ${analysisError}`);
+          setAnalysisProgress(prev => ({
+            ...prev,
+            [fileId]: null
+          }));
+        }
+      };
+    }
+
+    return () => {
+      if (workerRef.current) {
+        workerRef.current.terminate();
+        workerRef.current = null;
+      }
+    };
+  }, [analysisParams]);
+
+  // Process enhanced analysis result
+  const processEnhancedAnalysis = useCallback((result: any, params: typeof analysisParams): EnhancedAnalysisData => {
+    // Extract original analysis data
+    const original: AudioAnalysisDataForTrack = {
+      features: result.analysisData.features || [],
+      markers: result.analysisData.markers || [],
+      frequencies: result.analysisData.frequencies || [],
+      timeData: result.analysisData.timeData || [],
+      volume: result.analysisData.volume || [],
+      bass: result.analysisData.bass || [],
+      mid: result.analysisData.mid || [],
+      treble: result.analysisData.treble || [],
+      stereoWindow_left: result.analysisData.stereoWindow_left || [],
+      stereoWindow_right: result.analysisData.stereoWindow_right || [],
+      fft: result.analysisData.fft || [],
+      fftFrequencies: result.analysisData.fftFrequencies || [],
+    };
+
+    // Extract new analysis data
+    const transients = result.analysisData.transients || [];
+    const chroma = result.analysisData.chroma || [];
+    const rms = result.analysisData.rms || [];
+
+    return {
+      original,
+      transients,
+      chroma,
+      rms,
+      analysisParams: params
+    };
+  }, []);
+
+  // Load analysis from cache
+  const loadAnalysis = useCallback(async (fileIds: string[], stemType?: string) => {
+    if (fileIds.length === 0) return;
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // Load original analysis
+      const originalAnalysis = await trpc.stem.getCachedAnalysis.query({
+        fileIds,
+        stemType
+      });
+
+      // Load enhanced analysis if available
+      const enhancedAnalysis = await trpc.audioAnalysisSandbox.getSandboxAnalysis.query({
+        fileId: fileIds[0], // For now, just get the first file
+        stemType: stemType || 'master'
+      });
+
+      // Combine the analyses
+      const combinedAnalysis: CachedEnhancedAnalysis[] = originalAnalysis.map(orig => {
+        const enhanced = enhancedAnalysis?.fileMetadataId === orig.fileMetadataId ? enhancedAnalysis : null;
+        
+        return {
+          id: orig.id,
+          fileMetadataId: orig.fileMetadataId,
+          stemType: orig.stemType,
+          analysisData: {
+            original: orig.analysisData,
+            transients: enhanced?.analysisData?.transients || [],
+            chroma: enhanced?.analysisData?.chroma || [],
+            rms: enhanced?.analysisData?.rms || [],
+            analysisParams
+          },
+          waveformData: orig.waveformData,
+          metadata: {
+            ...orig.metadata,
+            analysisMethod: enhanced ? 'both' : 'original'
+          }
+        };
+      });
+
+      setCachedAnalysis(combinedAnalysis);
+    } catch (err) {
+      console.error('Failed to load analysis:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load analysis');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [analysisParams]);
+
+  // Analyze audio buffer with enhanced analysis
+  const analyzeAudioBuffer = useCallback((fileId: string, audioBuffer: AudioBuffer, stemType: string) => {
+    if (!workerRef.current) {
+      console.error("Analysis worker not ready.");
+      return;
+    }
+
+    if (cachedAnalysis.some(a => a.fileMetadataId === fileId) || analysisProgress[fileId]) {
+      console.log('Skipping analysis - already cached or in progress:', fileId);
+      return;
+    }
+
+    console.log('Starting enhanced analysis for:', fileId, stemType);
+    setAnalysisProgress(prev => ({ ...prev, [fileId]: { progress: 0, message: 'Queued for enhanced analysis...' } }));
+    
+    const channelData = audioBuffer.getChannelData(0);
+    workerRef.current.postMessage({
+      type: 'ANALYZE_BUFFER',
+      data: { 
+        fileId, 
+        channelData,
+        sampleRate: audioBuffer.sampleRate,
+        duration: audioBuffer.duration,
+        stemType,
+        analysisParams, // Pass the enhanced analysis parameters
+        enhancedAnalysis: true // Flag to indicate enhanced analysis
+      }
+    }, [channelData.buffer]);
+  }, [cachedAnalysis, analysisProgress, analysisParams]);
+
+  // Get feature value based on analysis method
+  const getFeatureValue = useCallback((fileId: string, feature: string, time: number): number => {
+    const analysis = cachedAnalysis.find(a => a.fileMetadataId === fileId);
+    if (!analysis) return 0;
+
+    const { analysisData } = analysis;
+
+    // Route to appropriate analysis based on method and feature
+    if (analysisMethod === 'enhanced' || analysisMethod === 'both') {
+      switch (feature) {
+        case 'transients':
+          const transient = analysisData.transients.find(t => Math.abs(t.time - time) < 0.1);
+          return transient?.intensity || 0;
+        
+        case 'chroma':
+          const chroma = analysisData.chroma.find(c => Math.abs(c.time - time) < 0.1);
+          return chroma?.confidence || 0;
+        
+        case 'rms':
+          const rms = analysisData.rms.find(r => Math.abs(r.time - time) < 0.1);
+          return rms?.value || 0;
+        
+        case 'pitch':
+          const pitch = analysisData.chroma.find(c => Math.abs(c.time - time) < 0.1);
+          return pitch?.pitch || 0;
+      }
+    }
+
+    // Fall back to original analysis
+    if (analysisMethod === 'original' || analysisMethod === 'both') {
+      // Use existing feature extraction logic
+      // This would integrate with the existing useFeatureValue hook
+      return 0; // Placeholder - would implement original feature extraction
+    }
+
+    return 0;
+  }, [cachedAnalysis, analysisMethod]);
+
+  // Update analysis parameters
+  const updateAnalysisParams = useCallback((newParams: Partial<typeof analysisParams>) => {
+    setAnalysisParams(prev => ({ ...prev, ...newParams }));
+  }, []);
+
+  return {
+    cachedAnalysis,
+    isLoading,
+    error,
+    analysisProgress,
+    analysisMethod,
+    analysisParams,
+    loadAnalysis,
+    analyzeAudioBuffer,
+    setAnalysisMethod,
+    updateAnalysisParams,
+    getFeatureValue
+  };
+}
