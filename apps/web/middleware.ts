@@ -82,8 +82,7 @@ export async function middleware(request: NextRequest) {
     // If user is not authenticated and trying to access protected route
     if (isProtectedRoute && !session) {
       const redirectUrl = new URL('/auth/login', request.url)
-      // Pass the full URL so we can redirect back to the experimental branch
-      redirectUrl.searchParams.set('redirectTo', request.url)
+      redirectUrl.searchParams.set('redirectTo', pathname)
       return NextResponse.redirect(redirectUrl)
     }
 

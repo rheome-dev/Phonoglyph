@@ -36,15 +36,10 @@ export class AuthService {
 
   // OAuth Authentication
   static async signInWithOAuth({ provider, redirectTo }: AuthProvider) {
-    // If redirectTo is just a path, make it a full URL
-    const fullRedirectTo = redirectTo?.startsWith('http') 
-      ? redirectTo 
-      : `${window.location.origin}${redirectTo || '/dashboard'}`
-
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?redirectTo=${encodeURIComponent(fullRedirectTo)}`,
+        redirectTo: redirectTo || `${window.location.origin}/auth/callback`,
       },
     })
 
