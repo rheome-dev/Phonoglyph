@@ -8,19 +8,13 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Settings, Zap, Music, Volume2, BarChart3, ToggleLeft, ToggleRight } from 'lucide-react';
+import { AnalysisParams, AnalysisMethod } from '@/types/audio-analysis';
 
 interface AnalysisMethodControlsProps {
-  analysisMethod: 'original' | 'enhanced' | 'both';
-  analysisParams: {
-    transientThreshold: number;
-    onsetThreshold: number;
-    chromaSmoothing: number;
-    rmsWindowSize: number;
-    pitchConfidence: number;
-    minNoteDuration: number;
-  };
-  onMethodChange: (method: 'original' | 'enhanced' | 'both') => void;
-  onParamsChange: (params: Partial<typeof analysisParams>) => void;
+  analysisMethod: AnalysisMethod;
+  analysisParams: AnalysisParams;
+  onMethodChange: (method: AnalysisMethod) => void;
+  onParamsChange: (params: Partial<AnalysisParams>) => void;
   isAnalyzing?: boolean;
 }
 
@@ -31,7 +25,7 @@ export function AnalysisMethodControls({
   onParamsChange,
   isAnalyzing = false
 }: AnalysisMethodControlsProps) {
-  const handleParamChange = (key: string, value: number | number[]) => {
+  const handleParamChange = (key: keyof AnalysisParams, value: number | number[]) => {
     onParamsChange({
       [key]: Array.isArray(value) ? value[0] : value
     });

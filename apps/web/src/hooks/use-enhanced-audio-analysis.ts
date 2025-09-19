@@ -2,37 +2,20 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { trpc } from '@/lib/trpc';
 import { AudioAnalysisDataForTrack } from '@/types/stem-audio-analysis';
 import { WaveformData, FeatureMarker } from '@/components/stem-visualization/stem-waveform';
+import { AnalysisParams, AnalysisMethod, TransientData, ChromaData, RMSData } from '@/types/audio-analysis';
+import { useCachedStemAnalysis } from './use-cached-stem-analysis';
 
 interface EnhancedAnalysisData {
   // Original analysis data
   original: AudioAnalysisDataForTrack;
   
   // New analysis data
-  transients: Array<{
-    time: number;
-    intensity: number;
-    frequency: number;
-  }>;
-  chroma: Array<{
-    time: number;
-    pitch: number;
-    confidence: number;
-    note: string;
-  }>;
-  rms: Array<{
-    time: number;
-    value: number;
-  }>;
+  transients: TransientData[];
+  chroma: ChromaData[];
+  rms: RMSData[];
   
   // Analysis parameters used
-  analysisParams: {
-    transientThreshold: number;
-    onsetThreshold: number;
-    chromaSmoothing: number;
-    rmsWindowSize: number;
-    pitchConfidence: number;
-    minNoteDuration: number;
-  };
+  analysisParams: AnalysisParams;
 }
 
 interface CachedEnhancedAnalysis {
@@ -61,19 +44,12 @@ interface UseEnhancedAudioAnalysis {
   isLoading: boolean;
   error: string | null;
   analysisProgress: Record<string, AnalysisProgress | null>;
-  analysisMethod: 'original' | 'enhanced' | 'both';
-  analysisParams: {
-    transientThreshold: number;
-    onsetThreshold: number;
-    chromaSmoothing: number;
-    rmsWindowSize: number;
-    pitchConfidence: number;
-    minNoteDuration: number;
-  };
+  analysisMethod: AnalysisMethod;
+  analysisParams: AnalysisParams;
   loadAnalysis: (fileIds: string[], stemType?: string) => Promise<void>;
   analyzeAudioBuffer: (fileId: string, audioBuffer: AudioBuffer, stemType: string) => void;
-  setAnalysisMethod: (method: 'original' | 'enhanced' | 'both') => void;
-  updateAnalysisParams: (params: Partial<typeof analysisParams>) => void;
+  setAnalysisMethod: (method: AnalysisMethod) => void;
+  updateAnalysisParams: (params: Partial<AnalysisParams>) => void;
   getFeatureValue: (fileId: string, feature: string, time: number) => number;
 }
 
@@ -82,8 +58,8 @@ export function useEnhancedAudioAnalysis(): UseEnhancedAudioAnalysis {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [analysisProgress, setAnalysisProgress] = useState<Record<string, AnalysisProgress | null>>({});
-  const [analysisMethod, setAnalysisMethod] = useState<'original' | 'enhanced' | 'both'>('both');
-  const [analysisParams, setAnalysisParams] = useState({
+  const [analysisMethod, setAnalysisMethod] = useState<AnalysisMethod>('both');
+  const [analysisParams, setAnalysisParams] = useState<AnalysisParams>({
     transientThreshold: 0.3,
     onsetThreshold: 0.2,
     chromaSmoothing: 0.8,
@@ -93,6 +69,7 @@ export function useEnhancedAudioAnalysis(): UseEnhancedAudioAnalysis {
   });
 
   const workerRef = useRef<Worker | null>(null);
+  const cachedStemAnalysis = useCachedStemAnalysis();
 
   // Initialize worker
   useEffect(() => {
@@ -160,7 +137,7 @@ export function useEnhancedAudioAnalysis(): UseEnhancedAudioAnalysis {
   }, [analysisParams]);
 
   // Process enhanced analysis result
-  const processEnhancedAnalysis = useCallback((result: any, params: typeof analysisParams): EnhancedAnalysisData => {
+  const processEnhancedAnalysis = useCallback((result: any, params: AnalysisParams): EnhancedAnalysisData => {
     // Extract original analysis data
     const original: AudioAnalysisDataForTrack = {
       features: result.analysisData.features || [],
@@ -199,40 +176,28 @@ export function useEnhancedAudioAnalysis(): UseEnhancedAudioAnalysis {
     setError(null);
 
     try {
-      // Load original analysis
-      const originalAnalysis = await trpc.stem.getCachedAnalysis.query({
-        fileIds,
-        stemType
-      });
-
-      // Load enhanced analysis if available
-      const enhancedAnalysis = await trpc.audioAnalysisSandbox.getSandboxAnalysis.query({
-        fileId: fileIds[0], // For now, just get the first file
-        stemType: stemType || 'master'
-      });
-
-      // Combine the analyses
-      const combinedAnalysis: CachedEnhancedAnalysis[] = originalAnalysis.map(orig => {
-        const enhanced = enhancedAnalysis?.fileMetadataId === orig.fileMetadataId ? enhancedAnalysis : null;
-        
-        return {
-          id: orig.id,
-          fileMetadataId: orig.fileMetadataId,
-          stemType: orig.stemType,
-          analysisData: {
-            original: orig.analysisData,
-            transients: enhanced?.analysisData?.transients || [],
-            chroma: enhanced?.analysisData?.chroma || [],
-            rms: enhanced?.analysisData?.rms || [],
-            analysisParams
-          },
-          waveformData: orig.waveformData,
-          metadata: {
-            ...orig.metadata,
-            analysisMethod: enhanced ? 'both' : 'original'
-          }
-        };
-      });
+      // For now, just use the original analysis and add empty enhanced data
+      // This will be properly implemented when the tRPC endpoints are working
+      const originalAnalysis = cachedStemAnalysis.cachedAnalysis;
+      
+      // Create enhanced analysis structure
+      const combinedAnalysis: CachedEnhancedAnalysis[] = originalAnalysis.map((orig: any) => ({
+        id: orig.id,
+        fileMetadataId: orig.fileMetadataId,
+        stemType: orig.stemType,
+        analysisData: {
+          original: orig.analysisData,
+          transients: [],
+          chroma: [],
+          rms: [],
+          analysisParams
+        },
+        waveformData: orig.waveformData,
+        metadata: {
+          ...orig.metadata,
+          analysisMethod: 'original' as const
+        }
+      }));
 
       setCachedAnalysis(combinedAnalysis);
     } catch (err) {
@@ -241,7 +206,7 @@ export function useEnhancedAudioAnalysis(): UseEnhancedAudioAnalysis {
     } finally {
       setIsLoading(false);
     }
-  }, [analysisParams]);
+  }, [analysisParams, cachedStemAnalysis.cachedAnalysis]);
 
   // Analyze audio buffer with enhanced analysis
   const analyzeAudioBuffer = useCallback((fileId: string, audioBuffer: AudioBuffer, stemType: string) => {
@@ -312,7 +277,7 @@ export function useEnhancedAudioAnalysis(): UseEnhancedAudioAnalysis {
   }, [cachedAnalysis, analysisMethod]);
 
   // Update analysis parameters
-  const updateAnalysisParams = useCallback((newParams: Partial<typeof analysisParams>) => {
+  const updateAnalysisParams = useCallback((newParams: Partial<AnalysisParams>) => {
     setAnalysisParams(prev => ({ ...prev, ...newParams }));
   }, []);
 
