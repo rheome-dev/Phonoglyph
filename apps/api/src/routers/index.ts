@@ -8,6 +8,7 @@ import { fileRouter } from './file';
 import { midiRouter } from './midi';
 import { stemRouter } from './stem';
 import { autoSaveRouter } from './auto-save';
+import { audioAnalysisSandboxRouter } from './audio-analysis-sandbox';
 
 export const appRouter = router({
   health: healthRouter,
@@ -19,6 +20,7 @@ export const appRouter = router({
   midi: midiRouter,
   stem: stemRouter,
   autoSave: autoSaveRouter,
+  audioAnalysisSandbox: audioAnalysisSandboxRouter,
 });
 
 export type AppRouter = typeof appRouter; 
