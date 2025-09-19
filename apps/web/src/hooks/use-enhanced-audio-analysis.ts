@@ -197,9 +197,6 @@ export function useEnhancedAudioAnalysis(): UseEnhancedAudioAnalysis {
 
       setCachedAnalysis(combinedAnalysis);
       
-      // Now trigger enhanced analysis for each file
-      // We need to get the audio buffers from the stem audio controller
-      // This will be handled by the creative visualizer calling analyzeAudioBuffer
       console.log('Enhanced analysis structure created, ready for audio buffer analysis');
     } catch (err) {
       console.error('Failed to load analysis:', err);
@@ -216,10 +213,19 @@ export function useEnhancedAudioAnalysis(): UseEnhancedAudioAnalysis {
       return;
     }
 
-    // Check if enhanced analysis already exists or is in progress
-    const hasEnhancedAnalysis = cachedAnalysis.some(a => a.fileMetadataId === fileId);
-    if (hasEnhancedAnalysis || analysisProgress[fileId]) {
-      console.log('🎵 Skipping enhanced analysis - already cached or in progress:', fileId);
+    // Check if enhanced analysis is already in progress
+    if (analysisProgress[fileId]) {
+      console.log('🎵 Skipping enhanced analysis - already in progress:', fileId);
+      return;
+    }
+
+    // Check if enhanced analysis already has real data (not just empty arrays)
+    const existingAnalysis = cachedAnalysis.find(a => a.fileMetadataId === fileId);
+    if (existingAnalysis && 
+        existingAnalysis.analysisData.transients.length > 0 && 
+        existingAnalysis.analysisData.chroma.length > 0 && 
+        existingAnalysis.analysisData.rms.length > 0) {
+      console.log('🎵 Skipping enhanced analysis - already has real data:', fileId);
       return;
     }
 
