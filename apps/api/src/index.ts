@@ -69,7 +69,9 @@ const corsOptions = {
         ...allowedOrigins,
         // Add specific Vercel frontend URLs as fallbacks
         'https://phonoglyph.rheome.tools',
-        'https://phonoglyph.vercel.app'
+        'https://phonoglyph.vercel.app',
+        // Allow Vercel preview URLs for experimental branches
+        /^https:\/\/phonoglyph-.*\.vercel\.app$/
       ]
     : ['http://localhost:3000', 'http://127.0.0.1:3000'], // Allow specific origins in development
   credentials: true,
