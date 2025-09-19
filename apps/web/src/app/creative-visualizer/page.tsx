@@ -1675,10 +1675,10 @@ function CreativeVisualizerPage() {
                     activeTrackId={activeTrackId}
                     soloedStems={stemAudio.soloedStems}
                     onToggleSolo={stemAudio.toggleStemSolo}
-                    analysisProgress={cachedStemAnalysis.analysisProgress}
-                    cachedAnalysis={cachedStemAnalysis.cachedAnalysis}
-                    stemLoadingState={cachedStemAnalysis.isLoading}
-                    stemError={cachedStemAnalysis.error}
+                    analysisProgress={enhancedAudioAnalysis.analysisProgress}
+                    cachedAnalysis={enhancedAudioAnalysis.cachedAnalysis}
+                    stemLoadingState={enhancedAudioAnalysis.isLoading}
+                    stemError={enhancedAudioAnalysis.error}
                     isPlaying={isPlaying}
                     onSeek={setCurrentTime}
                     className="bg-stone-800 border border-gray-700"

@@ -39,69 +39,52 @@ const FeatureNode = ({
       return;
     }
 
-    // Map feature ID to analysis key
-    const getAnalysisKey = (featureId: string): string => {
+    // Map feature ID to enhanced analysis data
+    const getEnhancedFeatureValue = (featureId: string, time: number): number => {
       const parts = featureId.split('-');
       if (parts.length >= 2) {
         const featureName = parts.slice(1).join('-');
-        const featureMapping: Record<string, string> = {
-          'impact': 'energy',
-          'brightness': 'spectralCentroid',
-          'harshness': 'spectralRolloff', // Using spectralRolloff as proxy for harshness
-          'volume': 'rms', // Map volume to RMS for now
-          'noisiness': 'zcr',
-          'warmth': 'spectralCentroid', // Using spectralCentroid as proxy for warmth (lower = warmer)
-          'pitch-height': 'spectralCentroid', // Using spectralCentroid as proxy for pitch height
-          'harmonic-content': 'spectralFlatness', // Using spectralFlatness as proxy for harmonic content
-          'loudness': 'loudness',
-          'expression': 'rms', // Using RMS as proxy for expression
-          'texture': 'zcr', // Using ZCR as proxy for texture
-          'rms': 'rms', // Direct mapping for RMS
-          'spectral-rolloff': 'spectralRolloff',
-          'spectral-flatness': 'spectralFlatness',
-          'spectral-spread': 'spectralSpread',
-          'perceptual-spread': 'perceptualSpread',
-          'perceptual-sharpness': 'perceptualSharpness',
-        };
-        return featureMapping[featureName] || featureName;
+        
+        // Enhanced analysis features
+        switch (featureName) {
+          case 'impact':
+            const transient = analysis.analysisData.transients.find((t: any) => Math.abs(t.time - time) < 0.1);
+            return transient?.intensity || 0;
+          
+          case 'pitch-height':
+            const pitch = analysis.analysisData.chroma.find((c: any) => Math.abs(c.time - time) < 0.1);
+            return pitch?.pitch || 0;
+          
+          case 'brightness':
+            const chroma = analysis.analysisData.chroma.find((c: any) => Math.abs(c.time - time) < 0.1);
+            return chroma?.confidence || 0;
+          
+          case 'rms':
+          case 'volume':
+          case 'loudness':
+            const rms = analysis.analysisData.rms.find((r: any) => Math.abs(r.time - time) < 0.1);
+            return rms?.value || 0;
+          
+          // Fall back to original analysis for other features
+          default:
+            if (analysis.analysisData.original && analysis.analysisData.original[featureName]) {
+              const featureData = analysis.analysisData.original[featureName];
+              if (Array.isArray(featureData) && featureData.length > 0) {
+                const timeIndex = Math.round(time * 10); // Assuming 10fps data
+                return featureData[timeIndex] || 0;
+              }
+            }
+            return 0;
+        }
       }
-      return featureId;
+      return 0;
     };
 
-    const analysisKey = getAnalysisKey(feature.id);
-    const featureData = analysis.analysisData[analysisKey];
+    const featureValue = getEnhancedFeatureValue(feature.id, currentTime);
     
-
+    // Normalize value to 0-1 range for display
+    const normalizedValue = Math.max(0, Math.min(1, featureValue));
     
-    if (!featureData || !Array.isArray(featureData) || featureData.length === 0) {
-      setLiveValue(0);
-      setIsActive(false);
-      return;
-    }
-
-    // Calculate current value based on time
-    const analysisDuration = analysis.metadata.duration;
-    const progress = Math.max(0, Math.min(currentTime / analysisDuration, 1));
-    
-    // Convert time-based progress to frame-based index
-    // Use consistent hop size and sample rate for accurate timing
-    const hopSize = 512; // samples per frame
-    const sampleRate = 44100; // Hz
-    const frameTime = hopSize / sampleRate; // seconds per frame
-    
-    // Calculate frame index based on current time
-    const frameIndex = Math.floor(currentTime / frameTime);
-    const nextFrameIndex = Math.min(frameIndex + 1, featureData.length - 1);
-    
-    // Interpolate between frames for smooth values
-    const frameProgress = (currentTime % frameTime) / frameTime;
-    const currentValue = featureData[frameIndex] || 0;
-    const nextValue = featureData[nextFrameIndex] || currentValue;
-    
-    const value = currentValue + (nextValue - currentValue) * frameProgress;
-    
-    // Values from audio analysis are already normalized between 0-1
-    const normalizedValue = Math.max(0, Math.min(1, value));
     setLiveValue(normalizedValue);
     setIsActive(isPlaying && normalizedValue > 0.1); // Active if playing and has significant value
   }, [feature, currentTime, cachedAnalysis, isPlaying]);
