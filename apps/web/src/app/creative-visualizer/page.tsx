@@ -22,7 +22,6 @@ import { ProjectCreationModal } from '@/components/projects/project-creation-mod
 import { useStemAudioController } from '@/hooks/use-stem-audio-controller';
 import { useCachedStemAnalysis } from '@/hooks/use-cached-stem-analysis';
 import { useEnhancedAudioAnalysis } from '@/hooks/use-enhanced-audio-analysis';
-import { AnalysisMethodControls } from '@/components/audio-analysis/analysis-method-controls';
 import { PortalModal } from '@/components/ui/portal-modal';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
@@ -529,8 +528,9 @@ function CreativeVisualizerPage() {
     if (availableStems.length > 0) {
       const stemIds = availableStems.map(stem => stem.id);
       cachedStemAnalysis.loadAnalysis(stemIds);
+      enhancedAudioAnalysis.loadAnalysis(stemIds);
     }
-  }, [availableStems.length]);
+  }, [availableStems.length, cachedStemAnalysis, enhancedAudioAnalysis]);
 
 
 
@@ -1437,21 +1437,12 @@ function CreativeVisualizerPage() {
         <div className="flex h-screen bg-stone-800 text-white min-w-0 creative-visualizer-text">
           <CollapsibleSidebar>
             <div className="space-y-4">
-              {/* Audio Analysis Pipeline Controls */}
-              <AnalysisMethodControls
-                analysisMethod={enhancedAudioAnalysis.analysisMethod}
-                analysisParams={enhancedAudioAnalysis.analysisParams}
-                onMethodChange={enhancedAudioAnalysis.setAnalysisMethod}
-                onParamsChange={enhancedAudioAnalysis.updateAnalysisParams}
-                isAnalyzing={enhancedAudioAnalysis.isLoading}
-              />
-              
               <MappingSourcesPanel 
                 activeTrackId={activeTrackId || undefined}
                 className="mb-4"
                 selectedStemType={selectedStemType}
                 currentTime={currentTime}
-                cachedAnalysis={enhancedAudioAnalysis.cachedAnalysis.length > 0 ? enhancedAudioAnalysis.cachedAnalysis : cachedStemAnalysis.cachedAnalysis}
+                cachedAnalysis={enhancedAudioAnalysis.cachedAnalysis}
                 isPlaying={isPlaying}
               />
               <FileSelector 

@@ -44,11 +44,9 @@ interface UseEnhancedAudioAnalysis {
   isLoading: boolean;
   error: string | null;
   analysisProgress: Record<string, AnalysisProgress | null>;
-  analysisMethod: AnalysisMethod;
   analysisParams: AnalysisParams;
   loadAnalysis: (fileIds: string[], stemType?: string) => Promise<void>;
   analyzeAudioBuffer: (fileId: string, audioBuffer: AudioBuffer, stemType: string) => void;
-  setAnalysisMethod: (method: AnalysisMethod) => void;
   updateAnalysisParams: (params: Partial<AnalysisParams>) => void;
   getFeatureValue: (fileId: string, feature: string, time: number) => number;
 }
@@ -58,7 +56,6 @@ export function useEnhancedAudioAnalysis(): UseEnhancedAudioAnalysis {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [analysisProgress, setAnalysisProgress] = useState<Record<string, AnalysisProgress | null>>({});
-  const [analysisMethod, setAnalysisMethod] = useState<AnalysisMethod>('both');
   const [analysisParams, setAnalysisParams] = useState<AnalysisParams>({
     transientThreshold: 0.3,
     onsetThreshold: 0.2,
@@ -238,43 +235,50 @@ export function useEnhancedAudioAnalysis(): UseEnhancedAudioAnalysis {
     }, [channelData.buffer]);
   }, [cachedAnalysis, analysisProgress, analysisParams]);
 
-  // Get feature value based on analysis method
+  // Get feature value using enhanced analysis
   const getFeatureValue = useCallback((fileId: string, feature: string, time: number): number => {
     const analysis = cachedAnalysis.find(a => a.fileMetadataId === fileId);
     if (!analysis) return 0;
 
     const { analysisData } = analysis;
 
-    // Route to appropriate analysis based on method and feature
-    if (analysisMethod === 'enhanced' || analysisMethod === 'both') {
-      switch (feature) {
-        case 'transients':
-          const transient = analysisData.transients.find(t => Math.abs(t.time - time) < 0.1);
-          return transient?.intensity || 0;
-        
-        case 'chroma':
-          const chroma = analysisData.chroma.find(c => Math.abs(c.time - time) < 0.1);
-          return chroma?.confidence || 0;
-        
-        case 'rms':
-          const rms = analysisData.rms.find(r => Math.abs(r.time - time) < 0.1);
-          return rms?.value || 0;
-        
-        case 'pitch':
-          const pitch = analysisData.chroma.find(c => Math.abs(c.time - time) < 0.1);
-          return pitch?.pitch || 0;
-      }
+    // Map enhanced analysis features to existing audio features
+    switch (feature) {
+      // Transient-based features
+      case 'impact':
+        const transient = analysisData.transients.find(t => Math.abs(t.time - time) < 0.1);
+        return transient?.intensity || 0;
+      
+      // Chroma-based features  
+      case 'pitch-height':
+        const pitch = analysisData.chroma.find(c => Math.abs(c.time - time) < 0.1);
+        return pitch?.pitch || 0;
+      
+      case 'brightness':
+        const chroma = analysisData.chroma.find(c => Math.abs(c.time - time) < 0.1);
+        return chroma?.confidence || 0;
+      
+      // RMS-based features
+      case 'rms':
+      case 'volume':
+      case 'loudness':
+        const rms = analysisData.rms.find(r => Math.abs(r.time - time) < 0.1);
+        return rms?.value || 0;
+      
+      // Fall back to original analysis for other features
+      default:
+        // Use original analysis data if available
+        if (analysisData.original && analysisData.original[feature]) {
+          const featureData = analysisData.original[feature];
+          if (Array.isArray(featureData) && featureData.length > 0) {
+            // Find the closest time point
+            const timeIndex = Math.round(time * 10); // Assuming 10fps data
+            return featureData[timeIndex] || 0;
+          }
+        }
+        return 0;
     }
-
-    // Fall back to original analysis
-    if (analysisMethod === 'original' || analysisMethod === 'both') {
-      // Use existing feature extraction logic
-      // This would integrate with the existing useFeatureValue hook
-      return 0; // Placeholder - would implement original feature extraction
-    }
-
-    return 0;
-  }, [cachedAnalysis, analysisMethod]);
+  }, [cachedAnalysis]);
 
   // Update analysis parameters
   const updateAnalysisParams = useCallback((newParams: Partial<AnalysisParams>) => {
@@ -286,11 +290,9 @@ export function useEnhancedAudioAnalysis(): UseEnhancedAudioAnalysis {
     isLoading,
     error,
     analysisProgress,
-    analysisMethod,
     analysisParams,
     loadAnalysis,
     analyzeAudioBuffer,
-    setAnalysisMethod,
     updateAnalysisParams,
     getFeatureValue
   };
