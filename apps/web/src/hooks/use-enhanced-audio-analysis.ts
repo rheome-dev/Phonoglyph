@@ -232,19 +232,22 @@ export function useEnhancedAudioAnalysis(): UseEnhancedAudioAnalysis {
     console.log('Starting enhanced analysis for:', fileId, stemType);
     setAnalysisProgress(prev => ({ ...prev, [fileId]: { progress: 0, message: 'Queued for enhanced analysis...' } }));
     
+    // Create a copy of the channel data to avoid ArrayBuffer detachment issues
     const channelData = audioBuffer.getChannelData(0);
+    const channelDataCopy = new Float32Array(channelData);
+    
     workerRef.current.postMessage({
       type: 'ANALYZE_BUFFER',
       data: { 
         fileId, 
-        channelData,
+        channelData: channelDataCopy,
         sampleRate: audioBuffer.sampleRate,
         duration: audioBuffer.duration,
         stemType,
         analysisParams, // Pass the enhanced analysis parameters
         enhancedAnalysis: true // Flag to indicate enhanced analysis
       }
-    }, [channelData.buffer]);
+    }, [channelDataCopy.buffer]);
   }, [cachedAnalysis, analysisProgress, analysisParams]);
 
   // Get feature value using enhanced analysis
