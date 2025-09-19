@@ -173,7 +173,7 @@ export function useEnhancedAudioAnalysis(): UseEnhancedAudioAnalysis {
     setError(null);
 
     try {
-      // Start with original analysis as base
+      // Start with original analysis as base - get current value without dependency
       const originalAnalysis = cachedStemAnalysis.cachedAnalysis;
       
       // Create enhanced analysis structure with original data
@@ -204,7 +204,7 @@ export function useEnhancedAudioAnalysis(): UseEnhancedAudioAnalysis {
     } finally {
       setIsLoading(false);
     }
-  }, [analysisParams, cachedStemAnalysis.cachedAnalysis]);
+  }, [analysisParams]);
 
   // Analyze audio buffer with enhanced analysis
   const analyzeAudioBuffer = useCallback((fileId: string, audioBuffer: AudioBuffer, stemType: string) => {

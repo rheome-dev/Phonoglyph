@@ -532,7 +532,7 @@ function CreativeVisualizerPage() {
       cachedStemAnalysis.loadAnalysis(stemIds);
       enhancedAudioAnalysis.loadAnalysis(stemIds);
     }
-  }, [availableStems.length, cachedStemAnalysis, enhancedAudioAnalysis]);
+  }, [availableStems.length]); // Only depend on stem count, not the analysis functions
 
 
 
