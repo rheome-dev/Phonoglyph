@@ -135,34 +135,59 @@ export function useEnhancedAudioAnalysis(): UseEnhancedAudioAnalysis {
 
   // Process enhanced analysis result
   const processEnhancedAnalysis = useCallback((result: any, params: AnalysisParams): EnhancedAnalysisData => {
-    // Extract original analysis data
-    const original: AudioAnalysisDataForTrack = {
-      features: result.analysisData.features || [],
-      markers: result.analysisData.markers || [],
-      frequencies: result.analysisData.frequencies || [],
-      timeData: result.analysisData.timeData || [],
-      volume: result.analysisData.volume || [],
-      bass: result.analysisData.bass || [],
-      mid: result.analysisData.mid || [],
-      treble: result.analysisData.treble || [],
-      stereoWindow_left: result.analysisData.stereoWindow_left || [],
-      stereoWindow_right: result.analysisData.stereoWindow_right || [],
-      fft: result.analysisData.fft || [],
-      fftFrequencies: result.analysisData.fftFrequencies || [],
-    };
+    // For enhanced analysis, the result structure is different
+    if (result.transients && result.chroma && result.rms) {
+      // This is enhanced analysis result
+      return {
+        original: {
+          features: [],
+          markers: [],
+          frequencies: new Float32Array(0),
+          timeData: new Float32Array(0),
+          volume: new Float32Array(0),
+          bass: new Float32Array(0),
+          mid: new Float32Array(0),
+          treble: new Float32Array(0),
+          stereoWindow_left: new Float32Array(0),
+          stereoWindow_right: new Float32Array(0),
+          fft: new Float32Array(0),
+          fftFrequencies: new Float32Array(0),
+        },
+        transients: result.transients || [],
+        chroma: result.chroma || [],
+        rms: result.rms || [],
+        analysisParams: params
+      };
+    } else {
+      // This is regular analysis result - extract original analysis data
+      const original: AudioAnalysisDataForTrack = {
+        features: result.analysisData?.features || [],
+        markers: result.analysisData?.markers || [],
+        frequencies: result.analysisData?.frequencies || [],
+        timeData: result.analysisData?.timeData || [],
+        volume: result.analysisData?.volume || [],
+        bass: result.analysisData?.bass || [],
+        mid: result.analysisData?.mid || [],
+        treble: result.analysisData?.treble || [],
+        stereoWindow_left: result.analysisData?.stereoWindow_left || [],
+        stereoWindow_right: result.analysisData?.stereoWindow_right || [],
+        fft: result.analysisData?.fft || [],
+        fftFrequencies: result.analysisData?.fftFrequencies || [],
+      };
 
-    // Extract new analysis data
-    const transients = result.analysisData.transients || [];
-    const chroma = result.analysisData.chroma || [];
-    const rms = result.analysisData.rms || [];
+      // Extract enhanced analysis data
+      const transients = result.analysisData?.transients || [];
+      const chroma = result.analysisData?.chroma || [];
+      const rms = result.analysisData?.rms || [];
 
-    return {
-      original,
-      transients,
-      chroma,
-      rms,
-      analysisParams: params
-    };
+      return {
+        original,
+        transients,
+        chroma,
+        rms,
+        analysisParams: params
+      };
+    }
   }, []);
 
   // Load analysis from cache
@@ -232,9 +257,10 @@ export function useEnhancedAudioAnalysis(): UseEnhancedAudioAnalysis {
     console.log('Starting enhanced analysis for:', fileId, stemType);
     setAnalysisProgress(prev => ({ ...prev, [fileId]: { progress: 0, message: 'Queued for enhanced analysis...' } }));
     
-    // Create a copy of the channel data to avoid ArrayBuffer detachment issues
+    // Create a completely independent copy of the channel data to avoid ArrayBuffer detachment issues
     const channelData = audioBuffer.getChannelData(0);
-    const channelDataCopy = new Float32Array(channelData);
+    const channelDataCopy = new Float32Array(channelData.length);
+    channelDataCopy.set(channelData);
     
     workerRef.current.postMessage({
       type: 'ANALYZE_BUFFER',

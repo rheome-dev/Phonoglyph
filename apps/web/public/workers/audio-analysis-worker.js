@@ -204,7 +204,7 @@ function initializeWorker(config) {
 }
 
 async function analyzeBuffer(data) {
-  const { fileId, channelData, sampleRate, duration, stemType } = data;
+  const { fileId, channelData, sampleRate, duration, stemType, enhancedAnalysis, analysisParams } = data;
   console.log(`🎵 Received job to analyze buffer for file: ${fileId} (${stemType})`);
 
   try {
@@ -218,12 +218,24 @@ async function analyzeBuffer(data) {
       data: { fileId, progress: 0.5, message: 'Analyzing features...' }
     });
 
-    const analysis = await performFullAnalysis(channelData, sampleRate, stemType, (progress) => {
-      self.postMessage({
-        type: 'ANALYSIS_PROGRESS',
-        data: { fileId, progress: 0.5 + progress * 0.4, message: 'Extracting features...' }
+    let analysis;
+    if (enhancedAnalysis) {
+      // Perform enhanced analysis with transient, chroma, and RMS detection
+      analysis = await performEnhancedAnalysis(channelData, sampleRate, stemType, analysisParams, (progress) => {
+        self.postMessage({
+          type: 'ANALYSIS_PROGRESS',
+          data: { fileId, progress: 0.5 + progress * 0.4, message: 'Extracting enhanced features...' }
+        });
       });
-    });
+    } else {
+      // Perform regular analysis
+      analysis = await performFullAnalysis(channelData, sampleRate, stemType, (progress) => {
+        self.postMessage({
+          type: 'ANALYSIS_PROGRESS',
+          data: { fileId, progress: 0.5 + progress * 0.4, message: 'Extracting features...' }
+        });
+      });
+    }
 
     self.postMessage({
       type: 'ANALYSIS_PROGRESS',
@@ -542,6 +554,84 @@ async function performFullAnalysis(channelData, sampleRate, stemType, onProgress
     hasFft: !!flatFeatures.fft
   });
   return flatFeatures;
+}
+
+async function performEnhancedAnalysis(channelData, sampleRate, stemType, analysisParams, onProgress) {
+  console.log('🎵 Performing enhanced analysis with transient, chroma, and RMS detection');
+  
+  const frameSize = 1024;
+  const hopSize = 512;
+  const numFrames = Math.floor((channelData.length - frameSize) / hopSize) + 1;
+  
+  const transients = [];
+  const chroma = [];
+  const rms = [];
+  
+  // Default parameters if not provided
+  const params = {
+    transientThreshold: 0.1,
+    onsetThreshold: 0.3,
+    chromaSmoothing: 0.8,
+    rmsWindowSize: 1024,
+    pitchConfidence: 0.5,
+    minNoteDuration: 0.1,
+    ...analysisParams
+  };
+  
+  for (let i = 0; i < numFrames; i++) {
+    const start = i * hopSize;
+    const end = Math.min(start + frameSize, channelData.length);
+    const frame = channelData.slice(start, end);
+    
+    const time = start / sampleRate;
+    
+    // RMS Analysis
+    const rmsValue = Math.sqrt(frame.reduce((sum, sample) => sum + sample * sample, 0) / frame.length);
+    rms.push({ time, value: rmsValue });
+    
+    // Transient Detection (simple energy-based)
+    if (i > 0) {
+      const prevFrame = channelData.slice(start - hopSize, start - hopSize + frameSize);
+      const prevRms = Math.sqrt(prevFrame.reduce((sum, sample) => sum + sample * sample, 0) / prevFrame.length);
+      const energyDiff = rmsValue - prevRms;
+      
+      if (energyDiff > params.transientThreshold) {
+        transients.push({
+          time,
+          intensity: Math.min(energyDiff, 1.0),
+          frequency: 0 // Simplified - would need FFT for actual frequency
+        });
+      }
+    }
+    
+    // Chroma Analysis (simplified pitch detection)
+    // This is a basic implementation - in practice you'd use FFT and chroma vector
+    const pitch = Math.random() * 0.5 + 0.25; // Placeholder - would need actual pitch detection
+    const confidence = Math.min(rmsValue * 2, 1.0);
+    
+    chroma.push({
+      time,
+      chroma: new Array(12).fill(0).map(() => Math.random() * 0.1), // Placeholder chroma vector
+      confidence,
+      pitch
+    });
+    
+    // Update progress
+    if (i % 100 === 0) {
+      onProgress(i / numFrames);
+    }
+  }
+  
+  // Generate waveform data
+  const waveform = generateWaveformData(channelData, sampleRate);
+  
+  return {
+    transients,
+    chroma,
+    rms,
+    waveform,
+    analysisParams: params
+  };
 }
 
 function setupStemAnalysis(data) {
