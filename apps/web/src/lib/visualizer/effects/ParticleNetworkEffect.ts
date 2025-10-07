@@ -209,8 +209,8 @@ export class ParticleNetworkEffect implements VisualEffect {
       new THREE.InstancedBufferAttribute(this.instanceSizes, 1, false)
     );
 
-    // Do NOT initialize with default particles
-    // this.initializeDefaultParticles();
+    // Initialize with a few default particles to make the effect visible
+    this.initializeDefaultParticles();
 
     this.scene.add(this.instancedMesh);
   }
@@ -328,6 +328,11 @@ export class ParticleNetworkEffect implements VisualEffect {
       this.spawnAudioParticles(deltaTime, audioData);
     }
     
+    // Manual testing: spawn particles based on particleSpawning slider
+    if (this.parameters.particleSpawning >= this.parameters.spawnThreshold) {
+      this.spawnManualParticles(deltaTime);
+    }
+    
     // Update existing particles
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const particle = this.particles[i];
@@ -382,6 +387,34 @@ export class ParticleNetworkEffect implements VisualEffect {
         this.particles.push(particle);
         this.lastAudioSpawnTime = currentTime;
       }
+    }
+  }
+  
+  private spawnManualParticles(deltaTime: number) {
+    const currentTime = performance.now() / 1000;
+    
+    // Check cooldown for manual spawning
+    if (currentTime - this.lastAudioSpawnTime < 0.1) { // 100ms cooldown for manual testing
+      return;
+    }
+    
+    // Calculate spawn probability based on how much particleSpawning exceeds threshold
+    const excessAmount = this.parameters.particleSpawning - this.parameters.spawnThreshold;
+    const spawnProbability = Math.min(excessAmount * 2.0, 0.5); // Max 50% chance per frame
+    
+    if (Math.random() < spawnProbability && this.particles.length < this.parameters.maxParticles) {
+      // Create manual test particle
+      const particle = this.createParticle(
+        60, // Default note
+        Math.floor(this.parameters.particleSpawning * 127), // Use slider value as velocity
+        'manual',
+        'audio', // Use audio spawn type for visual distinction
+        'manual',
+        this.parameters.particleSpawning
+      );
+      
+      this.particles.push(particle);
+      this.lastAudioSpawnTime = currentTime;
     }
   }
   
