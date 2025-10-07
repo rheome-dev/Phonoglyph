@@ -80,6 +80,7 @@ export class ParticleNetworkEffect implements VisualEffect {
 
   // Audio spawning state
   private lastAudioSpawnTime: number = 0;
+  private lastManualSpawnTime: number = 0;
   private currentAudioData: AudioAnalysisData | null = null;
 
 
@@ -330,6 +331,12 @@ export class ParticleNetworkEffect implements VisualEffect {
     
     // Manual testing: spawn particles based on particleSpawning slider
     if (this.parameters.particleSpawning >= this.parameters.spawnThreshold) {
+      // Debug log to see if manual spawning condition is met
+      console.log('🌟 Manual spawning condition met:', {
+        particleSpawning: this.parameters.particleSpawning,
+        spawnThreshold: this.parameters.spawnThreshold,
+        condition: this.parameters.particleSpawning >= this.parameters.spawnThreshold
+      });
       this.spawnManualParticles(deltaTime);
     }
     
@@ -394,7 +401,7 @@ export class ParticleNetworkEffect implements VisualEffect {
     const currentTime = performance.now() / 1000;
     
     // Check cooldown for manual spawning
-    if (currentTime - this.lastAudioSpawnTime < 0.1) { // 100ms cooldown for manual testing
+    if (currentTime - this.lastManualSpawnTime < 0.1) { // 100ms cooldown for manual testing
       return;
     }
     
@@ -414,7 +421,16 @@ export class ParticleNetworkEffect implements VisualEffect {
       );
       
       this.particles.push(particle);
-      this.lastAudioSpawnTime = currentTime;
+      this.lastManualSpawnTime = currentTime;
+      
+      // Debug log to see if manual spawning is working
+      console.log('🌟 Manual particle spawned!', {
+        particleSpawning: this.parameters.particleSpawning,
+        spawnThreshold: this.parameters.spawnThreshold,
+        excessAmount,
+        spawnProbability,
+        totalParticles: this.particles.length
+      });
     }
   }
   
