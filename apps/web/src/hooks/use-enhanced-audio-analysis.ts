@@ -140,8 +140,8 @@ export function useEnhancedAudioAnalysis(): UseEnhancedAudioAnalysis {
       // This is enhanced analysis result
       return {
         original: {
-          features: [],
-          markers: [],
+          features: new Float32Array(0),
+          markers: new Float32Array(0),
           frequencies: new Float32Array(0),
           timeData: new Float32Array(0),
           volume: new Float32Array(0),
@@ -161,18 +161,18 @@ export function useEnhancedAudioAnalysis(): UseEnhancedAudioAnalysis {
     } else {
       // This is regular analysis result - extract original analysis data
       const original: AudioAnalysisDataForTrack = {
-        features: result.analysisData?.features || [],
-        markers: result.analysisData?.markers || [],
-        frequencies: result.analysisData?.frequencies || [],
-        timeData: result.analysisData?.timeData || [],
-        volume: result.analysisData?.volume || [],
-        bass: result.analysisData?.bass || [],
-        mid: result.analysisData?.mid || [],
-        treble: result.analysisData?.treble || [],
-        stereoWindow_left: result.analysisData?.stereoWindow_left || [],
-        stereoWindow_right: result.analysisData?.stereoWindow_right || [],
-        fft: result.analysisData?.fft || [],
-        fftFrequencies: result.analysisData?.fftFrequencies || [],
+        features: result.analysisData?.features || new Float32Array(0),
+        markers: result.analysisData?.markers || new Float32Array(0),
+        frequencies: result.analysisData?.frequencies || new Float32Array(0),
+        timeData: result.analysisData?.timeData || new Float32Array(0),
+        volume: result.analysisData?.volume || new Float32Array(0),
+        bass: result.analysisData?.bass || new Float32Array(0),
+        mid: result.analysisData?.mid || new Float32Array(0),
+        treble: result.analysisData?.treble || new Float32Array(0),
+        stereoWindow_left: result.analysisData?.stereoWindow_left || new Float32Array(0),
+        stereoWindow_right: result.analysisData?.stereoWindow_right || new Float32Array(0),
+        fft: result.analysisData?.fft || new Float32Array(0),
+        fftFrequencies: result.analysisData?.fftFrequencies || new Float32Array(0),
       };
 
       // Extract enhanced analysis data
