@@ -542,6 +542,13 @@ function getSliderMax(paramName: string) {
     case 'particleLifetime': return 10;
     case 'particleSize': return 50;
     case 'glowSoftness': return 5;
+    case 'particleSpawning': return 1.0;
+    case 'spawnThreshold': return 1.0;
+    case 'audioSpawnThreshold': return 1.0;
+    case 'audioSpawnRate': return 1.0;
+    case 'audioSpawnCooldown': return 1.0;
+    case 'audioParticleSize': return 50;
+    case 'audioSpawnIntensity': return 2.0;
     default: return 1;
   }
 }
@@ -556,6 +563,13 @@ function getSliderStep(paramName: string) {
     case 'radius': return 0.05;
     case 'threshold': return 0.01;
     case 'glowSoftness': return 0.1;
+    case 'particleSpawning': return 0.01;
+    case 'spawnThreshold': return 0.01;
+    case 'audioSpawnThreshold': return 0.01;
+    case 'audioSpawnRate': return 0.01;
+    case 'audioSpawnCooldown': return 0.01;
+    case 'audioParticleSize': return 0.1;
+    case 'audioSpawnIntensity': return 0.01;
     default: return 0.01;
   }
 } 

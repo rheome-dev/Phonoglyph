@@ -33,12 +33,16 @@ export class ParticleNetworkEffect implements VisualEffect {
     // Audio feature spawning parameters
     enableAudioSpawning: true,
     audioSpawnFeature: 'volume', // 'volume', 'bass', 'mid', 'treble', 'rms', 'spectralCentroid'
-    audioSpawnThreshold: 0.3, // Minimum value to trigger spawning
+    audioSpawnThreshold: 0.3, // Minimum value to trigger spawning (not a modulation destination)
     audioSpawnRate: 0.1, // Probability of spawning per frame when threshold is met
     audioSpawnCooldown: 0.1, // Minimum time between audio spawns (seconds)
     audioParticleSize: 10.0, // Size multiplier for audio-triggered particles
     audioParticleColor: [0.8, 0.4, 1.0], // Purple tint for audio particles
     audioSpawnIntensity: 1.0, // How much audio value affects particle properties
+    
+    // New modulation parameters
+    particleSpawning: 0.0, // Modulation destination for particle spawning (0-1)
+    spawnThreshold: 0.5, // Threshold for when modulation signal spawns particles (not modulation destination)
   };
 
   private scene!: THREE.Scene;
@@ -356,15 +360,15 @@ export class ParticleNetworkEffect implements VisualEffect {
       return;
     }
     
-    // Get the current audio feature value
-    const featureValue = this.getAudioFeatureValue(audioData, this.parameters.audioSpawnFeature);
-    
-    // Check if we should spawn based on threshold
-    if (featureValue >= this.parameters.audioSpawnThreshold) {
-      // Calculate spawn probability
-      const spawnProbability = this.parameters.audioSpawnRate * (featureValue / this.parameters.audioSpawnThreshold);
+    // Check if modulation signal exceeds spawn threshold
+    if (this.parameters.particleSpawning >= this.parameters.spawnThreshold) {
+      // Calculate spawn probability based on modulation signal
+      const spawnProbability = this.parameters.audioSpawnRate * (this.parameters.particleSpawning / this.parameters.spawnThreshold);
       
       if (Math.random() < spawnProbability && this.particles.length < this.parameters.maxParticles) {
+        // Get the current audio feature value for particle properties
+        const featureValue = this.getAudioFeatureValue(audioData, this.parameters.audioSpawnFeature);
+        
         // Create audio-triggered particle
         const particle = this.createParticle(
           60, // Default note for audio particles
@@ -568,6 +572,12 @@ export class ParticleNetworkEffect implements VisualEffect {
         break;
       case 'audioSpawnIntensity':
         this.parameters.audioSpawnIntensity = value;
+        break;
+      case 'particleSpawning':
+        this.parameters.particleSpawning = value;
+        break;
+      case 'spawnThreshold':
+        this.parameters.spawnThreshold = value;
         break;
     }
   }

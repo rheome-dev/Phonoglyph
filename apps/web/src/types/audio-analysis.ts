@@ -26,3 +26,5 @@ export interface RMSData {
 }
 
 export type AnalysisMethod = 'original' | 'enhanced' | 'both';
+
+
