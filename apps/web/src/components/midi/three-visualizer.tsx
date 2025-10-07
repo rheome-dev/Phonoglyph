@@ -208,8 +208,13 @@ export function ThreeVisualizer({
         } // Add more effect types as needed
         if (effect) {
           effectInstancesRef.current[layer.id] = effect;
+          // Add effect with both layer ID and effect ID for parameter mapping
           manager.addEffect(effect);
-          console.log(`[ThreeVisualizer] Added effect instance: ${layer.id} (${layer.effectType})`);
+          // Also add with effect's internal ID for parameter mapping system
+          if (effect.id !== layer.id) {
+            manager.addEffectWithId(effect, effect.id);
+          }
+          console.log(`[ThreeVisualizer] Added effect instance: ${layer.id} (${layer.effectType}) with effect ID: ${effect.id}`);
         }
       }
     }

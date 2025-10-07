@@ -235,6 +235,25 @@ export class VisualizerManager {
     }
   }
   
+  public addEffectWithId(effect: VisualEffect, customId: string) {
+    try {
+      debugLog.log(`🎨 Adding effect with custom ID: ${effect.name} (${customId})`);
+      effect.init(this.scene, this.camera, this.renderer);
+      this.effects.set(customId, effect);
+      
+      // Set initial visibility based on enabled status
+      if (effect.enabled) {
+        this.showEffectInScene(effect);
+      } else {
+        this.hideEffectFromScene(effect);
+      }
+      
+      debugLog.log(`✅ Added effect with custom ID: ${effect.name} (${customId}). Total effects: ${this.effects.size}`);
+    } catch (error) {
+      debugLog.error(`❌ Failed to add effect ${effect.name} with custom ID ${customId}:`, error);
+    }
+  }
+  
   public removeEffect(effectId: string) {
     const effect = this.effects.get(effectId);
     if (effect) {
