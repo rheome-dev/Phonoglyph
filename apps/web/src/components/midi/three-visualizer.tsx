@@ -208,12 +208,10 @@ export function ThreeVisualizer({
           effect = new ParticleNetworkEffect();
         } // Add more effect types as needed
         if (effect) {
-          // Override the effect's internal ID to match the layer ID for consistent parameter mapping
-          effect.id = layer.id;
           effectInstancesRef.current[layer.id] = effect;
-          // Add effect with layer ID
+          // Add effect with its internal ID (e.g., 'particleNetwork', 'metaballs')
           manager.addEffect(effect);
-          console.log(`[ThreeVisualizer] Added effect instance: ${layer.id} (${layer.effectType})`);
+          console.log(`[ThreeVisualizer] Added effect instance: ${layer.id} (${layer.effectType}) with effect ID: ${effect.id}`);
         }
       }
     }

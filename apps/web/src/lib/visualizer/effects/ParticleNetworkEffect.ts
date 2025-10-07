@@ -331,12 +331,6 @@ export class ParticleNetworkEffect implements VisualEffect {
     
     // Manual testing: spawn particles based on particleSpawning slider
     if (this.parameters.particleSpawning >= this.parameters.spawnThreshold) {
-      // Debug log to see if manual spawning condition is met
-      console.log('🌟 Manual spawning condition met:', {
-        particleSpawning: this.parameters.particleSpawning,
-        spawnThreshold: this.parameters.spawnThreshold,
-        condition: this.parameters.particleSpawning >= this.parameters.spawnThreshold
-      });
       this.spawnManualParticles(deltaTime);
     }
     
@@ -422,15 +416,6 @@ export class ParticleNetworkEffect implements VisualEffect {
       
       this.particles.push(particle);
       this.lastManualSpawnTime = currentTime;
-      
-      // Debug log to see if manual spawning is working
-      console.log('🌟 Manual particle spawned!', {
-        particleSpawning: this.parameters.particleSpawning,
-        spawnThreshold: this.parameters.spawnThreshold,
-        excessAmount,
-        spawnProbability,
-        totalParticles: this.particles.length
-      });
     }
   }
   
@@ -632,7 +617,6 @@ export class ParticleNetworkEffect implements VisualEffect {
   }
 
   update(deltaTime: number, audioData: AudioAnalysisData, midiData: LiveMIDIData): void {
-    console.log('🌟 ParticleNetworkEffect.update() called');
     if (!this.uniforms) {
       console.warn('⚠️ Uniforms not initialized in ParticleNetworkEffect.update()');
       return;
