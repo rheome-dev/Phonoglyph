@@ -642,7 +642,25 @@ function CreativeVisualizerPage() {
       description: 'Dynamic particle systems that react to rhythm and pitch',
       category: 'Generative',
       rarity: 'Mythic',
-      parameters: {} // <-- Added
+      parameters: {
+        maxParticles: 50,
+        connectionDistance: 1.0,
+        particleLifetime: 3.0,
+        glowIntensity: 0.6,
+        glowSoftness: 3.0,
+        particleColor: [1.0, 1.0, 1.0],
+        particleSize: 15.0,
+        enableAudioSpawning: true,
+        audioSpawnFeature: 'volume',
+        audioSpawnThreshold: 0.3,
+        audioSpawnRate: 0.1,
+        audioSpawnCooldown: 0.1,
+        audioParticleSize: 10.0,
+        audioParticleColor: [0.8, 0.4, 1.0],
+        audioSpawnIntensity: 1.0,
+        particleSpawning: 0.0,
+        spawnThreshold: 0.5
+      }
     },
     // HUD Overlay Effects
     { 
