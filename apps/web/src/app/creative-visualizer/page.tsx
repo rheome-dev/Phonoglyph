@@ -642,17 +642,7 @@ function CreativeVisualizerPage() {
       description: 'Dynamic particle systems that react to rhythm and pitch',
       category: 'Generative',
       rarity: 'Mythic',
-      parameters: {
-        maxParticles: 50,
-        connectionDistance: 1.0,
-        particleLifetime: 3.0,
-        glowIntensity: 0.6,
-        glowSoftness: 3.0,
-        particleColor: [1.0, 1.0, 1.0],
-        particleSize: 15.0,
-        particleSpawning: 0.0,
-        spawnThreshold: 0.5
-      }
+      parameters: {} // Empty - modal is handled by ThreeVisualizer
     },
     // HUD Overlay Effects
     { 
