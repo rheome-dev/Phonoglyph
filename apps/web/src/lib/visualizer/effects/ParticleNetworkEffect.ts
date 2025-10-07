@@ -632,7 +632,11 @@ export class ParticleNetworkEffect implements VisualEffect {
   }
 
   update(deltaTime: number, audioData: AudioAnalysisData, midiData: LiveMIDIData): void {
-    if (!this.uniforms) return;
+    console.log('🌟 ParticleNetworkEffect.update() called');
+    if (!this.uniforms) {
+      console.warn('⚠️ Uniforms not initialized in ParticleNetworkEffect.update()');
+      return;
+    }
 
     // Store current audio data for particle spawning
     this.currentAudioData = audioData;
