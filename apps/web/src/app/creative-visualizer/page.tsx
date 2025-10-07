@@ -650,14 +650,6 @@ function CreativeVisualizerPage() {
         glowSoftness: 3.0,
         particleColor: [1.0, 1.0, 1.0],
         particleSize: 15.0,
-        enableAudioSpawning: true,
-        audioSpawnFeature: 'volume',
-        audioSpawnThreshold: 0.3,
-        audioSpawnRate: 0.1,
-        audioSpawnCooldown: 0.1,
-        audioParticleSize: 10.0,
-        audioParticleColor: [0.8, 0.4, 1.0],
-        audioSpawnIntensity: 1.0,
         particleSpawning: 0.0,
         spawnThreshold: 0.5
       }
@@ -1198,7 +1190,7 @@ function CreativeVisualizerPage() {
         initialPosition={initialPos}
         bounds="#editor-bounds"
       >
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-4 max-h-96 overflow-y-auto">
           {sortedParams.map(([paramName, value]) => {
             if (typeof value === 'boolean') {
               return (
