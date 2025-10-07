@@ -207,7 +207,12 @@ const DroppableLane: React.FC<{
           onLayerSelect(layer.id);
         }
       }}
-      onDoubleClick={e => { e.stopPropagation(); }}
+      onDoubleClick={e => { 
+        e.stopPropagation(); 
+        if (isEffect) {
+          onEffectClipEdit(layer.id);
+        }
+      }}
     >
       <div className="flex items-center gap-1">
         {isEmptyLane ? (
