@@ -33,7 +33,7 @@ export interface Layer {
   duration: number;
 }
 
-export type EffectType = 'metaballs' | 'particles' | 'midihud' | 'bloom';
+export type EffectType = 'metaballs' | 'particles' | 'particleNetwork' | 'midihud' | 'bloom';
 export type LayerType = 'video' | 'image' | 'effect';
 
 export interface VideoComposition {

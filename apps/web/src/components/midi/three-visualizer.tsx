@@ -203,7 +203,8 @@ export function ThreeVisualizer({
         if (layer.effectType === 'metaballs') {
           console.log('[ThreeVisualizer] Instantiating MetaballsEffect for layer:', layer);
           effect = new MetaballsEffect(layer.settings || {});
-        } else if (layer.effectType === 'particles') { // <-- correct type for ParticleNetworkEffect
+        } else if (layer.effectType === 'particles' || layer.effectType === 'particleNetwork') {
+          console.log('[ThreeVisualizer] Instantiating ParticleNetworkEffect for layer:', layer);
           effect = new ParticleNetworkEffect();
         } // Add more effect types as needed
         if (effect) {
