@@ -895,6 +895,58 @@ function CreativeVisualizerPage() {
   const visualizerRef = useRef<any>(null);
   const animationFrameId = useRef<number>();
 
+  // 🔥 NEW: Helper function to get feature values from time-indexed data
+  const getFeatureValueAtTime = (
+    featureId: string,
+    time: number,
+    analysisData: any
+  ): number | null => {
+    const parts = featureId.split('-');
+    if (parts.length < 2) return null;
+    
+    const [, ...featureParts] = parts; // Remove stem type
+    const featureName = featureParts.join('-');
+    
+    // Map feature names to analysis data
+    switch (featureName) {
+      case 'impact':
+      case 'transient': {
+        const transient = analysisData.transients?.find(
+          (t: any) => Math.abs(t.time - time) < 0.1
+        );
+        return transient?.intensity || 0;
+      }
+      
+      case 'rms':
+      case 'volume':
+      case 'loudness': {
+        const rmsPoint = analysisData.rms?.find(
+          (r: any) => Math.abs(r.time - time) < 0.1
+        );
+        return rmsPoint?.value || 0;
+      }
+      
+      case 'pitch':
+      case 'pitch-height': {
+        const chromaPoint = analysisData.chroma?.find(
+          (c: any) => Math.abs(c.time - time) < 0.1
+        );
+        return chromaPoint?.pitch || 0;
+      }
+      
+      case 'brightness':
+      case 'confidence': {
+        const chromaPoint = analysisData.chroma?.find(
+          (c: any) => Math.abs(c.time - time) < 0.1
+        );
+        return chromaPoint?.confidence || 0;
+      }
+      
+      default:
+        return 0;
+    }
+  };
+
   // Function to convert frontend feature names to backend analysis keys
   const getAnalysisKeyFromFeatureId = (featureId: string): string => {
     // Frontend feature IDs are like "drums-rms-volume", "bass-loudness", etc.
@@ -961,22 +1013,9 @@ function CreativeVisualizerPage() {
 
   // Real-time feature mapping and visualizer update loop
   useEffect(() => {
-    // REMOVED VERBOSE LOGGING - Only log setup and errors
-    // console.log('🎛️ Setting up mapping loop:', {
-    //   isPlaying,
-    //   hasVisualizerRef: !!visualizerRef.current,
-    //   activeTrackId,
-    //   mappingsCount: Object.keys(mappings).length
-    // });
-
-    // Cache analysis data and mappings for performance
     let cachedMappings: [string, string][] = [];
     let lastUpdateTime = 0;
     let frameCount = 0;
-    
-    // Pre-calculate analysis data for better performance
-    let analysisCache: Record<string, any> = {};
-    let lastAnalysisCacheTime = 0;
 
     const animationLoop = () => {
       if (!isPlaying || !visualizerRef.current) {
@@ -984,132 +1023,76 @@ function CreativeVisualizerPage() {
         return;
       }
       
-      // IMPLEMENT 30FPS CAP FOR MAPPING LOOP
+      // 30FPS CAP
       const now = performance.now();
       const elapsed = now - lastUpdateTime;
-      const targetFrameTime = 1000 / 30; // 33.33ms for 30fps
+      const targetFrameTime = 1000 / 30;
       
       if (elapsed < targetFrameTime) {
         animationFrameId.current = requestAnimationFrame(animationLoop);
-        return; // Skip this frame to maintain 30fps cap
+        return;
       }
       
       lastUpdateTime = now;
+      frameCount++;
       
+      // Get current audio time
       const time = stemAudio.currentTime;
       setCurrentTime(time);
       
-      // IMPROVED SYNC CALCULATION
-      // Use a more accurate sync calculation that accounts for all timing factors
-      const measuredLatency = stemAudio.getAudioLatency ? stemAudio.getAudioLatency() : 0;
-      const audioContextTime = stemAudio.getAudioContextTime ? stemAudio.getAudioContextTime() : 0;
+      // Sync calculation (keep your existing code)
+      const audioContextTime = stemAudio.getAudioContextTime?.() || 0;
       const scheduledStartTime = stemAudio.scheduledStartTimeRef?.current || 0;
-      
-      // Calculate the actual audio playback time more accurately
+      const measuredLatency = stemAudio.getAudioLatency?.() || 0;
       const audioPlaybackTime = Math.max(0, audioContextTime - scheduledStartTime);
-      
-      // Apply latency compensation and manual offset
-      const compensatedTime = audioPlaybackTime - measuredLatency + (syncOffsetMs / 1000);
-      const syncTime = Math.max(0, compensatedTime);
+      const syncTime = Math.max(0, audioPlaybackTime - measuredLatency + (syncOffsetMs / 1000));
 
-      // Cache analysis data to avoid repeated lookups
-      // if (!cachedAnalysis || cachedAnalysis.fileMetadataId !== activeTrackId) {
-      //   cachedAnalysis = cachedStemAnalysis.cachedAnalysis.find(a => a.fileMetadataId === activeTrackId);
-      // }
-
-      // Cache mappings to avoid repeated Object.entries calls
+      // Cache mappings
       if (cachedMappings.length !== Object.keys(mappings).length) {
         cachedMappings = Object.entries(mappings).filter(([, featureId]) => featureId !== null) as [string, string][];
       }
 
-      // REMOVED VERBOSE LOGGING - Only log errors
-      frameCount++;
-      const shouldLog = false; // Disable all logging for performance
-
-      if (activeTrackId && cachedStemAnalysis.cachedAnalysis.length > 0) {
-        // Use duration-based proportional indexing for robust sync
-        const analysisDuration = cachedStemAnalysis.cachedAnalysis.find(a => a.fileMetadataId === activeTrackId)?.metadata.duration || 1; // Default to 1 if no analysis
-        
-        // Pre-calculate analysis cache every 100ms to avoid repeated calculations
-        const now = performance.now();
-        if (now - lastAnalysisCacheTime > 100) {
-          analysisCache = {};
-          lastAnalysisCacheTime = now;
-        }
-        
-        // Process all mappings in a single pass for better performance
+      // 🔥 THE FIX: Use enhancedAudioAnalysis instead of cachedStemAnalysis
+      if (enhancedAudioAnalysis.cachedAnalysis.length > 0) {
         for (const [paramKey, featureId] of cachedMappings) {
           if (!featureId) continue;
 
-          // Get the stem type from the feature ID
+          // Parse feature ID: "drums-rms"
           const featureStemType = getStemTypeFromFeatureId(featureId);
-          if (!featureStemType) {
-            continue;
-          }
+          if (!featureStemType) continue;
 
-          // Find the analysis data for the specific stem type of this feature
-          const featureAnalysis = cachedStemAnalysis.cachedAnalysis.find(a => 
-            a.stemType === featureStemType
+          // 🔥 CHANGED: Use enhancedAudioAnalysis
+          const featureAnalysis = enhancedAudioAnalysis.cachedAnalysis.find(
+            a => a.stemType === featureStemType
           );
 
-          if (!featureAnalysis || !featureAnalysis.analysisData) {
-            continue;
-          }
+          if (!featureAnalysis?.analysisData) continue;
 
-          // Convert frontend feature ID to backend analysis key
-          const analysisKey = getAnalysisKeyFromFeatureId(featureId);
-          const featureData = featureAnalysis.analysisData[analysisKey];
+          // 🔥 NEW: Get value using time-based lookup
+          const rawValue = getFeatureValueAtTime(
+            featureId, 
+            syncTime, 
+            featureAnalysis.analysisData
+          );
+
+          if (rawValue === null) continue;
+
+          // Parse parameter key: "metaballs-glowIntensity"
+          const [effectId, ...paramParts] = paramKey.split('-');
+          const paramName = paramParts.join('-');
           
-          if (!featureData || featureData.length === 0) {
-            // Only log errors, not every frame
-            continue;
-          }
+          if (!effectId || !paramName) continue;
 
-          // OPTIMIZED DURATION-BASED INDEXING
-          const analysisDuration = featureAnalysis.metadata.duration;
-          const progress = Math.max(0, Math.min(syncTime / analysisDuration, 1));
-          const index = progress * (featureData.length - 1);
-          const lower = Math.floor(index);
-          const upper = Math.min(lower + 1, featureData.length - 1);
-          const fraction = index - lower;
-          
-          // Use cached interpolation if available
-          const cacheKey = `${featureId}-${lower}-${upper}`;
-          let rawValue: number;
-          
-          if (analysisCache[cacheKey]) {
-            rawValue = analysisCache[cacheKey] + (featureData[upper] - featureData[lower]) * fraction;
-          } else {
-            rawValue = featureData[lower] + (featureData[upper] - featureData[lower]) * fraction;
-            analysisCache[cacheKey] = featureData[lower];
-          }
-
-          const [effectId, paramName] = paramKey.split('-', 2);
-          if (!effectId || !paramName) {
-            continue;
-          }
-
+          // Scale to parameter range
           const maxValue = getSliderMax(paramName);
-          const minValue = 0; 
-          
-          const scaledValue = rawValue * (maxValue - minValue) + minValue;
+          const scaledValue = rawValue * maxValue;
 
-          // OPTIMIZED UPDATE THRESHOLD
-          // Only update if value has changed significantly (reduce unnecessary updates)
-          const currentValue = activeSliderValues[paramKey];
-          const valueChange = Math.abs(scaledValue - (currentValue || 0));
+          // Update visualizer
+          visualizerRef.current.updateEffectParameter(effectId, paramName, scaledValue);
           
-          // Use adaptive threshold based on parameter type for smoother updates
-          const updateThreshold = paramName.includes('speed') || paramName.includes('animation') ? 0.005 : 0.01;
-          
-          if (valueChange > updateThreshold) { // Update if change > threshold
-            // DIRECT VISUALIZER UPDATE - No React state update to reduce latency
-            visualizerRef.current.updateEffectParameter(effectId, paramName, scaledValue);
-            
-            // Batch React state updates to reduce re-renders
-            if (frameCount % 10 === 0) { // Update React state less frequently
-              setActiveSliderValues(prev => ({ ...prev, [paramKey]: scaledValue }));
-            }
+          // Update React state occasionally
+          if (frameCount % 10 === 0) {
+            setActiveSliderValues(prev => ({ ...prev, [paramKey]: scaledValue }));
           }
         }
       }
@@ -1122,11 +1105,15 @@ function CreativeVisualizerPage() {
     return () => {
       if (animationFrameId.current) {
         cancelAnimationFrame(animationFrameId.current);
-        // REMOVED VERBOSE LOGGING
-        // console.log('🎛️ Mapping loop stopped');
       }
     };
-  }, [isPlaying, mappings, activeTrackId, cachedStemAnalysis.cachedAnalysis, stemAudio, activeSliderValues]);
+  }, [
+    isPlaying, 
+    mappings, 
+    enhancedAudioAnalysis.cachedAnalysis, // 🔥 CHANGED: Use enhanced analysis
+    stemAudio, 
+    syncOffsetMs
+  ]);
   
   const getSliderMax = (paramName: string) => {
     if (paramName === 'base-radius') return 1.0;
