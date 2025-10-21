@@ -33,7 +33,7 @@ export function CollapsibleSidebar({ children }: CollapsibleSidebarProps) {
       <div className="h-full flex flex-col p-4">
         <div className={cn("flex items-center mb-6", isCollapsed ? 'justify-center' : 'justify-between')}>
           <span className={cn("text-2xl font-semibold text-gray-100", isCollapsed && "hidden")}>
-            <pre className="text-[3px] leading-[3px] font-mono whitespace-pre text-gray-100 overflow-hidden max-w-full">
+            <pre className="text-[2px] leading-[2px] font-mono whitespace-pre text-gray-100 overflow-hidden w-full" style={{ transform: 'scaleX(1.5) scaleY(0.7)' }}>
 {`                                                                      
                                                                       
         █                                  ███                  █     
