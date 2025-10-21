@@ -80,6 +80,15 @@ export const DroppableParameter: React.FC<DroppableParameterProps> = ({
       <div className="flex items-center justify-between">
         <label className="text-white/80 text-xs font-mono">{label}</label>
         <div className="flex items-center gap-2">
+          {/* Modulation Attenuator - only show when feature is mapped, positioned to the left */}
+          {mappedFeatureId && onModulationAmountChange && (
+            <ModulationAttenuator
+              value={modulationAmount}
+              onChange={(amount) => onModulationAmountChange(parameterId, amount)}
+              size="sm"
+            />
+          )}
+          
           {/* Drop Zone - Embossed Pill */}
           <div
             ref={dropRef}
@@ -137,15 +146,6 @@ export const DroppableParameter: React.FC<DroppableParameterProps> = ({
               <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
             )}
           </div>
-          
-          {/* Modulation Attenuator - only show when feature is mapped */}
-          {mappedFeatureId && onModulationAmountChange && (
-            <ModulationAttenuator
-              value={modulationAmount}
-              onChange={(amount) => onModulationAmountChange(parameterId, amount)}
-              size="sm"
-            />
-          )}
         </div>
       </div>
       {/* Parameter Control */}
