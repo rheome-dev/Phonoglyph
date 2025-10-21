@@ -73,13 +73,7 @@ export function useStemAudioController(): UseStemAudioController {
   const timeUpdateIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isIntentionallyStoppingRef = useRef(false);
 
-  // Remove all advanced system refs
-  // const audioProcessorRef = useRef<AudioProcessor | null>(null);
-  // const workerManagerRef = useRef<AudioWorkerManager | null>(null);
-  // const performanceMonitorRef = useRef<PerformanceMonitor | null>(null);
-  // const fallbackSystemRef = useRef<FallbackSystem | null>(null);
-  // const featurePipelineRef = useRef<VisualizationFeaturePipeline | null>(null);
-  // const deviceOptimizerRef = useRef<DeviceOptimizer | null>(null);
+
 
   // Remove advanced audio system initialization
   useEffect(() => {
@@ -104,49 +98,7 @@ export function useStemAudioController(): UseStemAudioController {
           }
         }
         
-        // Initialize device optimizer
-        // deviceOptimizerRef.current = new DeviceOptimizer(); // This line was removed
-        // const deviceConfig = deviceOptimizerRef.current.getOptimizedConfig(); // This line was removed
-        // setDeviceProfile(deviceOptimizerRef.current.getCurrentProfile().name); // This line was removed
         
-        // Initialize audio processor with device-optimized config // This line was removed
-        // audioProcessorRef.current = new AudioProcessor(audioContextRef.current, deviceConfig); // This line was removed
-        
-        // Initialize worker manager // This line was removed
-        // workerManagerRef.current = new AudioWorkerManager(); // This line was removed
-        
-        // Initialize performance monitor // This line was removed
-        // performanceMonitorRef.current = new PerformanceMonitor(); // This line was removed
-        
-        // Initialize fallback system // This line was removed
-        // fallbackSystemRef.current = new FallbackSystem(); // This line was removed
-        
-        // Initialize feature pipeline // This line was removed
-        // featurePipelineRef.current = new VisualizationFeaturePipeline(); // This line was removed
-        
-        // Set up performance monitoring callbacks // This line was removed
-        // performanceMonitorRef.current.updateMetrics = (metrics) => { // This line was removed
-        //   // setPerformanceMetrics(prev => ({ ...prev, ...metrics })); // This line was removed
-        // }; // This line was removed
-        
-        // Set up worker manager callbacks // This line was removed
-        // if (workerManagerRef.current) { // This line was removed
-        //   workerManagerRef.current.setStemAnalysisCallback((stemType, analysis) => { // This line was removed
-        //     setFeaturesByStem(prev => ({ ...prev, [stemType]: analysis })); // This line was removed
-        //   }); // This line was removed
-          
-        //   workerManagerRef.current.setPerformanceCallback((metrics) => { // This line was removed
-        //     // setPerformanceMetrics(metrics); // This line was removed
-        //     if (performanceMonitorRef.current) { // This line was removed
-        //       // performanceMonitorRef.current.updateMetrics(metrics); // This line was removed
-        //     } // This line was removed
-        //   }); // This line was removed
-        // } // This line was removed
-        
-        // Set up fallback system monitoring // This line was removed
-        // if (fallbackSystemRef.current) { // This line was removed
-        //   // setFallbackState(fallbackSystemRef.current.getFallbackState()); // This line was removed
-        // } // This line was removed
         
         console.log('🎵 Advanced audio analysis system initialized');
         
@@ -159,11 +111,6 @@ export function useStemAudioController(): UseStemAudioController {
 
     // Cleanup on unmount
     return () => {
-      // if (audioProcessorRef.current) audioProcessorRef.current.dispose(); // This line was removed
-      // if (workerManagerRef.current) workerManagerRef.current.dispose(); // This line was removed
-      // if (performanceMonitorRef.current) performanceMonitorRef.current.dispose(); // This line was removed
-      // if (fallbackSystemRef.current) fallbackSystemRef.current.dispose(); // This line was removed
-      // if (featurePipelineRef.current) featurePipelineRef.current.reset(); // This line was removed
       if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
         audioContextRef.current.close();
       }

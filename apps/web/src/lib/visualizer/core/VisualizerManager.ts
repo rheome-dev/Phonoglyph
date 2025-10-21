@@ -559,12 +559,6 @@ export class VisualizerManager {
     debugLog.log('🎵 MIDI data received (placeholder):', midiData);
   }
   
-  updateAudioData(audioData: AudioAnalysisData): void {
-    // Store audio data to be used in next animation frame
-    // This method is no longer used as AudioAnalyzer is removed.
-    // Keeping it for now to avoid breaking existing calls, but it will be removed.
-    debugLog.log('🎵 Audio data received (placeholder):', audioData);
-  }
   
   updateEffectParameter(effectId: string, paramName: string, value: any): void {
     const effect = this.effects.get(effectId);
