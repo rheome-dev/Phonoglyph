@@ -78,6 +78,31 @@ export const DroppableParameter: React.FC<DroppableParameterProps> = ({
 
   // For hover badge
   const [hovered, setHovered] = React.useState(false);
+  const hideTimeoutRef = React.useRef<number | null>(null);
+
+  const keepBadgeVisible = () => {
+    if (hideTimeoutRef.current !== null) {
+      window.clearTimeout(hideTimeoutRef.current);
+      hideTimeoutRef.current = null;
+    }
+    setHovered(true);
+  };
+
+  const scheduleHideBadge = () => {
+    if (hideTimeoutRef.current !== null) {
+      window.clearTimeout(hideTimeoutRef.current);
+    }
+    hideTimeoutRef.current = window.setTimeout(() => {
+      setHovered(false);
+      hideTimeoutRef.current = null;
+    }, 400);
+  };
+
+  React.useEffect(() => {
+    return () => {
+      if (hideTimeoutRef.current !== null) window.clearTimeout(hideTimeoutRef.current);
+    };
+  }, []);
 
   return (
     <div className={`space-y-2 ${className}`}>
@@ -140,8 +165,8 @@ export const DroppableParameter: React.FC<DroppableParameterProps> = ({
                 ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(16, 185, 129, 0.1) 100%)'
                 : 'linear-gradient(135deg, rgba(68, 64, 60, 0.5) 0%, rgba(41, 37, 36, 0.5) 100%)'
             }}
-            onMouseEnter={() => setHovered(true)}
-            onMouseLeave={() => setHovered(false)}
+            onMouseEnter={keepBadgeVisible}
+            onMouseLeave={scheduleHideBadge}
           >
             {/* Drop indicator */}
             {!mappedFeatureId && (
@@ -184,7 +209,7 @@ export const DroppableParameter: React.FC<DroppableParameterProps> = ({
         </div>
         {/* Mapped Feature Badge */}
         {mappedFeatureId && mappedFeatureName && (!showTagOnHover || hovered) && (
-          <div className="absolute -top-2 -right-2 z-10">
+          <div className="absolute -top-2 -right-2 z-10" onMouseEnter={keepBadgeVisible} onMouseLeave={scheduleHideBadge}>
             <Badge 
               className="bg-emerald-600/90 text-emerald-100 text-xs px-2 py-1 border border-emerald-500/50 shadow-lg"
               style={{
