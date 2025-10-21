@@ -19,6 +19,10 @@ export interface DroppableParameterProps {
   mappedFeatureId?: string | null;
   mappedFeatureName?: string;
   modulationAmount?: number;
+  // For visualization of modulation along the slider
+  baseValue?: number;
+  modulatedValue?: number;
+  sliderMax?: number;
   onFeatureDrop: (parameterId: string, featureId: string, stemType?: string) => void;
   onFeatureUnmap: (parameterId: string) => void;
   onModulationAmountChange?: (parameterId: string, amount: number) => void;
@@ -34,6 +38,9 @@ export const DroppableParameter: React.FC<DroppableParameterProps> = ({
   mappedFeatureId,
   mappedFeatureName,
   modulationAmount = 1.0,
+  baseValue,
+  modulatedValue,
+  sliderMax,
   onFeatureDrop,
   onFeatureUnmap,
   onModulationAmountChange,
@@ -155,7 +162,26 @@ export const DroppableParameter: React.FC<DroppableParameterProps> = ({
       </div>
       {/* Parameter Control */}
       <div className="relative">
-        {children}
+        <div className="relative">
+          {/* Modulation overlay bar */}
+          {typeof baseValue === 'number' && typeof modulatedValue === 'number' && typeof sliderMax === 'number' && sliderMax > 0 && (
+            <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-0 pointer-events-none">
+              {(() => {
+                const baseN = Math.max(0, Math.min(1, baseValue / sliderMax));
+                const modN = Math.max(0, Math.min(1, modulatedValue / sliderMax));
+                const left = Math.min(baseN, modN) * 100;
+                const width = Math.abs(modN - baseN) * 100;
+                return (
+                  <div
+                    className="h-[3px] bg-emerald-400/70"
+                    style={{ position: 'absolute', left: `${left}%`, width: `${width}%`, borderRadius: 2 }}
+                  />
+                );
+              })()}
+            </div>
+          )}
+          {children}
+        </div>
         {/* Mapped Feature Badge */}
         {mappedFeatureId && mappedFeatureName && (!showTagOnHover || hovered) && (
           <div className="absolute -top-2 -right-2 z-10">

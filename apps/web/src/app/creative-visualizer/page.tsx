@@ -273,6 +273,9 @@ function CreativeVisualizerPage() {
   const [mappings, setMappings] = useState<Record<string, FeatureMapping>>({});
   const [featureNames, setFeatureNames] = useState<Record<string, string>>({});
   const [activeTrackId, setActiveTrackId] = useState<string | null>(null);
+  // Base (user-set) parameter values and last modulated values for visualization
+  const [baseParameterValues, setBaseParameterValues] = useState<Record<string, number>>({});
+  const [modulatedParameterValues, setModulatedParameterValues] = useState<Record<string, number>>({});
 
   // Real-time sync calibration offset in ms
   const [syncOffsetMs, setSyncOffsetMs] = useState(0);
@@ -1122,15 +1125,18 @@ function CreativeVisualizerPage() {
 
           // Scale to parameter range with modulation amount attenuation
           const maxValue = getSliderMax(paramName);
-          const modulationAmount = mappings[paramKey]?.modulationAmount ?? 1.0;
-          const scaledValue = rawValue * modulationAmount * maxValue;
+          // Bipolar attenuverter: mapping.modulationAmount in [0..1] maps to [-1..+1] around noon
+          const knob = (mappings[paramKey]?.modulationAmount ?? 0.5) * 2 - 1; // -1..+1
+          const baseValue = baseParameterValues[paramKey] ?? (activeSliderValues[paramKey] ?? 0);
+          const delta = rawValue * knob * maxValue; // modulation contribution
+          const scaledValue = Math.max(0, Math.min(maxValue, baseValue + delta));
 
           // Update visualizer
           visualizerRef.current.updateEffectParameter(effectId, paramName, scaledValue);
           
           // Update React state occasionally
           if (frameCount % 10 === 0) {
-            setActiveSliderValues(prev => ({ ...prev, [paramKey]: scaledValue }));
+            setModulatedParameterValues(prev => ({ ...prev, [paramKey]: scaledValue }));
           }
         }
       }
@@ -1178,6 +1184,8 @@ function CreativeVisualizerPage() {
 
   const handleParameterChange = (effectId: string, paramName: string, value: any) => {
     const paramKey = `${effectId}-${paramName}`;
+    // Slider sets the base value regardless of mapping
+    setBaseParameterValues(prev => ({ ...prev, [paramKey]: value }));
     setActiveSliderValues(prev => ({ ...prev, [paramKey]: value }));
     // In a real application, you would update the effect's parameters here
     // For now, we'll just update the state to reflect the current value in the modal
@@ -1224,7 +1232,8 @@ function CreativeVisualizerPage() {
               const mapping = mappings[paramKey];
               const mappedFeatureId = mapping?.featureId || null;
               const mappedFeatureName = mappedFeatureId ? featureNames[mappedFeatureId] : undefined;
-              const modulationAmount = mapping?.modulationAmount || 1.0;
+              const modulationAmount = mapping?.modulationAmount ?? 0.5;
+              const baseVal = activeSliderValues[paramKey] ?? value;
               return (
                 <DroppableParameter
                   key={paramKey}
@@ -1233,6 +1242,9 @@ function CreativeVisualizerPage() {
                   mappedFeatureId={mappedFeatureId}
                   mappedFeatureName={mappedFeatureName}
                   modulationAmount={modulationAmount}
+                  baseValue={baseParameterValues[paramKey] ?? baseVal}
+                  modulatedValue={modulatedParameterValues[paramKey] ?? baseVal}
+                  sliderMax={getSliderMax(paramName)}
                   onFeatureDrop={handleMapFeature}
                   onFeatureUnmap={handleUnmapFeature}
                   onModulationAmountChange={handleModulationAmountChange}
