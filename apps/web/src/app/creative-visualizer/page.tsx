@@ -1120,9 +1120,10 @@ function CreativeVisualizerPage() {
           
           if (!effectId || !paramName) continue;
 
-          // Scale to parameter range
+          // Scale to parameter range with modulation amount attenuation
           const maxValue = getSliderMax(paramName);
-          const scaledValue = rawValue * maxValue;
+          const modulationAmount = mappings[paramKey]?.modulationAmount ?? 1.0;
+          const scaledValue = rawValue * modulationAmount * maxValue;
 
           // Update visualizer
           visualizerRef.current.updateEffectParameter(effectId, paramName, scaledValue);

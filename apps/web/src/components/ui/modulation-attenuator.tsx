@@ -60,9 +60,12 @@ export function ModulationAttenuator({
 
   return (
     <div className={cn(
-      "relative flex items-center gap-2",
+      "relative flex items-center gap-2 select-none",
       className
-    )}>
+    )}
+      onMouseEnter={(e) => e.stopPropagation()}
+      onMouseLeave={(e) => e.stopPropagation()}
+    >
       {/* Value display - positioned to the left */}
       <div className="text-xs text-emerald-400 font-mono min-w-[3ch] text-right">
         {Math.round(value * 100)}%
@@ -71,34 +74,30 @@ export function ModulationAttenuator({
       {/* Knob container */}
       <div 
         className={cn(
-          "relative flex items-center justify-center",
+          "relative flex items-center justify-center cursor-ns-resize",
           sizeClasses[size],
-          "pointer-events-auto" // Ensure it captures mouse events
+          "pointer-events-auto"
         )}
         style={{ pointerEvents: 'auto' }}
+        onMouseDown={(e) => { e.stopPropagation(); handleMouseDown(e as unknown as React.MouseEvent); }}
       >
-        {/* Background circle */}
+        {/* Knob base */}
         <div className={cn(
-          "absolute inset-0 rounded-full border-2 border-gray-600 bg-gray-800",
-          "shadow-inner"
-        )} />
-        
-        {/* Center knob */}
-        <div 
-          ref={knobRef}
-          className={cn(
-            "absolute rounded-full bg-emerald-400 border border-emerald-300",
-            "shadow-lg cursor-pointer transition-all duration-150",
-            isDragging ? "bg-emerald-300 scale-110" : "hover:bg-emerald-300 hover:scale-105"
-          )}
+          "absolute inset-0 rounded-full border-2",
+          isDragging ? "border-white/30" : "border-white/20",
+        )}
+          style={{ backgroundColor: '#0b0b0b' }}
+        />
+
+        {/* Indicator line */}
+        <div
+          className="absolute left-1/2 top-1/2 origin-bottom bg-white"
           style={{
-            width: knobSize,
-            height: knobSize,
-            left: '50%',
-            top: '50%',
-            transform: `translate(-50%, -50%) rotate(${knobAngle}deg) translateY(-${knobRadius}px)`
+            width: 2,
+            height: knobRadius,
+            transform: `translate(-50%, -100%) rotate(${knobAngle}deg)`,
+            borderRadius: 1
           }}
-          onMouseDown={handleMouseDown}
         />
       </div>
     </div>
