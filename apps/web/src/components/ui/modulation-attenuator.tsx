@@ -41,9 +41,16 @@ export function ModulationAttenuator({
     currentValueRef.current = value;
     
     const handleMouseMove = (moveEvent: MouseEvent) => {
-      const deltaY = previousY.current - moveEvent.clientY; // Inverted for natural feel
+      // Prefer movementY for robustness (doesn't depend on absolute cursor position)
+      const movementY = typeof moveEvent.movementY === 'number' ? moveEvent.movementY : previousY.current - moveEvent.clientY;
+      const deltaY = -movementY; // invert so up increases
       const sensitivity = 0.0075; // tuned for smooth control
-      const nextValue = Math.max(0, Math.min(1, currentValueRef.current + deltaY * sensitivity));
+      let tentative = currentValueRef.current + deltaY * sensitivity;
+      // Guard: if we're at a bound, ignore deltas that would push further out of bounds
+      if ((currentValueRef.current <= 0 && tentative < 0) || (currentValueRef.current >= 1 && tentative > 1)) {
+        tentative = currentValueRef.current;
+      }
+      const nextValue = Math.max(0, Math.min(1, tentative));
       currentValueRef.current = nextValue;
       previousY.current = moveEvent.clientY;
       onChange(nextValue);
