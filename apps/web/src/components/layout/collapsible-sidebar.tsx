@@ -39,10 +39,10 @@ export function CollapsibleSidebar({ children }: CollapsibleSidebarProps) {
 88      "8b  88                                                               88                            88           
 88      ,8P  88                                                               88                            88           
 88aaaaaa8P'  88,dPPYba,    ,adPPYba,   8b,dPPYba,    ,adPPYba,    ,adPPYb,d8  88  8b       d8  8b,dPPYba,   88,dPPYba,   
-88""""""'    88P'    "8a  a8"     "8a  88P'   `"8a  a8"     "8a  a8"    `Y88  88  `8b     d8'  88P'    "8a  88P'    "8a  
-88           88       88  8b       d8  88       88  8b       d8  8b       88  88   `8b   d8'   88       d8  88       88  
-88           88       88  "8a,   ,a8"  88       88  "8a,   ,a8"  "8a,   ,d88  88    `8b,d8'    88b,   ,a8"  88       88  
-88           88       88   `"YbbdP"'   88       88   `"YbbdP"'    `"YbbdP"Y8  88      Y88'     88`YbbdP"'   88       88  
+88""""""'    88P'    "8a  a8"     "8a  88P'   \`"8a  a8"     "8a  a8"    \`Y88  88  \`8b     d8'  88P'    "8a  88P'    "8a  
+88           88       88  8b       d8  88       88  8b       d8  8b       88  88   \`8b   d8'   88       d8  88       88  
+88           88       88  "8a,   ,a8"  88       88  "8a,   ,a8"  "8a,   ,d88  88    \`8b,d8'    88b,   ,a8"  88       88  
+88           88       88   \`"YbbdP"'   88       88   \`"YbbdP"'    \`"YbbdP"Y8  88      Y88'     88\`YbbdP"'   88       88  
                                                                   aa,    ,88          d8'      88                        
                                                                    "Y8bbdP"          d8'       88                        `}
             </pre>
