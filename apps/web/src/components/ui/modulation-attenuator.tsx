@@ -20,6 +20,7 @@ export function ModulationAttenuator({
   const knobRef = useRef<HTMLDivElement>(null);
   const previousY = useRef(0);
   const currentValueRef = useRef(0);
+  const isPointerDownRef = useRef(false);
 
   const sizeClasses = {
     sm: 'w-8 h-8',
@@ -32,38 +33,43 @@ export function ModulationAttenuator({
   // Map value [0..1] to angle [-135..+135], noon at 0°
   const knobAngle = (value - 0.5) * 270; // -135 at 0, 0 at .5, +135 at 1
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handlePointerDown = (e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
     
     setIsDragging(true);
+    isPointerDownRef.current = true;
     previousY.current = e.clientY;
     currentValueRef.current = value;
     
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      // Prefer movementY for robustness (doesn't depend on absolute cursor position)
-      const movementY = typeof moveEvent.movementY === 'number' ? moveEvent.movementY : previousY.current - moveEvent.clientY;
-      const deltaY = -movementY; // invert so up increases
-      const sensitivity = 0.0075; // tuned for smooth control
-      let tentative = currentValueRef.current + deltaY * sensitivity;
-      // Guard: if we're at a bound, ignore deltas that would push further out of bounds
-      if ((currentValueRef.current <= 0 && tentative < 0) || (currentValueRef.current >= 1 && tentative > 1)) {
-        tentative = currentValueRef.current;
+    const handlePointerMove = (ev: PointerEvent) => {
+      if (!isPointerDownRef.current) return;
+      // Use movementY when available
+      const movementY = typeof ev.movementY === 'number' ? ev.movementY : previousY.current - ev.clientY;
+      const deltaY = -movementY; // up increases
+      const sensitivity = 0.0075;
+      const proposedDelta = deltaY * sensitivity;
+      // If at bound and trying to push further, ignore and do not consume the event (keep previousY)
+      if ((currentValueRef.current <= 0 && proposedDelta < 0) || (currentValueRef.current >= 1 && proposedDelta > 0)) {
+        return;
       }
+      let tentative = currentValueRef.current + proposedDelta;
       const nextValue = Math.max(0, Math.min(1, tentative));
       currentValueRef.current = nextValue;
-      previousY.current = moveEvent.clientY;
+      previousY.current = ev.clientY;
       onChange(nextValue);
     };
-    
-    const handleMouseUp = () => {
+
+    const handlePointerUp = () => {
+      isPointerDownRef.current = false;
       setIsDragging(false);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('pointermove', handlePointerMove);
+      document.removeEventListener('pointerup', handlePointerUp);
     };
-    
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
+
+    // Attach global listeners for robust drag
+    document.addEventListener('pointermove', handlePointerMove);
+    document.addEventListener('pointerup', handlePointerUp);
   };
 
   return (
@@ -87,7 +93,7 @@ export function ModulationAttenuator({
           "pointer-events-auto"
         )}
         style={{ pointerEvents: 'auto' }}
-        onMouseDown={(e) => { e.stopPropagation(); handleMouseDown(e as unknown as React.MouseEvent); }}
+        onPointerDown={(e) => { e.stopPropagation(); handlePointerDown(e as unknown as React.PointerEvent); }}
       >
         {/* Knob base */}
         <div className={cn(
