@@ -163,9 +163,9 @@ export const DroppableParameter: React.FC<DroppableParameterProps> = ({
       {/* Parameter Control */}
       <div className="relative">
         <div className="relative">
-          {/* Modulation overlay bar */}
+          {/* Modulation overlay bar (lay over slider track/value) */}
           {typeof baseValue === 'number' && typeof modulatedValue === 'number' && typeof sliderMax === 'number' && sliderMax > 0 && (
-            <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-0 pointer-events-none">
+            <div className="absolute inset-0 pointer-events-none">
               {(() => {
                 const baseN = Math.max(0, Math.min(1, baseValue / sliderMax));
                 const modN = Math.max(0, Math.min(1, modulatedValue / sliderMax));
@@ -173,8 +173,8 @@ export const DroppableParameter: React.FC<DroppableParameterProps> = ({
                 const width = Math.abs(modN - baseN) * 100;
                 return (
                   <div
-                    className="h-[3px] bg-emerald-400/70"
-                    style={{ position: 'absolute', left: `${left}%`, width: `${width}%`, borderRadius: 2 }}
+                    className="absolute top-1/2 -translate-y-1/2 h-[6px] bg-emerald-400/40 mix-blend-screen"
+                    style={{ left: `${left}%`, width: `${width}%`, borderRadius: 3 }}
                   />
                 );
               })()}

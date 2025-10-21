@@ -1126,7 +1126,9 @@ function CreativeVisualizerPage() {
           // Scale to parameter range with modulation amount attenuation
           const maxValue = getSliderMax(paramName);
           // Bipolar attenuverter: mapping.modulationAmount in [0..1] maps to [-1..+1] around noon
-          const knob = (mappings[paramKey]?.modulationAmount ?? 0.5) * 2 - 1; // -1..+1
+          // Range clamp to ±0.5 (±50%) so modulation isn't too extreme
+          const knobFull = (mappings[paramKey]?.modulationAmount ?? 0.5) * 2 - 1; // -1..+1
+          const knob = Math.max(-0.5, Math.min(0.5, knobFull));
           const baseValue = baseParameterValues[paramKey] ?? (activeSliderValues[paramKey] ?? 0);
           const delta = rawValue * knob * maxValue; // modulation contribution
           const scaledValue = Math.max(0, Math.min(maxValue, baseValue + delta));

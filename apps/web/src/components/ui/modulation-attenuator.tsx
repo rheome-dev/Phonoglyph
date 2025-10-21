@@ -67,8 +67,8 @@ export function ModulationAttenuator({
       onMouseLeave={(e) => e.stopPropagation()}
     >
       {/* Value display - positioned to the left */}
-      <div className="text-xs text-white font-mono min-w-[4ch] text-right">
-        {Math.round(value * 100)}%
+      <div className="text-xs text-white font-mono min-w-[5ch] text-right">
+        {(() => { const pct = Math.round((value - 0.5) * 100); return `${pct>0?'+':''}${pct}%`; })()}
       </div>
       
       {/* Knob container */}
