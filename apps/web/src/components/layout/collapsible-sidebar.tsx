@@ -34,14 +34,13 @@ export function CollapsibleSidebar({ children }: CollapsibleSidebarProps) {
         <div className={cn("flex items-center mb-6", isCollapsed ? 'justify-center' : 'justify-between')}>
           <span className={cn("text-2xl font-semibold text-gray-100", isCollapsed && "hidden")}>
             <pre className="text-[4px] leading-[4px] font-mono whitespace-pre text-gray-100">
-{`                                                                      
- mmmmm  #                                  ""#                  #     
- #   "# # mm    mmm   m mm    mmm    mmmm    #    m   m  mmmm   # mm  
- #mmm#" #"  #  #" "#  #"  #  #" "#  #" "#    #    "m m"  #" "#  #"  # 
- #      #   #  #   #  #   #  #   #  #   #    #     #m#   #   #  #   # 
- #      #   #  "#m#"  #   #  "#m#"  "#m"#    "mm   "#    ##m#"  #   # 
-                                     m  #          m"    #            
-                                      ""          ""     "            `}
+{`'||''|.  '||                                       '||                    '||      
+ ||   ||  || ..     ...   .. ...     ...     ... .  ||  .... ... ... ...   || ..   
+ ||...|'  ||' ||  .|  '|.  ||  ||  .|  '|.  || ||   ||   '|.  |   ||'  ||  ||' ||  
+ ||       ||  ||  ||   ||  ||  ||  ||   ||   |''    ||    '|.|    ||    |  ||  ||  
+.||.     .||. ||.  '|..|' .||. ||.  '|..|'  '||||. .||.    '|     ||...'  .||. ||. 
+                                           .|....'      .. |      ||               
+                                                         ''      ''''              `}
             </pre>
           </span>
         </div>
