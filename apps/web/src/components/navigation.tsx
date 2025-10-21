@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils"
 import { TechnicalButton } from "@/components/ui/technical-button"
 import { ProfileMenu } from "@/components/auth/profile-menu"
 import { EnhancedBreadcrumbNav } from "@/components/layout/breadcrumb-nav"
+import { PhonoglyphLogo } from "@/components/ui/phonoglyph-logo"
 
 export interface NavigationProps {
   user: any | null
@@ -36,11 +37,11 @@ const Navigation = React.forwardRef<HTMLElement, NavigationProps>(
             {/* Logo */}
             <Link href="/" className="flex items-center space-x-2">
               <motion.div
-                className="text-2xl font-display font-bold text-stone-700"
+                className="flex items-center"
                 whileHover={{ scale: 1.05 }}
                 transition={{ type: "spring", stiffness: 400, damping: 10 }}
               >
-                Phonoglyph
+                <PhonoglyphLogo size="md" className="text-stone-700" />
               </motion.div>
             </Link>
 
