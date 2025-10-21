@@ -73,10 +73,7 @@ export const DroppableParameter: React.FC<DroppableParameterProps> = ({
   const [hovered, setHovered] = React.useState(false);
 
   return (
-    <div className={`space-y-2 ${className}`}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
+    <div className={`space-y-2 ${className}`}>
       <div className="flex items-center justify-between">
         <label className="text-white/80 text-xs font-mono">{label}</label>
         <div className="flex items-center gap-2">
@@ -136,6 +133,8 @@ export const DroppableParameter: React.FC<DroppableParameterProps> = ({
                 ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(16, 185, 129, 0.1) 100%)'
                 : 'linear-gradient(135deg, rgba(68, 64, 60, 0.5) 0%, rgba(41, 37, 36, 0.5) 100%)'
             }}
+            onMouseEnter={() => setHovered(true)}
+            onMouseLeave={() => setHovered(false)}
           >
             {/* Drop indicator */}
             {!mappedFeatureId && (

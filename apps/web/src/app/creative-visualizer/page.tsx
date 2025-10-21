@@ -837,7 +837,7 @@ function CreativeVisualizerPage() {
       ...prev, 
       [parameterId]: { 
         featureId, 
-        modulationAmount: 1.0 // Default to 100% modulation
+        modulationAmount: 0.5 // Default to 50% (noon)
       } 
     }));
     
@@ -860,7 +860,7 @@ function CreativeVisualizerPage() {
       ...prev, 
       [parameterId]: { 
         featureId: null, 
-        modulationAmount: 1.0 
+        modulationAmount: 0.5 
       } 
     }));
     

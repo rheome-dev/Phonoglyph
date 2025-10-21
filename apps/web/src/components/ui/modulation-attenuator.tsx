@@ -29,8 +29,8 @@ export function ModulationAttenuator({
   const knobSize = size === 'sm' ? 6 : 8;
   const knobRadius = size === 'sm' ? 12 : 15;
 
-  // Convert value to knob angle (0-270 degrees, starting from top)
-  const knobAngle = value * 270;
+  // Map value [0..1] to angle [-135..+135], noon at 0°
+  const knobAngle = (value - 0.5) * 270; // -135 at 0, 0 at .5, +135 at 1
 
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -42,8 +42,8 @@ export function ModulationAttenuator({
     
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const deltaY = startY.current - moveEvent.clientY; // Inverted for natural feel
-      const sensitivity = 0.5; // Adjust for sensitivity
-      const deltaValue = (deltaY / 100) * sensitivity; // Scale down movement
+      const sensitivity = 0.0075; // tuned for smooth control
+      const deltaValue = deltaY * sensitivity; // vertical drag maps to value
       const newValue = Math.max(0, Math.min(1, startValue.current + deltaValue));
       onChange(newValue);
     };
