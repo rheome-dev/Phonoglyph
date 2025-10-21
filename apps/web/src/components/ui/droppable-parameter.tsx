@@ -188,9 +188,10 @@ export const DroppableParameter: React.FC<DroppableParameterProps> = ({
       {/* Parameter Control */}
       <div className="relative">
         <div className="relative">
-          {/* Modulation overlay bar (lay over slider track/value) */}
+          {children}
+          {/* Modulation overlay bar (lay over slider track/value) - positioned after children for proper z-index */}
           {typeof baseValue === 'number' && typeof modulatedValue === 'number' && typeof sliderMax === 'number' && sliderMax > 0 && (
-            <div className="absolute inset-0 pointer-events-none">
+            <div className="absolute inset-0 pointer-events-none z-10">
               {(() => {
                 const baseN = Math.max(0, Math.min(1, baseValue / sliderMax));
                 const modN = Math.max(0, Math.min(1, modulatedValue / sliderMax));
@@ -198,14 +199,18 @@ export const DroppableParameter: React.FC<DroppableParameterProps> = ({
                 const width = Math.abs(modN - baseN) * 100;
                 return (
                   <div
-                    className="absolute top-1/2 -translate-y-1/2 h-[6px] bg-emerald-400/40 mix-blend-screen"
-                    style={{ left: `${left}%`, width: `${width}%`, borderRadius: 3 }}
+                    className="absolute top-1/2 -translate-y-1/2 h-[6px] bg-emerald-400/60 rounded-sm shadow-lg"
+                    style={{ 
+                      left: `${left}%`, 
+                      width: `${width}%`,
+                      boxShadow: '0 0 8px rgba(16, 185, 129, 0.6), inset 0 1px 2px rgba(255, 255, 255, 0.3)',
+                      border: '1px solid rgba(16, 185, 129, 0.4)'
+                    }}
                   />
                 );
               })()}
             </div>
           )}
-          {children}
         </div>
         {/* Mapped Feature Badge */}
         {mappedFeatureId && mappedFeatureName && (!showTagOnHover || hovered) && (

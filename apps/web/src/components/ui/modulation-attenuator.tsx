@@ -44,20 +44,26 @@ export function ModulationAttenuator({
     
     const handlePointerMove = (ev: PointerEvent) => {
       if (!isPointerDownRef.current) return;
-      // Use movementY when available
-      const movementY = typeof ev.movementY === 'number' ? ev.movementY : previousY.current - ev.clientY;
-      const deltaY = -movementY; // up increases
-      const sensitivity = 0.0075;
+      
+      // Calculate delta from previous position
+      const deltaY = previousY.current - ev.clientY; // down is negative, up is positive
+      const sensitivity = 0.005; // Adjust sensitivity for smoother control
       const proposedDelta = deltaY * sensitivity;
-      // If at bound and trying to push further, ignore and do not consume the event (keep previousY)
-      if ((currentValueRef.current <= 0 && proposedDelta < 0) || (currentValueRef.current >= 1 && proposedDelta > 0)) {
-        return;
-      }
+      
+      // Calculate tentative new value
       let tentative = currentValueRef.current + proposedDelta;
+      
+      // Clamp to [0, 1] range - no wrap-around
       const nextValue = Math.max(0, Math.min(1, tentative));
-      currentValueRef.current = nextValue;
+      
+      // Only update if value actually changed (prevents jitter at bounds)
+      if (nextValue !== currentValueRef.current) {
+        currentValueRef.current = nextValue;
+        onChange(nextValue);
+      }
+      
+      // Always update previousY to track cursor position
       previousY.current = ev.clientY;
-      onChange(nextValue);
     };
 
     const handlePointerUp = () => {
