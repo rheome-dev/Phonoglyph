@@ -1,7 +1,6 @@
 'use client';
 
-import React from 'react';
-import { Slider } from '@/components/ui/slider';
+import React, { useState, useRef } from 'react';
 import { cn } from '@/lib/utils';
 
 interface ModulationAttenuatorProps {
@@ -17,82 +16,90 @@ export function ModulationAttenuator({
   className,
   size = 'sm'
 }: ModulationAttenuatorProps) {
+  const [isDragging, setIsDragging] = useState(false);
+  const knobRef = useRef<HTMLDivElement>(null);
+  const startY = useRef(0);
+  const startValue = useRef(0);
+
   const sizeClasses = {
     sm: 'w-8 h-8',
     md: 'w-10 h-10'
   };
 
   const knobSize = size === 'sm' ? 6 : 8;
-  const trackHeight = size === 'sm' ? 2 : 3;
+  const knobRadius = size === 'sm' ? 12 : 15;
+
+  // Convert value to knob angle (0-270 degrees, starting from top)
+  const knobAngle = value * 270;
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    setIsDragging(true);
+    startY.current = e.clientY;
+    startValue.current = value;
+    
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const deltaY = startY.current - moveEvent.clientY; // Inverted for natural feel
+      const sensitivity = 0.5; // Adjust for sensitivity
+      const deltaValue = (deltaY / 100) * sensitivity; // Scale down movement
+      const newValue = Math.max(0, Math.min(1, startValue.current + deltaValue));
+      onChange(newValue);
+    };
+    
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
 
   return (
     <div className={cn(
-      "relative flex items-center justify-center",
-      sizeClasses[size],
+      "relative flex items-center gap-2",
       className
     )}>
-      {/* Background circle */}
-      <div className={cn(
-        "absolute inset-0 rounded-full border-2 border-gray-600 bg-gray-800",
-        "shadow-inner"
-      )} />
+      {/* Value display - positioned to the left */}
+      <div className="text-xs text-emerald-400 font-mono min-w-[3ch] text-right">
+        {Math.round(value * 100)}%
+      </div>
       
-      {/* Modulation amount indicator */}
-      <div 
-        className="absolute inset-0 rounded-full border-2 border-emerald-500 bg-emerald-500/20"
-        style={{
-          clipPath: `polygon(50% 50%, 50% 0%, ${50 + 50 * Math.cos((value * 2 - 1) * Math.PI)}% ${50 + 50 * Math.sin((value * 2 - 1) * Math.PI)}%, 50% 50%)`
-        }}
-      />
-      
-      {/* Center knob */}
+      {/* Knob container */}
       <div 
         className={cn(
-          "absolute rounded-full bg-emerald-400 border border-emerald-300",
-          "shadow-lg cursor-pointer transition-all duration-150",
-          "hover:bg-emerald-300 hover:scale-110"
+          "relative flex items-center justify-center",
+          sizeClasses[size],
+          "pointer-events-auto" // Ensure it captures mouse events
         )}
-        style={{
-          width: knobSize,
-          height: knobSize,
-          left: '50%',
-          top: '50%',
-          transform: `translate(-50%, -50%) rotate(${value * 270 - 135}deg) translateY(-${size === 'sm' ? 12 : 15}px)`
-        }}
-        onMouseDown={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          
-          const rect = e.currentTarget.parentElement?.getBoundingClientRect();
-          if (!rect) return;
-          
-          const centerX = rect.left + rect.width / 2;
-          const centerY = rect.top + rect.height / 2;
-          
-          const handleMouseMove = (moveEvent: MouseEvent) => {
-            const deltaX = moveEvent.clientX - centerX;
-            const deltaY = moveEvent.clientY - centerY;
-            const angle = Math.atan2(deltaY, deltaX);
-            const normalizedAngle = (angle + Math.PI) / (2 * Math.PI);
-            const newValue = Math.max(0, Math.min(1, normalizedAngle));
-            onChange(newValue);
-          };
-          
-          const handleMouseUp = () => {
-            document.removeEventListener('mousemove', handleMouseMove);
-            document.removeEventListener('mouseup', handleMouseUp);
-          };
-          
-          document.addEventListener('mousemove', handleMouseMove);
-          document.addEventListener('mouseup', handleMouseUp);
-        }}
-      />
-      
-      {/* Value display */}
-      <div className="absolute -bottom-6 left-1/2 transform -translate-x-1/2">
-        <span className="text-xs text-emerald-400 font-mono">
-          {Math.round(value * 100)}%
-        </span>
+        style={{ pointerEvents: 'auto' }}
+      >
+        {/* Background circle */}
+        <div className={cn(
+          "absolute inset-0 rounded-full border-2 border-gray-600 bg-gray-800",
+          "shadow-inner"
+        )} />
+        
+        {/* Center knob */}
+        <div 
+          ref={knobRef}
+          className={cn(
+            "absolute rounded-full bg-emerald-400 border border-emerald-300",
+            "shadow-lg cursor-pointer transition-all duration-150",
+            isDragging ? "bg-emerald-300 scale-110" : "hover:bg-emerald-300 hover:scale-105"
+          )}
+          style={{
+            width: knobSize,
+            height: knobSize,
+            left: '50%',
+            top: '50%',
+            transform: `translate(-50%, -50%) rotate(${knobAngle}deg) translateY(-${knobRadius}px)`
+          }}
+          onMouseDown={handleMouseDown}
+        />
       </div>
     </div>
   );

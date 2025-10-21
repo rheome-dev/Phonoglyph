@@ -82,11 +82,17 @@ export const DroppableParameter: React.FC<DroppableParameterProps> = ({
         <div className="flex items-center gap-2">
           {/* Modulation Attenuator - only show when feature is mapped, positioned to the left */}
           {mappedFeatureId && onModulationAmountChange && (
-            <ModulationAttenuator
-              value={modulationAmount}
-              onChange={(amount) => onModulationAmountChange(parameterId, amount)}
-              size="sm"
-            />
+            <div 
+              className="pointer-events-auto"
+              onMouseEnter={(e) => e.stopPropagation()}
+              onMouseLeave={(e) => e.stopPropagation()}
+            >
+              <ModulationAttenuator
+                value={modulationAmount}
+                onChange={(amount) => onModulationAmountChange(parameterId, amount)}
+                size="sm"
+              />
+            </div>
           )}
           
           {/* Drop Zone - Embossed Pill */}
