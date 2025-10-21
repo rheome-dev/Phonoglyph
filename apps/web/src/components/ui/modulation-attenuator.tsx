@@ -18,8 +18,8 @@ export function ModulationAttenuator({
 }: ModulationAttenuatorProps) {
   const [isDragging, setIsDragging] = useState(false);
   const knobRef = useRef<HTMLDivElement>(null);
-  const startY = useRef(0);
-  const startValue = useRef(0);
+  const previousY = useRef(0);
+  const currentValueRef = useRef(0);
 
   const sizeClasses = {
     sm: 'w-8 h-8',
@@ -37,15 +37,16 @@ export function ModulationAttenuator({
     e.stopPropagation();
     
     setIsDragging(true);
-    startY.current = e.clientY;
-    startValue.current = value;
+    previousY.current = e.clientY;
+    currentValueRef.current = value;
     
     const handleMouseMove = (moveEvent: MouseEvent) => {
-      const deltaY = startY.current - moveEvent.clientY; // Inverted for natural feel
+      const deltaY = previousY.current - moveEvent.clientY; // Inverted for natural feel
       const sensitivity = 0.0075; // tuned for smooth control
-      const deltaValue = deltaY * sensitivity; // vertical drag maps to value
-      const newValue = Math.max(0, Math.min(1, startValue.current + deltaValue));
-      onChange(newValue);
+      const nextValue = Math.max(0, Math.min(1, currentValueRef.current + deltaY * sensitivity));
+      currentValueRef.current = nextValue;
+      previousY.current = moveEvent.clientY;
+      onChange(nextValue);
     };
     
     const handleMouseUp = () => {
