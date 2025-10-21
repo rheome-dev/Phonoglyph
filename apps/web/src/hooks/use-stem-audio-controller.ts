@@ -280,8 +280,11 @@ export function useStemAudioController(): UseStemAudioController {
       // Start time updates
       timeUpdateIntervalRef.current = setInterval(() => {
         if (audioContextRef.current && isPlaying) {
-          const currentTime = audioContextRef.current.currentTime - startTimeRef.current;
-          setCurrentTime(Math.max(0, currentTime));
+          const elapsedTime = audioContextRef.current.currentTime - startTimeRef.current;
+          // 🔥 FIX: Handle looping by wrapping currentTime to audio duration
+          const masterDuration = getMasterDuration();
+          const currentTime = masterDuration > 0 ? elapsedTime % masterDuration : Math.max(0, elapsedTime);
+          setCurrentTime(currentTime);
         }
       }, 16);
 
@@ -442,8 +445,11 @@ export function useStemAudioController(): UseStemAudioController {
         
         // Only update if enough time has passed (30fps cap)
         if (elapsed >= targetFrameTime) {
-          const currentAudioTime = audioContextRef.current!.currentTime - startTimeRef.current;
-          setCurrentTime(Math.max(0, currentAudioTime));
+          const elapsedTime = audioContextRef.current!.currentTime - startTimeRef.current;
+          // 🔥 FIX: Handle looping by wrapping currentTime to audio duration
+          const masterDuration = getMasterDuration();
+          const currentAudioTime = masterDuration > 0 ? elapsedTime % masterDuration : Math.max(0, elapsedTime);
+          setCurrentTime(currentAudioTime);
           lastUpdateTime = now;
         }
         

@@ -1046,7 +1046,15 @@ function CreativeVisualizerPage() {
       const scheduledStartTime = stemAudio.scheduledStartTimeRef?.current || 0;
       const measuredLatency = stemAudio.getAudioLatency?.() || 0;
       const audioPlaybackTime = Math.max(0, audioContextTime - scheduledStartTime);
-      const syncTime = Math.max(0, audioPlaybackTime - measuredLatency + (syncOffsetMs / 1000));
+      let syncTime = Math.max(0, audioPlaybackTime - measuredLatency + (syncOffsetMs / 1000));
+      
+      // 🔥 FIX: Handle audio looping by wrapping syncTime to analysis duration
+      if (enhancedAudioAnalysis.cachedAnalysis.length > 0) {
+        const analysisDuration = enhancedAudioAnalysis.cachedAnalysis[0]?.metadata?.duration || 1;
+        if (analysisDuration > 0) {
+          syncTime = syncTime % analysisDuration; // Wrap time to loop within analysis duration
+        }
+      }
 
       // Cache mappings
       if (cachedMappings.length !== Object.keys(mappings).length) {
