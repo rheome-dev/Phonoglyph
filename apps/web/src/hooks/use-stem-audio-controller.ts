@@ -1,8 +1,5 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
-import { PerformanceMonitor } from '@/lib/performance-monitor';
-import { DeviceOptimizer } from '@/lib/device-optimizer';
-import { FallbackSystem } from '@/lib/fallback-system';
-import { StemAnalysis, AudioFeature, PerformanceMetrics } from '@/types/stem-audio-analysis';
+import { StemAnalysis, AudioFeature } from '@/types/stem-audio-analysis';
 import { AudioAnalysisData } from '@/types/visualizer';
 
 interface Stem {
@@ -29,9 +26,6 @@ interface UseStemAudioController {
   setStemVolume: (stemId: string, volume: number) => void;
   getStemVolume: (stemId: string) => number;
   testAudioOutput: () => Promise<void>;
-  performanceMetrics: PerformanceMetrics;
-  deviceProfile: string;
-  fallbackState: any;
   visualizationData: AudioAnalysisData | null;
   stemsLoaded: boolean;
   isLooping: boolean;
@@ -635,15 +629,6 @@ export function useStemAudioController(): UseStemAudioController {
     setStemVolume,
     getStemVolume,
     testAudioOutput,
-    performanceMetrics: {
-      fps: 0,
-      analysisLatency: 0,
-      memoryUsage: 0,
-      cpuUsage: 0,
-      frameDrops: 0
-    },
-    deviceProfile: 'medium',
-    fallbackState: {},
     visualizationData,
     stemsLoaded,
     isLooping,

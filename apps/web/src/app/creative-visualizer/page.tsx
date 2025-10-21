@@ -1515,16 +1515,6 @@ function CreativeVisualizerPage() {
                 <div className="text-xs font-mono uppercase tracking-wider px-2 py-1 rounded text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
                   FPS: <span className="font-creative-mono">{fps}</span>
                 </div>
-                {stemAudio.performanceMetrics && (
-                  <div className="text-xs font-mono uppercase tracking-wider px-2 py-1 rounded text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                    LAT: <span className="font-creative-mono">{(stemAudio.getAudioLatency ? (stemAudio.getAudioLatency() * 1000).toFixed(1) : '0.0')}</span><span className="font-creative-mono">MS</span>
-                  </div>
-                )}
-                {stemAudio.deviceProfile && (
-                  <div className="text-xs font-mono uppercase tracking-wider px-2 py-1 rounded text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                    {stemAudio.deviceProfile.toUpperCase()}
-                  </div>
-                )}
                 <div className="text-xs font-mono uppercase tracking-wider px-2 py-1 rounded text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
                   NOTES: <span className="font-creative-mono">{(midiData || sampleMidiData).tracks.reduce((sum, track) => sum + track.notes.length, 0)}</span>
                 </div>
