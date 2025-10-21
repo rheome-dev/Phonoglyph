@@ -461,8 +461,8 @@ export class VisualizerManager {
         
         try {
           // Use real data if available, otherwise fallback to mock data
-          const audioData: AudioAnalysisData = this.createMockAudioData();
-          const midiData: LiveMIDIData = this.createMockMidiData();
+          const audioData: AudioAnalysisData = this.currentAudioData || this.createMockAudioData();
+          const midiData: LiveMIDIData = this.currentMidiData || this.createMockMidiData();
           
           effect.update(deltaTime, audioData, midiData);
         } catch (error) {
@@ -506,8 +506,8 @@ export class VisualizerManager {
     
     // Update bloom effect
     if (this.bloomEffect) {
-      const audioData: AudioAnalysisData = this.createMockAudioData();
-      const midiData: LiveMIDIData = this.createMockMidiData();
+      const audioData: AudioAnalysisData = this.currentAudioData || this.createMockAudioData();
+      const midiData: LiveMIDIData = this.currentMidiData || this.createMockMidiData();
       this.bloomEffect.update(deltaTime, audioData, midiData);
       
       // Render with bloom post-processing
@@ -554,9 +554,14 @@ export class VisualizerManager {
   // Update methods for real data
   updateMIDIData(midiData: LiveMIDIData): void {
     // Store MIDI data to be used in next animation frame
-    // This method is no longer used as AudioAnalyzer is removed.
-    // Keeping it for now to avoid breaking existing calls, but it will be removed.
-    debugLog.log('🎵 MIDI data received (placeholder):', midiData);
+    this.currentMidiData = midiData;
+    debugLog.log('🎵 MIDI data received:', midiData);
+  }
+
+  updateAudioData(audioData: AudioAnalysisData): void {
+    // Store audio data to be used in next animation frame
+    this.currentAudioData = audioData;
+    debugLog.log('🎵 Audio data received:', audioData);
   }
   
   

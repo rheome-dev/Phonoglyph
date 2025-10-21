@@ -137,16 +137,20 @@ export function useCachedStemAnalysis(): UseCachedStemAnalysis {
     setAnalysisProgress(prev => ({ ...prev, [fileId]: { progress: 0, message: 'Queued for analysis...' } }));
     
     const channelData = audioBuffer.getChannelData(0); // Using first channel for analysis
+    // Create a copy to avoid ArrayBuffer detachment issues
+    const channelDataCopy = new Float32Array(channelData.length);
+    channelDataCopy.set(channelData);
+    
     workerRef.current.postMessage({
       type: 'ANALYZE_BUFFER',
       data: { 
         fileId, 
-        channelData,
+        channelData: channelDataCopy,
         sampleRate: audioBuffer.sampleRate,
         duration: audioBuffer.duration,
         stemType,
       }
-    }, [channelData.buffer]); // Transfer the underlying buffer
+    }); // Don't transfer the buffer to avoid detachment
   }, [cachedAnalysis, analysisProgress]);
 
   useEffect(() => {

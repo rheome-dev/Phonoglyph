@@ -273,7 +273,7 @@ export function useEnhancedAudioAnalysis(): UseEnhancedAudioAnalysis {
         analysisParams, // Pass the enhanced analysis parameters
         enhancedAnalysis: true // Flag to indicate enhanced analysis
       }
-    }, [channelDataCopy.buffer]);
+    }); // Don't transfer the buffer to avoid detachment
   }, [cachedAnalysis, analysisProgress, analysisParams]);
 
   // Get feature value using enhanced analysis
