@@ -33,19 +33,18 @@ export function CollapsibleSidebar({ children }: CollapsibleSidebarProps) {
       <div className="h-full flex flex-col p-4">
         <div className={cn("flex items-center mb-6", isCollapsed ? 'justify-center' : 'justify-between')}>
           <span className={cn("text-2xl font-semibold text-gray-100", isCollapsed && "hidden")}>
-            <pre className="text-[4px] leading-[4px] font-mono whitespace-pre text-gray-100 overflow-hidden w-full" style={{ transform: 'scaleX(1.1) scaleY(0.9)', transformOrigin: 'left center' }}>
-{` _______   __    __   ______   __    __   ______    ______   __    __      __  _______   __    __ 
-/       \ /  |  /  | /      \ /  \  /  | /      \  /      \ /  |  /  \    /  |/       \ /  |  /  |
-$$$$$$$  |$$ |  $$ |/$$$$$$  |$$  \ $$ |/$$$$$$  |/$$$$$$  |$$ |  $$  \  /$$/ $$$$$$$  |$$ |  $$ |
-$$ |__$$ |$$ |__$$ |$$ |  $$ |$$$  \$$ |$$ |  $$ |$$ | _$$/ $$ |   $$  \/$$/  $$ |__$$ |$$ |__$$ |
-$$    $$/ $$    $$ |$$ |  $$ |$$$$  $$ |$$ |  $$ |$$ |/    |$$ |    $$  $$/   $$    $$/ $$    $$ |
-$$$$$$$/  $$$$$$$$ |$$ |  $$ |$$ $$ $$ |$$ |  $$ |$$ |$$$$ |$$ |     $$$$/    $$$$$$$/  $$$$$$$$ |
-$$ |      $$ |  $$ |$$ \__$$ |$$ |$$$$ |$$ \__$$ |$$ \__$$ |$$ |_____ $$ |    $$ |      $$ |  $$ |
-$$ |      $$ |  $$ |$$    $$/ $$ | $$$ |$$    $$/ $$    $$/ $$       |$$ |    $$ |      $$ |  $$ |
-$$/       $$/   $$/  $$$$$$/  $$/   $$/  $$$$$$/   $$$$$$/  $$$$$$$$/ $$/     $$/       $$/   $$/ 
-                                                                                                  
-                                                                                                  
-                                                                                                  `}
+            <pre className="text-[3px] leading-[3px] font-mono whitespace-pre text-gray-100 overflow-hidden w-full">
+{`                                                                                                                    
+                                                                                                                    
+`7MM"""Mq.`7MMF'  `7MMF' .g8""8q. `7MN.   `7MF' .g8""8q.     .g8"""bgd `7MMF'   `YMM'   `MM'`7MM"""Mq.`7MMF'  `7MMF'
+  MM   `MM. MM      MM .dP'    `YM. MMN.    M .dP'    `YM. .dP'     `M   MM       VMA   ,V    MM   `MM. MM      MM  
+  MM   ,M9  MM      MM dM'      `MM M YMb   M dM'      `MM dM'       `   MM        VMA ,V     MM   ,M9  MM      MM  
+  MMmmdM9   MMmmmmmmMM MM        MM M  `MN. M MM        MM MM            MM         VMMP      MMmmdM9   MMmmmmmmMM  
+  MM        MM      MM MM.      ,MP M   `MM.M MM.      ,MP MM.    `7MMF' MM      ,   MM       MM        MM      MM  
+  MM        MM      MM `Mb.    ,dP' M     YMM `Mb.    ,dP' `Mb.     MM   MM     ,M   MM       MM        MM      MM  
+.JMML.    .JMML.  .JMML. `"bmmd"' .JML.    YM   `"bmmd"'     `"bmmmdPY .JMMmmmmMMM .JMML.   .JMML.    .JMML.  .JMML.
+                                                                                                                    
+                                                                                                                    `}
             </pre>
           </span>
         </div>
