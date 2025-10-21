@@ -34,7 +34,7 @@ export function CollapsibleSidebar({ children }: CollapsibleSidebarProps) {
       <div className="h-full flex flex-col p-4">
         <div className={cn("flex items-center mb-6", isCollapsed ? 'justify-center' : 'justify-between')}>
           <div className={cn("text-2xl font-semibold text-gray-100", isCollapsed && "hidden")}>
-            <PhonoglyphLogo size="sm" className="text-gray-100" />
+            <PhonoglyphLogo size="lg" className="text-gray-100" />
           </div>
         </div>
 
