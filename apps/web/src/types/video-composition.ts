@@ -5,6 +5,7 @@ export interface AudioBinding {
   inputRange: [number, number];
   outputRange: [number, number];
   blendMode: 'add' | 'multiply' | 'replace';
+  modulationAmount?: number; // 0-1, default 1.0 (100%)
 }
 
 export interface MIDIBinding {

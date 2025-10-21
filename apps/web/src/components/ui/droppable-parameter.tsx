@@ -4,6 +4,7 @@ import React from 'react';
 import { useDrop } from 'react-dnd';
 import { Badge } from '@/components/ui/badge';
 import { X } from 'lucide-react';
+import { ModulationAttenuator } from '@/components/ui/modulation-attenuator';
 
 export interface DraggableFeatureItem {
   id: string;
@@ -17,8 +18,10 @@ export interface DroppableParameterProps {
   children: React.ReactNode;
   mappedFeatureId?: string | null;
   mappedFeatureName?: string;
+  modulationAmount?: number;
   onFeatureDrop: (parameterId: string, featureId: string, stemType?: string) => void;
   onFeatureUnmap: (parameterId: string) => void;
+  onModulationAmountChange?: (parameterId: string, amount: number) => void;
   className?: string;
   dropZoneStyle?: string;
   showTagOnHover?: boolean;
@@ -30,8 +33,10 @@ export const DroppableParameter: React.FC<DroppableParameterProps> = ({
   children,
   mappedFeatureId,
   mappedFeatureName,
+  modulationAmount = 1.0,
   onFeatureDrop,
   onFeatureUnmap,
+  onModulationAmountChange,
   className = '',
   dropZoneStyle = '',
   showTagOnHover = false
@@ -74,61 +79,72 @@ export const DroppableParameter: React.FC<DroppableParameterProps> = ({
     >
       <div className="flex items-center justify-between">
         <label className="text-white/80 text-xs font-mono">{label}</label>
-        {/* Drop Zone - Embossed Pill */}
-        <div
-          ref={dropRef}
-          className={`
-            relative flex items-center justify-center w-8 h-6 rounded-full cursor-pointer
-            transition-all duration-200 ease-out
-            ${mappedFeatureId 
-              ? 'bg-emerald-600/20 border-2 border-emerald-500/50 shadow-lg' 
-              : 'bg-stone-700/50 border-2 border-stone-600/50 shadow-inner'
-            }
-            ${dropState.isOver && dropState.canDrop 
-              ? 'scale-110 bg-emerald-500/30 border-emerald-400 shadow-lg ring-2 ring-emerald-400/50' 
-              : ''
-            }
-            ${!mappedFeatureId && !dropState.isOver 
-              ? 'hover:bg-stone-600/60 hover:border-stone-500/60' 
-              : ''
-            }
-            ${dropZoneStyle === 'inlayed' ? 'ring-2 ring-stone-900/80 shadow-[inset_0_2px_8px_rgba(0,0,0,0.7),0_2px_8px_rgba(16,185,129,0.15)]' : ''}
-          `}
-          style={{
-            // Embossed effect with multiple shadows
-            boxShadow: mappedFeatureId 
-              ? `
-                inset 0 1px 0 rgba(255, 255, 255, 0.1),
-                inset 0 -1px 0 rgba(0, 0, 0, 0.2),
-                0 2px 4px rgba(0, 0, 0, 0.3),
-                0 0 8px rgba(16, 185, 129, 0.3),
-                ${dropZoneStyle === 'inlayed' ? 'inset 0 4px 12px rgba(0,0,0,0.7)' : ''}
-              `
-              : `
-                inset 0 1px 0 rgba(255, 255, 255, 0.05),
-                inset 0 -1px 0 rgba(0, 0, 0, 0.3),
-                0 1px 2px rgba(0, 0, 0, 0.2),
-                ${dropZoneStyle === 'inlayed' ? 'inset 0 4px 12px rgba(0,0,0,0.7)' : ''}
-              `,
-            // Subtle gradient for depth
-            background: mappedFeatureId
-              ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(16, 185, 129, 0.1) 100%)'
-              : 'linear-gradient(135deg, rgba(68, 64, 60, 0.5) 0%, rgba(41, 37, 36, 0.5) 100%)'
-          }}
-        >
-          {/* Drop indicator */}
-          {!mappedFeatureId && (
-            <div className={`
-              w-2 h-2 rounded-full transition-all duration-200
-              ${dropState.isOver && dropState.canDrop 
-                ? 'bg-emerald-400 scale-125' 
-                : 'bg-stone-400/50'
+        <div className="flex items-center gap-2">
+          {/* Drop Zone - Embossed Pill */}
+          <div
+            ref={dropRef}
+            className={`
+              relative flex items-center justify-center w-8 h-6 rounded-full cursor-pointer
+              transition-all duration-200 ease-out
+              ${mappedFeatureId 
+                ? 'bg-emerald-600/20 border-2 border-emerald-500/50 shadow-lg' 
+                : 'bg-stone-700/50 border-2 border-stone-600/50 shadow-inner'
               }
-            `} />
-          )}
-          {/* Mapped feature indicator */}
-          {mappedFeatureId && (
-            <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              ${dropState.isOver && dropState.canDrop 
+                ? 'scale-110 bg-emerald-500/30 border-emerald-400 shadow-lg ring-2 ring-emerald-400/50' 
+                : ''
+              }
+              ${!mappedFeatureId && !dropState.isOver 
+                ? 'hover:bg-stone-600/60 hover:border-stone-500/60' 
+                : ''
+              }
+              ${dropZoneStyle === 'inlayed' ? 'ring-2 ring-stone-900/80 shadow-[inset_0_2px_8px_rgba(0,0,0,0.7),0_2px_8px_rgba(16,185,129,0.15)]' : ''}
+            `}
+            style={{
+              // Embossed effect with multiple shadows
+              boxShadow: mappedFeatureId 
+                ? `
+                  inset 0 1px 0 rgba(255, 255, 255, 0.1),
+                  inset 0 -1px 0 rgba(0, 0, 0, 0.2),
+                  0 2px 4px rgba(0, 0, 0, 0.3),
+                  0 0 8px rgba(16, 185, 129, 0.3),
+                  ${dropZoneStyle === 'inlayed' ? 'inset 0 4px 12px rgba(0,0,0,0.7)' : ''}
+                `
+                : `
+                  inset 0 1px 0 rgba(255, 255, 255, 0.05),
+                  inset 0 -1px 0 rgba(0, 0, 0, 0.3),
+                  0 1px 2px rgba(0, 0, 0, 0.2),
+                  ${dropZoneStyle === 'inlayed' ? 'inset 0 4px 12px rgba(0,0,0,0.7)' : ''}
+                `,
+              // Subtle gradient for depth
+              background: mappedFeatureId
+                ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(16, 185, 129, 0.1) 100%)'
+                : 'linear-gradient(135deg, rgba(68, 64, 60, 0.5) 0%, rgba(41, 37, 36, 0.5) 100%)'
+            }}
+          >
+            {/* Drop indicator */}
+            {!mappedFeatureId && (
+              <div className={`
+                w-2 h-2 rounded-full transition-all duration-200
+                ${dropState.isOver && dropState.canDrop 
+                  ? 'bg-emerald-400 scale-125' 
+                  : 'bg-stone-400/50'
+                }
+              `} />
+            )}
+            {/* Mapped feature indicator */}
+            {mappedFeatureId && (
+              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            )}
+          </div>
+          
+          {/* Modulation Attenuator - only show when feature is mapped */}
+          {mappedFeatureId && onModulationAmountChange && (
+            <ModulationAttenuator
+              value={modulationAmount}
+              onChange={(amount) => onModulationAmountChange(parameterId, amount)}
+              size="sm"
+            />
           )}
         </div>
       </div>

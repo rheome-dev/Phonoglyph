@@ -35,10 +35,11 @@ interface ThreeVisualizerProps {
   // Modal and mapping props
   openEffectModals: Record<string, boolean>;
   onCloseEffectModal: (effectId: string) => void;
-  mappings: Record<string, string | null>;
+  mappings: Record<string, { featureId: string | null; modulationAmount: number }>;
   featureNames: Record<string, string>;
   onMapFeature: (parameterId: string, featureId: string) => void;
   onUnmapFeature: (parameterId: string) => void;
+  onModulationAmountChange?: (parameterId: string, amount: number) => void;
   activeSliderValues: Record<string, number>;
   setActiveSliderValues: React.Dispatch<React.SetStateAction<Record<string, number>>>;
   visualizerRef?: React.RefObject<VisualizerManager> | ((instance: VisualizerManager | null) => void);
@@ -66,6 +67,7 @@ export function ThreeVisualizer({
   featureNames,
   onMapFeature,
   onUnmapFeature,
+  onModulationAmountChange,
   activeSliderValues,
   setActiveSliderValues,
   visualizerRef: externalVisualizerRef,
@@ -416,8 +418,10 @@ export function ThreeVisualizer({
                     }
                     if (typeof value === 'number') {
                       const paramKey = `${effectId}-${paramName}`;
-                      const mappedFeatureId = mappings[paramKey];
+                      const mapping = mappings[paramKey];
+                      const mappedFeatureId = mapping?.featureId || null;
                       const mappedFeatureName = mappedFeatureId ? featureNames[mappedFeatureId] : undefined;
+                      const modulationAmount = mapping?.modulationAmount || 1.0;
                       return (
                         <DroppableParameter
                           key={paramKey}
@@ -425,8 +429,10 @@ export function ThreeVisualizer({
                           label={paramName}
                           mappedFeatureId={mappedFeatureId}
                           mappedFeatureName={mappedFeatureName}
+                          modulationAmount={modulationAmount}
                           onFeatureDrop={onMapFeature}
                           onFeatureUnmap={onUnmapFeature}
+                          onModulationAmountChange={onModulationAmountChange}
                           className="mb-2"
                           dropZoneStyle="inlayed"
                           showTagOnHover

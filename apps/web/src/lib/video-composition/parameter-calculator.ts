@@ -91,7 +91,10 @@ export function calculateOpacity(
         binding.outputRange[0],
         binding.outputRange[1]
       );
-      opacity = applyBlendMode(opacity, mappedValue, binding.blendMode);
+      // Apply modulation amount (default to 1.0 if not specified)
+      const modulationAmount = binding.modulationAmount ?? 1.0;
+      const modulatedValue = mappedValue * modulationAmount;
+      opacity = applyBlendMode(opacity, modulatedValue, binding.blendMode);
     }
   });
   
@@ -157,8 +160,11 @@ export function calculateScale(
         binding.outputRange[0],
         binding.outputRange[1]
       );
-      scaleX = applyBlendMode(scaleX, mappedValue, binding.blendMode);
-      scaleY = applyBlendMode(scaleY, mappedValue, binding.blendMode);
+      // Apply modulation amount (default to 1.0 if not specified)
+      const modulationAmount = binding.modulationAmount ?? 1.0;
+      const modulatedValue = mappedValue * modulationAmount;
+      scaleX = applyBlendMode(scaleX, modulatedValue, binding.blendMode);
+      scaleY = applyBlendMode(scaleY, modulatedValue, binding.blendMode);
     }
   });
   
@@ -227,7 +233,10 @@ export function calculateRotation(
         binding.outputRange[0],
         binding.outputRange[1]
       );
-      rotation = applyBlendMode(rotation, mappedValue, binding.blendMode);
+      // Apply modulation amount (default to 1.0 if not specified)
+      const modulationAmount = binding.modulationAmount ?? 1.0;
+      const modulatedValue = mappedValue * modulationAmount;
+      rotation = applyBlendMode(rotation, modulatedValue, binding.blendMode);
     }
   });
   
@@ -293,8 +302,11 @@ export function calculatePosition(
         binding.outputRange[0],
         binding.outputRange[1]
       );
-      x = applyBlendMode(x, mappedValue, binding.blendMode);
-      y = applyBlendMode(y, mappedValue, binding.blendMode);
+      // Apply modulation amount (default to 1.0 if not specified)
+      const modulationAmount = binding.modulationAmount ?? 1.0;
+      const modulatedValue = mappedValue * modulationAmount;
+      x = applyBlendMode(x, modulatedValue, binding.blendMode);
+      y = applyBlendMode(y, modulatedValue, binding.blendMode);
     }
   });
   

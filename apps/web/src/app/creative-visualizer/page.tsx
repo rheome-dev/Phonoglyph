@@ -266,7 +266,11 @@ function CreativeVisualizerPage() {
   });
 
   // Feature mapping state
-  const [mappings, setMappings] = useState<Record<string, string | null>>({});
+  interface FeatureMapping {
+    featureId: string | null;
+    modulationAmount: number; // 0-1, default 1.0 (100%)
+  }
+  const [mappings, setMappings] = useState<Record<string, FeatureMapping>>({});
   const [featureNames, setFeatureNames] = useState<Record<string, string>>({});
   const [activeTrackId, setActiveTrackId] = useState<string | null>(null);
 
@@ -829,7 +833,13 @@ function CreativeVisualizerPage() {
       effectId: parameterId.split('-')[0]
     });
     
-    setMappings(prev => ({ ...prev, [parameterId]: featureId }));
+    setMappings(prev => ({ 
+      ...prev, 
+      [parameterId]: { 
+        featureId, 
+        modulationAmount: 1.0 // Default to 100% modulation
+      } 
+    }));
     
     // Store feature name for display
     const featureName = featureId.split('-').map(word => 
@@ -846,9 +856,25 @@ function CreativeVisualizerPage() {
       currentMapping: mappings[parameterId]
     });
     
-    setMappings(prev => ({ ...prev, [parameterId]: null }));
+    setMappings(prev => ({ 
+      ...prev, 
+      [parameterId]: { 
+        featureId: null, 
+        modulationAmount: 1.0 
+      } 
+    }));
     
     console.log('🎛️ Mapping removed successfully');
+  };
+
+  const handleModulationAmountChange = (parameterId: string, amount: number) => {
+    setMappings(prev => ({
+      ...prev,
+      [parameterId]: {
+        ...prev[parameterId],
+        modulationAmount: amount
+      }
+    }));
   };
 
   // Handler for selecting a stem/track
@@ -1058,7 +1084,9 @@ function CreativeVisualizerPage() {
 
       // Cache mappings
       if (cachedMappings.length !== Object.keys(mappings).length) {
-        cachedMappings = Object.entries(mappings).filter(([, featureId]) => featureId !== null) as [string, string][];
+        cachedMappings = Object.entries(mappings)
+          .filter(([, mapping]) => mapping.featureId !== null)
+          .map(([paramKey, mapping]) => [paramKey, mapping.featureId!]) as [string, string][];
       }
 
       // 🔥 THE FIX: Use enhancedAudioAnalysis instead of cachedStemAnalysis
@@ -1192,8 +1220,10 @@ function CreativeVisualizerPage() {
             }
             if (typeof value === 'number') {
               const paramKey = `${effectId}-${paramName}`;
-              const mappedFeatureId = mappings[paramKey];
+              const mapping = mappings[paramKey];
+              const mappedFeatureId = mapping?.featureId || null;
               const mappedFeatureName = mappedFeatureId ? featureNames[mappedFeatureId] : undefined;
+              const modulationAmount = mapping?.modulationAmount || 1.0;
               return (
                 <DroppableParameter
                   key={paramKey}
@@ -1201,8 +1231,10 @@ function CreativeVisualizerPage() {
                   label={paramName}
                   mappedFeatureId={mappedFeatureId}
                   mappedFeatureName={mappedFeatureName}
+                  modulationAmount={modulationAmount}
                   onFeatureDrop={handleMapFeature}
                   onFeatureUnmap={handleUnmapFeature}
+                  onModulationAmountChange={handleModulationAmountChange}
                   className="mb-2"
                   dropZoneStyle="inlayed"
                   showTagOnHover
@@ -1600,6 +1632,7 @@ function CreativeVisualizerPage() {
                           featureNames={featureNames}
                           onMapFeature={handleMapFeature}
                           onUnmapFeature={handleUnmapFeature}
+                          onModulationAmountChange={handleModulationAmountChange}
                           activeSliderValues={activeSliderValues}
                           setActiveSliderValues={setActiveSliderValues}
                       onSelectedEffectsChange={() => {}} // <-- Added no-op
