@@ -195,60 +195,6 @@ const transformBackendToFrontendMidiData = (backendData: any): MIDIData => {
   };
 };
 
-// Helper function to create real-time audio data from cached analysis
-const createRealtimeAudioData = (time: number, cachedAnalysis: any[]): AudioAnalysisData => {
-  // Find the analysis data for the current time
-  const analysis = cachedAnalysis.find(a => a.analysisData);
-  if (!analysis?.analysisData) {
-    // Return mock data if no analysis available
-    return {
-      frequencies: new Array(256).fill(0),
-      timeData: new Array(256).fill(0),
-      volume: 0,
-      bass: 0,
-      mid: 0,
-      treble: 0
-    };
-  }
-
-  // Extract real-time values from cached analysis
-  const { original, transients, chroma, rms } = analysis.analysisData;
-  
-  // Get current values based on time
-  const timeIndex = Math.floor(time * 10); // Assuming 10fps data
-  
-  return {
-    frequencies: original.frequencies || new Array(256).fill(0),
-    timeData: original.timeData || new Array(256).fill(0),
-    volume: original.volume?.[timeIndex] || 0,
-    bass: original.bass?.[timeIndex] || 0,
-    mid: original.mid?.[timeIndex] || 0,
-    treble: original.treble?.[timeIndex] || 0
-  };
-};
-
-// Helper function to create real-time MIDI data
-const createRealtimeMidiData = (time: number, midiData: MIDIData): LiveMIDIData => {
-  const activeNotes = midiData.tracks.flatMap(track => 
-    track.notes.filter(note => 
-      note.start <= time && note.start + note.duration > time
-    ).map(note => ({
-      note: note.pitch,
-      velocity: note.velocity,
-      startTime: note.start,
-      duration: note.duration,
-      track: track.id
-    }))
-  );
-
-  return {
-    activeNotes,
-    currentTime: time,
-    tempo: 120, // Default tempo
-    totalNotes: midiData.tracks.reduce((sum, track) => sum + track.notes.length, 0),
-    trackActivity: {}
-  };
-};
 
 function CreativeVisualizerPage() {
   const router = useRouter();
@@ -1152,16 +1098,6 @@ function CreativeVisualizerPage() {
         }
       }
 
-      // Update visualizer with real-time audio data
-      if (visualizerRef.current && enhancedAudioAnalysis.cachedAnalysis.length > 0) {
-        // Create real-time audio data from cached analysis
-        const currentAudioData = createRealtimeAudioData(syncTime, enhancedAudioAnalysis.cachedAnalysis);
-        const currentMidiData = createRealtimeMidiData(syncTime, midiData || sampleMidiData);
-        
-        // Update visualizer with real data
-        visualizerRef.current.updateAudioData(currentAudioData);
-        visualizerRef.current.updateMIDIData(currentMidiData);
-      }
 
       animationFrameId.current = requestAnimationFrame(animationLoop);
     };
