@@ -164,8 +164,8 @@ export function EffectsLibrarySidebar({
     // All cards use the same grey styling regardless of rarity
     return {
       name: rarity,
-      background: 'bg-gray-700',
-      border: 'border-gray-600',
+      background: 'bg-neutral-700',
+      border: 'border-neutral-600',
       glow: 'shadow-gray-600/50',
       textColor: 'text-white',
       frameColor: 'bg-gray-500'
