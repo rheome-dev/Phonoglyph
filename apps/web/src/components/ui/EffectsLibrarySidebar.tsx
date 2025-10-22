@@ -82,7 +82,7 @@ const DraggableEffectCard: React.FC<{
         </div>
         
         {/* Card art area - square and fills width */}
-        <div className="relative z-10 w-full aspect-square bg-gray-800 border border-gray-600 overflow-hidden rounded p-1">
+        <div className="relative z-10 w-full aspect-square bg-neutral-800 border border-gray-600 overflow-hidden rounded p-1">
           {effect.image ? (
             <img 
               src={effect.image} 
