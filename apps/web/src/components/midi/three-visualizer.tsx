@@ -7,8 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { Play, Pause, Settings, Maximize, Download } from 'lucide-react';
 import { cn, debugLog } from '@/lib/utils';
 import { VisualizerManager } from '@/lib/visualizer/core/VisualizerManager';
-import { MetaballsEffect } from '@/lib/visualizer/effects/MetaballsEffect';
-import { ParticleNetworkEffect } from '@/lib/visualizer/effects/ParticleNetworkEffect';
+import { EffectRegistry } from '@/lib/visualizer/effects/EffectRegistry';
+import '@/lib/visualizer/effects/EffectDefinitions';
 import { MIDIData, VisualizationSettings } from '@/types/midi';
 import { VisualizerConfig, LiveMIDIData, AudioAnalysisData, VisualEffect, AspectRatioConfig } from '@/types/visualizer';
 import { PortalModal } from '@/components/ui/portal-modal';
@@ -155,11 +155,7 @@ export function ThreeVisualizer({
 
       internalVisualizerRef.current = new VisualizerManager(canvasRef.current, config);
       
-      // Add default effects
-      // const metaballsEffect = new MetaballsEffect();
-      // const particleEffect = new ParticleNetworkEffect();
-      // metaballsEffectRef.current = metaballsEffect;
-      // particleEffectRef.current = particleEffect;
+
       
       // Enable selected effects
       Object.entries(selectedEffects).forEach(([effectId, enabled]) => {
@@ -183,9 +179,9 @@ export function ThreeVisualizer({
   useEffect(() => {
     if (!internalVisualizerRef.current) return;
     const manager = internalVisualizerRef.current;
-    console.log('[ThreeVisualizer] layers prop:', layers, layers.map(l => l.type));
+    debugLog.log('[ThreeVisualizer] layers prop:', layers, layers.map(l => l.type));
     const effectLayers = layers.filter(l => l.type === 'effect');
-    console.log('[ThreeVisualizer] effectLayers:', effectLayers);
+    debugLog.log('[ThreeVisualizer] effectLayers:', effectLayers);
     const currentIds = Object.keys(effectInstancesRef.current);
     const newIds = effectLayers.map(l => l.id);
 
@@ -194,26 +190,22 @@ export function ThreeVisualizer({
       if (!newIds.includes(id)) {
         manager.removeEffect(id);
         delete effectInstancesRef.current[id];
-        console.log(`[ThreeVisualizer] Removed effect instance: ${id}`);
+        debugLog.log(`[ThreeVisualizer] Removed effect instance: ${id}`);
       }
     }
 
-    // Add new effects from layers
+    // Add new effects from layers using registry system
     for (const layer of effectLayers) {
       if (!effectInstancesRef.current[layer.id]) {
-        let effect: VisualEffect | null = null;
-        if (layer.effectType === 'metaballs') {
-          console.log('[ThreeVisualizer] Instantiating MetaballsEffect for layer:', layer);
-          effect = new MetaballsEffect(layer.settings || {});
-        } else if (layer.effectType === 'particles' || layer.effectType === 'particleNetwork') {
-          console.log('[ThreeVisualizer] Instantiating ParticleNetworkEffect for layer:', layer);
-          effect = new ParticleNetworkEffect();
-        } // Add more effect types as needed
+        debugLog.log('[ThreeVisualizer] Creating effect for layer:', layer);
+        const effect = EffectRegistry.createEffect(layer.effectType || 'metaballs', layer.settings);
         if (effect) {
           effectInstancesRef.current[layer.id] = effect;
           // Add effect with its internal ID (e.g., 'particleNetwork', 'metaballs')
           manager.addEffect(effect);
-          console.log(`[ThreeVisualizer] Added effect instance: ${layer.id} (${layer.effectType}) with effect ID: ${effect.id}`);
+          debugLog.log(`[ThreeVisualizer] Added effect instance: ${layer.id} (${layer.effectType}) with effect ID: ${effect.id}`);
+        } else {
+          debugLog.warn(`[ThreeVisualizer] Failed to create effect: ${layer.effectType} for layer: ${layer.id}`);
         }
       }
     }
@@ -223,7 +215,7 @@ export function ThreeVisualizer({
       for (const id of Object.keys(effectInstancesRef.current)) {
         manager.removeEffect(id);
         delete effectInstancesRef.current[id];
-        console.log(`[ThreeVisualizer] Removed effect instance (all cleared): ${id}`);
+        debugLog.log(`[ThreeVisualizer] Removed effect instance (all cleared): ${id}`);
       }
     }
   }, [layers, internalVisualizerRef.current]);
@@ -303,20 +295,6 @@ export function ThreeVisualizer({
       const paramKey = `${effectId}-${paramName}`;
     setActiveSliderValues(prev => ({ ...prev, [paramKey]: value }));
   };
-
-  // Handler to add an effect (stub, e.g., adds metaballs)
-  // const handleAddEffect = (type: 'metaballs' | 'particles') => {
-  //   const id = `${type}-${Date.now()}`;
-  //   const box = {
-  //     x: canvasSize.width * 0.2,
-  //     y: canvasSize.height * 0.2,
-  //     width: canvasSize.width * 0.6,
-  //     height: canvasSize.height * 0.6,
-  //   };
-  //   setEffects(prev => [...prev, { id, type, }]);
-  //   setSelectedEffectId(id);
-  //   // TODO: Actually instantiate and add the effect to the visualizer manager
-  // };
 
   // Cleanup on unmount
   useEffect(() => {
