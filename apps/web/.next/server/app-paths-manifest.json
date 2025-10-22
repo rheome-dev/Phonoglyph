@@ -1,0 +1,13 @@
+{
+  "/_not-found/page": "app/_not-found/page.js",
+  "/audio-analysis-sandbox/page": "app/audio-analysis-sandbox/page.js",
+  "/auth/callback/route": "app/auth/callback/route.js",
+  "/auth/error/page": "app/auth/error/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/files/page": "app/files/page.js",
+  "/page": "app/page.js",
+  "/(auth)/login/page": "app/(auth)/login/page.js",
+  "/profile/page": "app/profile/page.js",
+  "/creative-visualizer/page": "app/creative-visualizer/page.js",
+  "/(auth)/signup/page": "app/(auth)/signup/page.js"
+}

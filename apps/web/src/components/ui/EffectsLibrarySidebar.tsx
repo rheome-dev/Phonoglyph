@@ -80,9 +80,9 @@ const DraggableEffectCard: React.FC<{
           </div>
         </div>
         
-        <div className="relative z-10 p-2 flex-1 flex flex-col">
+        <div className="relative z-10 px-2 pb-2 flex-1 flex flex-col">
           {/* Card art area */}
-          <div className="h-8 mb-1 bg-gray-800 border border-gray-600 flex items-center justify-center relative overflow-hidden rounded">
+          <div className="h-12 bg-gray-800 border border-gray-600 flex items-center justify-center relative overflow-hidden rounded p-1">
             {effect.image ? (
               <img 
                 src={effect.image} 
