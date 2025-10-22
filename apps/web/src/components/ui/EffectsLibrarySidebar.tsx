@@ -53,7 +53,7 @@ const DraggableEffectCard: React.FC<{
     >
       <div
         className={cn(
-          "h-24 cursor-grab active:cursor-grabbing transition-all duration-200 border relative overflow-hidden p-2 rounded-md flex flex-col",
+          "cursor-grab active:cursor-grabbing transition-all duration-200 border relative overflow-hidden p-2 rounded-md flex flex-col",
           "hover:bg-gray-800",
           cardStyle.background,
           cardStyle.border,
@@ -81,21 +81,23 @@ const DraggableEffectCard: React.FC<{
           </div>
         </div>
         
-        {/* Card art area - takes remaining space */}
-        <div className="relative z-10 flex-1 bg-gray-800 border border-gray-600 flex items-center justify-center overflow-hidden rounded p-1">
+        {/* Card art area - square and fills width */}
+        <div className="relative z-10 w-full aspect-square bg-gray-800 border border-gray-600 overflow-hidden rounded p-1">
           {effect.image ? (
             <img 
               src={effect.image} 
               alt={effect.name}
-              className="w-full h-full object-contain"
+              className="absolute inset-0 w-full h-full object-cover"
             />
           ) : (
-            <div className="text-center relative z-10">
-              <div className="text-xs">
-                {effect.category === 'Generative' ? '🌊' : effect.category === 'Overlays' ? '📊' : '✨'}
-              </div>
-              <div className="text-xs font-mono text-gray-300 uppercase tracking-wider">
-                {effect.category.slice(0, 3)}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="text-center">
+                <div className="text-xs">
+                  {effect.category === 'Generative' ? '🌊' : effect.category === 'Overlays' ? '📊' : '✨'}
+                </div>
+                <div className="text-xs font-mono text-gray-300 uppercase tracking-wider">
+                  {effect.category.slice(0, 3)}
+                </div>
               </div>
             </div>
           )}
