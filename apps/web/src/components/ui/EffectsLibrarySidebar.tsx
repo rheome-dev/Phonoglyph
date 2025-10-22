@@ -69,7 +69,7 @@ const DraggableEffectCard: React.FC<{
         </div>
 
         <div className="relative z-10 pb-0 p-2">
-          <div className="flex items-center gap-1 font-mono text-[10px] font-bold tracking-wide text-black">
+          <div className="flex items-center gap-1 font-mono text-[10px] font-bold tracking-wide text-white">
             <div 
               className="w-1 h-1 flex-shrink-0 border border-gray-600"
               style={{ 
@@ -87,7 +87,7 @@ const DraggableEffectCard: React.FC<{
               <img 
                 src={effect.image} 
                 alt={effect.name}
-                className="w-6 h-6 object-contain"
+                className="w-full h-full object-contain"
               />
             ) : (
               <div className="text-center relative z-10">
