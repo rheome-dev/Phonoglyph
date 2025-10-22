@@ -52,7 +52,7 @@ const DraggableEffectCard: React.FC<{
     >
       <div
         className={cn(
-          "h-24 cursor-grab active:cursor-grabbing transition-all duration-200 border relative overflow-hidden p-0",
+          "h-24 cursor-grab active:cursor-grabbing transition-all duration-200 border relative overflow-hidden p-0 rounded-md",
           "hover:bg-gray-800",
           cardStyle.background,
           cardStyle.border,
@@ -68,7 +68,7 @@ const DraggableEffectCard: React.FC<{
         </div>
 
         <div className="relative z-10 pb-0 p-2">
-          <div className="flex items-center gap-1 font-mono text-xs font-bold tracking-wide text-black">
+          <div className="flex items-center gap-1 font-mono text-[10px] font-bold tracking-wide text-black">
             <div 
               className="w-1 h-1 flex-shrink-0 border border-gray-600"
               style={{ 
@@ -149,36 +149,17 @@ export function EffectsLibrarySidebar({
     return categories;
   }, [filteredEffects]);
 
-  // Get card styling based on rarity
+  // Get card styling - all cards are now grey
   const getCardStyle = (rarity: string, isActive: boolean) => {
-    const rarityStyles = {
-      'Common': {
-        name: 'Common',
-        background: 'bg-gray-700',
-        border: 'border-gray-600',
-        glow: 'shadow-gray-600/50',
-        textColor: 'text-white',
-        frameColor: 'bg-gray-500'
-      },
-      'Rare': {
-        name: 'Rare',
-        background: 'bg-blue-700',
-        border: 'border-blue-600',
-        glow: 'shadow-blue-600/50',
-        textColor: 'text-white',
-        frameColor: 'bg-blue-500'
-      },
-      'Mythic': {
-        name: 'Mythic Rare',
-        background: 'bg-yellow-700',
-        border: 'border-yellow-600',
-        glow: 'shadow-yellow-600/50',
-        textColor: 'text-white',
-        frameColor: 'bg-yellow-500'
-      }
+    // All cards use the same grey styling regardless of rarity
+    return {
+      name: rarity,
+      background: 'bg-gray-700',
+      border: 'border-gray-600',
+      glow: 'shadow-gray-600/50',
+      textColor: 'text-white',
+      frameColor: 'bg-gray-500'
     };
-
-    return rarityStyles[rarity as keyof typeof rarityStyles] || rarityStyles['Common'];
   };
 
   const toggleCategory = (category: string) => {
