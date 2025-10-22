@@ -53,7 +53,7 @@ const DraggableEffectCard: React.FC<{
     >
       <div
         className={cn(
-          "h-24 cursor-grab active:cursor-grabbing transition-all duration-200 border relative overflow-hidden p-0 rounded-md",
+          "h-24 cursor-grab active:cursor-grabbing transition-all duration-200 border relative overflow-hidden p-2 rounded-md flex flex-col",
           "hover:bg-gray-800",
           cardStyle.background,
           cardStyle.border,
@@ -68,7 +68,8 @@ const DraggableEffectCard: React.FC<{
           </span>
         </div>
 
-        <div className="relative z-10 pb-0 p-2">
+        {/* Title - fixed height */}
+        <div className="relative z-10 mb-1">
           <div className="flex items-center gap-1 font-mono text-[10px] font-bold tracking-wide text-white">
             <div 
               className="w-1 h-1 flex-shrink-0 border border-gray-600"
@@ -80,32 +81,30 @@ const DraggableEffectCard: React.FC<{
           </div>
         </div>
         
-        <div className="relative z-10 px-2 pb-2 flex-1 flex flex-col">
-          {/* Card art area */}
-          <div className="h-12 bg-gray-800 border border-gray-600 flex items-center justify-center relative overflow-hidden rounded p-1">
-            {effect.image ? (
-              <img 
-                src={effect.image} 
-                alt={effect.name}
-                className="w-full h-full object-contain"
-              />
-            ) : (
-              <div className="text-center relative z-10">
-                <div className="text-xs">
-                  {effect.category === 'Generative' ? '🌊' : effect.category === 'Overlays' ? '📊' : '✨'}
-                </div>
-                <div className="text-xs font-mono text-gray-300 uppercase tracking-wider">
-                  {effect.category.slice(0, 3)}
-                </div>
+        {/* Card art area - takes remaining space */}
+        <div className="relative z-10 flex-1 bg-gray-800 border border-gray-600 flex items-center justify-center overflow-hidden rounded p-1">
+          {effect.image ? (
+            <img 
+              src={effect.image} 
+              alt={effect.name}
+              className="w-full h-full object-contain"
+            />
+          ) : (
+            <div className="text-center relative z-10">
+              <div className="text-xs">
+                {effect.category === 'Generative' ? '🌊' : effect.category === 'Overlays' ? '📊' : '✨'}
               </div>
-            )}
-          </div>
-          
-          {/* Drag indicator */}
-          <div className="absolute bottom-1 right-1 z-20">
-            <div className="bg-gray-600 text-gray-900 text-xs font-bold px-1 py-0.5 border border-gray-700">
-              ↙
+              <div className="text-xs font-mono text-gray-300 uppercase tracking-wider">
+                {effect.category.slice(0, 3)}
+              </div>
             </div>
+          )}
+        </div>
+        
+        {/* Drag indicator */}
+        <div className="absolute bottom-1 right-1 z-20">
+          <div className="bg-gray-600 text-gray-900 text-xs font-bold px-1 py-0.5 border border-gray-700">
+            ↙
           </div>
         </div>
       </div>
