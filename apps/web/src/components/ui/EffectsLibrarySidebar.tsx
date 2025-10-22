@@ -13,6 +13,7 @@ export interface EffectUIData {
   category: 'Generative' | 'Overlays' | 'Post-Processing';
   rarity: 'Common' | 'Rare' | 'Mythic';
   parameters?: Record<string, any>; // <-- Added optional parameters property
+  image?: string; // <-- Added optional image property
 }
 
 interface EffectsLibrarySidebarProps {
@@ -81,15 +82,23 @@ const DraggableEffectCard: React.FC<{
         
         <div className="relative z-10 p-2 flex-1 flex flex-col">
           {/* Card art area */}
-          <div className="h-8 mb-1 bg-gray-800 border border-gray-600 flex items-center justify-center relative overflow-hidden">
-            <div className="text-center relative z-10">
-              <div className="text-xs">
-                {effect.category === 'Generative' ? '🌊' : effect.category === 'Overlays' ? '📊' : '✨'}
+          <div className="h-8 mb-1 bg-gray-800 border border-gray-600 flex items-center justify-center relative overflow-hidden rounded">
+            {effect.image ? (
+              <img 
+                src={effect.image} 
+                alt={effect.name}
+                className="w-6 h-6 object-contain"
+              />
+            ) : (
+              <div className="text-center relative z-10">
+                <div className="text-xs">
+                  {effect.category === 'Generative' ? '🌊' : effect.category === 'Overlays' ? '📊' : '✨'}
+                </div>
+                <div className="text-xs font-mono text-gray-300 uppercase tracking-wider">
+                  {effect.category.slice(0, 3)}
+                </div>
               </div>
-              <div className="text-xs font-mono text-gray-300 uppercase tracking-wider">
-                {effect.category.slice(0, 3)}
-              </div>
-            </div>
+            )}
           </div>
           
           {/* Drag indicator */}

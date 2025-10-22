@@ -634,6 +634,7 @@ function CreativeVisualizerPage() {
       description: 'Organic, fluid-like visualizations that respond to audio intensity',
       category: 'Generative',
       rarity: 'Rare',
+      image: '/effects/generative/metaballs.png',
       parameters: {} // <-- Added
     },
     { 
@@ -650,6 +651,7 @@ function CreativeVisualizerPage() {
       description: 'Dynamic particle systems that react to rhythm and pitch',
       category: 'Generative',
       rarity: 'Mythic',
+      image: '/effects/generative/particles.png',
       parameters: {} // Empty - modal is handled by ThreeVisualizer
     },
     // HUD Overlay Effects
