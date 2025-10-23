@@ -40,41 +40,40 @@ const FeatureNode = ({
       return;
     }
 
-    // Map feature ID to enhanced analysis data
+    // Map feature ID to enhanced analysis data (aligned with consolidated hook shape)
     const getEnhancedFeatureValue = (featureId: string, time: number): number => {
       const parts = featureId.split('-');
       if (parts.length >= 2) {
         const featureName = parts.slice(1).join('-');
-        
-        // Enhanced analysis features
+
+        const duration: number = analysis?.metadata?.duration ?? 0;
+        const getTimeSeriesValue = (arr: Float32Array | undefined): number => {
+          if (!arr || arr.length === 0 || duration <= 0) return 0;
+          const fps = arr.length / duration;
+          const index = Math.min(arr.length - 1, Math.floor(time * fps));
+          return arr[index] ?? 0;
+        };
+
         switch (featureName) {
-          case 'impact':
-            const transient = analysis.analysisData.transients.find((t: any) => Math.abs(t.time - time) < 0.1);
-            return transient?.intensity || 0;
-          
-          case 'pitch-height':
-            const pitch = analysis.analysisData.chroma.find((c: any) => Math.abs(c.time - time) < 0.1);
-            return pitch?.pitch || 0;
-          
-          case 'brightness':
-            const chroma = analysis.analysisData.chroma.find((c: any) => Math.abs(c.time - time) < 0.1);
-            return chroma?.confidence || 0;
-          
+          case 'impact': {
+            const transient = analysis.analysisData.transients?.find((t: any) => Math.abs(t.time - time) < 0.1);
+            return transient?.intensity ?? 0;
+          }
+          case 'pitch-height': {
+            const chromaHit = analysis.analysisData.chroma?.find((c: any) => Math.abs(c.time - time) < 0.1);
+            return chromaHit?.pitch ?? 0;
+          }
+          case 'brightness': {
+            const chromaHit = analysis.analysisData.chroma?.find((c: any) => Math.abs(c.time - time) < 0.1);
+            return chromaHit?.confidence ?? 0;
+          }
           case 'rms':
+            return getTimeSeriesValue(analysis.analysisData.rms);
           case 'volume':
+            return getTimeSeriesValue(analysis.analysisData.volume ?? analysis.analysisData.rms);
           case 'loudness':
-            const rms = analysis.analysisData.rms.find((r: any) => Math.abs(r.time - time) < 0.1);
-            return rms?.value || 0;
-          
-          // Fall back to original analysis for other features
+            return getTimeSeriesValue(analysis.analysisData.loudness);
           default:
-            if (analysis.analysisData.original && analysis.analysisData.original[featureName]) {
-              const featureData = analysis.analysisData.original[featureName];
-              if (Array.isArray(featureData) && featureData.length > 0) {
-                const timeIndex = Math.round(time * 10); // Assuming 10fps data
-                return featureData[timeIndex] || 0;
-              }
-            }
             return 0;
         }
       }

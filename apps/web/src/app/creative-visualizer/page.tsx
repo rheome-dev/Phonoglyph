@@ -1654,7 +1654,7 @@ function CreativeVisualizerPage() {
                     onEffectClipRemove={handleEffectClipRemove}
                     onEffectClipEdit={handleEffectClipEdit}
                     stems={sortedAvailableStems}
-                    masterStemId={projectFiles?.files.find(f => f.is_master)?.id ?? null}
+                    masterStemId={projectFiles?.files?.find(f => f.is_master)?.id ?? null}
                     onStemSelect={handleStemSelect}
                     activeTrackId={activeTrackId}
                     soloedStems={stemAudio.soloedStems}
