@@ -12,7 +12,7 @@ import { createTRPCContext } from './trpc'
 import { appRouter } from './routers'
 import { testConnection } from './db/connection'
 import { initializeS3 } from './services/r2-storage'
-import { logger } from '../lib/logger';
+import { logger } from './lib/logger';
 
 const app = express()
 const PORT = process.env.PORT || 3001
