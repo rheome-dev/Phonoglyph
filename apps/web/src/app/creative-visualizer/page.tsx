@@ -939,7 +939,8 @@ function CreativeVisualizerPage() {
     switch (featureName) {
       case 'impact':
       case 'transient': {
-        const transient = analysisData.transients?.find(
+        if (!analysisData?.transients || !Array.isArray(analysisData.transients)) return 0;
+        const transient = analysisData.transients.find(
           (t: any) => Math.abs(t.time - time) < 0.1
         );
         return transient?.intensity || 0;
@@ -948,7 +949,8 @@ function CreativeVisualizerPage() {
       case 'rms':
       case 'volume':
       case 'loudness': {
-        const rmsPoint = analysisData.rms?.find(
+        if (!analysisData?.rms || !Array.isArray(analysisData.rms)) return 0;
+        const rmsPoint = analysisData.rms.find(
           (r: any) => Math.abs(r.time - time) < 0.1
         );
         return rmsPoint?.value || 0;
@@ -956,7 +958,8 @@ function CreativeVisualizerPage() {
       
       case 'pitch':
       case 'pitch-height': {
-        const chromaPoint = analysisData.chroma?.find(
+        if (!analysisData?.chroma || !Array.isArray(analysisData.chroma)) return 0;
+        const chromaPoint = analysisData.chroma.find(
           (c: any) => Math.abs(c.time - time) < 0.1
         );
         return chromaPoint?.pitch || 0;
@@ -964,7 +967,8 @@ function CreativeVisualizerPage() {
       
       case 'brightness':
       case 'confidence': {
-        const chromaPoint = analysisData.chroma?.find(
+        if (!analysisData?.chroma || !Array.isArray(analysisData.chroma)) return 0;
+        const chromaPoint = analysisData.chroma.find(
           (c: any) => Math.abs(c.time - time) < 0.1
         );
         return chromaPoint?.confidence || 0;
