@@ -90,9 +90,9 @@ const corsOptions = {
       return callback(null, true);
     }
 
-    // Log rejected origins for debugging
-    logger.warn(`CORS blocked origin: ${origin}`);
-    callback(new Error('Not allowed by CORS'));
+    // Block but don't throw error - just reject with false
+    console.error(`CORS blocked origin: ${origin}`);
+    callback(null, false);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH', 'HEAD'],
@@ -165,21 +165,29 @@ app.get('/', (req: any, res: any) => {
   res.json({ message: 'Phonoglyph API Server is running! 🎵' })
 })
 
-// Start server
-app.listen(PORT, async () => {
-  logger.log(`🚀 Server running on port ${PORT}`)
-  logger.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`)
-  
-  // Test database connection
-  await testConnection()
-  
-  // Initialize S3 service
+// Initialize services (for serverless, this runs on cold start)
+const initializeServices = async () => {
   try {
+    await testConnection()
     await initializeS3()
   } catch (error) {
-    logger.warn('⚠️  S3 initialization failed - file upload features will be disabled')
-    logger.warn('   Please check AWS credentials and configuration')
+    console.error('Service initialization warning:', error)
   }
-})
+}
 
+// For serverless deployment (Vercel), initialize on cold start
+if (process.env.VERCEL) {
+  initializeServices().catch(console.error)
+}
+
+// For local development - start the server
+if (!process.env.VERCEL) {
+  app.listen(PORT, async () => {
+    console.log(`🚀 Server running on port ${PORT}`)
+    console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`)
+    await initializeServices()
+  })
+}
+
+// Export the app for both Vercel serverless and potential imports
 export default app 
