@@ -803,7 +803,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
             >
               <div className="space-y-1">
                 {stems.map((stem) => {
-                  const analysis = cachedAnalysis.find((a: any) => a.fileMetadataId === stem.id);
+                  const analysis = cachedAnalysis?.find((a: any) => a.fileMetadataId === stem.id);
                   const progress = analysisProgress?.[stem.id];
                   return (
                     <StemTrack

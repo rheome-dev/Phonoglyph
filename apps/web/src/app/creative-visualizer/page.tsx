@@ -883,18 +883,18 @@ function CreativeVisualizerPage() {
     debugLog.log('🎛️ Selecting stem:', {
       stemId,
       previousActiveTrack: activeTrackId,
-      availableAnalyses: audioAnalysis.cachedAnalysis.map(a => ({
+      availableAnalyses: audioAnalysis.cachedAnalysis?.map(a => ({
         id: a.fileMetadataId,
         stemType: a.stemType,
         hasData: !!a.analysisData,
         features: a.analysisData ? Object.keys(a.analysisData) : []
-      }))
+      })) || []
     });
     
     setActiveTrackId(stemId);
     
     // Log the analysis data for the selected stem
-    const selectedAnalysis = audioAnalysis.cachedAnalysis.find(a => a.fileMetadataId === stemId);
+    const selectedAnalysis = audioAnalysis.cachedAnalysis?.find(a => a.fileMetadataId === stemId);
     if (selectedAnalysis) {
       debugLog.log('🎛️ Selected stem analysis:', {
         stemId,
@@ -1039,7 +1039,7 @@ function CreativeVisualizerPage() {
       }
 
       // 🔥 THE FIX: Use enhancedAudioAnalysis instead of cachedStemAnalysis
-      if (audioAnalysis.cachedAnalysis.length > 0) {
+      if (audioAnalysis.cachedAnalysis && audioAnalysis.cachedAnalysis.length > 0) {
         for (const [paramKey, featureId] of cachedMappings) {
           if (!featureId) continue;
 
@@ -1049,7 +1049,7 @@ function CreativeVisualizerPage() {
 
           // 🔥 CHANGED: Use audioAnalysis.getFeatureValue from consolidated hook
           // Find the analysis for this stem type to get its file ID
-          const stemAnalysis = audioAnalysis.cachedAnalysis.find(
+          const stemAnalysis = audioAnalysis.cachedAnalysis?.find(
             a => a.stemType === featureStemType
           );
           if (!stemAnalysis) continue;
@@ -1660,7 +1660,7 @@ function CreativeVisualizerPage() {
                     soloedStems={stemAudio.soloedStems}
                     onToggleSolo={stemAudio.toggleStemSolo}
                     analysisProgress={audioAnalysis.analysisProgress}
-                    cachedAnalysis={audioAnalysis.cachedAnalysis}
+                    cachedAnalysis={audioAnalysis.cachedAnalysis || []}
                     stemLoadingState={audioAnalysis.isLoading}
                     stemError={audioAnalysis.error}
                     isPlaying={isPlaying}
