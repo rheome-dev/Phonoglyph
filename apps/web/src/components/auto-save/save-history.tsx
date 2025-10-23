@@ -5,7 +5,7 @@ import { Clock, RotateCcw, Trash2, Calendar } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { cn } from '@/lib/utils'
+import { cn, debugLog } from '@/lib/utils'
 import type { EditState } from '@/hooks/use-auto-save'
 
 export interface SaveHistoryProps {
@@ -33,7 +33,7 @@ export function SaveHistory({
       setRestoringId(stateId)
       await onRestore(stateId)
     } catch (error) {
-      console.error('Failed to restore state:', error)
+      debugLog.error('Failed to restore state:', error)
     } finally {
       setRestoringId(null)
     }
@@ -44,7 +44,7 @@ export function SaveHistory({
       setDeletingId(stateId)
       await onDelete(stateId)
     } catch (error) {
-      console.error('Failed to delete state:', error)
+      debugLog.error('Failed to delete state:', error)
     } finally {
       setDeletingId(null)
     }

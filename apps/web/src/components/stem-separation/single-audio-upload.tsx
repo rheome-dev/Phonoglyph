@@ -18,6 +18,7 @@ import {
 import { trpc } from '@/lib/trpc';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { debugLog } from '@/lib/utils';
 
 interface SingleAudioUploadProps {
   onStemsReady?: (stems: Record<string, string>) => void;
@@ -149,7 +150,7 @@ export function SingleAudioUpload({ onStemsReady, onComplete, className }: Singl
       onComplete?.(fileId);
 
     } catch (error) {
-      console.error('Upload error:', error);
+      debugLog.error('Upload error:', error);
       toast({
         title: 'Upload failed',
         description: error instanceof Error ? error.message : 'Unknown error',

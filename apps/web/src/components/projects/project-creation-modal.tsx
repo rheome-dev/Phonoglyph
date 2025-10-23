@@ -31,6 +31,7 @@ import {
 import { cn } from "@/lib/utils"
 import { StatBar } from "@/components/ui/stat-bar"
 import React from "react"
+import { debugLog } from '@/lib/utils';
 
 interface ProjectCreationModalProps {
   isOpen: boolean
@@ -401,10 +402,10 @@ export function ProjectCreationModal({ isOpen, onClose, defaultMidiFilePath }: P
 
   const uploadFileMutation = trpc.file.uploadFile.useMutation({
     onSuccess: (result) => {
-      console.log('File uploaded successfully:', result.fileId)
+      debugLog.log('File uploaded successfully:', result.fileId)
     },
     onError: (error) => {
-      console.error('Upload error:', error)
+      debugLog.error('Upload error:', error)
       throw error
     }
   })
@@ -423,7 +424,7 @@ export function ProjectCreationModal({ isOpen, onClose, defaultMidiFilePath }: P
     }
     try {
       setIsLoading(true)
-      console.log('Form submission data:', data)
+      debugLog.log('Form submission data:', data)
       
       // Use the actual form data
       const projectData = {
@@ -434,14 +435,14 @@ export function ProjectCreationModal({ isOpen, onClose, defaultMidiFilePath }: P
       };
       
       // Debug: Log the exact payload being sent
-      console.log('=== DEBUG PROJECT CREATION ===');
-      console.log('projectData to send:', JSON.stringify(projectData, null, 2));
-      console.log('projectData.name:', projectData.name);
-      console.log('projectData.name type:', typeof projectData.name);
-      console.log('=== END DEBUG ===');
+      debugLog.log('=== DEBUG PROJECT CREATION ===');
+      debugLog.log('projectData to send:', JSON.stringify(projectData, null, 2));
+      debugLog.log('projectData.name:', projectData.name);
+      debugLog.log('projectData.name type:', typeof projectData.name);
+      debugLog.log('=== END DEBUG ===');
       
       const project = await createProjectMutation.mutateAsync(projectData as CreateProjectInput)
-      console.log('Project created:', project.id)
+      debugLog.log('Project created:', project.id)
       
       // Upload files if stems method is selected
       if (selectedMethod === 'stems' && selectedFiles.length > 0) {
@@ -496,7 +497,7 @@ export function ProjectCreationModal({ isOpen, onClose, defaultMidiFilePath }: P
           utils.file.getUserFiles.invalidate()
           
         } catch (uploadError) {
-          console.error('Upload error:', uploadError)
+          debugLog.error('Upload error:', uploadError)
           toast({
             title: "Upload Failed",
             description: "Some files failed to upload. Please try again.",
@@ -507,7 +508,7 @@ export function ProjectCreationModal({ isOpen, onClose, defaultMidiFilePath }: P
       }
       
     } catch (error) {
-      console.error('Form submission error:', error)
+      debugLog.error('Form submission error:', error)
       toast({
         title: "Upload Failed",
         description: error instanceof Error ? error.message : "Failed to upload files or create project.",

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { router, protectedProcedure, flexibleProcedure } from '../trpc';
 import { TRPCError } from '@trpc/server';
+import { logger } from '../lib/logger';
 
 // Validation schemas
 const saveStateSchema = z.object({
@@ -69,7 +70,7 @@ export const autoSaveRouter = router({
           .single();
 
         if (error) {
-          console.error('Database error saving edit state:', error);
+          logger.error('Database error saving edit state:', error);
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to save edit state',
@@ -88,7 +89,7 @@ export const autoSaveRouter = router({
         return editState;
       } catch (error) {
         if (error instanceof TRPCError) throw error;
-        console.error('Error saving edit state:', error);
+        logger.error('Error saving edit state:', error);
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to save edit state',
@@ -114,7 +115,7 @@ export const autoSaveRouter = router({
             // No current state found, return null
             return null;
           }
-          console.error('Database error fetching current state:', error);
+          logger.error('Database error fetching current state:', error);
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to fetch current state',
@@ -124,7 +125,7 @@ export const autoSaveRouter = router({
         return editState;
       } catch (error) {
         if (error instanceof TRPCError) throw error;
-        console.error('Error fetching current state:', error);
+        logger.error('Error fetching current state:', error);
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch current state',
@@ -152,7 +153,7 @@ export const autoSaveRouter = router({
               message: 'Edit state not found or access denied',
             });
           }
-          console.error('Database error fetching edit state:', fetchError);
+          logger.error('Database error fetching edit state:', fetchError);
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to fetch edit state',
@@ -180,7 +181,7 @@ export const autoSaveRouter = router({
           .single();
 
         if (createError) {
-          console.error('Database error creating restored state:', createError);
+          logger.error('Database error creating restored state:', createError);
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to restore edit state',
@@ -203,7 +204,7 @@ export const autoSaveRouter = router({
         return newState;
       } catch (error) {
         if (error instanceof TRPCError) throw error;
-        console.error('Error restoring edit state:', error);
+        logger.error('Error restoring edit state:', error);
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to restore edit state',
@@ -225,7 +226,7 @@ export const autoSaveRouter = router({
           .range(input.offset, input.offset + input.limit - 1);
 
         if (error) {
-          console.error('Database error fetching project states:', error);
+          logger.error('Database error fetching project states:', error);
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to fetch project states',
@@ -235,7 +236,7 @@ export const autoSaveRouter = router({
         return editStates || [];
       } catch (error) {
         if (error instanceof TRPCError) throw error;
-        console.error('Error fetching project states:', error);
+        logger.error('Error fetching project states:', error);
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch project states',
@@ -263,7 +264,7 @@ export const autoSaveRouter = router({
               message: 'Edit state not found or access denied',
             });
           }
-          console.error('Database error fetching edit state:', fetchError);
+          logger.error('Database error fetching edit state:', fetchError);
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to fetch edit state',
@@ -278,7 +279,7 @@ export const autoSaveRouter = router({
           .eq('user_id', ctx.user.id);
 
         if (deleteError) {
-          console.error('Database error deleting edit state:', deleteError);
+          logger.error('Database error deleting edit state:', deleteError);
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to delete edit state',
@@ -319,7 +320,7 @@ export const autoSaveRouter = router({
         return { success: true };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
-        console.error('Error deleting edit state:', error);
+        logger.error('Error deleting edit state:', error);
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to delete edit state',
@@ -340,7 +341,7 @@ export const autoSaveRouter = router({
           .eq('user_id', ctx.user.id);
 
         if (error) {
-          console.error('Database error clearing project history:', error);
+          logger.error('Database error clearing project history:', error);
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to clear project history',
@@ -359,7 +360,7 @@ export const autoSaveRouter = router({
         return { success: true };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
-        console.error('Error clearing project history:', error);
+        logger.error('Error clearing project history:', error);
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to clear project history',

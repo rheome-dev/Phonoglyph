@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { VisualEffect, AudioAnalysisData, LiveMIDIData } from '@/types/visualizer';
+import { debugLog } from '@/lib/utils';
 
 export class TestCubeEffect implements VisualEffect {
   id = 'test-cube';
@@ -13,7 +14,7 @@ export class TestCubeEffect implements VisualEffect {
   private rotationSpeed = 0.01;
 
   init(scene: THREE.Scene, camera: THREE.Camera, renderer: THREE.WebGLRenderer): void {
-    console.log('🧊 TestCubeEffect.init() called');
+    debugLog.log('🧊 TestCubeEffect.init() called');
     this.scene = scene;
     
     // Create a simple cube (make it bright and obvious)
@@ -27,7 +28,7 @@ export class TestCubeEffect implements VisualEffect {
     this.mesh.position.set(0, 0, 0);
     
     this.scene.add(this.mesh);
-    console.log('🧊 Test cube added to scene');
+    debugLog.log('🧊 Test cube added to scene');
   }
 
   update(deltaTime: number, audioData: AudioAnalysisData, midiData: LiveMIDIData): void {

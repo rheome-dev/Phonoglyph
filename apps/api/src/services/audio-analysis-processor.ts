@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { AudioAnalyzer } from './audio-analyzer';
 import { getFileBuffer } from './r2-storage';
 import { buffer } from 'stream/consumers';
+import { logger } from '../lib/logger';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -36,7 +37,7 @@ export class AudioAnalysisProcessor {
 
       await this.updateJobStatus(job.id, 'completed');
     } catch (error: any) {
-      console.error(`Error processing audio analysis job ${job.id}:`, error);
+      logger.error(`Error processing audio analysis job ${job.id}:`, error);
       await this.updateJobStatus(job.id, 'failed', error.message);
     }
   }
@@ -48,7 +49,7 @@ export class AudioAnalysisProcessor {
       .eq('id', jobId);
 
     if (updateError) {
-      console.error(`Failed to update status for audio analysis job ${jobId}:`, updateError);
+      logger.error(`Failed to update status for audio analysis job ${jobId}:`, updateError);
     }
   }
 } 

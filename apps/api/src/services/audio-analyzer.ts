@@ -163,8 +163,8 @@ export class AudioAnalyzer {
       
       const { data, error } = await query;
       
-      console.log('getCachedAnalysis query:', { fileMetadataId, userId, stemType });
-      console.log('getCachedAnalysis result:', data);
+      logger.log('getCachedAnalysis query:', { fileMetadataId, userId, stemType });
+      logger.log('getCachedAnalysis result:', data);
       
       if (error) {
         throw new Error(`Failed to retrieve cached analysis: ${error.message}`);
@@ -242,7 +242,7 @@ export class AudioAnalyzer {
         }
       }));
     } catch (error) {
-      console.error('getBatchCachedAnalysis error:', error);
+      logger.error('getBatchCachedAnalysis error:', error);
       throw error;
     }
   }
@@ -756,7 +756,7 @@ export class AudioAnalyzer {
     if (N % 2 !== 0) {
       // For non-power-of-2, you'd need a more complex FFT or padding.
       // For simplicity, we'll just return magnitudes of 0.
-      console.warn(`FFT size is not a power of 2 (${N}), which is not optimal. Padding or a different FFT algorithm should be used.`);
+      logger.warn(`FFT size is not a power of 2 (${N}), which is not optimal. Padding or a different FFT algorithm should be used.`);
       return new Float32Array(N / 2);
     }
 

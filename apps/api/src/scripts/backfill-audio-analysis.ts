@@ -1,5 +1,6 @@
 import { createSupabaseServerClient } from '../lib/supabase';
 import dotenv from 'dotenv';
+import { logger } from '../lib/logger';
 
 dotenv.config();
 
@@ -16,7 +17,7 @@ async function backfillAudioAnalysis() {
     .eq('upload_status', 'completed');
 
   if (error) {
-    console.error('Failed to fetch audio files:', error);
+    logger.error('Failed to fetch audio files:', error);
     process.exit(1);
   }
 
@@ -30,11 +31,11 @@ async function backfillAudioAnalysis() {
       .maybeSingle();
 
     if (analysisError) {
-      console.error(`Failed to check analysis for file ${file.id}:`, analysisError);
+      logger.error(`Failed to check analysis for file ${file.id}:`, analysisError);
       continue;
     }
     if (existing) {
-      console.log(`Analysis already exists for file ${file.file_name} (${file.id}), skipping.`);
+      logger.log(`Analysis already exists for file ${file.file_name} (${file.id}), skipping.`);
       continue;
     }
 
@@ -44,7 +45,7 @@ async function backfillAudioAnalysis() {
         .from(file.s3_bucket)
         .download(file.s3_key);
       if (bufferError || !fileBuffer) {
-        console.error(`Failed to download buffer for file ${file.file_name}:`, bufferError);
+        logger.error(`Failed to download buffer for file ${file.file_name}:`, bufferError);
         continue;
       }
       const arrayBuffer = await fileBuffer.arrayBuffer();
@@ -59,15 +60,15 @@ async function backfillAudioAnalysis() {
         nodeBuffer
       );
       analyzedCount++;
-      console.log(`✅ Backfilled analysis for file ${file.file_name} (${file.id})`);
+      logger.log(`✅ Backfilled analysis for file ${file.file_name} (${file.id})`);
     } catch (err) {
-      console.error(`❌ Failed to analyze file ${file.file_name} (${file.id}):`, err);
+      logger.error(`❌ Failed to analyze file ${file.file_name} (${file.id}):`, err);
     }
   }
-  console.log(`Backfill complete. Analyzed ${analyzedCount} files.`);
+  logger.log(`Backfill complete. Analyzed ${analyzedCount} files.`);
 }
 
 backfillAudioAnalysis().catch((err) => {
-  console.error('Backfill script failed:', err);
+  logger.error('Backfill script failed:', err);
   process.exit(1);
 }); 

@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { trpc } from '@/lib/trpc'
 import { useAuth } from './use-auth'
+import { debugLog } from '@/lib/utils'
+import { debugLog } from '@/lib/utils';
 
 export interface AutoSaveConfig {
   enabled: boolean
@@ -97,14 +99,14 @@ export function useAutoSave(projectId: string): UseAutoSave {
       
       const dataToSave = stateData || currentStateRef.current
       if (!dataToSave) {
-        console.warn('No state data to save')
+        debugLog.warn('No state data to save')
         return
       }
 
       // Validate state data structure
       const isValidData = validateStateData(dataToSave)
       if (!isValidData) {
-        console.warn('Invalid state data structure')
+        debugLog.warn('Invalid state data structure')
         return
       }
 
@@ -120,7 +122,7 @@ export function useAutoSave(projectId: string): UseAutoSave {
       await getProjectStatesQuery.refetch()
       
     } catch (error) {
-      console.error('Failed to save state:', error)
+      debugLog.error('Failed to save state:', error)
       // Don't throw error to avoid breaking the UI
     } finally {
       setIsSaving(false)
@@ -146,7 +148,7 @@ export function useAutoSave(projectId: string): UseAutoSave {
       
       return restoredState
     } catch (error) {
-      console.error('Failed to restore state:', error)
+      debugLog.error('Failed to restore state:', error)
       throw error
     } finally {
       setIsSaving(false)
@@ -168,7 +170,7 @@ export function useAutoSave(projectId: string): UseAutoSave {
       setLastSaved(null)
       
     } catch (error) {
-      console.error('Failed to clear history:', error)
+      debugLog.error('Failed to clear history:', error)
       throw error
     } finally {
       setIsSaving(false)
@@ -185,7 +187,7 @@ export function useAutoSave(projectId: string): UseAutoSave {
       const currentState = await getCurrentStateQuery.refetch()
       return currentState.data || null
     } catch (error) {
-      console.error('Failed to get current state:', error)
+      debugLog.error('Failed to get current state:', error)
       return null
     }
   }, [projectId, isAuthenticated, getCurrentStateQuery])
@@ -277,7 +279,7 @@ export function useAutoSave(projectId: string): UseAutoSave {
       setLastSaved(new Date(timestamp))
       
     } catch (error) {
-      console.error('Failed to save guest state:', error)
+      debugLog.error('Failed to save guest state:', error)
     } finally {
       setIsSaving(false)
     }
@@ -310,7 +312,7 @@ export function useAutoSave(projectId: string): UseAutoSave {
         timestamp: new Date(parsed.timestamp)
       }
     } catch (error) {
-      console.error('Failed to get guest state:', error)
+      debugLog.error('Failed to get guest state:', error)
       return null
     }
   }, [projectId, isAuthenticated])
@@ -351,7 +353,7 @@ function validateStateData(data: Record<string, any>): boolean {
 
     return isValid
   } catch (error) {
-    console.error('Error validating state data:', error)
+    debugLog.error('Error validating state data:', error)
     return false
   }
 } 

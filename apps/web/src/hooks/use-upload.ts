@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import { useToast } from './use-toast'
 import { trpc } from '@/lib/trpc'
+import { debugLog } from '@/lib/utils';
 
 export interface UploadFile {
   file: File
@@ -231,7 +232,7 @@ export function useUpload(options: UseUploadOptions = {}) {
       onAllUploadsComplete?.()
 
     } catch (error) {
-      console.error('Upload error:', error)
+      debugLog.error('Upload error:', error)
       
       const errorMessage = error instanceof Error ? error.message : 'Upload failed'
       updateFileStatus(uploadFile.id, { 
@@ -288,7 +289,7 @@ export function useUpload(options: UseUploadOptions = {}) {
         }
 
       } catch (error) {
-        console.error('Upload error:', error)
+        debugLog.error('Upload error:', error)
         toast({
           title: 'Upload Error',
           description: 'Upload failed',
@@ -333,7 +334,7 @@ export function useUpload(options: UseUploadOptions = {}) {
       }
 
     } catch (error) {
-      console.error('Upload error:', error)
+      debugLog.error('Upload error:', error)
       toast({
         title: 'Upload Error',
         description: 'Upload failed',

@@ -18,10 +18,10 @@ import { AudioAnalysisData, LiveMIDIData } from '@/types/visualizer';
 import { trpc } from '@/lib/trpc';
 import { CollapsibleSidebar } from '@/components/layout/collapsible-sidebar';
 import { ProjectPickerModal } from '@/components/projects/project-picker-modal';
+import { debugLog } from '@/lib/utils';
 import { ProjectCreationModal } from '@/components/projects/project-creation-modal';
 import { useStemAudioController } from '@/hooks/use-stem-audio-controller';
-import { useCachedStemAnalysis } from '@/hooks/use-cached-stem-analysis';
-import { useEnhancedAudioAnalysis } from '@/hooks/use-enhanced-audio-analysis';
+import { useAudioAnalysis } from '@/hooks/use-audio-analysis';
 import { PortalModal } from '@/components/ui/portal-modal';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
@@ -59,7 +59,7 @@ const EffectsLibrarySidebarWithHud: React.FC<{
   
   const handleEffectDoubleClick = (effectId: string) => {
     if (!stemUrlsReady) {
-      console.warn('[EffectsLibrarySidebarWithHud] Overlay creation blocked: stem URLs not ready');
+      debugLog.warn('[EffectsLibrarySidebarWithHud] Overlay creation blocked: stem URLs not ready');
       return;
     }
     const effect = effects.find(e => e.id === effectId);
@@ -77,7 +77,7 @@ const EffectsLibrarySidebarWithHud: React.FC<{
       
       const overlayType = overlayTypeMap[effectId];
       if (overlayType) {
-        console.log('🎯 Adding HUD overlay:', overlayType);
+        debugLog.log('🎯 Adding HUD overlay:', overlayType);
         hudContext.addOverlay(overlayType);
       }
     }
@@ -291,8 +291,7 @@ function CreativeVisualizerPage() {
 
   const [sampleMidiData] = useState<MIDIData>(createSampleMIDIData());
   const stemAudio = useStemAudioController();
-  const cachedStemAnalysis = useCachedStemAnalysis();
-  const enhancedAudioAnalysis = useEnhancedAudioAnalysis();
+  const audioAnalysis = useAudioAnalysis();
   
   // Sync performance monitoring
   useEffect(() => {
@@ -327,12 +326,12 @@ function CreativeVisualizerPage() {
   const [isCacheLoaded, setIsCacheLoaded] = useState(false);
   
   // Ref to track current analysis state to avoid stale closures
-  const currentAnalysisRef = useRef(cachedStemAnalysis.cachedAnalysis);
+  const currentAnalysisRef = useRef(audioAnalysis.cachedAnalysis);
   
   // Update ref when analysis changes
   useEffect(() => {
-    currentAnalysisRef.current = cachedStemAnalysis.cachedAnalysis;
-  }, [cachedStemAnalysis.cachedAnalysis]);
+    currentAnalysisRef.current = audioAnalysis.cachedAnalysis;
+  }, [audioAnalysis.cachedAnalysis]);
 
   // Get download URL mutation
   const getDownloadUrlMutation = trpc.file.getDownloadUrl.useMutation();
@@ -412,7 +411,7 @@ function CreativeVisualizerPage() {
   // Load stems when project files are available
   useEffect(() => {
     // This effect now correctly handles both initial load and changes to project files
-    if (projectFiles?.files && currentProjectId && isInitialized && !cachedStemAnalysis.isLoading) {
+    if (projectFiles?.files && currentProjectId && isInitialized && !audioAnalysis.isLoading) {
       let cancelled = false;
       
       const loadStemsWithUrls = async () => {
@@ -426,11 +425,11 @@ function CreativeVisualizerPage() {
           );
 
           if (audioFiles.length > 0) {
-            console.log('Found audio files, preparing to load:', audioFiles.map(f => f.file_name));
-            console.log('Master stem info:', audioFiles.map(f => ({ name: f.file_name, is_master: f.is_master })));
+            debugLog.log('Found audio files, preparing to load:', audioFiles.map(f => f.file_name));
+            debugLog.log('Master stem info:', audioFiles.map(f => ({ name: f.file_name, is_master: f.is_master })));
             
             // Debug: Log file structure to see what fields are available
-            console.log('Audio file structure sample:', audioFiles[0]);
+            debugLog.log('Audio file structure sample:', audioFiles[0]);
             
             // Sort so master is last
             const sortedAudioFiles = sortStemsWithMasterLast(audioFiles.map(f => ({
@@ -442,11 +441,11 @@ function CreativeVisualizerPage() {
               sortedAudioFiles.map(async file => {
                 // Debug: Check if file.id exists
                 if (!file.id) {
-                  console.error('File missing ID:', file);
+                  debugLog.error('File missing ID:', file);
                   throw new Error(`File missing ID: ${file.file_name}`);
                 }
                 
-                console.log('Getting download URL for file:', { id: file.id, name: file.file_name });
+                debugLog.log('Getting download URL for file:', { id: file.id, name: file.file_name });
                 const result = await getDownloadUrlMutation.mutateAsync({ fileId: file.id });
                 return {
                   id: file.id,
@@ -467,7 +466,7 @@ function CreativeVisualizerPage() {
                 // Use ref to get current state to avoid stale closure
                 const currentAnalysis = currentAnalysisRef.current;
                 const hasAnalysis = currentAnalysis.some(a => a.fileMetadataId === stemId);
-                console.log('🎵 Stem loaded callback:', { 
+                debugLog.log('🎵 Stem loaded callback:', { 
                   stemId, 
                   stemType: stem?.stemType, 
                   hasAnalysis,
@@ -475,11 +474,10 @@ function CreativeVisualizerPage() {
                   cachedAnalysisIds: currentAnalysis.map(a => a.fileMetadataId)
                 });
                 if (stem && !hasAnalysis) {
-                  console.log('🎵 Triggering analysis for stem:', stemId, stem.stemType);
-                  cachedStemAnalysis.analyzeAudioBuffer(stemId, audioBuffer, stem.stemType);
-                  enhancedAudioAnalysis.analyzeAudioBuffer(stemId, audioBuffer, stem.stemType);
+                  debugLog.log('🎵 Triggering analysis for stem:', stemId, stem.stemType);
+                  audioAnalysis.analyzeAudioBuffer(stemId, audioBuffer, stem.stemType);
                 } else {
-                  console.log('🎵 Skipping analysis for stem:', stemId, 'reason:', !stem ? 'no stem found' : 'analysis already exists');
+                  debugLog.log('🎵 Skipping analysis for stem:', stemId, 'reason:', !stem ? 'no stem found' : 'analysis already exists');
                 }
               });
               if (masterStems.length > 0) {
@@ -488,7 +486,7 @@ function CreativeVisualizerPage() {
                   // Use ref to get current state to avoid stale closure
                   const currentAnalysis = currentAnalysisRef.current;
                   const hasAnalysis = currentAnalysis.some(a => a.fileMetadataId === stemId);
-                  console.log('🎵 Master stem loaded callback:', { 
+                  debugLog.log('🎵 Master stem loaded callback:', { 
                     stemId, 
                     stemType: stem?.stemType, 
                     hasAnalysis,
@@ -496,21 +494,20 @@ function CreativeVisualizerPage() {
                     cachedAnalysisIds: currentAnalysis.map(a => a.fileMetadataId)
                   });
                   if (stem && !hasAnalysis) {
-                    console.log('🎵 Triggering analysis for master stem:', stemId, stem.stemType);
-                    cachedStemAnalysis.analyzeAudioBuffer(stemId, audioBuffer, stem.stemType);
-                    enhancedAudioAnalysis.analyzeAudioBuffer(stemId, audioBuffer, stem.stemType);
+                    debugLog.log('🎵 Triggering analysis for master stem:', stemId, stem.stemType);
+                    audioAnalysis.analyzeAudioBuffer(stemId, audioBuffer, stem.stemType);
                   } else {
-                    console.log('🎵 Skipping analysis for master stem:', stemId, 'reason:', !stem ? 'no stem found' : 'analysis already exists');
+                    debugLog.log('🎵 Skipping analysis for master stem:', stemId, 'reason:', !stem ? 'no stem found' : 'analysis already exists');
                   }
                 });
               }
             }
           } else {
-            console.log('No completed audio files found in project.');
+            debugLog.log('No completed audio files found in project.');
           }
         } catch (error) {
           if (!cancelled) {
-            console.error('Failed to load stems:', error);
+            debugLog.error('Failed to load stems:', error);
           }
         } finally {
           if (!cancelled) {
@@ -525,7 +522,7 @@ function CreativeVisualizerPage() {
         isLoadingStemsRef.current = false;
       };
     }
-  }, [projectFiles?.files, currentProjectId, isInitialized, cachedStemAnalysis.isLoading]); // Removed cachedStemAnalysis.cachedAnalysis from dependencies
+  }, [projectFiles?.files, currentProjectId, isInitialized, audioAnalysis.isLoading]); // Removed audioAnalysis.cachedAnalysis from dependencies
 
   
 
@@ -537,8 +534,7 @@ function CreativeVisualizerPage() {
   useEffect(() => {
     if (availableStems.length > 0) {
       const stemIds = availableStems.map(stem => stem.id);
-      cachedStemAnalysis.loadAnalysis(stemIds);
-      enhancedAudioAnalysis.loadAnalysis(stemIds);
+      audioAnalysis.loadAnalysis(stemIds);
     }
   }, [availableStems.length]); // Only depend on stem count, not the analysis functions
 
@@ -583,7 +579,7 @@ function CreativeVisualizerPage() {
           await stemAudio.play();
           setIsPlaying(true);
         } catch (error) {
-          console.error('Failed to start audio playback:', error);
+          debugLog.error('Failed to start audio playback:', error);
           setIsPlaying(false);
         }
       } else {
@@ -776,7 +772,7 @@ function CreativeVisualizerPage() {
       [effect.id]: true
     }));
     
-    console.log('Effect added to timeline:', newClip);
+    debugLog.log('Effect added to timeline:', newClip);
   };
 
   const handleEffectClipRemove = (clipId: string) => {
@@ -808,7 +804,7 @@ function CreativeVisualizerPage() {
   };
 
   const handleLayerUpdate = (layerId: string, updates: Partial<Layer>) => {
-    console.log('handleLayerUpdate', layerId, updates);
+    debugLog.log('handleLayerUpdate', layerId, updates);
     setVideoLayers(prev => prev.map(layer => 
       layer.id === layerId ? { ...layer, ...updates } : layer
     ));
@@ -831,7 +827,7 @@ function CreativeVisualizerPage() {
 
   // Feature mapping handlers
   const handleMapFeature = (parameterId: string, featureId: string) => {
-    console.log('🎛️ Creating mapping:', {
+    debugLog.log('🎛️ Creating mapping:', {
       parameterId,
       featureId,
       parameterName: parameterId.split('-')[1],
@@ -852,11 +848,11 @@ function CreativeVisualizerPage() {
     ).join(' ');
     setFeatureNames(prev => ({ ...prev, [featureId]: featureName }));
     
-    console.log('🎛️ Mapping created successfully');
+    debugLog.log('🎛️ Mapping created successfully');
   };
 
   const handleUnmapFeature = (parameterId: string) => {
-    console.log('🎛️ Removing mapping:', {
+    debugLog.log('🎛️ Removing mapping:', {
       parameterId,
       currentMapping: mappings[parameterId]
     });
@@ -869,7 +865,7 @@ function CreativeVisualizerPage() {
       } 
     }));
     
-    console.log('🎛️ Mapping removed successfully');
+    debugLog.log('🎛️ Mapping removed successfully');
   };
 
   const handleModulationAmountChange = (parameterId: string, amount: number) => {
@@ -884,10 +880,10 @@ function CreativeVisualizerPage() {
 
   // Handler for selecting a stem/track
   const handleStemSelect = (stemId: string) => {
-    console.log('🎛️ Selecting stem:', {
+    debugLog.log('🎛️ Selecting stem:', {
       stemId,
       previousActiveTrack: activeTrackId,
-      availableAnalyses: cachedStemAnalysis.cachedAnalysis.map(a => ({
+      availableAnalyses: audioAnalysis.cachedAnalysis.map(a => ({
         id: a.fileMetadataId,
         stemType: a.stemType,
         hasData: !!a.analysisData,
@@ -898,9 +894,9 @@ function CreativeVisualizerPage() {
     setActiveTrackId(stemId);
     
     // Log the analysis data for the selected stem
-    const selectedAnalysis = cachedStemAnalysis.cachedAnalysis.find(a => a.fileMetadataId === stemId);
+    const selectedAnalysis = audioAnalysis.cachedAnalysis.find(a => a.fileMetadataId === stemId);
     if (selectedAnalysis) {
-      console.log('🎛️ Selected stem analysis:', {
+      debugLog.log('🎛️ Selected stem analysis:', {
         stemId,
         stemType: selectedAnalysis.stemType,
         duration: selectedAnalysis.metadata.duration,
@@ -919,7 +915,7 @@ function CreativeVisualizerPage() {
           }, {} as Record<string, any>) : {}
       });
     } else {
-      console.warn('🎛️ No analysis found for selected stem:', stemId);
+      debugLog.warn('🎛️ No analysis found for selected stem:', stemId);
     }
   };
 
@@ -1033,13 +1029,13 @@ function CreativeVisualizerPage() {
   // Track when visualizer ref becomes available
   useEffect(() => {
     if (visualizerRef.current) {
-      console.log('🎛️ Visualizer ref available:', {
+      debugLog.log('🎛️ Visualizer ref available:', {
         hasRef: !!visualizerRef.current,
         availableEffects: visualizerRef.current?.getAllEffects?.()?.map((e: any) => e.id) || [],
         selectedEffects: Object.keys(selectedEffects).filter(k => selectedEffects[k])
       });
     } else {
-      console.log('🎛️ Visualizer ref not available yet');
+      debugLog.log('🎛️ Visualizer ref not available yet');
     }
   }, [visualizerRef.current, selectedEffects]);
 
@@ -1080,8 +1076,8 @@ function CreativeVisualizerPage() {
       let syncTime = Math.max(0, audioPlaybackTime - measuredLatency + (syncOffsetMs / 1000));
       
       // 🔥 FIX: Handle audio looping by wrapping syncTime to analysis duration
-      if (enhancedAudioAnalysis.cachedAnalysis.length > 0) {
-        const analysisDuration = enhancedAudioAnalysis.cachedAnalysis[0]?.metadata?.duration || 1;
+      if (audioAnalysis.cachedAnalysis.length > 0) {
+        const analysisDuration = audioAnalysis.cachedAnalysis[0]?.metadata?.duration || 1;
         if (analysisDuration > 0) {
           syncTime = syncTime % analysisDuration; // Wrap time to loop within analysis duration
         }
@@ -1095,7 +1091,7 @@ function CreativeVisualizerPage() {
       }
 
       // 🔥 THE FIX: Use enhancedAudioAnalysis instead of cachedStemAnalysis
-      if (enhancedAudioAnalysis.cachedAnalysis.length > 0) {
+      if (audioAnalysis.cachedAnalysis.length > 0) {
         for (const [paramKey, featureId] of cachedMappings) {
           if (!featureId) continue;
 
@@ -1104,7 +1100,7 @@ function CreativeVisualizerPage() {
           if (!featureStemType) continue;
 
           // 🔥 CHANGED: Use enhancedAudioAnalysis
-          const featureAnalysis = enhancedAudioAnalysis.cachedAnalysis.find(
+          const featureAnalysis = audioAnalysis.cachedAnalysis.find(
             a => a.stemType === featureStemType
           );
 
@@ -1159,7 +1155,7 @@ function CreativeVisualizerPage() {
   }, [
     isPlaying, 
     mappings, 
-    enhancedAudioAnalysis.cachedAnalysis, // 🔥 CHANGED: Use enhanced analysis
+    audioAnalysis.cachedAnalysis,
     stemAudio, 
     syncOffsetMs
   ]);
@@ -1373,7 +1369,7 @@ function CreativeVisualizerPage() {
 
   // Log projectFiles.files before building stemUrlMap
   useEffect(() => {
-    console.log('[CreativeVisualizerPage] projectFiles.files:', projectFiles?.files);
+    debugLog.log('[CreativeVisualizerPage] projectFiles.files:', projectFiles?.files);
   }, [projectFiles?.files]);
 
   // State for asynchronously built stemUrlMap
@@ -1385,8 +1381,8 @@ function CreativeVisualizerPage() {
       const audioFiles = projectFiles.files.filter(f => f.file_type === 'audio' && f.upload_status === 'completed');
       
       // Debug: Log file structure
-      console.log('fetchUrls - projectFiles.files:', projectFiles.files);
-      console.log('fetchUrls - audioFiles:', audioFiles);
+      debugLog.log('fetchUrls - projectFiles.files:', projectFiles.files);
+      debugLog.log('fetchUrls - audioFiles:', audioFiles);
       
       const entries = await Promise.all(audioFiles.map(async f => {
         let url = f.downloadUrl;
@@ -1394,15 +1390,15 @@ function CreativeVisualizerPage() {
           try {
             // Debug: Check if f.id exists
             if (!f.id) {
-              console.error('fetchUrls - File missing ID:', f);
+              debugLog.error('fetchUrls - File missing ID:', f);
               return [f.id, null];
             }
             
-            console.log('fetchUrls - Getting download URL for file:', { id: f.id, name: f.file_name });
+            debugLog.log('fetchUrls - Getting download URL for file:', { id: f.id, name: f.file_name });
             const result = await getDownloadUrlMutation.mutateAsync({ fileId: f.id });
             url = result.downloadUrl;
           } catch (err) {
-            console.error('[CreativeVisualizerPage] Failed to fetch downloadUrl for', f.id, err);
+            debugLog.error('[CreativeVisualizerPage] Failed to fetch downloadUrl for', f.id, err);
           }
         }
         return [f.id, url];
@@ -1410,9 +1406,9 @@ function CreativeVisualizerPage() {
       const map = Object.fromEntries(entries.filter(([id, url]) => !!url));
       setAsyncStemUrlMap(map);
       if (Object.keys(map).length > 0) {
-        console.log('[CreativeVisualizerPage] asyncStemUrlMap populated:', map);
+        debugLog.log('[CreativeVisualizerPage] asyncStemUrlMap populated:', map);
       } else {
-        console.log('[CreativeVisualizerPage] asyncStemUrlMap is empty');
+        debugLog.log('[CreativeVisualizerPage] asyncStemUrlMap is empty');
       }
     }
     fetchUrls();
@@ -1462,7 +1458,7 @@ function CreativeVisualizerPage() {
 
   return (
     <HudOverlayProvider 
-      cachedAnalysis={cachedStemAnalysis.cachedAnalysis}
+      cachedAnalysis={audioAnalysis.cachedAnalysis}
       stemAudio={stemAudio}
       stemUrlMap={asyncStemUrlMap}
     >
@@ -1490,7 +1486,7 @@ function CreativeVisualizerPage() {
                 className="mb-4"
                 selectedStemType={selectedStemType}
                 currentTime={currentTime}
-                cachedAnalysis={enhancedAudioAnalysis.cachedAnalysis}
+                cachedAnalysis={audioAnalysis.cachedAnalysis}
                 isPlaying={isPlaying}
               />
               <FileSelector 
@@ -1714,10 +1710,10 @@ function CreativeVisualizerPage() {
                     activeTrackId={activeTrackId}
                     soloedStems={stemAudio.soloedStems}
                     onToggleSolo={stemAudio.toggleStemSolo}
-                    analysisProgress={enhancedAudioAnalysis.analysisProgress}
-                    cachedAnalysis={enhancedAudioAnalysis.cachedAnalysis}
-                    stemLoadingState={enhancedAudioAnalysis.isLoading}
-                    stemError={enhancedAudioAnalysis.error}
+                    analysisProgress={audioAnalysis.analysisProgress}
+                    cachedAnalysis={audioAnalysis.cachedAnalysis}
+                    stemLoadingState={audioAnalysis.isLoading}
+                    stemError={audioAnalysis.error}
                     isPlaying={isPlaying}
                     onSeek={setCurrentTime}
                     className="bg-stone-800 border border-gray-700"

@@ -361,7 +361,7 @@ async function performFullAnalysis(channelData, sampleRate, stemType, onProgress
   const totalSteps = Math.floor((channelData.length - bufferSize) / hopSize);
 
   // For now, we'll work with mono data only
-  // TODO: Add stereo support when we have access to multi-channel audio data
+  // Note: Currently processing mono audio - stereo support pending multi-channel data access
   let rightChannelData = null;
 
   while (currentPosition + bufferSize <= channelData.length) {

@@ -93,6 +93,7 @@ export class MediaLayerManager {
   
   /**
    * Update media layer with audio features
+   * @deprecated Legacy method - effects now receive modulated parameters through the mapping system
    */
   public updateWithAudioFeatures(audioFeatures: AudioFeatures): void {
     for (const [id, config] of this.mediaLayers) {

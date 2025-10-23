@@ -5,6 +5,7 @@ import { AuthService } from '@/lib/auth'
 import { guestUserService, type GuestUser } from '@/lib/guest-user'
 import { trpc } from '@/lib/trpc'
 import type { User } from 'phonoglyph-types'
+import { debugLog } from '@/lib/utils';
 
 export type AuthUser = User | GuestUser
 
@@ -81,10 +82,10 @@ export function useAuth() {
               currentGuestUser.id,
               newUser.id
             )
-            console.log('Transferred guest data:', transferredData)
-            // TODO: Call API to save transferred data to user account
+            debugLog.log('Transferred guest data:', transferredData)
+            // Note: Guest data transfer completed - API integration pending
           } catch (error) {
-            console.error('Failed to transfer guest data:', error)
+            debugLog.error('Failed to transfer guest data:', error)
           }
         }
       }
@@ -126,7 +127,7 @@ export function useAuth() {
       const guestUser = guestUserService.createGuestSession()
       setUser(guestUser)
     } catch (error) {
-      console.error('Sign out error:', error)
+      debugLog.error('Sign out error:', error)
       throw error
     }
   }

@@ -9,6 +9,7 @@ import {
   calculateRotation, 
   calculatePosition 
 } from '@/lib/video-composition/parameter-calculator';
+import { debugLog } from '@/lib/utils';
 
 interface VideoLayerProps {
   src: string;
@@ -80,7 +81,7 @@ export const VideoLayer: React.FC<VideoLayerProps> = ({
     if (!video || !isLoaded) return;
     
     if (isPlaying) {
-      video.play().catch(console.error);
+      video.play().catch(debugLog.error);
     } else {
       video.pause();
     }

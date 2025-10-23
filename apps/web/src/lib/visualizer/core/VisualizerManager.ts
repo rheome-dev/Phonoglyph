@@ -109,7 +109,7 @@ export class VisualizerManager {
       debugLog.log('✅ WebGL Renderer created successfully');
       debugLog.log('🔧 WebGL Context:', this.renderer.getContext());
     } catch (error) {
-      console.error('❌ Primary WebGL renderer failed:', error);
+      debugLog.error('❌ Primary WebGL renderer failed:', error);
       
       // Try minimal fallback settings
       try {
@@ -123,7 +123,7 @@ export class VisualizerManager {
         });
         debugLog.log('✅ Fallback renderer created successfully');
       } catch (fallbackError) {
-        console.error('❌ Fallback renderer also failed:', fallbackError);
+        debugLog.error('❌ Fallback renderer also failed:', fallbackError);
         throw new Error('WebGL is not available. Please refresh the page and try again. If the problem persists, try closing other browser tabs or restarting your browser.');
       }
     }
@@ -202,7 +202,7 @@ export class VisualizerManager {
     
     // Handle WebGL context lost/restored
     this.canvas.addEventListener('webglcontextlost', (event) => {
-      console.warn('⚠️ WebGL context lost!');
+      debugLog.warn('⚠️ WebGL context lost!');
       event.preventDefault();
       this.pause(); // Stop rendering
     });
@@ -491,16 +491,8 @@ export class VisualizerManager {
       this.audioTextureManager.updateTime(currentTime / 1000, audioFeatureData.duration);
     }
     
-    // Update media layers with audio features
-    if (this.mediaLayerManager && this.currentAudioData) {
-      const audioFeatures: Record<string, number> = {
-        'main-volume': this.currentAudioData.volume,
-        'main-bass': this.currentAudioData.bass,
-        'main-mid': this.currentAudioData.mid,
-        'main-treble': this.currentAudioData.treble
-      };
-      
-      this.mediaLayerManager.updateWithAudioFeatures(audioFeatures);
+    // Update media layer textures (for video elements)
+    if (this.mediaLayerManager) {
       this.mediaLayerManager.updateTextures();
     }
     
@@ -579,9 +571,9 @@ export class VisualizerManager {
     } else {
       // Only log errors, not every parameter update
       if (!effect) {
-        console.warn(`⚠️ Effect ${effectId} not found`);
+        debugLog.warn(`⚠️ Effect ${effectId} not found`);
       } else if (!effect.parameters.hasOwnProperty(paramName)) {
-        console.warn(`⚠️ Parameter ${paramName} not found in effect ${effectId}`);
+        debugLog.warn(`⚠️ Parameter ${paramName} not found in effect ${effectId}`);
       }
     }
   }

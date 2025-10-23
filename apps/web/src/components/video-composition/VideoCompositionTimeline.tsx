@@ -252,7 +252,7 @@ export const VideoCompositionTimeline: React.FC<VideoCompositionTimelineProps> =
                     className="h-5 w-5 p-0 text-stone-400 hover:text-blue-400"
                     onClick={(e) => {
                       e.stopPropagation();
-                      // TODO: Open layer settings
+                      // Note: Layer settings functionality pending implementation
                     }}
                   >
                     <Settings className="h-3 w-3" />

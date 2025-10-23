@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { router, protectedProcedure, flexibleProcedure, publicProcedure } from '../trpc';
 import { TRPCError } from '@trpc/server';
+import { logger } from '../lib/logger';
 
 // Schema for sandbox analysis data
 const SandboxAnalysisSchema = z.object({
@@ -106,7 +107,7 @@ export const audioAnalysisSandboxRouter = router({
           });
 
         if (saveError) {
-          console.error('Failed to save sandbox analysis:', saveError);
+          logger.error('Failed to save sandbox analysis:', saveError);
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: `Failed to save sandbox analysis: ${saveError.message}`,
@@ -120,7 +121,7 @@ export const audioAnalysisSandboxRouter = router({
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         
-        console.error('Error saving sandbox analysis:', error);
+        logger.error('Error saving sandbox analysis:', error);
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to save sandbox analysis',
@@ -169,7 +170,7 @@ export const audioAnalysisSandboxRouter = router({
           },
         };
       } catch (error) {
-        console.error('Error getting sandbox analysis:', error);
+        logger.error('Error getting sandbox analysis:', error);
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to get sandbox analysis',
@@ -238,7 +239,7 @@ export const audioAnalysisSandboxRouter = router({
 
         return comparison;
       } catch (error) {
-        console.error('Error comparing analysis:', error);
+        logger.error('Error comparing analysis:', error);
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to compare analysis',
@@ -281,7 +282,7 @@ export const audioAnalysisSandboxRouter = router({
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         
-        console.error('Error getting sandbox analyses:', error);
+        logger.error('Error getting sandbox analyses:', error);
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to get sandbox analyses',
@@ -335,7 +336,7 @@ export const audioAnalysisSandboxRouter = router({
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         
-        console.error('Error deleting sandbox analysis:', error);
+        logger.error('Error deleting sandbox analysis:', error);
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to delete sandbox analysis',

@@ -7,6 +7,7 @@ import { Label } from './label';
 import { Button } from './button';
 import { X, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { debugLog } from '@/lib/utils';
 
 interface DroppableSliderProps {
   parameterId: string;
@@ -62,7 +63,7 @@ export function DroppableSlider({
     }, [dropFunction]);
   } catch (error) {
     // If drop context is not available, just use a no-op
-    console.warn('Drop context not available for DroppableSlider:', error);
+    debugLog.warn('Drop context not available for DroppableSlider:', error);
   }
 
   const isMapped = !!mappedFeatureName;

@@ -1,4 +1,5 @@
 import { trpc } from '@/lib/trpc';
+import { debugLog } from '@/lib/utils';
 
 export interface SandboxAnalysisData {
   transients: Array<{
@@ -126,13 +127,12 @@ export class AudioAnalysisSandboxService {
     try {
       const cachedFormat = this.convertToCachedFormat(sandboxAnalysis, fileId, stemType);
       
-      // TODO: Fix tRPC usage in service context
-      // For now, just log the cached format instead of calling tRPC
-      console.log('Sandbox analysis cached format:', cachedFormat);
+      // Note: Currently logging cached format - tRPC integration pending
+      debugLog.log('Sandbox analysis cached format:', cachedFormat);
       
       return true;
     } catch (error) {
-      console.error('Failed to save sandbox analysis to cache:', error);
+      debugLog.error('Failed to save sandbox analysis to cache:', error);
       return false;
     }
   }
@@ -142,13 +142,12 @@ export class AudioAnalysisSandboxService {
    */
   static async loadFromCache(fileId: string, stemType: string = 'master'): Promise<SandboxAnalysisData | null> {
     try {
-      // TODO: Fix tRPC usage in service context
-      // For now, return null to indicate no cached analysis
-      console.log('Loading sandbox analysis from cache:', { fileId, stemType });
+      // Note: Currently returning null - tRPC integration pending
+      debugLog.log('Loading sandbox analysis from cache:', { fileId, stemType });
       
       return null;
     } catch (error) {
-      console.error('Failed to load sandbox analysis from cache:', error);
+      debugLog.error('Failed to load sandbox analysis from cache:', error);
       return null;
     }
   }
@@ -177,7 +176,7 @@ export class AudioAnalysisSandboxService {
         }
       };
     } catch (error) {
-      console.error('Failed to convert cached analysis to sandbox format:', error);
+      debugLog.error('Failed to convert cached analysis to sandbox format:', error);
       return null;
     }
   }

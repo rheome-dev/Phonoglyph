@@ -4,6 +4,7 @@ import { TRPCError } from '@trpc/server';
 import { getFileBuffer } from '../services/r2-storage';
 import { parseMidiFile, validateMidiBuffer } from '../services/midi-parser';
 import { MIDIData } from 'phonoglyph-types';
+import { logger } from '../lib/logger';
 
 // Validation schemas
 const VisualizationSettingsSchema = z.object({
@@ -122,7 +123,7 @@ export const midiRouter = router({
           .single();
 
         if (insertError) {
-          console.error('Database error storing MIDI data:', insertError);
+          logger.error('Database error storing MIDI data:', insertError);
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to store parsed MIDI data',
@@ -139,7 +140,7 @@ export const midiRouter = router({
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         
-        console.error('Error parsing MIDI file:', error);
+        logger.error('Error parsing MIDI file:', error);
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to parse MIDI file',
@@ -204,7 +205,7 @@ export const midiRouter = router({
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         
-        console.error('Error getting visualization data:', error);
+        logger.error('Error getting visualization data:', error);
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to get visualization data',
@@ -252,7 +253,7 @@ export const midiRouter = router({
           });
 
         if (upsertError) {
-          console.error('Database error saving visualization settings:', upsertError);
+          logger.error('Database error saving visualization settings:', upsertError);
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to save visualization settings',
@@ -267,7 +268,7 @@ export const midiRouter = router({
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         
-        console.error('Error saving visualization settings:', error);
+        logger.error('Error saving visualization settings:', error);
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to save visualization settings',
@@ -299,7 +300,7 @@ export const midiRouter = router({
             .eq('file_type', 'midi');
             
           if (fileError) {
-            console.error('Database error fetching file metadata:', fileError);
+            logger.error('Database error fetching file metadata:', fileError);
             throw new TRPCError({
               code: 'INTERNAL_SERVER_ERROR',
               message: 'Failed to fetch project files',
@@ -334,7 +335,7 @@ export const midiRouter = router({
           midiFiles = data;
           
           if (error) {
-            console.error('Database error fetching MIDI files:', error);
+            logger.error('Database error fetching MIDI files:', error);
             throw new TRPCError({
               code: 'INTERNAL_SERVER_ERROR',
               message: 'Failed to fetch MIDI files',
@@ -359,14 +360,14 @@ export const midiRouter = router({
           if (error) {
             // If the table doesn't exist yet, return empty result instead of error
             if (error.code === '42P01') { // Table doesn't exist
-              console.log('MIDI files table does not exist yet, returning empty result');
+              logger.log('MIDI files table does not exist yet, returning empty result');
               return {
                 files: [],
                 hasMore: false,
               };
             }
             
-            console.error('Database error fetching MIDI files:', error);
+            logger.error('Database error fetching MIDI files:', error);
             throw new TRPCError({
               code: 'INTERNAL_SERVER_ERROR',
               message: 'Failed to fetch MIDI files',
@@ -392,7 +393,7 @@ export const midiRouter = router({
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         
-        console.error('Error fetching user MIDI files:', error);
+        logger.error('Error fetching user MIDI files:', error);
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch MIDI files',

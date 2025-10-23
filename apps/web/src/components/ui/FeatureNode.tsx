@@ -4,6 +4,7 @@ import React from 'react';
 import { useDrag, ConnectDragSource } from 'react-dnd';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { debugLog } from '@/lib/utils';
 
 interface AudioFeature {
   id: string;
@@ -53,7 +54,7 @@ export function FeatureNode({ feature, category }: FeatureNodeProps) {
     }, [drag]);
   } catch (error) {
     // If drag context is not available, just use a no-op
-    console.warn('Drag context not available for FeatureNode:', error);
+    debugLog.warn('Drag context not available for FeatureNode:', error);
   }
 
   const colorClass = categoryColors[category as keyof typeof categoryColors];

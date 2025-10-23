@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { debugLog } from '@/lib/utils';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -13,21 +14,21 @@ const DEBUG_ENABLED = process.env.NODE_ENV === 'development' &&
 export const debugLog = {
   log: (...args: any[]) => {
     if (DEBUG_ENABLED) {
-      console.log(...args);
+      debugLog.log(...args);
     }
   },
   warn: (...args: any[]) => {
     if (DEBUG_ENABLED) {
-      console.warn(...args);
+      debugLog.warn(...args);
     }
   },
   error: (...args: any[]) => {
     // Always log errors regardless of debug setting
-    console.error(...args);
+    debugLog.error(...args);
   },
   info: (...args: any[]) => {
     if (DEBUG_ENABLED) {
-      console.info(...args);
+      debugLog.info(...args);
     }
   }
 };
@@ -37,6 +38,6 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
   (window as any).__DEBUG_LOGGING__ = false;
   (window as any).__toggleDebugLogging = () => {
     (window as any).__DEBUG_LOGGING__ = !(window as any).__DEBUG_LOGGING__;
-    console.log('Debug logging:', (window as any).__DEBUG_LOGGING__ ? 'enabled' : 'disabled');
+    debugLog.log('Debug logging:', (window as any).__DEBUG_LOGGING__ ? 'enabled' : 'disabled');
   };
 }

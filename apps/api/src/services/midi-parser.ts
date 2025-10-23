@@ -1,6 +1,7 @@
 import MidiParser from 'midi-parser-js';
 import { randomUUID } from 'crypto';
 import { MIDIData, MIDINote, MIDITrack, TempoEvent, MIDIParsingResult } from 'phonoglyph-types';
+import { logger } from '../lib/logger';
 
 // Color palette for track visualization
 const TRACK_COLORS = [
@@ -179,7 +180,7 @@ export async function parseMidiFile(buffer: Buffer, filename: string): Promise<M
     };
 
   } catch (error) {
-    console.error('MIDI parsing error:', error);
+    logger.error('MIDI parsing error:', error);
     return {
       success: false,
       error: `Failed to parse MIDI file: ${error instanceof Error ? error.message : 'Unknown error'}`

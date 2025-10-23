@@ -1,8 +1,9 @@
 import { pool } from '../connection'
+import { logger } from '../lib/logger';
 
 export async function seedDevelopmentData() {
   try {
-    console.log('🌱 Seeding development data...')
+    logger.log('🌱 Seeding development data...')
 
     // Insert test user
     const userResult = await pool.query(`
@@ -15,7 +16,7 @@ export async function seedDevelopmentData() {
     `, ['Test User', 'test@phonoglyph.com', 'https://via.placeholder.com/150'])
 
     const userId = userResult.rows[0].id
-    console.log(`✅ Test user created/updated: ${userId}`)
+    logger.log(`✅ Test user created/updated: ${userId}`)
 
     // Insert test project
     const projectResult = await pool.query(`
@@ -36,14 +37,14 @@ export async function seedDevelopmentData() {
     ])
 
     if (projectResult.rows.length > 0) {
-      console.log(`✅ Test project created: ${projectResult.rows[0].id}`)
+      logger.log(`✅ Test project created: ${projectResult.rows[0].id}`)
     } else {
-      console.log('⏭️ Test project already exists')
+      logger.log('⏭️ Test project already exists')
     }
 
-    console.log('🎉 Development data seeded successfully!')
+    logger.log('🎉 Development data seeded successfully!')
   } catch (error) {
-    console.error('❌ Seeding failed:', error)
+    logger.error('❌ Seeding failed:', error)
     throw error
   }
 }
@@ -54,7 +55,7 @@ if (require.main === module) {
     pool.end()
     process.exit(0)
   }).catch((error) => {
-    console.error(error)
+    logger.error(error)
     pool.end()
     process.exit(1)
   })

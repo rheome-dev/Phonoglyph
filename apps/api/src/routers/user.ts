@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { router, protectedProcedure } from '../trpc';
 import { TRPCError } from '@trpc/server';
 import type { UserProfile } from 'phonoglyph-types';
+import { logger } from '../lib/logger';
 
 const updateProfileSchema = z.object({
   display_name: z.string().min(1, 'Display name is required').max(100, 'Display name too long').optional(),
@@ -67,7 +68,7 @@ export const userRouter = router({
         const { error } = await ctx.supabase.auth.admin.deleteUser(ctx.user.id);
 
         if (error) {
-          console.error('Database error deleting user account:', error);
+          logger.error('Database error deleting user account:', error);
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to delete user account',
@@ -77,7 +78,7 @@ export const userRouter = router({
         return { success: true, message: 'Account deleted successfully' };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
-        console.error('Error deleting user account:', error);
+        logger.error('Error deleting user account:', error);
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to delete user account',
@@ -101,7 +102,7 @@ export const userRouter = router({
           .range(input.offset, input.offset + input.limit - 1);
 
         if (error) {
-          console.error('Database error fetching audit logs:', error);
+          logger.error('Database error fetching audit logs:', error);
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to fetch audit logs',
@@ -111,7 +112,7 @@ export const userRouter = router({
         return logs || [];
       } catch (error) {
         if (error instanceof TRPCError) throw error;
-        console.error('Error fetching audit logs:', error);
+        logger.error('Error fetching audit logs:', error);
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch audit logs',

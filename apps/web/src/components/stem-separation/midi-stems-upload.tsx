@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { debugLog } from '@/lib/utils';
 
 interface MidiStemsUploadProps {
   onStemsReady?: (stems: Record<string, File>) => void;
@@ -150,7 +151,7 @@ export function MidiStemsUpload({ onStemsReady, onComplete, className }: MidiSte
       onComplete?.(uploadedFileIds);
 
     } catch (error) {
-      console.error('Upload error:', error);
+      debugLog.error('Upload error:', error);
       toast({
         title: 'Upload failed',
         description: error instanceof Error ? error.message : 'Unknown error',

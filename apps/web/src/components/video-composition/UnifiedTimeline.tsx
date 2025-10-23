@@ -8,6 +8,7 @@ import { StemWaveform, WaveformData } from '@/components/stem-visualization/stem
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { HudOverlayProvider, HudOverlayConfig, useHudOverlayContext } from '@/components/hud/HudOverlayManager';
+import { debugLog } from '@/lib/utils';
 
 interface EffectClip {
   id: string;
@@ -506,7 +507,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
   }, []); // Only run once on mount
 
   const handleAssetDrop = (item: any, targetLayerId?: string) => {
-    console.log('Asset dropped on timeline:', item, 'target layer:', targetLayerId);
+    debugLog.log('Asset dropped on timeline:', item, 'target layer:', targetLayerId);
     
     if (targetLayerId) {
       // Dropped on a specific layer
@@ -536,7 +537,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
             });
             break;
           default:
-            console.warn('Unknown asset type:', item.type);
+            debugLog.warn('Unknown asset type:', item.type);
             return;
         }
         return;
@@ -571,7 +572,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
           });
           break;
         default:
-          console.warn('Unknown asset type:', item.type);
+          debugLog.warn('Unknown asset type:', item.type);
           return;
       }
     } else {
@@ -638,7 +639,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
           onLayerAdd(effectLayer);
           break;
         default:
-          console.warn('Unknown asset type:', item.type);
+          debugLog.warn('Unknown asset type:', item.type);
           return;
       }
     }

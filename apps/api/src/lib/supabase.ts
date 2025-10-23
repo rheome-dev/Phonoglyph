@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import dotenv from 'dotenv'
+import { logger } from '../lib/logger';
 
 dotenv.config()
 
@@ -8,7 +9,7 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
 if (!supabaseUrl || !supabaseServiceKey || !supabaseAnonKey) {
-  console.warn('Supabase environment variables not found. Using dummy values for development.')
+  logger.warn('Supabase environment variables not found. Using dummy values for development.')
 }
 
 // Server-side client with service role key for admin operations
@@ -26,7 +27,7 @@ export const supabase = createClient(
 // Function to create Supabase client with user session
 export function createSupabaseServerClient(accessToken?: string) {
   if (!supabaseUrl || !supabaseAnonKey) {
-    console.warn('Supabase not configured properly')
+    logger.warn('Supabase not configured properly')
     return supabase
   }
 

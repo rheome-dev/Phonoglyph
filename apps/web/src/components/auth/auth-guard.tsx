@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AuthService } from '@/lib/auth'
 import { useAuth } from '@/hooks/use-auth'
+import { debugLog } from '@/lib/utils';
 
 interface AuthGuardProps {
   children: React.ReactNode
@@ -56,7 +57,7 @@ export function AuthGuard({
 
         setIsChecking(false)
       } catch (error) {
-        console.error('Auth guard error:', error)
+        debugLog.error('Auth guard error:', error)
         setIsChecking(false)
       }
     }

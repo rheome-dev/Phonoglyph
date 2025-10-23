@@ -6,6 +6,7 @@ import { generateS3Key, generateUploadUrl, getFileBuffer } from '../services/r2-
 import { join } from 'path';
 import { promises as fs } from 'fs';
 import { tmpdir } from 'os';
+import { logger } from '../lib/logger';
 
 export const stemRouter = router({
   // Create a new stem separation job
@@ -98,7 +99,7 @@ export const stemRouter = router({
                 .single();
 
               if (stemFileError) {
-                console.error(`Failed to create file metadata for ${stemName} stem:`, stemFileError);
+                logger.error(`Failed to create file metadata for ${stemName} stem:`, stemFileError);
                 return { [stemName]: stemKey };
               }
 
@@ -112,9 +113,9 @@ export const stemRouter = router({
                   stemName,
                   stemBuffer
                 );
-                console.log(`✅ Analyzed and cached ${stemName} stem`);
+                logger.log(`✅ Analyzed and cached ${stemName} stem`);
               } catch (analysisError) {
-                console.error(`❌ Failed to analyze ${stemName} stem:`, analysisError);
+                logger.error(`❌ Failed to analyze ${stemName} stem:`, analysisError);
                 // Continue with other stems even if analysis fails
               }
 
@@ -139,7 +140,7 @@ export const stemRouter = router({
             await fs.rm(outputDir, { recursive: true, force: true });
           })
           .catch(async (error) => {
-            console.error('Stem separation failed:', error);
+            logger.error('Stem separation failed:', error);
             
             // Update job status to failed
             await ctx.supabase
@@ -154,13 +155,13 @@ export const stemRouter = router({
             try {
               await fs.rm(outputDir, { recursive: true, force: true });
             } catch (cleanupError) {
-              console.error('Failed to cleanup temporary files:', cleanupError);
+              logger.error('Failed to cleanup temporary files:', cleanupError);
             }
           });
 
         return { jobId: initialJob.id };
       } catch (error) {
-        console.error('Failed to create stem separation job:', error);
+        logger.error('Failed to create stem separation job:', error);
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: error instanceof Error ? error.message : 'Unknown error',
@@ -200,7 +201,7 @@ export const stemRouter = router({
           error: job.error,
         };
       } catch (error) {
-        console.error('Failed to get job status:', error);
+        logger.error('Failed to get job status:', error);
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: error instanceof Error ? error.message : 'Unknown error',
@@ -225,7 +226,7 @@ export const stemRouter = router({
           input.stemType
         );
       } catch (error) {
-        console.error('Failed to get batch cached analysis:', error);
+        logger.error('Failed to get batch cached analysis:', error);
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: error instanceof Error ? error.message : 'Unknown error',
@@ -275,7 +276,7 @@ export const stemRouter = router({
         }
 
         if (existing) {
-          console.log(`Analysis for file ${fileMetadataId} and stem ${stemType} already exists. Skipping cache.`);
+          logger.log(`Analysis for file ${fileMetadataId} and stem ${stemType} already exists. Skipping cache.`);
           return { success: true, cached: false, message: "Analysis already cached." };
         }
 
@@ -305,7 +306,7 @@ export const stemRouter = router({
 
       } catch (error) {
         if (error instanceof TRPCError) throw error;
-        console.error('Failed to cache client-side analysis:', error);
+        logger.error('Failed to cache client-side analysis:', error);
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: error instanceof Error ? error.message : 'Unknown error',
@@ -339,7 +340,7 @@ export const stemRouter = router({
 
         return jobs || [];
       } catch (error) {
-        console.error('Failed to list jobs:', error);
+        logger.error('Failed to list jobs:', error);
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: error instanceof Error ? error.message : 'Unknown error',

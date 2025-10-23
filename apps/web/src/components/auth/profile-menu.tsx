@@ -14,6 +14,7 @@ import {
 import { AuthService } from "@/lib/auth"
 import { useToast } from "@/hooks/use-toast"
 import type { User } from "phonoglyph-types"
+import { debugLog } from '@/lib/utils';
 
 interface ProfileMenuProps {
   user: User
@@ -125,7 +126,7 @@ export function UserDisplay() {
         const currentUser = await AuthService.getCurrentUser()
         setUser(currentUser)
       } catch (error) {
-        console.error("Failed to load user:", error)
+        debugLog.error("Failed to load user:", error)
       } finally {
         setIsLoading(false)
       }

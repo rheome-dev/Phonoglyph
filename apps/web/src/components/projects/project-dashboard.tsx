@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils"
 import { useRouter } from "next/navigation"
 import { Trash2 } from 'lucide-react'
 import { ConfirmationModal } from '@/components/ui/confirmation-modal'
+import { debugLog } from '@/lib/utils';
 
 export interface ProjectDashboardProps {
   user: any
@@ -46,7 +47,7 @@ const ProjectDashboard = React.forwardRef<HTMLDivElement, ProjectDashboardProps>
     const displayProjects = hasSearchCriteria ? searchResults || [] : projects
 
     // Debug logging
-    console.log('🔍 ProjectDashboard State:', {
+    debugLog.log('🔍 ProjectDashboard State:', {
       searchQuery: `"${searchQuery}"`,
       hasSearchCriteria,
       isLoading,

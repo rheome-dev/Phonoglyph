@@ -5,6 +5,7 @@ import { useDrop } from 'react-dnd';
 import { Badge } from '@/components/ui/badge';
 import { X } from 'lucide-react';
 import { ModulationAttenuator } from '@/components/ui/modulation-attenuator';
+import { debugLog } from '@/lib/utils';
 
 export interface DraggableFeatureItem {
   id: string;
@@ -73,7 +74,7 @@ export const DroppableParameter: React.FC<DroppableParameterProps> = ({
     }, [drop]);
   } catch (error) {
     // If drop context is not available, just use a no-op
-    console.warn('Drop context not available for DroppableParameter:', error);
+    debugLog.warn('Drop context not available for DroppableParameter:', error);
   }
 
   // For hover badge

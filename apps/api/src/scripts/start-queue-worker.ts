@@ -1,7 +1,8 @@
 import { QueueWorker } from '../services/queue-worker';
+import { logger } from '../lib/logger';
  
-console.log('Starting queue worker...');
+logger.log('Starting queue worker...');
 QueueWorker.start().catch(error => {
-  console.error('Queue worker failed:', error);
+  logger.error('Queue worker failed:', error);
   process.exit(1);
 }); 

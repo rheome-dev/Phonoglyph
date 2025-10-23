@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { VisualEffect, AudioAnalysisData, LiveMIDIData } from '@/types/visualizer';
+import { debugLog } from '@/lib/utils';
 
 interface Particle {
   position: THREE.Vector3;
@@ -102,7 +103,7 @@ export class ParticleNetworkEffect implements VisualEffect {
   }
 
   init(scene: THREE.Scene, camera: THREE.Camera, renderer: THREE.WebGLRenderer): void {
-    console.log('🌟 ParticleNetworkEffect.init() called');
+    debugLog.log('🌟 ParticleNetworkEffect.init() called');
     this.scene = scene;
     this.camera = camera;
     this.renderer = renderer;
@@ -115,7 +116,7 @@ export class ParticleNetworkEffect implements VisualEffect {
       this.uniforms.uSizeMultiplier.value = this.parameters.particleSize;
     }
     
-    console.log('🌟 Particle Network initialized');
+    debugLog.log('🌟 Particle Network initialized');
   }
   
   private createParticleSystem() {
@@ -508,7 +509,7 @@ export class ParticleNetworkEffect implements VisualEffect {
 
   update(deltaTime: number, audioData: AudioAnalysisData, midiData: LiveMIDIData): void {
     if (!this.uniforms) {
-      console.warn('⚠️ Uniforms not initialized in ParticleNetworkEffect.update()');
+      debugLog.warn('⚠️ Uniforms not initialized in ParticleNetworkEffect.update()');
       return;
     }
 

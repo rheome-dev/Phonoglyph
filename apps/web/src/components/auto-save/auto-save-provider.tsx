@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Settings, History, Save } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, debugLog } from '@/lib/utils'
 
 interface AutoSaveContextType {
   saveCurrentState: () => Promise<void>
@@ -82,7 +82,7 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
       await autoSave.saveState()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save state')
-      console.error('Auto-save error:', err)
+      debugLog.error('Auto-save error:', err)
     }
   }, [autoSave, captureCurrentState])
 
@@ -94,14 +94,14 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
       
       // Apply the restored state to the visualization
       // This will be implemented to restore the state to child components
-      console.log('Restored state:', restoredState)
+      debugLog.log('Restored state:', restoredState)
       
       // Trigger a re-render or state update in child components
       // This is a placeholder - actual implementation will depend on the child components
       
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to restore state')
-      console.error('Restore error:', err)
+      debugLog.error('Restore error:', err)
     }
   }, [autoSave])
 
@@ -111,10 +111,10 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
       setError(null)
       // Note: The delete functionality is not implemented in the hook yet
       // This is a placeholder for future implementation
-      console.log('Delete state:', stateId)
+      debugLog.log('Delete state:', stateId)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete state')
-      console.error('Delete error:', err)
+      debugLog.error('Delete error:', err)
     }
   }, [])
 
@@ -125,7 +125,7 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
       await autoSave.clearHistory()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to clear history')
-      console.error('Clear history error:', err)
+      debugLog.error('Clear history error:', err)
     }
   }, [autoSave])
 
@@ -148,10 +148,10 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
         if (savedState) {
           // Apply the saved state to the visualization
           // This will be implemented to restore the state to child components
-          console.log('Loaded saved state:', savedState)
+          debugLog.log('Loaded saved state:', savedState)
         }
       } catch (err) {
-        console.error('Failed to load saved state:', err)
+        debugLog.error('Failed to load saved state:', err)
       }
     }
 

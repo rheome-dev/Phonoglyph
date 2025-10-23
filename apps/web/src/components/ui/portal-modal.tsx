@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import Draggable from 'react-draggable';
 import { cn } from '@/lib/utils';
+import { debugLog } from '@/lib/utils';
 
 interface PortalModalProps {
   children: React.ReactNode;
@@ -101,7 +102,7 @@ export function PortalModal({
         document.body.removeChild(container);
             } catch (error) {
               // Container might have already been removed, ignore the error
-              console.warn('Portal container cleanup error:', error);
+              debugLog.warn('Portal container cleanup error:', error);
             }
           }
         }, 100);

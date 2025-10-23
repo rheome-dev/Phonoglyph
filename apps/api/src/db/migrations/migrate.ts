@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { pool } from '../connection'
+import { logger } from '../lib/logger';
 
 async function runMigrations() {
   try {
@@ -26,7 +27,7 @@ async function runMigrations() {
     // Execute pending migrations
     for (const file of migrationFiles) {
       if (!executedMigrations.includes(file)) {
-        console.log(`🔄 Running migration: ${file}`)
+        logger.log(`🔄 Running migration: ${file}`)
         
         const migrationSQL = fs.readFileSync(path.join(migrationsDir, file), 'utf8')
         
@@ -36,15 +37,15 @@ async function runMigrations() {
         // Record migration as executed
         await pool.query('INSERT INTO migrations (name) VALUES ($1)', [file])
         
-        console.log(`✅ Migration completed: ${file}`)
+        logger.log(`✅ Migration completed: ${file}`)
       } else {
-        console.log(`⏭️ Migration already executed: ${file}`)
+        logger.log(`⏭️ Migration already executed: ${file}`)
       }
     }
 
-    console.log('🎉 All migrations completed successfully!')
+    logger.log('🎉 All migrations completed successfully!')
   } catch (error) {
-    console.error('❌ Migration failed:', error)
+    logger.error('❌ Migration failed:', error)
     process.exit(1)
   }
 }

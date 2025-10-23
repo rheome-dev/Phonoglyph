@@ -4,9 +4,10 @@ import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { HudOverlay } from './HudOverlay';
 import { HudOverlayParameterModal } from './HudOverlayParameterModal';
-import { useCachedStemAnalysis } from '@/hooks/use-cached-stem-analysis';
+import { useAudioAnalysis } from '@/hooks/use-audio-analysis';
 import { useStemAudioController } from '@/hooks/use-stem-audio-controller';
 import { useDrop } from 'react-dnd';
+import { debugLog } from '@/lib/utils';
 
 export interface HudOverlayConfig {
   id: string;
@@ -83,16 +84,16 @@ export const HudOverlayProvider: React.FC<{
   }, []);
 
   // Use passed props or fallback to hooks
-  const cachedStemAnalysis = useCachedStemAnalysis();
+  const audioAnalysisHook = useAudioAnalysis();
   const stemAudioController = useStemAudioController();
   
   // Use passed props if available, otherwise use hooks
-  const analysisData = cachedAnalysis.length > 0 ? cachedAnalysis : cachedStemAnalysis.cachedAnalysis;
+  const analysisData = cachedAnalysis.length > 0 ? cachedAnalysis : audioAnalysisHook.cachedAnalysis;
   const audioController = stemAudio || stemAudioController;
 
   // Debug: log when the hook data changes
   useEffect(() => {
-    // console.log('🎵 HudOverlayManager analysis data changed:', {
+    // debugLog.log('🎵 HudOverlayManager analysis data changed:', {
     //   count: analysisData.length,
     //   ids: analysisData.map(a => a.fileMetadataId),
     //   source: cachedAnalysis.length > 0 ? 'props' : 'hook'
@@ -102,7 +103,7 @@ export const HudOverlayProvider: React.FC<{
   // Debug: log cached analysis state
   useEffect(() => {
     // if (frame % 120 === 0) { // Log every 120 frames
-    //   console.log('🎵 HudOverlayManager cached analysis state:', {
+    //   debugLog.log('🎵 HudOverlayManager cached analysis state:', {
     //     count: analysisData.length,
     //     analyses: analysisData.map(a => ({
     //       id: a.fileMetadataId,
@@ -118,7 +119,7 @@ export const HudOverlayProvider: React.FC<{
   // Helper: find master stem from cached analysis
   function findMasterStem() {
     if (!analysisData || analysisData.length === 0) {
-      // console.log('🎵 No cached analysis available for master stem selection');
+      // debugLog.log('🎵 No cached analysis available for master stem selection');
       return null;
     }
     
@@ -136,7 +137,7 @@ export const HudOverlayProvider: React.FC<{
     
     // Debug log to see what we found
     if (masterStem) {
-      // console.log('🎵 Found master stem:', {
+      // debugLog.log('🎵 Found master stem:', {
       //   id: masterStem.fileMetadataId,
       //   stemType: masterStem.stemType,
       //   duration: masterStem.metadata?.duration,
@@ -144,7 +145,7 @@ export const HudOverlayProvider: React.FC<{
       //   availableFeatures: masterStem.analysisData ? Object.keys(masterStem.analysisData) : []
       // });
     } else {
-      // console.log('🎵 No master stem found, available stems:', analysisData.map(a => ({
+      // debugLog.log('🎵 No master stem found, available stems:', analysisData.map(a => ({
       //   id: a.fileMetadataId,
       //   stemType: a.stemType,
       //   duration: a.metadata?.duration,
@@ -185,7 +186,7 @@ export const HudOverlayProvider: React.FC<{
     
     // Debug: log what we're looking for
     if (frame % 120 === 0) { // Log every 120 frames to avoid spam
-      // console.log('🎵 Looking for analysis data:', {
+      // debugLog.log('🎵 Looking for analysis data:', {
       //   overlayId: overlay.id,
       //   overlayType: overlay.type,
       //   stemId: overlay.stem.id,
@@ -200,7 +201,7 @@ export const HudOverlayProvider: React.FC<{
     const analysis = analysisData.find(a => a.fileMetadataId === overlay.stem.id);
     if (!analysis || !analysis.analysisData) {
       if (frame % 60 === 0) { // Log every 60 frames to avoid spam
-        // console.log('🎵 No analysis found for stem:', overlay.stem.id, 'Available:', analysisData.map(a => ({
+        // debugLog.log('🎵 No analysis found for stem:', overlay.stem.id, 'Available:', analysisData.map(a => ({
         //   id: a.fileMetadataId,
         //   stemType: a.stemType,
         //   hasData: !!a.analysisData
@@ -211,7 +212,7 @@ export const HudOverlayProvider: React.FC<{
 
     // Debug: log available features
     if (frame % 60 === 0) { // Log every 60 frames to avoid spam
-      // console.log('🎵 Available features for stem:', overlay.stem.id, Object.keys(analysis.analysisData));
+      // debugLog.log('🎵 Available features for stem:', overlay.stem.id, Object.keys(analysis.analysisData));
     }
 
     const featureKeys = getFeatureKeyForOverlay(overlay.type);
@@ -222,7 +223,7 @@ export const HudOverlayProvider: React.FC<{
     if (overlay.type === 'spectrogram' || overlay.type === 'spectrumAnalyzer') {
       // Debug: log what's in the analysis data
       if (frame % 60 === 0) {
-        // console.log('🎵 Analysis data for spectrogram:', {
+        // debugLog.log('🎵 Analysis data for spectrogram:', {
         //   availableKeys: Object.keys(analysis.analysisData),
         //   hasFft: !!analysis.analysisData.fft,
         //   fftType: typeof analysis.analysisData.fft,
@@ -279,7 +280,7 @@ export const HudOverlayProvider: React.FC<{
           buffer.push(newFrame);
         }
         
-        // console.log('🎵 Spectrogram using cached data:', {
+        // debugLog.log('🎵 Spectrogram using cached data:', {
         //   bufferLength: buffer.length,
         //   currentTime: currentTime,
         //   progress: progress,
@@ -293,7 +294,7 @@ export const HudOverlayProvider: React.FC<{
         };
       } else {
         // FFT data is missing or empty, create synthetic FFT data for visualization
-        // console.log('🎵 Creating synthetic FFT data for spectrogram');
+        // debugLog.log('🎵 Creating synthetic FFT data for spectrogram');
         
         const duration = analysis.metadata?.duration || 1;
         const rawCurrentTime = audioController?.currentTime || 0;
@@ -339,7 +340,7 @@ export const HudOverlayProvider: React.FC<{
           buffer.push(newFrame);
         }
         
-        // console.log('🎵 Spectrogram using synthetic data:', {
+        // debugLog.log('🎵 Spectrogram using synthetic data:', {
         //   bufferLength: buffer.length,
         //   currentTime: currentTime,
         //   fftSize: fftSize,
@@ -380,7 +381,7 @@ export const HudOverlayProvider: React.FC<{
     }
 
     if (!featureArr) {
-      // console.log('🎵 No matching features found for overlay type:', overlay.type, 'Available:', Object.keys(analysis.analysisData));
+      // debugLog.log('🎵 No matching features found for overlay type:', overlay.type, 'Available:', Object.keys(analysis.analysisData));
       
       // Fallback: try to find any available feature
       const availableFeatures = Object.keys(analysis.analysisData).filter(key => 
@@ -388,7 +389,7 @@ export const HudOverlayProvider: React.FC<{
       );
       
       if (availableFeatures.length > 0) {
-        // console.log('🎵 Using fallback feature:', availableFeatures[0]);
+        // debugLog.log('🎵 Using fallback feature:', availableFeatures[0]);
         featureArr = analysis.analysisData[availableFeatures[0]];
         featureName = availableFeatures[0];
       } else {
@@ -407,7 +408,7 @@ export const HudOverlayProvider: React.FC<{
     
     const value = featureArr[idx];
     if (frame % 60 === 0) { // Log every 60 frames
-      // console.log('🎵 Feature data for overlay:', overlay.type, 'feature:', featureName, 'value:', value, 'time:', currentTime);
+      // debugLog.log('🎵 Feature data for overlay:', overlay.type, 'feature:', featureName, 'value:', value, 'time:', currentTime);
     }
     
     // Return different data formats based on overlay type
@@ -426,7 +427,7 @@ export const HudOverlayProvider: React.FC<{
       // For stereometer, use real-time stereo window from audio controller if available
       if (audioController && audioController.getStereoWindow && overlay.stem && overlay.stem.id) {
         const stereoWindow = audioController.getStereoWindow(overlay.stem.id, 1024);
-        console.log('[stereometer getStereoWindow call]', {
+        debugLog.log('[stereometer getStereoWindow call]', {
           audioControllerExists: !!audioController,
           getStereoWindowExists: !!audioController.getStereoWindow,
           stemId: overlay.stem.id,
@@ -489,7 +490,7 @@ export const HudOverlayProvider: React.FC<{
 
     // If no master stem found, show a warning but still create the overlay
     if (!defaultStem) {
-      console.warn('🎵 No master stem available for overlay, creating overlay without audio data');
+      debugLog.warn('🎵 No master stem available for overlay, creating overlay without audio data');
     }
 
     setOverlays(prev => {
@@ -551,7 +552,7 @@ export const HudOverlayProvider: React.FC<{
     const allStemIds = overlays.map(o => o.stem?.id).filter(Boolean);
     const allUrlsAvailable = allStemIds.every(id => stemUrlMap[id]);
     if (!allUrlsAvailable) {
-      console.log('[HudOverlayManager] Waiting for all stem URLs to be available', { allStemIds, stemUrlMap });
+      debugLog.log('[HudOverlayManager] Waiting for all stem URLs to be available', { allStemIds, stemUrlMap });
       return;
     }
     // Attach URLs to overlays
@@ -563,7 +564,7 @@ export const HudOverlayProvider: React.FC<{
     // Load stems into audio controller
     const stemsToLoad = getAllOverlayStemsWithUrls(overlays, stemUrlMap);
     if (audioController && stemsToLoad.length > 0) {
-      console.log('[HudOverlayManager] Calling loadStems with', stemsToLoad);
+      debugLog.log('[HudOverlayManager] Calling loadStems with', stemsToLoad);
       audioController.loadStems(stemsToLoad);
     }
   }, [overlays, stemUrlMap, audioController]);

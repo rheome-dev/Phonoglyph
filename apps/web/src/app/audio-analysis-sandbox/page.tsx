@@ -15,6 +15,7 @@ import { AnalysisComparison } from '@/components/audio-analysis/analysis-compari
 import { AudioAnalysisSandboxService } from '@/services/audio-analysis-sandbox-service';
 import { ApiTest } from '@/components/audio-analysis/api-test';
 import { AuthStatus } from '@/components/audio-analysis/auth-status';
+import { debugLog } from '@/lib/utils';
 
 export default function AudioAnalysisSandboxPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -77,7 +78,7 @@ export default function AudioAnalysisSandboxPage() {
         setAudioBuffer(buffer);
         setDuration(buffer.duration);
       } catch (error) {
-        console.error('Error loading audio:', error);
+        debugLog.error('Error loading audio:', error);
         toast({
           title: 'Error loading audio',
           description: 'Failed to decode audio file',
@@ -137,7 +138,7 @@ export default function AudioAnalysisSandboxPage() {
         throw new Error('Failed to save to cache');
       }
     } catch (error) {
-      console.error('Save error:', error);
+      debugLog.error('Save error:', error);
       toast({
         title: 'Save failed',
         description: 'Failed to save analysis to cache',
@@ -169,7 +170,7 @@ export default function AudioAnalysisSandboxPage() {
         });
       }
     } catch (error) {
-      console.error('Load error:', error);
+      debugLog.error('Load error:', error);
       toast({
         title: 'Load failed',
         description: 'Failed to load analysis from cache',

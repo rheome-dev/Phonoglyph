@@ -1,3 +1,4 @@
+import { logger } from '../lib/logger';
 #!/usr/bin/env node
 
 const { spawn } = require('child_process');
@@ -26,16 +27,16 @@ const migrationProcess = spawn(
 );
 
 migrationProcess.on('close', (code) => {
-  console.log(`Migration process exited with code ${code}`);
+  logger.log(`Migration process exited with code ${code}`);
   if (code !== 0) {
-    console.error('Migration failed. Please check the output above.');
+    logger.error('Migration failed. Please check the output above.');
     process.exit(1);
   } else {
-    console.log('Migration completed successfully.');
+    logger.log('Migration completed successfully.');
   }
 });
 
 migrationProcess.on('error', (err) => {
-  console.error('Failed to start migration process:', err);
+  logger.error('Failed to start migration process:', err);
   process.exit(1);
 }); 

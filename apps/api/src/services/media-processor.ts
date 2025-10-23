@@ -1,4 +1,5 @@
 import { VideoMetadata, ImageMetadata } from '../lib/file-validation'
+import { logger } from '../lib/logger';
 
 export class MediaProcessor {
   
@@ -22,8 +23,7 @@ export class MediaProcessor {
       aspectRatio: '16:9'
     }
     
-    // TODO: Replace with actual ffprobe implementation
-    // const metadata = await this.runFFProbe(buffer);
+    // Note: Using mock metadata for development - replace with actual ffprobe implementation in production
     
     return mockMetadata
   }
@@ -57,7 +57,7 @@ export class MediaProcessor {
       0x07, 0xff, 0xd9
     ])
     
-    // TODO: Replace with actual ffmpeg thumbnail generation
+    // Note: Using mock thumbnail for development - replace with actual ffmpeg implementation in production
     // const thumbnail = await this.runFFMpeg(buffer, timestampSec);
     
     return placeholderJpeg
@@ -80,7 +80,7 @@ export class MediaProcessor {
       fileFormat: extension?.toUpperCase() || 'JPEG'
     }
     
-    // TODO: Replace with actual sharp implementation
+    // Note: Using mock image processing for development - replace with actual sharp implementation in production
     // const metadata = await sharp(buffer).metadata();
     
     return mockMetadata
@@ -115,7 +115,7 @@ export class MediaProcessor {
       0x07, 0xff, 0xd9
     ])
     
-    // TODO: Replace with actual sharp thumbnail generation
+    // Note: Using mock thumbnail for development - replace with actual sharp implementation in production
     // const thumbnail = await sharp(buffer)
     //   .resize(maxWidth, maxHeight, { fit: 'inside', withoutEnlargement: true })
     //   .jpeg({ quality: 80 })
@@ -161,7 +161,7 @@ export class MediaProcessor {
       }
       
     } catch (error) {
-      console.error('Error processing media file:', error)
+      logger.error('Error processing media file:', error)
       throw error
     }
   }

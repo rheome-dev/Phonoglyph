@@ -12,6 +12,7 @@ function observable<T>(subscribe: (observer: { next: (value: T) => void; error?:
   };
 }
 import { guestUserService } from './guest-user';
+import { debugLog } from '@/lib/utils';
 
 // Global session cache to avoid multiple calls
 let sessionCache: any = null;
@@ -77,7 +78,7 @@ const authLink: TRPCLink<AppRouter> = () => {
           
           next(newOp).subscribe(observer);
         } catch (error) {
-          console.warn('Auth link error, attempting request without auth:', error);
+          debugLog.warn('Auth link error, attempting request without auth:', error);
           // If there's an error, still try to make the request without auth
           const newOp = { ...op, context: op.context };
           next(newOp).subscribe(observer);
@@ -103,7 +104,7 @@ const apiUrl =
   (typeof window !== 'undefined' ? 'https://api.phonoglyph.rheome.tools' : 'http://localhost:3001'); // fallback for SSR dev
 
 // Debug logging to see what URL is being used
-console.log('🔧 tRPC API URL Debug:', {
+debugLog.log('🔧 tRPC API URL Debug:', {
   envVar: process.env.NEXT_PUBLIC_API_URL,
   apiUrl,
   isClient: typeof window !== 'undefined',
@@ -113,7 +114,7 @@ console.log('🔧 tRPC API URL Debug:', {
 
 // Validate API URL
 if (!apiUrl && typeof window !== 'undefined') {
-  console.error('❌ NEXT_PUBLIC_API_URL is not set! This will cause API calls to fail.');
+  debugLog.error('❌ NEXT_PUBLIC_API_URL is not set! This will cause API calls to fail.');
 }
 
 export const trpcLinks = [
@@ -145,11 +146,11 @@ export const trpcLinks = [
         });
         // Check if the response is ok
         if (!response.ok) {
-          console.warn(`HTTP ${response.status}: ${response.statusText} for ${url}`);
+          debugLog.warn(`HTTP ${response.status}: ${response.statusText} for ${url}`);
         }
         return response;
       } catch (error) {
-        console.error('Network error in tRPC request:', error);
+        debugLog.error('Network error in tRPC request:', error);
         throw error;
       }
     }

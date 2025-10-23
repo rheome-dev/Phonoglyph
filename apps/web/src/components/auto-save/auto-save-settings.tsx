@@ -9,7 +9,7 @@ import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
 import { Slider } from '@/components/ui/slider'
 import { Badge } from '@/components/ui/badge'
-import { cn } from '@/lib/utils'
+import { cn, debugLog } from '@/lib/utils'
 import type { AutoSaveConfig } from '@/hooks/use-auto-save'
 
 export interface AutoSaveSettingsProps {
@@ -33,7 +33,7 @@ export function AutoSaveSettings({
     try {
       await onSaveNow()
     } catch (error) {
-      console.error('Failed to save now:', error)
+      debugLog.error('Failed to save now:', error)
     }
   }
 

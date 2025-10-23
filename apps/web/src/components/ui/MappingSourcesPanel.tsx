@@ -5,6 +5,7 @@ import { useDrag } from 'react-dnd';
 import { Zap, Music, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAudioFeatures, AudioFeature } from '@/hooks/use-audio-features';
+import { debugLog } from '@/lib/utils';
 
 // Enhanced FeatureNode with live meter
 const FeatureNode = ({ 
@@ -114,7 +115,7 @@ const FeatureNode = ({
     }, [drag]);
   } catch (error) {
     // If drag context is not available, just use a no-op
-    console.warn('Drag context not available for FeatureNode:', error);
+    debugLog.warn('Drag context not available for FeatureNode:', error);
   }
   
   return (

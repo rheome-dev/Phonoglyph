@@ -12,6 +12,7 @@ import {
 } from '../lib/file-validation'
 import { MediaProcessor } from '../services/media-processor'
 import { AssetManager } from '../services/asset-manager'
+import { logger } from '../lib/logger';
 
 // Create rate limiter instance
 const uploadRateLimit = createUploadRateLimit()
@@ -87,7 +88,7 @@ export const fileRouter = router({
           })
 
         if (dbError) {
-          console.error('Database error creating file metadata:', dbError)
+          logger.error('Database error creating file metadata:', dbError)
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to create file record',
@@ -109,7 +110,7 @@ export const fileRouter = router({
       } catch (error) {
         if (error instanceof TRPCError) throw error
         
-        console.error('Error generating upload URL:', error)
+        logger.error('Error generating upload URL:', error)
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to generate upload URL',
@@ -201,7 +202,7 @@ export const fileRouter = router({
           .single();
 
         if (dbError) {
-          console.error('Database error creating file metadata:', dbError)
+          logger.error('Database error creating file metadata:', dbError)
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to create file record',
@@ -221,9 +222,9 @@ export const fileRouter = router({
 
           if (jobError) {
             // Log the error but don't block the upload from completing
-            console.error(`❌ Failed to create audio analysis job for file ${sanitizedFileName}:`, jobError);
+            logger.error(`❌ Failed to create audio analysis job for file ${sanitizedFileName}:`, jobError);
           } else {
-            console.log(`✅ Audio analysis job queued for file ${sanitizedFileName}`);
+            logger.log(`✅ Audio analysis job queued for file ${sanitizedFileName}`);
           }
         }
 
@@ -252,12 +253,12 @@ export const fileRouter = router({
               .eq('id', data.id)
 
             if (updateError) {
-              console.error('Failed to update file metadata:', updateError)
+              logger.error('Failed to update file metadata:', updateError)
               // Don't throw error here - file upload was successful
             }
 
           } catch (processingError) {
-            console.error('Media processing failed:', processingError)
+            logger.error('Media processing failed:', processingError)
             // Update status to failed but don't throw error
             await ctx.supabase
               .from('file_metadata')
@@ -279,7 +280,7 @@ export const fileRouter = router({
       } catch (error) {
         if (error instanceof TRPCError) throw error
         
-        console.error('Error uploading file:', error)
+        logger.error('Error uploading file:', error)
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to upload file',
@@ -325,7 +326,7 @@ export const fileRouter = router({
           .eq('user_id', userId)
 
         if (updateError) {
-          console.error('Database error updating file status:', updateError)
+          logger.error('Database error updating file status:', updateError)
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to update file status',
@@ -337,7 +338,7 @@ export const fileRouter = router({
           try {
             await deleteFile(fileData.s3_key)
           } catch (cleanupError) {
-            console.error('Failed to cleanup failed upload:', cleanupError)
+            logger.error('Failed to cleanup failed upload:', cleanupError)
             // Don't throw - the database update was successful
           }
         }
@@ -351,7 +352,7 @@ export const fileRouter = router({
       } catch (error) {
         if (error instanceof TRPCError) throw error
         
-        console.error('Error confirming upload:', error)
+        logger.error('Error confirming upload:', error)
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to confirm upload',
@@ -412,7 +413,7 @@ export const fileRouter = router({
         return { success: true };
       } catch (error) {
         if (error instanceof TRPCError) throw error;
-        console.error('Error saving audio analysis:', error);
+        logger.error('Error saving audio analysis:', error);
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'An unexpected error occurred while saving the analysis.',
@@ -451,7 +452,7 @@ export const fileRouter = router({
         const { data: files, error } = await query
 
         if (error) {
-          console.error('Database error fetching user files:', error)
+          logger.error('Database error fetching user files:', error)
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to fetch files',
@@ -466,7 +467,7 @@ export const fileRouter = router({
                 const thumbnailUrl = await generateThumbnailUrl(file.thumbnail_url)
                 return { ...file, thumbnail_url: thumbnailUrl }
               } catch (error) {
-                console.error('Failed to generate thumbnail URL:', error)
+                logger.error('Failed to generate thumbnail URL:', error)
                 return file
               }
             }
@@ -482,7 +483,7 @@ export const fileRouter = router({
       } catch (error) {
         if (error instanceof TRPCError) throw error
         
-        console.error('Error fetching user files:', error)
+        logger.error('Error fetching user files:', error)
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch files',
@@ -527,7 +528,7 @@ export const fileRouter = router({
       } catch (error) {
         if (error instanceof TRPCError) throw error
         
-        console.error('Error generating download URL:', error)
+        logger.error('Error generating download URL:', error)
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to generate download URL',
@@ -568,7 +569,7 @@ export const fileRouter = router({
           .eq('user_id', userId)
 
         if (deleteError) {
-          console.error('Database error deleting file:', deleteError)
+          logger.error('Database error deleting file:', deleteError)
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to delete file record',
@@ -583,7 +584,7 @@ export const fileRouter = router({
       } catch (error) {
         if (error instanceof TRPCError) throw error
         
-        console.error('Error deleting file:', error)
+        logger.error('Error deleting file:', error)
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to delete file',
@@ -635,7 +636,7 @@ export const fileRouter = router({
       } catch (error) {
         if (error instanceof TRPCError) throw error
         
-        console.error('Error fetching processing status:', error)
+        logger.error('Error fetching processing status:', error)
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch processing status',
@@ -696,7 +697,7 @@ export const fileRouter = router({
         const { data: files, error } = await query
 
         if (error) {
-          console.error('Database error fetching project assets:', error)
+          logger.error('Database error fetching project assets:', error)
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to fetch project assets',
@@ -720,7 +721,7 @@ export const fileRouter = router({
                 const thumbnailUrl = await generateThumbnailUrl(file.thumbnail_url)
                 return { ...file, thumbnail_url: thumbnailUrl }
               } catch (error) {
-                console.error('Failed to generate thumbnail URL:', error)
+                logger.error('Failed to generate thumbnail URL:', error)
                 return file
               }
             }
@@ -736,7 +737,7 @@ export const fileRouter = router({
       } catch (error) {
         if (error instanceof TRPCError) throw error
         
-        console.error('Error fetching project assets:', error)
+        logger.error('Error fetching project assets:', error)
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch project assets',
@@ -785,7 +786,7 @@ export const fileRouter = router({
       } catch (error) {
         if (error instanceof TRPCError) throw error
         
-        console.error('Error starting asset usage tracking:', error)
+        logger.error('Error starting asset usage tracking:', error)
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to start usage tracking',
@@ -830,7 +831,7 @@ export const fileRouter = router({
       } catch (error) {
         if (error instanceof TRPCError) throw error
         
-        console.error('Error ending asset usage tracking:', error)
+        logger.error('Error ending asset usage tracking:', error)
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to end usage tracking',
@@ -870,7 +871,7 @@ export const fileRouter = router({
       } catch (error) {
         if (error instanceof TRPCError) throw error
         
-        console.error('Error fetching storage quota:', error)
+        logger.error('Error fetching storage quota:', error)
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch storage quota',
@@ -918,7 +919,7 @@ export const fileRouter = router({
       } catch (error) {
         if (error instanceof TRPCError) throw error
         
-        console.error('Error creating asset folder:', error)
+        logger.error('Error creating asset folder:', error)
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to create asset folder',
@@ -958,7 +959,7 @@ export const fileRouter = router({
       } catch (error) {
         if (error instanceof TRPCError) throw error
         
-        console.error('Error fetching asset folders:', error)
+        logger.error('Error fetching asset folders:', error)
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch asset folders',
@@ -1004,7 +1005,7 @@ export const fileRouter = router({
       } catch (error) {
         if (error instanceof TRPCError) throw error
         
-        console.error('Error creating asset tag:', error)
+        logger.error('Error creating asset tag:', error)
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to create asset tag',
@@ -1044,7 +1045,7 @@ export const fileRouter = router({
       } catch (error) {
         if (error instanceof TRPCError) throw error
         
-        console.error('Error fetching asset tags:', error)
+        logger.error('Error fetching asset tags:', error)
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch asset tags',
@@ -1085,7 +1086,7 @@ export const fileRouter = router({
       } catch (error) {
         if (error instanceof TRPCError) throw error
         
-        console.error('Error adding tag to file:', error)
+        logger.error('Error adding tag to file:', error)
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to add tag to file',
@@ -1126,7 +1127,7 @@ export const fileRouter = router({
       } catch (error) {
         if (error instanceof TRPCError) throw error
         
-        console.error('Error removing tag from file:', error)
+        logger.error('Error removing tag from file:', error)
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to remove tag from file',
@@ -1171,7 +1172,7 @@ export const fileRouter = router({
       } catch (error) {
         if (error instanceof TRPCError) throw error
         
-        console.error('Error replacing asset:', error)
+        logger.error('Error replacing asset:', error)
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to replace asset',

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { debugLog } from '@/lib/utils';
 
 interface AudioStemsUploadProps {
   onStemsReady?: (stems: Record<string, File>) => void;
@@ -137,7 +138,7 @@ export function AudioStemsUpload({ onStemsReady, onComplete, className }: AudioS
       onComplete?.(uploadedFileIds);
 
     } catch (error) {
-      console.error('Upload error:', error);
+      debugLog.error('Upload error:', error);
       toast({
         title: 'Upload failed',
         description: error instanceof Error ? error.message : 'Unknown error',

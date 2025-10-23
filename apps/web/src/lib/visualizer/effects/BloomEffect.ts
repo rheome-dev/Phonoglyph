@@ -5,6 +5,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { VisualEffect, AudioAnalysisData, LiveMIDIData } from '@/types/visualizer';
 import { MultiLayerCompositor } from '../core/MultiLayerCompositor';
+import { debugLog } from '@/lib/utils';
 
 export class BloomEffect implements VisualEffect {
   id = 'bloom';
@@ -32,18 +33,18 @@ export class BloomEffect implements VisualEffect {
   private multiLayerCompositor: MultiLayerCompositor | null = null;
 
   constructor() {
-    console.log('✨ BloomEffect constructor called');
+    debugLog.log('✨ BloomEffect constructor called');
   }
 
   init(scene: THREE.Scene, camera: THREE.Camera, renderer: THREE.WebGLRenderer): void {
-    console.log('✨ BloomEffect.init() called');
+    debugLog.log('✨ BloomEffect.init() called');
     this.scene = scene;
     this.camera = camera;
     this.renderer = renderer;
 
     this.setupComposer();
     this.setupMultiLayerCompositor();
-    console.log('✨ Bloom effect initialized');
+    debugLog.log('✨ Bloom effect initialized');
   }
 
   private setupComposer() {
@@ -99,7 +100,7 @@ export class BloomEffect implements VisualEffect {
     this.finalPass = new ShaderPass(finalPassShader);
     this.composer.addPass(this.finalPass);
 
-    console.log('🎭 Bloom composer setup complete');
+    debugLog.log('🎭 Bloom composer setup complete');
   }
 
   private setupMultiLayerCompositor(): void {
@@ -121,9 +122,9 @@ export class BloomEffect implements VisualEffect {
         enabled: true
       });
       
-      console.log('🎨 MultiLayerCompositor initialized (disabled by default)');
+      debugLog.log('🎨 MultiLayerCompositor initialized (disabled by default)');
     } catch (error) {
-      console.error('Failed to initialize MultiLayerCompositor:', error);
+      debugLog.error('Failed to initialize MultiLayerCompositor:', error);
       this.useMultiLayerCompositing = false;
     }
   }
@@ -156,13 +157,13 @@ export class BloomEffect implements VisualEffect {
   // Enable GPU compositing (for testing)
   public enableMultiLayerCompositing(): void {
     this.useMultiLayerCompositing = true;
-    console.log('🎨 GPU compositing enabled');
+    debugLog.log('🎨 GPU compositing enabled');
   }
 
   // Disable GPU compositing (fallback to traditional)
   public disableMultiLayerCompositing(): void {
     this.useMultiLayerCompositing = false;
-    console.log('🎨 GPU compositing disabled');
+    debugLog.log('🎨 GPU compositing disabled');
   }
 
   // Get the multi-layer compositor for external access

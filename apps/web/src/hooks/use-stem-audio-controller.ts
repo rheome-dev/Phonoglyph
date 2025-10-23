@@ -1,6 +1,7 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { StemAnalysis, AudioFeature } from '@/types/stem-audio-analysis';
 import { AudioAnalysisData } from '@/types/visualizer';
+import { debugLog } from '@/lib/utils';
 
 interface Stem {
   id: string;
@@ -77,27 +78,27 @@ export function useStemAudioController(): UseStemAudioController {
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
         
         // Log initial audio context state
-        console.log('🎵 Audio context created with state:', audioContextRef.current.state);
-        console.log('🎵 Audio context sample rate:', audioContextRef.current.sampleRate);
+        debugLog.log('🎵 Audio context created with state:', audioContextRef.current.state);
+        debugLog.log('🎵 Audio context sample rate:', audioContextRef.current.sampleRate);
         
         // Try to resume immediately if possible
         if (audioContextRef.current.state === 'suspended') {
-          console.log('🎵 Audio context is suspended, attempting to resume...');
+          debugLog.log('🎵 Audio context is suspended, attempting to resume...');
           try {
             await audioContextRef.current.resume();
-            console.log('🎵 Audio context resumed successfully');
+            debugLog.log('🎵 Audio context resumed successfully');
           } catch (resumeError) {
-            console.warn('⚠️ Could not resume audio context immediately:', resumeError);
-            console.log('🎵 User interaction will be required to start audio');
+            debugLog.warn('⚠️ Could not resume audio context immediately:', resumeError);
+            debugLog.log('🎵 User interaction will be required to start audio');
           }
         }
         
         
         
-        console.log('🎵 Advanced audio analysis system initialized');
+        debugLog.log('🎵 Advanced audio analysis system initialized');
         
       } catch (error) {
-        console.error('❌ Failed to initialize audio analysis system:', error);
+        debugLog.error('❌ Failed to initialize audio analysis system:', error);
       }
     };
 
@@ -151,23 +152,23 @@ export function useStemAudioController(): UseStemAudioController {
   const loadStems = useCallback(async (stems: Stem[], onDecode?: (stemId: string, buffer: AudioBuffer) => void) => {
     if (stems.length === 0) return;
     if (loadingRef.current || stemsLoaded) {
-      console.log('⚠️ Stems already loading or loaded, skipping duplicate request');
+      debugLog.log('⚠️ Stems already loading or loaded, skipping duplicate request');
       return;
     }
     loadingRef.current = true;
     try {
-      console.log(`🎵 Starting to load ${stems.length} stems...`);
-      console.log('🎵 Stem master info:', stems.map(s => ({ id: s.id, label: s.label, isMaster: s.isMaster })));
+      debugLog.log(`🎵 Starting to load ${stems.length} stems...`);
+      debugLog.log('🎵 Stem master info:', stems.map(s => ({ id: s.id, label: s.label, isMaster: s.isMaster })));
       // Only fetch and decode audio buffers
       const decodedBuffers: Record<string, AudioBuffer> = {};
       const masterStem = stems.find(s => s.isMaster);
       if (masterStem) {
         masterStemIdRef.current = masterStem.id;
-        console.log('🎵 Master stem identified:', masterStem.id, masterStem.label);
+        debugLog.log('🎵 Master stem identified:', masterStem.id, masterStem.label);
       } else if (stems.length > 0) {
         // Fallback: if no master is flagged, assume the first one is.
         masterStemIdRef.current = stems[0].id;
-        console.warn('⚠️ No master stem designated. Defaulting to first stem:', stems[0].id);
+        debugLog.warn('⚠️ No master stem designated. Defaulting to first stem:', stems[0].id);
       }
 
 
@@ -185,13 +186,13 @@ export function useStemAudioController(): UseStemAudioController {
           gainNode.gain.value = 0.7; // Default volume
           gainNodesRef.current[stem.id] = gainNode;
           
-          console.log(`🎵 Decoded audio buffer for ${stem.id}: ${audioBuffer.duration.toFixed(2)}s`);
+          debugLog.log(`🎵 Decoded audio buffer for ${stem.id}: ${audioBuffer.duration.toFixed(2)}s`);
           
           if (onDecode) {
             onDecode(stem.id, audioBuffer);
           }
         } catch (error) {
-          console.error(`❌ Failed to decode audio buffer for ${stem.id}:`, error);
+          debugLog.error(`❌ Failed to decode audio buffer for ${stem.id}:`, error);
         }
       }
 
@@ -200,10 +201,10 @@ export function useStemAudioController(): UseStemAudioController {
       setStemsLoaded(true);
       loadingRef.current = false;
       // REMOVED VERBOSE LOGGING
-      // console.log(`✅ Successfully loaded ${stems.length} stems`);
+      // debugLog.log(`✅ Successfully loaded ${stems.length} stems`);
       
     } catch (error) {
-      console.error('❌ Failed to load stems:', error);
+      debugLog.error('❌ Failed to load stems:', error);
       loadingRef.current = false;
     }
   }, []);
@@ -212,7 +213,7 @@ export function useStemAudioController(): UseStemAudioController {
 
   const play = useCallback(async () => {
     if (!audioContextRef.current || !stemsLoaded) {
-      console.warn('⚠️ Cannot play: AudioContext not ready or stems not loaded');
+      debugLog.warn('⚠️ Cannot play: AudioContext not ready or stems not loaded');
       return;
     }
 
@@ -289,7 +290,7 @@ export function useStemAudioController(): UseStemAudioController {
       }, 16);
 
     } catch (error) {
-      console.error('❌ Failed to start audio playback:', error);
+      debugLog.error('❌ Failed to start audio playback:', error);
       setIsPlaying(false);
     }
   }, [stemsLoaded, isLooping, soloedStems]);
@@ -328,7 +329,7 @@ export function useStemAudioController(): UseStemAudioController {
         try {
           source.stop();
         } catch (error) {
-          console.error(`❌ Failed to stop playback for ${stemId}:`, error);
+          debugLog.error(`❌ Failed to stop playback for ${stemId}:`, error);
         }
       });
       
@@ -345,7 +346,7 @@ export function useStemAudioController(): UseStemAudioController {
       pausedTimeRef.current = 0;
       startTimeRef.current = 0;
     } catch (error) {
-      console.error('❌ Failed to stop playback:', error);
+      debugLog.error('❌ Failed to stop playback:', error);
     }
   }, []); // This line was removed
 
@@ -383,9 +384,9 @@ export function useStemAudioController(): UseStemAudioController {
       //   audioProcessorRef.current.dispose(); // This line was removed
       // } // This line was removed
       
-      console.log('🗑️ Advanced audio analysis and playback cleared');
+      debugLog.log('🗑️ Advanced audio analysis and playback cleared');
     } catch (error) {
-      console.error('❌ Failed to clear stems:', error);
+      debugLog.error('❌ Failed to clear stems:', error);
     }
   }, []); // This line was removed
 
@@ -421,7 +422,7 @@ export function useStemAudioController(): UseStemAudioController {
   //         setVisualizationData(audioAnalysisData);
   //       }
   //     } catch (error) {
-  //       console.error('❌ Failed to process visualization data:', error);
+  //       debugLog.error('❌ Failed to process visualization data:', error);
   //     }
   //   };
 
@@ -455,7 +456,7 @@ export function useStemAudioController(): UseStemAudioController {
         
         animationFrameId = requestAnimationFrame(updateTime);
       } catch (error) {
-        console.error('❌ Failed to update time:', error);
+        debugLog.error('❌ Failed to update time:', error);
       }
     };
 
@@ -472,12 +473,12 @@ export function useStemAudioController(): UseStemAudioController {
   useEffect(() => {
     const handleUserInteraction = async () => {
       if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
-        console.log('🎵 User interaction detected, resuming audio context...');
+        debugLog.log('🎵 User interaction detected, resuming audio context...');
         try {
           await audioContextRef.current.resume();
-          console.log('🎵 Audio context resumed via user interaction');
+          debugLog.log('🎵 Audio context resumed via user interaction');
         } catch (error) {
-          console.error('❌ Failed to resume audio context on user interaction:', error);
+          debugLog.error('❌ Failed to resume audio context on user interaction:', error);
         }
       }
     };
@@ -508,7 +509,7 @@ export function useStemAudioController(): UseStemAudioController {
     //       metrics.memoryUsage // This line was removed
     //     ); // This line was removed
     //   } catch (error) { // This line was removed
-    //     console.error('❌ Failed to optimize performance:', error); // This line was removed
+    //     debugLog.error('❌ Failed to optimize performance:', error); // This line was removed
     //   } // This line was removed
     // }; // This line was removed
 
@@ -520,7 +521,7 @@ export function useStemAudioController(): UseStemAudioController {
     const gainNode = gainNodesRef.current[stemId];
     if (gainNode) {
       gainNode.gain.value = Math.max(0, Math.min(1, volume));
-      console.log(`🎵 Set volume for ${stemId}: ${volume}`);
+      debugLog.log(`🎵 Set volume for ${stemId}: ${volume}`);
     }
   }, []);
 
@@ -532,12 +533,12 @@ export function useStemAudioController(): UseStemAudioController {
   // Test audio output function
   const testAudioOutput = useCallback(async () => {
     if (!audioContextRef.current) {
-      console.warn('⚠️ No audio context available for test');
+      debugLog.warn('⚠️ No audio context available for test');
       return;
     }
 
     try {
-      console.log('🎵 Testing audio output...');
+      debugLog.log('🎵 Testing audio output...');
       
       // Create a simple test tone
       const oscillator = audioContextRef.current.createOscillator();
@@ -555,9 +556,9 @@ export function useStemAudioController(): UseStemAudioController {
       oscillator.start(audioContextRef.current.currentTime);
       oscillator.stop(audioContextRef.current.currentTime + 0.5);
       
-      console.log('🎵 Test tone played - you should hear a 440Hz tone for 0.5 seconds');
+      debugLog.log('🎵 Test tone played - you should hear a 440Hz tone for 0.5 seconds');
     } catch (error) {
-      console.error('❌ Audio output test failed:', error);
+      debugLog.error('❌ Audio output test failed:', error);
     }
   }, []);
 
@@ -592,7 +593,7 @@ export function useStemAudioController(): UseStemAudioController {
   const getStereoWindow = useCallback((stemId: string, windowSize: number = 1024) => {
     const buffer = audioBuffersRef.current[stemId];
     if (!buffer) {
-      console.warn('[getStereoWindow] No buffer for stemId', stemId, 'Available buffers:', Object.keys(audioBuffersRef.current));
+      debugLog.warn('[getStereoWindow] No buffer for stemId', stemId, 'Available buffers:', Object.keys(audioBuffersRef.current));
       return null;
     }
     const numChannels = buffer.numberOfChannels;
@@ -611,7 +612,7 @@ export function useStemAudioController(): UseStemAudioController {
         right = Array.from(buffer.getChannelData(1).slice(start, end));
       }
     } catch (err) {
-      console.error('[getStereoWindow] Error accessing buffer:', err, { stemId, buffer });
+      debugLog.error('[getStereoWindow] Error accessing buffer:', err, { stemId, buffer });
       return null;
     }
     // Pad if needed

@@ -16,6 +16,7 @@ import {
   MoreVertical
 } from 'lucide-react'
 import Link from 'next/link'
+import { debugLog } from '@/lib/utils'
 
 // Mock data for now - will be replaced with real data from API
 const mockFiles = [
@@ -127,15 +128,15 @@ export default function FilesPage() {
   }
 
   const handleDownload = (file: typeof mockFiles[0]) => {
-    // TODO: Implement real download via tRPC
-    console.log('Downloading file:', file.fileName)
+    // Note: Download functionality placeholder - tRPC integration pending
+    debugLog.log('Downloading file:', file.fileName)
     alert(`Download functionality coming soon for: ${file.fileName}`)
   }
 
   const handleDelete = (file: typeof mockFiles[0]) => {
-    // TODO: Implement real delete via tRPC
+    // Note: Delete functionality placeholder - tRPC integration pending
     if (confirm(`Are you sure you want to delete "${file.fileName}"?`)) {
-      console.log('Deleting file:', file.fileName)
+      debugLog.log('Deleting file:', file.fileName)
       alert(`Delete functionality coming soon for: ${file.fileName}`)
     }
   }

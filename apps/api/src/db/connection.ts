@@ -2,6 +2,7 @@ import { Pool, PoolConfig } from 'pg'
 import dotenv from 'dotenv'
 import fs from 'fs'
 import path from 'path'
+import { logger } from '../lib/logger';
 
 dotenv.config()
 
@@ -11,19 +12,19 @@ try {
   const certPath = path.join(process.cwd(), 'apps/api/src/db/prod-ca-2021.crt');
   if (fs.existsSync(certPath)) {
     caCert = fs.readFileSync(certPath).toString();
-    console.log('✅ Successfully loaded Supabase CA certificate from file.');
+    logger.log('✅ Successfully loaded Supabase CA certificate from file.');
   } else {
     // Fallback for different execution contexts, like tests.
     const fallbackPath = path.join(__dirname, 'prod-ca-2021.crt');
     if (fs.existsSync(fallbackPath)) {
       caCert = fs.readFileSync(fallbackPath).toString();
-      console.log('✅ Successfully loaded Supabase CA certificate from fallback path.');
+      logger.log('✅ Successfully loaded Supabase CA certificate from fallback path.');
     } else {
-      console.warn(`⚠️ CA certificate file not found. Looked in:\n1. ${certPath}\n2. ${fallbackPath}`);
+      logger.warn(`⚠️ CA certificate file not found. Looked in:\n1. ${certPath}\n2. ${fallbackPath}`);
     }
   }
 } catch (error) {
-    console.error('❌ Error reading CA certificate file:', error);
+    logger.error('❌ Error reading CA certificate file:', error);
     caCert = undefined;
 }
 
@@ -68,17 +69,17 @@ export async function testConnection() {
     const client = await pool.connect()
     const result = await client.query('SELECT NOW()')
     client.release()
-    console.log('✅ Database connected successfully:', result.rows[0])
+    logger.log('✅ Database connected successfully:', result.rows[0])
     return true
   } catch (err) {
-    console.error('❌ Database connection failed:', err)
+    logger.error('❌ Database connection failed:', err)
     return false
   }
 }
 
 // Graceful shutdown
 process.on('SIGINT', () => {
-  console.log('📡 Closing database pool...')
+  logger.log('📡 Closing database pool...')
   pool.end()
   process.exit(0)
 })

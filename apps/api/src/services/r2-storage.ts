@@ -1,6 +1,7 @@
 import { S3Client, CreateBucketCommand, PutBucketCorsCommand, HeadBucketCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { logger } from '../lib/logger';
 
 // Cloudflare R2 Configuration (S3-Compatible)
 const r2Config = {
@@ -32,18 +33,18 @@ export async function createBucketIfNotExists(): Promise<void> {
   try {
     // Check if bucket exists
     await (r2Client as any).send(new HeadBucketCommand({ Bucket: BUCKET_NAME }));
-    console.log(`✅ R2 bucket '${BUCKET_NAME}' already exists`);
+    logger.log(`✅ R2 bucket '${BUCKET_NAME}' already exists`);
   } catch (error: any) {
     if (error.name === 'NotFound') {
       try {
         await (r2Client as any).send(new CreateBucketCommand({ Bucket: BUCKET_NAME }));
-        console.log(`✅ Created R2 bucket '${BUCKET_NAME}'`);
+        logger.log(`✅ Created R2 bucket '${BUCKET_NAME}'`);
       } catch (createError) {
-        console.error('❌ Failed to create R2 bucket:', createError);
+        logger.error('❌ Failed to create R2 bucket:', createError);
         throw createError;
       }
     } else {
-      console.error('❌ Error checking R2 bucket:', error);
+      logger.error('❌ Error checking R2 bucket:', error);
       throw error;
     }
   }
@@ -80,9 +81,9 @@ export async function configureBucketCors(): Promise<void> {
       Bucket: BUCKET_NAME,
       CORSConfiguration: corsConfiguration,
     }));
-    console.log(`✅ Configured CORS for R2 bucket '${BUCKET_NAME}'`);
+    logger.log(`✅ Configured CORS for R2 bucket '${BUCKET_NAME}'`);
   } catch (error) {
-    console.error('❌ Failed to configure CORS:', error);
+    logger.error('❌ Failed to configure CORS:', error);
     throw error;
   }
 }
@@ -103,7 +104,7 @@ export async function generateUploadUrl(
     const url = await getSignedUrl(r2Client, command, { expiresIn });
     return url;
   } catch (error) {
-    console.error('❌ Failed to generate upload URL:', error);
+    logger.error('❌ Failed to generate upload URL:', error);
     throw error;
   }
 }
@@ -122,7 +123,7 @@ export async function generateDownloadUrl(
     const url = await getSignedUrl(r2Client, command, { expiresIn });
     return url;
   } catch (error) {
-    console.error('❌ Failed to generate download URL:', error);
+    logger.error('❌ Failed to generate download URL:', error);
     throw error;
   }
 }
@@ -153,7 +154,7 @@ export async function getFileBuffer(key: string): Promise<Buffer> {
     
     return Buffer.concat(chunks);
   } catch (error) {
-    console.error(`❌ Failed to get file buffer for ${key}:`, error);
+    logger.error(`❌ Failed to get file buffer for ${key}:`, error);
     throw error;
   }
 }
@@ -167,9 +168,9 @@ export async function deleteFile(key: string): Promise<void> {
 
   try {
     await (r2Client as any).send(command);
-    console.log(`✅ Deleted file: ${key}`);
+    logger.log(`✅ Deleted file: ${key}`);
   } catch (error) {
-    console.error(`❌ Failed to delete file ${key}:`, error);
+    logger.error(`❌ Failed to delete file ${key}:`, error);
     throw error;
   }
 }
@@ -209,7 +210,7 @@ export async function uploadThumbnail(
     await (r2Client as any).send(command);
     return thumbnailKey;
   } catch (error) {
-    console.error('❌ Failed to upload thumbnail:', error);
+    logger.error('❌ Failed to upload thumbnail:', error);
     throw error;
   }
 }
@@ -223,14 +224,14 @@ export async function generateThumbnailUrl(
     const url = await generateDownloadUrl(thumbnailKey, expiresIn);
     return url;
   } catch (error) {
-    console.error('❌ Failed to generate thumbnail URL:', error);
+    logger.error('❌ Failed to generate thumbnail URL:', error);
     throw error;
   }
 }
 
 // Initialize R2 service
 export async function initializeR2(): Promise<void> {
-  console.log('🚀 Initializing Cloudflare R2 service...');
+  logger.log('🚀 Initializing Cloudflare R2 service...');
   
   try {
     validateR2Config();
@@ -241,15 +242,15 @@ export async function initializeR2(): Promise<void> {
       await configureBucketCors();
     } catch (corsError: any) {
       if (corsError.Code === 'AccessDenied') {
-        console.log('⚠️  CORS configuration skipped (insufficient permissions - this is OK for development)');
+        logger.log('⚠️  CORS configuration skipped (insufficient permissions - this is OK for development)');
       } else {
         throw corsError;
       }
     }
     
-    console.log('✅ R2 service initialized successfully');
+    logger.log('✅ R2 service initialized successfully');
   } catch (error) {
-    console.error('❌ Failed to initialize R2 service:', error);
+    logger.error('❌ Failed to initialize R2 service:', error);
     throw error;
   }
 }
@@ -260,7 +261,7 @@ export async function testR2Connection(): Promise<boolean> {
     await (r2Client as any).send(new HeadBucketCommand({ Bucket: BUCKET_NAME }));
     return true;
   } catch (error) {
-    console.error('❌ R2 connection test failed:', error);
+    logger.error('❌ R2 connection test failed:', error);
     return false;
   }
 }

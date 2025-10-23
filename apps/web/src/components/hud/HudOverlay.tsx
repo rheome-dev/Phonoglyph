@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { debugLog } from '@/lib/utils';
 
 function drawWaveform(ctx: CanvasRenderingContext2D, w: number, h: number) {
   ctx.strokeStyle = '#00ffff';
@@ -423,7 +424,7 @@ export function HudOverlay({ id, type, position, size, stem, settings, featureDa
         break;
       case 'spectrogram': {
         // Enhanced spectrogram using FFT data
-        console.log('🎵 Spectrogram rendering check:', {
+        debugLog.log('🎵 Spectrogram rendering check:', {
           hasFeatureData: !!featureData,
           hasFft: !!(featureData && featureData.fft),
           isArray: !!(featureData && featureData.fft && Array.isArray(featureData.fft)),
@@ -433,7 +434,7 @@ export function HudOverlay({ id, type, position, size, stem, settings, featureDa
         });
         
         if (featureData && featureData.fft && Array.isArray(featureData.fft)) {
-          console.log('🎵 Spectrogram rendering with cached FFT data:', {
+          debugLog.log('🎵 Spectrogram rendering with cached FFT data:', {
             fftLength: featureData.fft.length,
             sampleValues: featureData.fft.slice(0, 5),
             maxValue: Math.max(...featureData.fft),
@@ -447,7 +448,7 @@ export function HudOverlay({ id, type, position, size, stem, settings, featureDa
           
           // If no buffer available, create a simple one from current FFT data
           if (!buffer || buffer.length === 0) {
-            console.log('🎵 No buffer available, creating simple buffer from FFT data');
+            debugLog.log('🎵 No buffer available, creating simple buffer from FFT data');
             const simpleBuffer = [];
             for (let i = 0; i < 50; i++) {
               simpleBuffer.push(Float32Array.from(featureData.fft));
@@ -455,7 +456,7 @@ export function HudOverlay({ id, type, position, size, stem, settings, featureDa
             buffer = simpleBuffer;
           }
           
-          console.log('🎵 Spectrogram buffer state:', {
+          debugLog.log('🎵 Spectrogram buffer state:', {
             bufferLength: buffer.length,
             firstFrameLength: buffer[0]?.length || 0
           });
@@ -730,7 +731,7 @@ export function HudOverlay({ id, type, position, size, stem, settings, featureDa
         }
         if (stereoWindow && stereoWindow.left && stereoWindow.right) {
           // Debug log
-          console.log('[stereometer render]', {
+          debugLog.log('[stereometer render]', {
             leftLength: stereoWindow.left.length,
             rightLength: stereoWindow.right.length,
             leftSample: stereoWindow.left.slice(0, 5),

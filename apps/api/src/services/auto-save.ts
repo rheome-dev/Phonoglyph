@@ -1,5 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 import { TRPCError } from '@trpc/server'
+import { logger } from '../lib/logger'
 
 export interface AutoSaveConfig {
   enabled: boolean
@@ -80,7 +81,7 @@ export class AutoSaveService {
         .single()
 
       if (error) {
-        console.error('Database error saving edit state:', error)
+        logger.error('Database error saving edit state:', error)
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to save edit state',
@@ -93,7 +94,7 @@ export class AutoSaveService {
       return this.mapDatabaseToEditState(editState)
     } catch (error) {
       if (error instanceof TRPCError) throw error
-      console.error('Error saving edit state:', error)
+      logger.error('Error saving edit state:', error)
       throw new TRPCError({
         code: 'INTERNAL_SERVER_ERROR',
         message: 'Failed to save edit state',
@@ -117,7 +118,7 @@ export class AutoSaveService {
           // No current state found, return null
           return null
         }
-        console.error('Database error fetching current state:', error)
+        logger.error('Database error fetching current state:', error)
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch current state',
@@ -127,7 +128,7 @@ export class AutoSaveService {
       return this.mapDatabaseToEditState(editState)
     } catch (error) {
       if (error instanceof TRPCError) throw error
-      console.error('Error fetching current state:', error)
+      logger.error('Error fetching current state:', error)
       throw new TRPCError({
         code: 'INTERNAL_SERVER_ERROR',
         message: 'Failed to fetch current state',
@@ -153,7 +154,7 @@ export class AutoSaveService {
             message: 'Edit state not found or access denied',
           })
         }
-        console.error('Database error fetching edit state:', fetchError)
+        logger.error('Database error fetching edit state:', fetchError)
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch edit state',
@@ -181,7 +182,7 @@ export class AutoSaveService {
         .single()
 
       if (createError) {
-        console.error('Database error creating restored state:', createError)
+        logger.error('Database error creating restored state:', createError)
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to restore edit state',
@@ -191,7 +192,7 @@ export class AutoSaveService {
       return this.mapDatabaseToEditState(newState)
     } catch (error) {
       if (error instanceof TRPCError) throw error
-      console.error('Error restoring edit state:', error)
+      logger.error('Error restoring edit state:', error)
       throw new TRPCError({
         code: 'INTERNAL_SERVER_ERROR',
         message: 'Failed to restore edit state',
@@ -216,7 +217,7 @@ export class AutoSaveService {
         .range(offset, offset + limit - 1)
 
       if (error) {
-        console.error('Database error fetching project states:', error)
+        logger.error('Database error fetching project states:', error)
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch project states',
@@ -226,7 +227,7 @@ export class AutoSaveService {
       return (editStates || []).map(state => this.mapDatabaseToEditState(state))
     } catch (error) {
       if (error instanceof TRPCError) throw error
-      console.error('Error fetching project states:', error)
+      logger.error('Error fetching project states:', error)
       throw new TRPCError({
         code: 'INTERNAL_SERVER_ERROR',
         message: 'Failed to fetch project states',
@@ -252,7 +253,7 @@ export class AutoSaveService {
             message: 'Edit state not found or access denied',
           })
         }
-        console.error('Database error fetching edit state:', fetchError)
+        logger.error('Database error fetching edit state:', fetchError)
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch edit state',
@@ -267,7 +268,7 @@ export class AutoSaveService {
         .eq('user_id', userId)
 
       if (deleteError) {
-        console.error('Database error deleting edit state:', deleteError)
+        logger.error('Database error deleting edit state:', deleteError)
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to delete edit state',
@@ -294,7 +295,7 @@ export class AutoSaveService {
       }
     } catch (error) {
       if (error instanceof TRPCError) throw error
-      console.error('Error deleting edit state:', error)
+      logger.error('Error deleting edit state:', error)
       throw new TRPCError({
         code: 'INTERNAL_SERVER_ERROR',
         message: 'Failed to delete edit state',
@@ -312,7 +313,7 @@ export class AutoSaveService {
         .eq('user_id', userId)
 
       if (error) {
-        console.error('Database error clearing project history:', error)
+        logger.error('Database error clearing project history:', error)
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to clear project history',
@@ -320,7 +321,7 @@ export class AutoSaveService {
       }
     } catch (error) {
       if (error instanceof TRPCError) throw error
-      console.error('Error clearing project history:', error)
+      logger.error('Error clearing project history:', error)
       throw new TRPCError({
         code: 'INTERNAL_SERVER_ERROR',
         message: 'Failed to clear project history',
@@ -358,7 +359,7 @@ export class AutoSaveService {
         }
       }
     } catch (error) {
-      console.error('Error cleaning up old states:', error)
+      logger.error('Error cleaning up old states:', error)
       // Don't throw error for cleanup failures
     }
   }
@@ -375,7 +376,7 @@ export class AutoSaveService {
       
       return compressed
     } catch (error) {
-      console.error('Error compressing state data:', error)
+      logger.error('Error compressing state data:', error)
       return data // Return original data if compression fails
     }
   }
@@ -412,7 +413,7 @@ export class AutoSaveService {
 
       return isValid
     } catch (error) {
-      console.error('Error validating state data:', error)
+      logger.error('Error validating state data:', error)
       return false
     }
   }
@@ -434,7 +435,7 @@ export class AutoSaveService {
         .order('timestamp', { ascending: true })
 
       if (error) {
-        console.error('Database error fetching storage stats:', error)
+        logger.error('Database error fetching storage stats:', error)
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch storage stats',
@@ -468,7 +469,7 @@ export class AutoSaveService {
       }
     } catch (error) {
       if (error instanceof TRPCError) throw error
-      console.error('Error getting storage stats:', error)
+      logger.error('Error getting storage stats:', error)
       throw new TRPCError({
         code: 'INTERNAL_SERVER_ERROR',
         message: 'Failed to get storage stats',

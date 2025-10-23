@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { VisualEffect, AudioAnalysisData, LiveMIDIData, MetaballConfig } from '@/types/visualizer';
+import { debugLog } from '@/lib/utils';
 
 
 export class MetaballsEffect implements VisualEffect {
@@ -286,7 +287,7 @@ export class MetaballsEffect implements VisualEffect {
       side: THREE.DoubleSide
     });
     } catch (error) {
-      console.error('❌ Shader compilation error:', error);
+      debugLog.error('❌ Shader compilation error:', error);
       // Fallback to basic material
       this.material = new THREE.MeshBasicMaterial({
         color: 0xff00ff,
