@@ -157,10 +157,13 @@ export function useAudioAnalysis(): UseAudioAnalysis {
     };
 
     return () => {
-      workerRef.current?.terminate();
-      workerRef.current = null;
+      if (workerRef.current) {
+        debugLog.log('🧹 Terminating audio analysis worker');
+        workerRef.current.terminate();
+        workerRef.current = null;
+      }
     };
-  }, [cacheMutation]);
+  }, []); // Empty deps - worker should only init once on mount
 
   // Handle cached data from server
   useEffect(() => {
