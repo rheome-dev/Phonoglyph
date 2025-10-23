@@ -47,11 +47,21 @@ const FeatureNode = ({
         const featureName = parts.slice(1).join('-');
 
         const duration: number = analysis?.metadata?.duration ?? 0;
+        const sampleRate: number = analysis?.metadata?.sampleRate ?? 0;
+        const bufferSize: number = analysis?.metadata?.bufferSize ?? 0;
         const getTimeSeriesValue = (arr: Float32Array | undefined): number => {
-          if (!arr || arr.length === 0 || duration <= 0) return 0;
-          const fps = arr.length / duration;
-          const index = Math.min(arr.length - 1, Math.floor(time * fps));
-          return arr[index] ?? 0;
+          if (!arr || arr.length === 0) return 0;
+          if (sampleRate > 0 && bufferSize > 0) {
+            const hopSeconds = bufferSize / sampleRate;
+            const index = Math.min(arr.length - 1, Math.max(0, Math.floor(time / hopSeconds)));
+            return arr[index] ?? 0;
+          }
+          if (duration > 0) {
+            const fps = arr.length / duration;
+            const index = Math.min(arr.length - 1, Math.max(0, Math.floor(time * fps)));
+            return arr[index] ?? 0;
+          }
+          return 0;
         };
 
         switch (featureName) {

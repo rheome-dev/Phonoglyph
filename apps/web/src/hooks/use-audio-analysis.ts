@@ -290,11 +290,20 @@ export function useAudioAnalysis(): UseAudioAnalysis {
       return chroma?.confidence ?? 0;
     }
 
-    // Time-series features - map time to array index
+    // Time-series features - hop-based indexing using bufferSize/sampleRate
     const getTimeSeriesValue = (arr: Float32Array | undefined): number => {
       if (!arr || arr.length === 0) return 0;
-      const fps = arr.length / metadata.duration;
-      const index = Math.min(arr.length - 1, Math.floor(time * fps));
+      const sampleRate = metadata.sampleRate || 0;
+      const bufferSize = metadata.bufferSize || 0;
+      const hasHop = sampleRate > 0 && bufferSize > 0;
+      if (hasHop) {
+        const hopSeconds = bufferSize / sampleRate;
+        const index = Math.min(arr.length - 1, Math.max(0, Math.floor(time / hopSeconds)));
+        return arr[index] ?? 0;
+      }
+      // Fallback to derived fps if hop cannot be computed
+      const fps = metadata.duration > 0 ? (arr.length / metadata.duration) : 0;
+      const index = Math.min(arr.length - 1, Math.max(0, Math.floor(time * fps)));
       return arr[index] ?? 0;
     };
 
