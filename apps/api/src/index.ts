@@ -65,27 +65,48 @@ const allowedOrigins = process.env.FRONTEND_URL
   : [];
 
 const corsOptions = {
-  origin: process.env.NODE_ENV === 'production'
-    ? [
-        ...allowedOrigins,
-        // Add specific Vercel frontend URLs as fallbacks
-        'https://phonoglyph.rheome.tools',
-        'https://phonoglyph.vercel.app',
-        // Allow Vercel preview URLs for experimental branches
-        /^https:\/\/phonoglyph-.*\.vercel\.app$/
-      ]
-    : ['http://localhost:3000', 'http://127.0.0.1:3000'], // Allow specific origins in development
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    const allowed = process.env.NODE_ENV === 'production'
+      ? [
+          ...allowedOrigins,
+          'https://phonoglyph.rheome.tools',
+          'https://www.phonoglyph.rheome.tools',
+          'https://phonoglyph.vercel.app',
+        ]
+      : ['http://localhost:3000', 'http://127.0.0.1:3000'];
+
+    // Check exact matches
+    if (allowed.includes(origin)) {
+      return callback(null, true);
+    }
+
+    // Check Vercel preview URLs pattern
+    if (origin.match(/^https:\/\/phonoglyph-.*\.vercel\.app$/)) {
+      return callback(null, true);
+    }
+
+    // Log rejected origins for debugging
+    logger.warn(`CORS blocked origin: ${origin}`);
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-guest-session'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH', 'HEAD'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-guest-session', 'Accept'],
   exposedHeaders: ['Authorization'],
   preflightContinue: false,
   optionsSuccessStatus: 204,
+  maxAge: 86400, // 24 hours
 }
 
+// Apply CORS middleware
 app.use(cors(corsOptions))
 
-// Handle preflight requests explicitly
+// Handle preflight requests explicitly for all routes
 app.options('*', cors(corsOptions))
 
 // Body parsing middleware - EXTENDED for large file uploads
