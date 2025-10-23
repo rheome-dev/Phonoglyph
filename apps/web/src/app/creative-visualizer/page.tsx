@@ -923,62 +923,6 @@ function CreativeVisualizerPage() {
   const visualizerRef = useRef<any>(null);
   const animationFrameId = useRef<number>();
 
-  // 🔥 NEW: Helper function to get feature values from time-indexed data
-  const getFeatureValueAtTime = (
-    featureId: string,
-    time: number,
-    analysisData: any
-  ): number | null => {
-    const parts = featureId.split('-');
-    if (parts.length < 2) return null;
-    
-    const [, ...featureParts] = parts; // Remove stem type
-    const featureName = featureParts.join('-');
-    
-    // Map feature names to analysis data
-    switch (featureName) {
-      case 'impact':
-      case 'transient': {
-        if (!analysisData?.transients || !Array.isArray(analysisData.transients)) return 0;
-        const transient = analysisData.transients.find(
-          (t: any) => Math.abs(t.time - time) < 0.1
-        );
-        return transient?.intensity || 0;
-      }
-      
-      case 'rms':
-      case 'volume':
-      case 'loudness': {
-        if (!analysisData?.rms || !Array.isArray(analysisData.rms)) return 0;
-        const rmsPoint = analysisData.rms.find(
-          (r: any) => Math.abs(r.time - time) < 0.1
-        );
-        return rmsPoint?.value || 0;
-      }
-      
-      case 'pitch':
-      case 'pitch-height': {
-        if (!analysisData?.chroma || !Array.isArray(analysisData.chroma)) return 0;
-        const chromaPoint = analysisData.chroma.find(
-          (c: any) => Math.abs(c.time - time) < 0.1
-        );
-        return chromaPoint?.pitch || 0;
-      }
-      
-      case 'brightness':
-      case 'confidence': {
-        if (!analysisData?.chroma || !Array.isArray(analysisData.chroma)) return 0;
-        const chromaPoint = analysisData.chroma.find(
-          (c: any) => Math.abs(c.time - time) < 0.1
-        );
-        return chromaPoint?.confidence || 0;
-      }
-      
-      default:
-        return 0;
-    }
-  };
-
   // Function to convert frontend feature names to backend analysis keys
   const getAnalysisKeyFromFeatureId = (featureId: string): string => {
     // Frontend feature IDs are like "drums-rms-volume", "bass-loudness", etc.
@@ -1103,21 +1047,22 @@ function CreativeVisualizerPage() {
           const featureStemType = getStemTypeFromFeatureId(featureId);
           if (!featureStemType) continue;
 
-          // 🔥 CHANGED: Use enhancedAudioAnalysis
-          const featureAnalysis = audioAnalysis.cachedAnalysis.find(
+          // 🔥 CHANGED: Use audioAnalysis.getFeatureValue from consolidated hook
+          // Find the analysis for this stem type to get its file ID
+          const stemAnalysis = audioAnalysis.cachedAnalysis.find(
             a => a.stemType === featureStemType
           );
+          if (!stemAnalysis) continue;
 
-          if (!featureAnalysis?.analysisData) continue;
-
-          // 🔥 NEW: Get value using time-based lookup
-          const rawValue = getFeatureValueAtTime(
-            featureId, 
-            syncTime, 
-            featureAnalysis.analysisData
+          // Use the hook's getFeatureValue which properly handles both Float32Arrays and time-indexed arrays
+          const rawValue = audioAnalysis.getFeatureValue(
+            stemAnalysis.fileMetadataId,
+            featureId,
+            syncTime,
+            featureStemType
           );
 
-          if (rawValue === null) continue;
+          if (rawValue === null || rawValue === undefined) continue;
 
           // Parse parameter key: "metaballs-glowIntensity"
           const [effectId, ...paramParts] = paramKey.split('-');
