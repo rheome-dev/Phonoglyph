@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { trpc } from '@/lib/trpc'
 import { useAuth } from './use-auth'
 import { debugLog } from '@/lib/utils'
-import { debugLog } from '@/lib/utils';
 
 export interface AutoSaveConfig {
   enabled: boolean
