@@ -309,6 +309,7 @@ async function performFullAnalysis(channelData, sampleRate, stemType, onProgress
   console.log('🎵 Performing full analysis for stem type:', stemType, 'effective type:', effectiveStemType, 'with features:', featuresToExtract);
   
   const featureFrames = {};
+  const frameTimes = [];
   featuresToExtract.forEach(f => {
     if (f === 'loudness') {
       featureFrames.loudness = { specific: [], total: [] };
@@ -487,6 +488,10 @@ async function performFullAnalysis(channelData, sampleRate, stemType, onProgress
     featureFrames.stereoWindow_left = Array.from(leftWindow);
     featureFrames.stereoWindow_right = Array.from(leftWindow);
     
+    // Record frame start time for timestamped series
+    const frameStartTime = currentPosition / sampleRate;
+    frameTimes.push(frameStartTime);
+
     currentPosition += hopSize;
 
     if (onProgress) {
@@ -496,6 +501,8 @@ async function performFullAnalysis(channelData, sampleRate, stemType, onProgress
 
   // Flatten featureFrames so each key is an array of numbers
   const flatFeatures = {};
+  // Include shared frame times for dense features
+  flatFeatures.frameTimes = Array.from(frameTimes);
   for (const key in featureFrames) {
     if (key === 'loudness') {
       flatFeatures.loudness = featureFrames.loudness.total;

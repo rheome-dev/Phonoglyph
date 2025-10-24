@@ -46,22 +46,19 @@ const FeatureNode = ({
       if (parts.length >= 2) {
         const featureName = parts.slice(1).join('-');
 
-        const duration: number = analysis?.metadata?.duration ?? 0;
-        const sampleRate: number = analysis?.metadata?.sampleRate ?? 0;
-        const bufferSize: number = analysis?.metadata?.bufferSize ?? 0;
+        const times = (analysis.analysisData as any).frameTimes as Float32Array | number[] | undefined;
         const getTimeSeriesValue = (arr: Float32Array | undefined): number => {
-          if (!arr || arr.length === 0) return 0;
-          if (sampleRate > 0 && bufferSize > 0) {
-            const hopSeconds = bufferSize / sampleRate;
-            const index = Math.min(arr.length - 1, Math.max(0, Math.floor(time / hopSeconds)));
-            return arr[index] ?? 0;
+          if (!arr || arr.length === 0 || !times || times.length === 0) return 0;
+          // Binary search on times
+          let lo = 0;
+          let hi = Math.min(times.length - 1, arr.length - 1);
+          while (lo < hi) {
+            const mid = (lo + hi + 1) >>> 1;
+            const tmid = (times as any)[mid];
+            if (tmid <= time) lo = mid; else hi = mid - 1;
           }
-          if (duration > 0) {
-            const fps = arr.length / duration;
-            const index = Math.min(arr.length - 1, Math.max(0, Math.floor(time * fps)));
-            return arr[index] ?? 0;
-          }
-          return 0;
+          const index = Math.max(0, Math.min(arr.length - 1, lo));
+          return arr[index] ?? 0;
         };
 
         switch (featureName) {

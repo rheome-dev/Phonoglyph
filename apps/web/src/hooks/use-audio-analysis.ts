@@ -24,6 +24,8 @@ export interface AudioAnalysisData {
   
   // Keep as 'analysisData' to match worker output
   analysisData: {
+    // Shared frame timestamps for dense time-series features
+    frameTimes?: Float32Array;
     // Core time-series features
     rms: Float32Array;
     loudness: Float32Array;
@@ -290,20 +292,24 @@ export function useAudioAnalysis(): UseAudioAnalysis {
       return chroma?.confidence ?? 0;
     }
 
-    // Time-series features - hop-based indexing using bufferSize/sampleRate
+    // Time-series features - timestamp-based indexing using analysisData.frameTimes
     const getTimeSeriesValue = (arr: Float32Array | undefined): number => {
       if (!arr || arr.length === 0) return 0;
-      const sampleRate = metadata.sampleRate || 0;
-      const bufferSize = metadata.bufferSize || 0;
-      const hasHop = sampleRate > 0 && bufferSize > 0;
-      if (hasHop) {
-        const hopSeconds = bufferSize / sampleRate;
-        const index = Math.min(arr.length - 1, Math.max(0, Math.floor(time / hopSeconds)));
-        return arr[index] ?? 0;
+      const times = (analysisData as any).frameTimes as Float32Array | number[] | undefined;
+      if (!times || times.length === 0) return 0;
+      // Binary search: find last index with times[idx] <= time
+      let lo = 0;
+      let hi = Math.min(times.length - 1, arr.length - 1);
+      while (lo < hi) {
+        const mid = (lo + hi + 1) >>> 1; // upper mid to avoid infinite loop
+        const tmid = (times as any)[mid];
+        if (tmid <= time) {
+          lo = mid;
+        } else {
+          hi = mid - 1;
+        }
       }
-      // Fallback to derived fps if hop cannot be computed
-      const fps = metadata.duration > 0 ? (arr.length / metadata.duration) : 0;
-      const index = Math.min(arr.length - 1, Math.max(0, Math.floor(time * fps)));
+      const index = Math.max(0, Math.min(arr.length - 1, lo));
       return arr[index] ?? 0;
     };
 
