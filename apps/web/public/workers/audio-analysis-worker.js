@@ -384,11 +384,16 @@ async function performFullAnalysis(channelData, sampleRate, stemType, onProgress
         //   fullReturnedFeatures: JSON.stringify(Object.keys(features))
         // });
         for (const feature of featuresToExtract) {
-          if (features[feature]) {
-            if (feature === 'loudness') {
+          if (feature === 'loudness') {
+            if (features.loudness && features.loudness.total !== undefined) {
               featureFrames.loudness.specific.push(features.loudness.specific);
               featureFrames.loudness.total.push(features.loudness.total);
-            } else if (feature === 'amplitudeSpectrum') {
+            } else {
+              // Ensure frame alignment even if loudness missing
+              featureFrames.loudness.specific.push([]);
+              featureFrames.loudness.total.push(0);
+            }
+          } else if (feature === 'amplitudeSpectrum') {
               // Process amplitude spectrum (Meyda returns an object with real/imaginary data)
               const amplitudeData = features.amplitudeSpectrum;
               // console.log('🎵 Amplitude spectrum extraction:', {
@@ -437,15 +442,20 @@ async function performFullAnalysis(channelData, sampleRate, stemType, onProgress
                 featureFrames.amplitudeSpectrum.push([]);
                 // console.log('🎵 No valid amplitude spectrum data, using empty array');
               }
+          } else {
+            // Handle other features (numeric or array); push a value every frame
+            const value = features[feature];
+            let numericValue = 0;
+            if (typeof value === 'number') {
+              numericValue = value;
+            } else if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'number') {
+              numericValue = value[0];
+            } else if (value && typeof value === 'object' && 'value' in value && typeof value.value === 'number') {
+              numericValue = value.value;
             } else {
-              // Handle other features
-              if (features[feature] !== undefined && features[feature] !== null) {
-                featureFrames[feature].push(features[feature]);
-              } else {
-                // Provide fallback value for missing features
-                featureFrames[feature].push(0);
-              }
+              numericValue = 0;
             }
+            featureFrames[feature].push(numericValue);
           }
         }
       }
