@@ -565,6 +565,14 @@ async function performFullAnalysis(channelData, sampleRate, stemType, onProgress
     }
   }
 
+  // Normalize numeric arrays to ensure no null/undefined entries are sent
+  Object.keys(flatFeatures).forEach(k => {
+    const val = flatFeatures[k];
+    if (Array.isArray(val)) {
+      flatFeatures[k] = val.map(v => (typeof v === 'number' && isFinite(v) ? v : 0));
+    }
+  });
+
   console.log('🎵 Final analysis result:', {
     keys: Object.keys(flatFeatures),
     fftLength: flatFeatures.fft ? flatFeatures.fft.length : 0,
