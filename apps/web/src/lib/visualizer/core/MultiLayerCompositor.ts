@@ -3,6 +3,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
 import { TexturePass } from 'three/examples/jsm/postprocessing/TexturePass.js';
 
 export interface LayerRenderTarget {
@@ -49,6 +50,7 @@ export class MultiLayerCompositor {
   private postProcessingComposer!: EffectComposer;
   private texturePass!: TexturePass;
   private bloomPass?: UnrealBloomPass;
+  private fxaaPass?: ShaderPass;
   
   constructor(renderer: THREE.WebGLRenderer, config: CompositorConfig) {
     this.renderer = renderer;
@@ -302,6 +304,12 @@ export class MultiLayerCompositor {
       );
       this.postProcessingComposer.addPass(this.bloomPass);
     }
+
+    // FXAA to reduce aliasing on lines and sprite edges
+    this.fxaaPass = new ShaderPass(FXAAShader);
+    const pixelRatio = this.renderer.getPixelRatio();
+    (this.fxaaPass.uniforms as any).resolution.value.set(1 / (this.config.width * pixelRatio), 1 / (this.config.height * pixelRatio));
+    this.postProcessingComposer.addPass(this.fxaaPass);
   }
   
   /**
@@ -425,6 +433,10 @@ export class MultiLayerCompositor {
     }
     if (this.bloomPass) {
       this.bloomPass.setSize(width, height);
+    }
+    if (this.fxaaPass) {
+      const pixelRatio = this.renderer.getPixelRatio();
+      (this.fxaaPass.uniforms as any).resolution.value.set(1 / (width * pixelRatio), 1 / (height * pixelRatio));
     }
   }
   

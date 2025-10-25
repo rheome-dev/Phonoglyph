@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 import { VisualEffect, AudioAnalysisData, LiveMIDIData } from '@/types/visualizer';
+import { Line2 } from 'three/examples/jsm/lines/Line2.js';
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
+import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
 import { debugLog } from '@/lib/utils';
 
 interface Particle {
@@ -38,7 +41,7 @@ export class ParticleNetworkEffect implements VisualEffect {
   private internalCamera!: THREE.PerspectiveCamera;
   private renderer!: THREE.WebGLRenderer;
   private particleSystem!: THREE.Points;
-  private connectionLines!: THREE.LineSegments;
+  private connectionLines!: Line2;
   private material!: THREE.ShaderMaterial;
   private uniforms!: Record<string, THREE.IUniform>;
   
@@ -50,10 +53,8 @@ export class ParticleNetworkEffect implements VisualEffect {
   private lives!: Float32Array;
   
   // Connection data
-  private connectionGeometry!: THREE.BufferGeometry;
-  private connectionMaterial!: THREE.LineBasicMaterial;
-  private connectionPositions!: Float32Array;
-  private connectionColors!: Float32Array;
+  private connectionGeometry!: LineGeometry;
+  private connectionMaterial!: LineMaterial;
   private maxConnections: number = 500; // Limit connections
   private activeConnections: number = 0;
   
@@ -150,23 +151,27 @@ export class ParticleNetworkEffect implements VisualEffect {
     const fragmentShader = `
       precision highp float;
       uniform float uGlowIntensity;
-      uniform float uGlowSoftness;
+      uniform float uGlowSoftness; // softness control, not exponent
       varying vec3 vColor;
       varying float vLife;
-      varying float vSize;
       varying vec2 vUv;
       
       void main() {
         vec2 center = vUv - 0.5;
-        float dist = length(center);
-        if (dist > 0.5) discard; // keep circle
+        float dist = length(center) * 2.0; // 0.0 center → 1.0 edge
+        if (dist > 1.0) discard;
+
+        // Solid core
+        float core = 1.0 - smoothstep(0.0, 0.2, dist);
+
+        // Smooth glow falloff
+        float glow = exp(-pow(dist, uGlowSoftness));
         
-        // bloom using distance falloff with adjustable softness exponent
-        float glow = pow(max(0.0, 0.5 - dist), uGlowSoftness);
-        vec3 color = vColor * (1.0 + glow * uGlowIntensity * 0.6);
-        
-        float alpha = glow * vLife;
-        gl_FragColor = vec4(color, alpha);
+        float alpha = (core + glow * uGlowIntensity) * vLife;
+        vec3 finalColor = vColor * (1.0 + glow * uGlowIntensity * 0.5 + core * 0.2);
+
+        // Premultiplied alpha for additive light contribution
+        gl_FragColor = vec4(finalColor * alpha, alpha);
       }
     `;
 
@@ -178,7 +183,7 @@ export class ParticleNetworkEffect implements VisualEffect {
       blending: THREE.AdditiveBlending,
       depthWrite: false,
       depthTest: false,
-      premultipliedAlpha: false,
+      premultipliedAlpha: true,
       vertexColors: true
     });
 
@@ -399,84 +404,58 @@ export class ParticleNetworkEffect implements VisualEffect {
   }
   
   private createConnectionSystem() {
-    // Create a single geometry for all connections
-    this.connectionGeometry = new THREE.BufferGeometry();
-    this.connectionPositions = new Float32Array(this.maxConnections * 6); // 2 points per line * 3 coords
-    this.connectionColors = new Float32Array(this.maxConnections * 6); // 2 points per line * 3 colors
-    
-    this.connectionGeometry.setAttribute('position', new THREE.BufferAttribute(this.connectionPositions, 3));
-    this.connectionGeometry.setAttribute('color', new THREE.BufferAttribute(this.connectionColors, 3));
-    
-    this.connectionMaterial = new THREE.LineBasicMaterial({
+    // Thick, AA connections using Line2
+    this.connectionGeometry = new LineGeometry();
+    this.connectionMaterial = new LineMaterial({
       vertexColors: true,
+      linewidth: 2, // pixels
       transparent: true,
-      opacity: 0.8,
       blending: THREE.AdditiveBlending,
       depthTest: false
     });
-    
-    this.connectionLines = new THREE.LineSegments(this.connectionGeometry, this.connectionMaterial);
+    this.connectionLines = new Line2(this.connectionGeometry, this.connectionMaterial);
+    this.connectionLines.computeLineDistances();
     this.internalScene.add(this.connectionLines);
   }
 
   private updateConnections() {
-    // Reset connection count
-    this.activeConnections = 0;
-    
-    // Clear all connection data
-    this.connectionPositions.fill(0);
-    this.connectionColors.fill(0);
-    
-    // Create new connections (limit to prevent performance issues)
+    // Build arrays for LineGeometry
+    const positions: number[] = [];
+    const colors: number[] = [];
     let connectionCount = 0;
     for (let i = 0; i < this.particles.length - 1 && connectionCount < this.maxConnections; i++) {
       for (let j = i + 1; j < this.particles.length && connectionCount < this.maxConnections; j++) {
         const p1 = this.particles[i];
         const p2 = this.particles[j];
         const distance = p1.position.distanceTo(p2.position);
-        
         if (distance < this.parameters.connectionDistance) {
-          this.createConnection(p1, p2, distance, connectionCount);
+          const strength = (1.0 - distance / this.parameters.connectionDistance) * 
+                           Math.min(p1.life, p2.life) * 
+                           ((p1.noteVelocity + p2.noteVelocity) / 254);
+          const color = new THREE.Color().lerpColors(
+            this.getNoteColor(p1.note, p1.noteVelocity),
+            this.getNoteColor(p2.note, p2.noteVelocity),
+            0.5
+          );
+          positions.push(
+            p1.position.x, p1.position.y, p1.position.z,
+            p2.position.x, p2.position.y, p2.position.z
+          );
+          colors.push(
+            color.r * strength, color.g * strength, color.b * strength,
+            color.r * strength, color.g * strength, color.b * strength
+          );
           connectionCount++;
         }
       }
     }
-    
-    // Update geometry
-    this.connectionGeometry.attributes.position.needsUpdate = true;
-    this.connectionGeometry.attributes.color.needsUpdate = true;
-    this.connectionGeometry.setDrawRange(0, connectionCount * 2); // 2 vertices per line
+    this.connectionGeometry.setPositions(positions);
+    this.connectionGeometry.setColors(colors);
+    const size = this.renderer.getSize(new THREE.Vector2());
+    this.connectionMaterial.resolution.set(size.x, size.y);
   }
 
-  private createConnection(p1: Particle, p2: Particle, distance: number, index: number) {
-    const strength = (1.0 - distance / this.parameters.connectionDistance) * 
-                    Math.min(p1.life, p2.life) * 
-                    ((p1.noteVelocity + p2.noteVelocity) / 254);
-    
-    const color = new THREE.Color().lerpColors(
-      this.getNoteColor(p1.note, p1.noteVelocity),
-      this.getNoteColor(p2.note, p2.noteVelocity),
-      0.5
-    );
-    
-    // Set positions for both points of the line
-    const posIndex = index * 6;
-    this.connectionPositions[posIndex] = p1.position.x;
-    this.connectionPositions[posIndex + 1] = p1.position.y;
-    this.connectionPositions[posIndex + 2] = p1.position.z;
-    this.connectionPositions[posIndex + 3] = p2.position.x;
-    this.connectionPositions[posIndex + 4] = p2.position.y;
-    this.connectionPositions[posIndex + 5] = p2.position.z;
-    
-    // Set colors for both points of the line
-    const colorIndex = index * 6;
-    this.connectionColors[colorIndex] = color.r * strength;
-    this.connectionColors[colorIndex + 1] = color.g * strength;
-    this.connectionColors[colorIndex + 2] = color.b * strength;
-    this.connectionColors[colorIndex + 3] = color.r * strength;
-    this.connectionColors[colorIndex + 4] = color.g * strength;
-    this.connectionColors[colorIndex + 5] = color.b * strength;
-  }
+  // createConnection not needed with LineGeometry batching
 
   updateParameter(paramName: string, value: any): void {
     // Immediately update parameters for real-time control
