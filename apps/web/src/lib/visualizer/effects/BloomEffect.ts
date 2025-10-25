@@ -3,11 +3,12 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
-import { VisualEffect, AudioAnalysisData, LiveMIDIData } from '@/types/visualizer';
+import { AudioAnalysisData, LiveMIDIData } from '@/types/visualizer';
 import { MultiLayerCompositor } from '../core/MultiLayerCompositor';
 import { debugLog } from '@/lib/utils';
 
-export class BloomEffect implements VisualEffect {
+// Note: BloomEffect is no longer used as a VisualEffect; keep for reference/testing
+export class BloomEffect {
   id = 'bloom';
   name = 'Bloom Post-Processing';
   description = 'Global bloom effect for all visualizations';

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { VisualEffect, VisualizerConfig, LiveMIDIData, AudioAnalysisData, VisualizerControls } from '@/types/visualizer';
-import { BloomEffect } from '../effects/BloomEffect';
+import { MultiLayerCompositor } from './MultiLayerCompositor';
 import { VisualizationPreset } from '@/types/stem-visualization';
 import { debugLog } from '@/lib/utils';
 import { AudioTextureManager, AudioFeatureData } from './AudioTextureManager';
@@ -26,8 +26,8 @@ export class VisualizerManager {
   private audioSources: AudioBufferSourceNode[] = [];
   private currentAudioBuffer: AudioBuffer | null = null;
   
-  // Bloom post-processing
-  private bloomEffect: BloomEffect | null = null;
+  // Layered compositor
+  private multiLayerCompositor!: MultiLayerCompositor;
   
   // GPU compositing system
   private audioTextureManager: AudioTextureManager | null = null;
@@ -65,7 +65,7 @@ export class VisualizerManager {
     
     this.initScene(config);
     this.setupEventListeners();
-    this.initBloomEffect();
+    this.initCompositor(config);
     this.initAudioTextureManager();
     this.initMediaLayerManager();
     debugLog.log('🎭 VisualizerManager constructor complete');
@@ -147,11 +147,16 @@ export class VisualizerManager {
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   }
 
-  private initBloomEffect() {
-    // Initialize bloom post-processing
-    this.bloomEffect = new BloomEffect();
-    this.bloomEffect.init(this.scene, this.camera, this.renderer);
-    debugLog.log('✨ Bloom post-processing initialized');
+  private initCompositor(config: VisualizerConfig) {
+    this.multiLayerCompositor = new MultiLayerCompositor(this.renderer, {
+      width: config.canvas.width,
+      height: config.canvas.height,
+      enableBloom: config.performance?.enableBloom ?? true,
+      enableAntialiasing: true,
+      pixelRatio: Math.min(window.devicePixelRatio, config.canvas.pixelRatio || 2)
+    });
+    // Add base scene as background layer
+    this.multiLayerCompositor.createLayer('base', this.scene, this.camera, { zIndex: -1, enabled: true });
   }
 
   private initAudioTextureManager() {
@@ -219,15 +224,13 @@ export class VisualizerManager {
   public addEffect(effect: VisualEffect) {
     try {
       debugLog.log(`🎨 Adding effect: ${effect.name} (${effect.id})`);
-      effect.init(this.scene, this.camera, this.renderer);
+      effect.init(this.renderer);
       this.effects.set(effect.id, effect);
-      
-      // Set initial visibility based on enabled status
-      if (effect.enabled) {
-        this.showEffectInScene(effect);
-      } else {
-        this.hideEffectFromScene(effect);
-      }
+      // Register a layer for this effect
+      this.multiLayerCompositor.createLayer(effect.id, effect.getScene(), effect.getCamera(), {
+        zIndex: this.effects.size,
+        enabled: effect.enabled
+      });
       
       debugLog.log(`✅ Added effect: ${effect.name}. Total effects: ${this.effects.size}`);
     } catch (error) {
@@ -253,7 +256,8 @@ export class VisualizerManager {
     if (effect) {
       effect.destroy();
       this.effects.delete(effectId);
-      debugLog.log(`✅ Removed effect: ${effect.name}. Remaining effects: ${this.effects.size}`);
+      this.multiLayerCompositor.removeLayer(effectId);
+      debugLog.log(`✅ Removed effect and compositor layer: ${effect.name}. Remaining effects: ${this.effects.size}`);
     }
   }
   
@@ -269,8 +273,7 @@ export class VisualizerManager {
     const effect = this.effects.get(effectId);
     if (effect) {
       effect.enabled = true;
-      // Show the effect's visual elements in the scene
-      this.showEffectInScene(effect);
+      this.multiLayerCompositor.updateLayer(effectId, { enabled: true });
       debugLog.log(`✅ Enabled effect: ${effect.name} (${effectId})`);
     } else {
       debugLog.warn(`⚠️ Effect not found: ${effectId}`);
@@ -281,73 +284,12 @@ export class VisualizerManager {
     const effect = this.effects.get(effectId);
     if (effect) {
       effect.enabled = false;
-      // Hide the effect's visual elements from the scene
-      this.hideEffectFromScene(effect);
+      this.multiLayerCompositor.updateLayer(effectId, { enabled: false });
       debugLog.log(`❌ Disabled effect: ${effect.name} (${effectId})`);
     }
   }
   
-  private showEffectInScene(effect: VisualEffect): void {
-    // Show the effect's visual elements by setting their visibility to true
-    
-    // Handle MetaballsEffect (has 'mesh' property)
-    if ('mesh' in effect && (effect as any).mesh) {
-      (effect as any).mesh.visible = true;
-    }
-    
-    // Handle ParticleNetworkEffect (has 'instancedMesh' and 'connectionLines')
-    if ('instancedMesh' in effect && (effect as any).instancedMesh) {
-      (effect as any).instancedMesh.visible = true;
-    }
-    if ('connectionLines' in effect && (effect as any).connectionLines) {
-      (effect as any).connectionLines.visible = true;
-    }
-    
-    // Handle TestCubeEffect (has 'mesh' property)
-    if ('mesh' in effect && (effect as any).mesh) {
-      (effect as any).mesh.visible = true;
-    }
-    
-    // Handle other visual elements that might need to be shown
-    if ('materials' in effect && Array.isArray((effect as any).materials)) {
-      (effect as any).materials.forEach((material: any) => {
-        if (material && material.visible !== undefined) {
-          material.visible = true;
-        }
-      });
-    }
-  }
-  
-  private hideEffectFromScene(effect: VisualEffect): void {
-    // Hide the effect's visual elements by setting their visibility to false
-    
-    // Handle MetaballsEffect (has 'mesh' property)
-    if ('mesh' in effect && (effect as any).mesh) {
-      (effect as any).mesh.visible = false;
-    }
-    
-    // Handle ParticleNetworkEffect (has 'instancedMesh' and 'connectionLines')
-    if ('instancedMesh' in effect && (effect as any).instancedMesh) {
-      (effect as any).instancedMesh.visible = false;
-    }
-    if ('connectionLines' in effect && (effect as any).connectionLines) {
-      (effect as any).connectionLines.visible = false;
-    }
-    
-    // Handle TestCubeEffect (has 'mesh' property)
-    if ('mesh' in effect && (effect as any).mesh) {
-      (effect as any).mesh.visible = false;
-    }
-    
-    // Handle other visual elements that might need to be hidden
-    if ('materials' in effect && Array.isArray((effect as any).materials)) {
-      (effect as any).materials.forEach((material: any) => {
-        if (material && material.visible !== undefined) {
-          material.visible = false;
-        }
-      });
-    }
-  }
+  // Legacy show/hide helpers removed; layers are toggled via compositor
   
   // Playback control
   play(): void {
@@ -496,18 +438,8 @@ export class VisualizerManager {
       this.mediaLayerManager.updateTextures();
     }
     
-    // Update bloom effect
-    if (this.bloomEffect) {
-      const audioData: AudioAnalysisData = this.currentAudioData || this.createMockAudioData();
-      const midiData: LiveMIDIData = this.currentMidiData || this.createMockMidiData();
-      this.bloomEffect.update(deltaTime, audioData, midiData);
-      
-      // Render with bloom post-processing
-      this.bloomEffect.render();
-    } else {
-      // Fallback to direct rendering
-      this.renderer.render(this.scene, this.camera);
-    }
+    // Render all layers via compositor
+    this.multiLayerCompositor.render();
     
     this.lastTime = currentTime;
   };
@@ -599,10 +531,9 @@ export class VisualizerManager {
     debugLog.log(`🗑️ VisualizerManager.dispose() called. Effects: ${this.effects.size}`);
     this.stop();
     
-    // Dispose bloom effect
-    if (this.bloomEffect) {
-      this.bloomEffect.destroy();
-      this.bloomEffect = null;
+    // Dispose compositor
+    if (this.multiLayerCompositor) {
+      this.multiLayerCompositor.dispose();
     }
     
     // Dispose all effects
@@ -808,9 +739,9 @@ export class VisualizerManager {
         (effect as any).uniforms.uResolution.value.set(canvasWidth, canvasHeight);
       }
     });
-    
-    if (this.bloomEffect) {
-      this.bloomEffect.handleResize(canvasWidth, canvasHeight);
+    // Resize compositor targets
+    if (this.multiLayerCompositor) {
+      this.multiLayerCompositor.resize(canvasWidth, canvasHeight);
     }
     debugLog.log('🎨 Responsive resize:', canvasWidth, canvasHeight, 'aspect:', this.camera.aspect);
   }
@@ -876,19 +807,7 @@ export class VisualizerManager {
     return this.mediaLayerManager;
   }
 
-  public enableGPUCompositing(): void {
-    if (this.bloomEffect) {
-      this.bloomEffect.enableMultiLayerCompositing();
-      debugLog.log('🎨 GPU compositing enabled');
-    }
-  }
-
-  public disableGPUCompositing(): void {
-    if (this.bloomEffect) {
-      this.bloomEffect.disableMultiLayerCompositing();
-      debugLog.log('🎨 GPU compositing disabled');
-    }
-  }
+  // GPU compositing always on via MultiLayerCompositor
 
   public loadAudioAnalysisForGPU(analysisData: AudioFeatureData): void {
     if (this.audioTextureManager) {

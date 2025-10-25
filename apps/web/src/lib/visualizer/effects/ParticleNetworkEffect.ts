@@ -34,8 +34,8 @@ export class ParticleNetworkEffect implements VisualEffect {
     spawnThreshold: 0.5, // Threshold for when modulation signal spawns particles
   };
 
-  private scene!: THREE.Scene;
-  private camera!: THREE.Camera;
+  private internalScene!: THREE.Scene;
+  private internalCamera!: THREE.PerspectiveCamera;
   private renderer!: THREE.WebGLRenderer;
   private particleSystem!: THREE.Points;
   private connectionLines!: THREE.LineSegments;
@@ -81,13 +81,13 @@ export class ParticleNetworkEffect implements VisualEffect {
 
   private screenToWorld(screenX: number, screenY: number): THREE.Vector3 {
     // Convert screen px to NDC
-    if (!this.renderer || !this.camera) return new THREE.Vector3();
+    if (!this.renderer || !this.internalCamera) return new THREE.Vector3();
     const size = this.renderer.getSize(new THREE.Vector2());
     const ndcX = (screenX / size.x) * 2 - 1;
     const ndcY = -((screenY / size.y) * 2 - 1);
     // Project to world at z=0
     const vector = new THREE.Vector3(ndcX, ndcY, 0.0);
-    vector.unproject(this.camera);
+    vector.unproject(this.internalCamera);
     return vector;
   }
 
@@ -102,11 +102,15 @@ export class ParticleNetworkEffect implements VisualEffect {
     };
   }
 
-  init(scene: THREE.Scene, camera: THREE.Camera, renderer: THREE.WebGLRenderer): void {
+  init(renderer: THREE.WebGLRenderer): void {
     debugLog.log('🌟 ParticleNetworkEffect.init() called');
-    this.scene = scene;
-    this.camera = camera;
     this.renderer = renderer;
+    // Create internal scene and a perspective camera for 3D effect
+    this.internalScene = new THREE.Scene();
+    const size = this.renderer.getSize(new THREE.Vector2());
+    const aspect = size.x / size.y || 1;
+    this.internalCamera = new THREE.PerspectiveCamera(60, aspect, 0.1, 1000);
+    this.internalCamera.position.set(0, 0, 5);
     
     this.createParticleSystem();
     this.createConnectionSystem();
@@ -202,7 +206,7 @@ export class ParticleNetworkEffect implements VisualEffect {
     // Initialize with a few default particles to make the effect visible
     this.initializeDefaultParticles();
 
-    this.scene.add(this.instancedMesh);
+    this.internalScene.add(this.instancedMesh);
   }
 
   private initializeDefaultParticles() {
@@ -358,7 +362,7 @@ export class ParticleNetworkEffect implements VisualEffect {
   
   
   private updateBuffers() {
-    const cameraQuat = this.camera.quaternion;
+    const cameraQuat = this.internalCamera.quaternion;
 
     // Update per-instance data
     let index = 0;
@@ -411,7 +415,7 @@ export class ParticleNetworkEffect implements VisualEffect {
     });
     
     this.connectionLines = new THREE.LineSegments(this.connectionGeometry, this.connectionMaterial);
-    this.scene.add(this.connectionLines);
+    this.internalScene.add(this.connectionLines);
   }
 
   private updateConnections() {
@@ -542,14 +546,22 @@ export class ParticleNetworkEffect implements VisualEffect {
     }
   }
 
+  public getScene(): THREE.Scene {
+    return this.internalScene;
+  }
+
+  public getCamera(): THREE.Camera {
+    return this.internalCamera;
+  }
+
   destroy(): void {
     if (this.instancedMesh) {
-      this.scene.remove(this.instancedMesh);
+      this.internalScene.remove(this.instancedMesh);
       this.material.dispose();
     }
     
     if (this.connectionLines) {
-      this.scene.remove(this.connectionLines);
+      this.internalScene.remove(this.connectionLines);
       this.connectionGeometry.dispose();
       this.connectionMaterial.dispose();
     }

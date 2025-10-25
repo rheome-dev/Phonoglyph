@@ -1,7 +1,6 @@
 import { EffectRegistry } from './EffectRegistry';
 import { MetaballsEffect } from './MetaballsEffect';
 import { ParticleNetworkEffect } from './ParticleNetworkEffect';
-import { BloomEffect } from './BloomEffect';
 
 // Register built-in effects at module import time
 EffectRegistry.register({
@@ -24,14 +23,6 @@ EffectRegistry.register({
   defaultConfig: {}
 });
 
-EffectRegistry.register({
-  id: 'bloom',
-  name: 'Bloom Post-Processing',
-  description: 'Global bloom post-processing effect',
-  category: 'postfx',
-  version: '1.0.0',
-  constructor: BloomEffect,
-  defaultConfig: {}
-});
+// Bloom post-processing is now handled by the compositor; remove as an effect
 
 

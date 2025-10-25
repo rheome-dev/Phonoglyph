@@ -6,9 +6,14 @@ export interface VisualEffect {
   description: string;
   enabled: boolean;
   parameters: Record<string, any>;
-  init(scene: THREE.Scene, camera: THREE.Camera, renderer: THREE.WebGLRenderer): void;
+  // Effects are now self-contained and manage their own scene and camera
+  init(renderer: THREE.WebGLRenderer): void;
   update(deltaTime: number, audioData: AudioAnalysisData, midiData: LiveMIDIData): void;
   destroy(): void;
+
+  // Expose internal scene and camera for the compositor
+  getScene(): THREE.Scene;
+  getCamera(): THREE.Camera;
 }
 
 export interface AudioAnalysisData {

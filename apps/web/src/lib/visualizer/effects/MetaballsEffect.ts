@@ -10,8 +10,8 @@ export class MetaballsEffect implements VisualEffect {
   enabled = true;
   parameters: MetaballConfig;
 
-  private scene!: THREE.Scene;
-  private camera!: THREE.Camera;
+  private internalScene!: THREE.Scene;
+  private internalCamera!: THREE.OrthographicCamera;
   private renderer!: THREE.WebGLRenderer;
   private material!: THREE.ShaderMaterial;
   private mesh!: THREE.Mesh;
@@ -54,10 +54,11 @@ export class MetaballsEffect implements VisualEffect {
     };
   }
 
-  init(scene: THREE.Scene, camera: THREE.Camera, renderer: THREE.WebGLRenderer): void {
-    this.scene = scene;
-    this.camera = camera;
+  init(renderer: THREE.WebGLRenderer): void {
     this.renderer = renderer;
+    // Create internal scene and camera for full-screen quad
+    this.internalScene = new THREE.Scene();
+    this.internalCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     // Set resolution uniform based on renderer size
     const size = renderer.getSize(new THREE.Vector2());
     this.uniforms.uResolution.value.set(size.x, size.y);
@@ -304,9 +305,17 @@ export class MetaballsEffect implements VisualEffect {
     this.mesh.renderOrder = 9999; // very last
     this.material.depthWrite = true; // write depth so underlying particles are hidden
     this.material.depthTest = true; // keep depth testing enabled
-    this.scene.add(this.mesh);
+    this.internalScene.add(this.mesh);
     this.mesh.position.set(0, 0, 0);
     this.mesh.scale.set(2, 2, 1); // Fill viewport
+  }
+
+  public getScene(): THREE.Scene {
+    return this.internalScene;
+  }
+
+  public getCamera(): THREE.Camera {
+    return this.internalCamera;
   }
 
   updateParameter(paramName: string, value: any): void {
@@ -438,7 +447,7 @@ export class MetaballsEffect implements VisualEffect {
 
   destroy(): void {
     if (this.mesh) {
-      this.scene.remove(this.mesh);
+      this.internalScene.remove(this.mesh);
       this.mesh.geometry.dispose();
       this.material.dispose();
     }
