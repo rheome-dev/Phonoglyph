@@ -1,4 +1,8 @@
 import * as THREE from 'three';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 
 export interface LayerRenderTarget {
   id: string;
@@ -39,6 +43,12 @@ export class MultiLayerCompositor {
   
   // Blend mode shaders
   private blendShaders: Map<string, string> = new Map();
+
+  // Post-processing
+  private postProcessingComposer!: EffectComposer;
+  private finalScene!: THREE.Scene;
+  private finalRenderPass!: RenderPass;
+  private bloomPass?: UnrealBloomPass;
   
   constructor(renderer: THREE.WebGLRenderer, config: CompositorConfig) {
     this.renderer = renderer;
@@ -49,6 +59,10 @@ export class MultiLayerCompositor {
       ...config
     };
     
+    // Ensure transparent clearing for all off-screen targets
+    this.renderer.setClearColor(0x000000, 0);
+    this.renderer.setClearAlpha(0);
+
     // Create render targets
     this.mainRenderTarget = new THREE.WebGLRenderTarget(
       this.config.width,
@@ -92,6 +106,9 @@ export class MultiLayerCompositor {
     
     // Initialize blend mode shaders
     this.initializeBlendShaders();
+
+    // Initialize post-processing (bloom, etc.)
+    this.initializePostProcessing();
   }
   
   /**
@@ -180,20 +197,19 @@ export class MultiLayerCompositor {
       if (!layer || !layer.enabled) continue;
       
       this.renderer.setRenderTarget(layer.renderTarget);
-      this.renderer.clear();
+      // Clear color/depth/stencil with transparent background
+      this.renderer.clear(true, true, true);
       this.renderer.render(layer.scene, layer.camera);
     }
     
     // Step 2: Composite layers using GPU shaders
     this.compositeLayersToMain();
     
-    // Step 3: Apply post-processing (bloom, etc.)
-    if (this.config.enableBloom) {
-      this.applyBloomEffect();
-    }
-    
-    // Step 4: Final output
-    this.renderFinalOutput();
+    // Step 3: Post-processing chain and final output
+    // Drive the first pass with the composited main render target
+    this.finalScene.background = this.mainRenderTarget.texture as any;
+    this.renderer.setRenderTarget(null);
+    this.postProcessingComposer.render();
   }
   
   /**
@@ -201,7 +217,8 @@ export class MultiLayerCompositor {
    */
   private compositeLayersToMain(): void {
     this.renderer.setRenderTarget(this.mainRenderTarget);
-    this.renderer.clear();
+    // Clear to transparent before compositing
+    this.renderer.clear(true, true, true);
     
     // Composite layers in order
     for (const layerId of this.layerOrder) {
@@ -246,129 +263,22 @@ export class MultiLayerCompositor {
     mesh.geometry.dispose();
   }
   
-  /**
-   * Apply bloom effect
-   */
-  private applyBloomEffect(): void {
-    // Simple bloom implementation - in practice you'd use a more sophisticated approach
-    this.renderer.setRenderTarget(this.bloomRenderTarget);
-    this.renderer.clear();
+  // Initialize post-processing chain
+  private initializePostProcessing(): void {
+    this.postProcessingComposer = new EffectComposer(this.renderer);
+    this.finalScene = new THREE.Scene();
+    this.finalRenderPass = new RenderPass(this.finalScene, this.quadCamera);
+    this.postProcessingComposer.addPass(this.finalRenderPass);
     
-    const bloomMaterial = new THREE.ShaderMaterial({
-      vertexShader: `
-        varying vec2 vUv;
-        void main() {
-          vUv = uv;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-      `,
-      fragmentShader: `
-        uniform sampler2D tDiffuse;
-        varying vec2 vUv;
-        
-        void main() {
-          vec4 texel = texture2D(tDiffuse, vUv);
-          float brightness = (texel.r + texel.g + texel.b) / 3.0;
-          float threshold = 0.7;
-          float bloom = max(0.0, brightness - threshold);
-          gl_FragColor = vec4(texel.rgb * bloom, bloom);
-        }
-      `,
-      uniforms: {
-        tDiffuse: new THREE.Uniform(this.mainRenderTarget.texture)
-      }
-    });
-    
-    const mesh = new THREE.Mesh(this.quadGeometry, bloomMaterial);
-    const scene = new THREE.Scene();
-    scene.add(mesh);
-    
-    this.renderer.render(scene, this.quadCamera);
-    
-    // Blend bloom with main
-    this.renderer.setRenderTarget(this.tempRenderTarget);
-    this.renderer.clear();
-    
-    const blendMaterial = new THREE.ShaderMaterial({
-      vertexShader: `
-        varying vec2 vUv;
-        void main() {
-          vUv = uv;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-      `,
-      fragmentShader: `
-        uniform sampler2D tMain;
-        uniform sampler2D tBloom;
-        varying vec2 vUv;
-        
-        void main() {
-          vec4 mainColor = texture2D(tMain, vUv);
-          vec4 bloomColor = texture2D(tBloom, vUv);
-          gl_FragColor = mainColor + bloomColor * 0.5;
-        }
-      `,
-      uniforms: {
-        tMain: new THREE.Uniform(this.mainRenderTarget.texture),
-        tBloom: new THREE.Uniform(this.bloomRenderTarget.texture)
-      }
-    });
-    
-    const blendMesh = new THREE.Mesh(this.quadGeometry, blendMaterial);
-    const blendScene = new THREE.Scene();
-    blendScene.add(blendMesh);
-    
-    this.renderer.render(blendScene, this.quadCamera);
-    
-    // Swap render targets
-    const temp = this.mainRenderTarget;
-    this.mainRenderTarget = this.tempRenderTarget;
-    this.tempRenderTarget = temp;
-    
-    // Cleanup
-    bloomMaterial.dispose();
-    blendMaterial.dispose();
-    mesh.geometry.dispose();
-    blendMesh.geometry.dispose();
-  }
-  
-  /**
-   * Render final output to screen
-   */
-  private renderFinalOutput(): void {
-    this.renderer.setRenderTarget(null);
-    
-    const finalMaterial = new THREE.ShaderMaterial({
-      vertexShader: `
-        varying vec2 vUv;
-        void main() {
-          vUv = uv;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-      `,
-      fragmentShader: `
-        uniform sampler2D tDiffuse;
-        varying vec2 vUv;
-        
-        void main() {
-          vec4 texel = texture2D(tDiffuse, vUv);
-          gl_FragColor = texel;
-        }
-      `,
-      uniforms: {
-        tDiffuse: new THREE.Uniform(this.mainRenderTarget.texture)
-      }
-    });
-    
-    const mesh = new THREE.Mesh(this.quadGeometry, finalMaterial);
-    const scene = new THREE.Scene();
-    scene.add(mesh);
-    
-    this.renderer.render(scene, this.quadCamera);
-    
-    // Cleanup
-    finalMaterial.dispose();
-    mesh.geometry.dispose();
+    if (this.config.enableBloom) {
+      this.bloomPass = new UnrealBloomPass(
+        new THREE.Vector2(this.config.width, this.config.height),
+        0.1, // strength
+        0.4, // radius
+        0.25 // threshold
+      );
+      this.postProcessingComposer.addPass(this.bloomPass);
+    }
   }
   
   /**
@@ -484,6 +394,14 @@ export class MultiLayerCompositor {
     // Resize layer render targets
     for (const layer of this.layers.values()) {
       layer.renderTarget.setSize(width, height);
+    }
+
+    // Resize post-processing
+    if (this.postProcessingComposer) {
+      this.postProcessingComposer.setSize(width, height);
+    }
+    if (this.bloomPass) {
+      this.bloomPass.setSize(width, height);
     }
   }
   
