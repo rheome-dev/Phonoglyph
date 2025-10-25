@@ -240,8 +240,11 @@ export class MetaballsEffect implements VisualEffect {
         vec3 cameraUp = cross(cameraRight, cameraDir);
         vec3 rayDir = normalize(cameraDir + uv.x * cameraRight + uv.y * cameraUp);
         float dist = rayMarch(cameraPos, rayDir);
+        if (dist >= MAX_DIST) {
+          discard; // ensure no background writes
+        }
         vec4 finalColor = vec4(0.0);
-        if (dist < MAX_DIST) {
+        {
           vec3 pos = cameraPos + rayDir * dist;
           vec3 normal = calcNormal(pos);
           float fresnel = pow(1.0 - max(0.0, dot(normal, -rayDir)), 2.5);
@@ -301,10 +304,9 @@ export class MetaballsEffect implements VisualEffect {
   private createMesh() {
     const geometry = new THREE.PlaneGeometry(2, 2);
     this.mesh = new THREE.Mesh(geometry, this.material);
-    // Ensure metaballs render on top of other content and occlude it
-    this.mesh.renderOrder = 9999; // very last
-    this.material.depthWrite = true; // write depth so underlying particles are hidden
-    this.material.depthTest = true; // keep depth testing enabled
+    // Let compositor handle layering; avoid depth artifacts across transparent areas
+    this.material.depthWrite = false;
+    this.material.depthTest = false;
     this.internalScene.add(this.mesh);
     this.mesh.position.set(0, 0, 0);
     this.mesh.scale.set(2, 2, 1); // Fill viewport
