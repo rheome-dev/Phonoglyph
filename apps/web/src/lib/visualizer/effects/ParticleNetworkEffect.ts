@@ -178,6 +178,7 @@ export class ParticleNetworkEffect implements VisualEffect {
       blending: THREE.AdditiveBlending,
       depthWrite: false,
       depthTest: false,
+      premultipliedAlpha: false,
       vertexColors: true
     });
 

@@ -3,6 +3,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { TexturePass } from 'three/examples/jsm/postprocessing/TexturePass.js';
 
 export interface LayerRenderTarget {
   id: string;
@@ -46,8 +47,7 @@ export class MultiLayerCompositor {
 
   // Post-processing
   private postProcessingComposer!: EffectComposer;
-  private finalScene!: THREE.Scene;
-  private finalRenderPass!: RenderPass;
+  private texturePass!: TexturePass;
   private bloomPass?: UnrealBloomPass;
   
   constructor(renderer: THREE.WebGLRenderer, config: CompositorConfig) {
@@ -63,8 +63,13 @@ export class MultiLayerCompositor {
     this.renderer.setClearColor(0x000000, 0);
     this.renderer.setClearAlpha(0);
 
-    // Create render targets
-    this.mainRenderTarget = new THREE.WebGLRenderTarget(
+    // Create render targets (use multisample if available for better AA)
+    const isWebGL2 = (this.renderer.getContext() as WebGL2RenderingContext | WebGLRenderingContext).constructor.name.includes('WebGL2');
+    const RTClass: any = (isWebGL2 && (THREE as any).WebGLMultisampleRenderTarget)
+      ? (THREE as any).WebGLMultisampleRenderTarget
+      : THREE.WebGLRenderTarget;
+
+    this.mainRenderTarget = new RTClass(
       this.config.width,
       this.config.height,
       {
@@ -75,8 +80,11 @@ export class MultiLayerCompositor {
         generateMipmaps: false
       }
     );
+    if ('samples' in this.mainRenderTarget) {
+      (this.mainRenderTarget as any).samples = 4;
+    }
     
-    this.bloomRenderTarget = new THREE.WebGLRenderTarget(
+    this.bloomRenderTarget = new RTClass(
       this.config.width,
       this.config.height,
       {
@@ -87,8 +95,11 @@ export class MultiLayerCompositor {
         generateMipmaps: false
       }
     );
+    if ('samples' in this.bloomRenderTarget) {
+      (this.bloomRenderTarget as any).samples = 4;
+    }
     
-    this.tempRenderTarget = new THREE.WebGLRenderTarget(
+    this.tempRenderTarget = new RTClass(
       this.config.width,
       this.config.height,
       {
@@ -99,6 +110,9 @@ export class MultiLayerCompositor {
         generateMipmaps: false
       }
     );
+    if ('samples' in this.tempRenderTarget) {
+      (this.tempRenderTarget as any).samples = 4;
+    }
     
     // Create shared geometry and camera
     this.quadGeometry = new THREE.PlaneGeometry(2, 2);
@@ -120,7 +134,12 @@ export class MultiLayerCompositor {
     camera: THREE.Camera,
     options: Partial<Omit<LayerRenderTarget, 'id' | 'scene' | 'camera'>> = {}
   ): LayerRenderTarget {
-    const renderTarget = new THREE.WebGLRenderTarget(
+    const isWebGL2 = (this.renderer.getContext() as WebGL2RenderingContext | WebGLRenderingContext).constructor.name.includes('WebGL2');
+    const RTClass: any = (isWebGL2 && (THREE as any).WebGLMultisampleRenderTarget)
+      ? (THREE as any).WebGLMultisampleRenderTarget
+      : THREE.WebGLRenderTarget;
+
+    const renderTarget = new RTClass(
       this.config.width,
       this.config.height,
       {
@@ -131,6 +150,9 @@ export class MultiLayerCompositor {
         generateMipmaps: false
       }
     );
+    if ('samples' in renderTarget) {
+      (renderTarget as any).samples = 4;
+    }
     
     const layer: LayerRenderTarget = {
       id,
@@ -206,8 +228,8 @@ export class MultiLayerCompositor {
     this.compositeLayersToMain();
     
     // Step 3: Post-processing chain and final output
-    // Drive the first pass with the composited main render target
-    this.finalScene.background = this.mainRenderTarget.texture as any;
+    // Update the texture pass input to the composited target
+    this.texturePass.map = this.mainRenderTarget.texture;
     this.renderer.setRenderTarget(null);
     this.postProcessingComposer.render();
   }
@@ -249,7 +271,8 @@ export class MultiLayerCompositor {
       },
       transparent: true,
       depthTest: false,
-      depthWrite: false
+      depthWrite: false,
+      premultipliedAlpha: false
     });
     
     const mesh = new THREE.Mesh(this.quadGeometry, material);
@@ -266,15 +289,15 @@ export class MultiLayerCompositor {
   // Initialize post-processing chain
   private initializePostProcessing(): void {
     this.postProcessingComposer = new EffectComposer(this.renderer);
-    this.finalScene = new THREE.Scene();
-    this.finalRenderPass = new RenderPass(this.finalScene, this.quadCamera);
-    this.postProcessingComposer.addPass(this.finalRenderPass);
-    
+    // Feed the composited texture into the composer
+    this.texturePass = new TexturePass(this.mainRenderTarget.texture);
+    this.postProcessingComposer.addPass(this.texturePass);
+
     if (this.config.enableBloom) {
       this.bloomPass = new UnrealBloomPass(
         new THREE.Vector2(this.config.width, this.config.height),
-        0.1, // strength
-        0.4, // radius
+        0.6, // strength (tuned up for visible glow)
+        0.8, // radius
         0.25 // threshold
       );
       this.postProcessingComposer.addPass(this.bloomPass);
