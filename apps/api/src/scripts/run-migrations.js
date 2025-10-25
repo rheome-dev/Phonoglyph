@@ -1,5 +1,5 @@
-import { logger } from '../lib/logger';
 #!/usr/bin/env node
+import { logger } from '../lib/logger';
 
 const { spawn } = require('child_process');
 const path = require('path');

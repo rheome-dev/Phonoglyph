@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { pool } from '../connection'
-import { logger } from '../lib/logger';
+import { logger } from '../../lib/logger';
 
 async function runMigrations() {
   try {

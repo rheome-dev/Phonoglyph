@@ -1,5 +1,5 @@
 import { pool } from '../connection'
-import { logger } from '../lib/logger';
+import { logger } from '../../lib/logger';
 
 export async function seedDevelopmentData() {
   try {
