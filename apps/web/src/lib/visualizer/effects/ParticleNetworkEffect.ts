@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { VisualEffect, AudioAnalysisData, LiveMIDIData } from '@/types/visualizer';
+import { debugLog } from '@/lib/utils';
 import { Line2 } from 'three/examples/jsm/lines/Line2.js';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
-import { debugLog } from '@/lib/utils';
 
 interface Particle {
   position: THREE.Vector3;
@@ -161,16 +161,16 @@ export class ParticleNetworkEffect implements VisualEffect {
         float dist = length(center) * 2.0; // 0.0 center → 1.0 edge
         if (dist > 1.0) discard;
 
-        // Solid core
+        // Solid core ensures visibility
         float core = 1.0 - smoothstep(0.0, 0.2, dist);
 
-        // Smooth glow falloff
+        // Smooth glow falloff using exp
         float glow = exp(-pow(dist, uGlowSoftness));
         
         float alpha = (core + glow * uGlowIntensity) * vLife;
         vec3 finalColor = vColor * (1.0 + glow * uGlowIntensity * 0.5 + core * 0.2);
 
-        // Premultiplied alpha for additive light contribution
+        // Premultiplied alpha for additive blending
         gl_FragColor = vec4(finalColor * alpha, alpha);
       }
     `;
@@ -404,8 +404,11 @@ export class ParticleNetworkEffect implements VisualEffect {
   }
   
   private createConnectionSystem() {
-    // Thick, AA connections using Line2
+    // AA/thick connections using Line2
     this.connectionGeometry = new LineGeometry();
+    // Initialize with empty attributes to avoid undefined access before first update
+    this.connectionGeometry.setPositions([]);
+    this.connectionGeometry.setColors([]);
     this.connectionMaterial = new LineMaterial({
       vertexColors: true,
       linewidth: 2, // pixels
@@ -414,12 +417,10 @@ export class ParticleNetworkEffect implements VisualEffect {
       depthTest: false
     });
     this.connectionLines = new Line2(this.connectionGeometry, this.connectionMaterial);
-    this.connectionLines.computeLineDistances();
     this.internalScene.add(this.connectionLines);
   }
 
   private updateConnections() {
-    // Build arrays for LineGeometry
     const positions: number[] = [];
     const colors: number[] = [];
     let connectionCount = 0;
@@ -453,10 +454,11 @@ export class ParticleNetworkEffect implements VisualEffect {
     this.connectionGeometry.setColors(colors);
     const size = this.renderer.getSize(new THREE.Vector2());
     this.connectionMaterial.resolution.set(size.x, size.y);
+    if (positions.length > 0) {
+      this.connectionLines.computeLineDistances();
+    }
   }
-
-  // createConnection not needed with LineGeometry batching
-
+  
   updateParameter(paramName: string, value: any): void {
     // Immediately update parameters for real-time control
     switch (paramName) {
