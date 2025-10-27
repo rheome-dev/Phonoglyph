@@ -270,12 +270,15 @@ export class MetaballsEffect implements VisualEffect {
           color = pow(color, vec3(7.0));
           // Add a subtle neon rim from before
           color = mix(color, getNeonColor(pos, fresnel, edge, core), 0.25 * fresnel);
-          // Translucency: base alpha is very low, highlights/rims are subtle
-          float alpha = 0.07 + 0.10 * thickness;
+          // Translucency and emission
+          float alpha = 0.10 + 0.12 * thickness;
           alpha += 0.25 * fresnel;
           alpha += 0.10 * pow(core, 2.0);
-          alpha = clamp(alpha, 0.0, 0.55);
-          finalColor = vec4(color, alpha);
+          alpha = clamp(alpha, 0.0, 0.70);
+          // Boost brightness slightly to compensate for loss of legacy bloom
+          color *= 1.5;
+          // Premultiplied alpha for correct additive blending over transparent background
+          finalColor = vec4(color * alpha, alpha);
         }
         gl_FragColor = finalColor;
       }
@@ -288,7 +291,9 @@ export class MetaballsEffect implements VisualEffect {
       fragmentShader,
       uniforms: this.uniforms,
       transparent: true,
-      side: THREE.DoubleSide
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+      premultipliedAlpha: true
     });
     } catch (error) {
       debugLog.error('❌ Shader compilation error:', error);
