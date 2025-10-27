@@ -451,13 +451,20 @@ export class ParticleNetworkEffect implements VisualEffect {
         }
       }
     }
-    this.connectionGeometry.setPositions(positions);
-    this.connectionGeometry.setColors(colors);
+    
+    // Only update geometry if we have connections, otherwise keep the minimal valid line
+    if (positions.length > 0) {
+      this.connectionGeometry.setPositions(positions);
+      this.connectionGeometry.setColors(colors);
+      this.connectionLines.computeLineDistances();
+    } else {
+      // Set to minimal valid line when no connections (prevents Float32Array error)
+      this.connectionGeometry.setPositions([0, 0, 0, 0, 0, 0]);
+      this.connectionGeometry.setColors([0, 0, 0, 0, 0, 0]);
+    }
+    
     const size = this.renderer.getSize(new THREE.Vector2());
     this.connectionMaterial.resolution.set(size.x, size.y);
-    if (positions.length > 0) {
-      this.connectionLines.computeLineDistances();
-    }
   }
   
   updateParameter(paramName: string, value: any): void {
