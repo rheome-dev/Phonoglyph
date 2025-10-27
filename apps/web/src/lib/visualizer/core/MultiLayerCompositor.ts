@@ -247,6 +247,11 @@ export class MultiLayerCompositor {
    */
   private compositeLayersToMain(): void {
     this.renderer.setRenderTarget(this.mainRenderTarget);
+    
+    const clearColor = this.renderer.getClearColor(new THREE.Color());
+    const clearAlpha = this.renderer.getClearAlpha();
+    console.log('🎬 Compositing to main RT, clearColor:', clearColor.getHex().toString(16), 'clearAlpha:', clearAlpha);
+    
     // Clear to transparent before compositing
     this.renderer.clear(true, true, true);
     
@@ -255,6 +260,7 @@ export class MultiLayerCompositor {
       const layer = this.layers.get(layerId);
       if (!layer || !layer.enabled) continue;
       
+      console.log(`🔗 Compositing layer "${layerId}" with blend mode: ${layer.blendMode}`);
       this.renderLayerWithBlending(layer);
     }
   }
@@ -264,6 +270,17 @@ export class MultiLayerCompositor {
    */
   private renderLayerWithBlending(layer: LayerRenderTarget): void {
     const blendShader = this.getBlendModeShader(layer.blendMode);
+    
+    // Determine THREE.js blending mode based on layer blend mode
+    let blendMode: THREE.Blending = THREE.NormalBlending;
+    if (layer.blendMode === 'add') {
+      blendMode = THREE.AdditiveBlending as THREE.Blending;
+    } else if (layer.blendMode === 'multiply') {
+      blendMode = THREE.MultiplyBlending as THREE.Blending;
+    } else if (layer.blendMode === 'screen') {
+      blendMode = THREE.CustomBlending as THREE.Blending;
+    }
+    
     const material = new THREE.ShaderMaterial({
       vertexShader: `
         varying vec2 vUv;
@@ -278,6 +295,7 @@ export class MultiLayerCompositor {
         opacity: new THREE.Uniform(layer.opacity)
       },
       transparent: true,
+      blending: blendMode,
       depthTest: false,
       depthWrite: false,
       premultipliedAlpha: false
@@ -285,6 +303,7 @@ export class MultiLayerCompositor {
     
     const mesh = new THREE.Mesh(this.quadGeometry, material);
     const scene = new THREE.Scene();
+    scene.background = null; // Ensure transparent background
     scene.add(mesh);
     
     this.renderer.render(scene, this.quadCamera);
