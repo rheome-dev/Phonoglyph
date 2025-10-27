@@ -315,7 +315,23 @@ export class MultiLayerCompositor {
   
   // Initialize post-processing chain
   private initializePostProcessing(): void {
-    this.postProcessingComposer = new EffectComposer(this.renderer);
+    // Create EffectComposer with alpha support
+    const renderTarget = new THREE.WebGLRenderTarget(
+      this.config.width,
+      this.config.height,
+      {
+        format: THREE.RGBAFormat,
+        type: THREE.UnsignedByteType,
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.LinearFilter,
+        generateMipmaps: false,
+        stencilBuffer: false,
+        depthBuffer: false
+      }
+    );
+    
+    this.postProcessingComposer = new EffectComposer(this.renderer, renderTarget);
+    
     // Feed the composited texture into the composer
     this.texturePass = new TexturePass(this.mainRenderTarget.texture);
     this.postProcessingComposer.addPass(this.texturePass);
@@ -335,6 +351,8 @@ export class MultiLayerCompositor {
     const pixelRatio = this.renderer.getPixelRatio();
     (this.fxaaPass.uniforms as any).resolution.value.set(1 / (this.config.width * pixelRatio), 1 / (this.config.height * pixelRatio));
     this.postProcessingComposer.addPass(this.fxaaPass);
+    
+    console.log('🎬 EffectComposer initialized with alpha support');
   }
   
   /**
