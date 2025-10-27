@@ -27,7 +27,7 @@ export class ParticleNetworkEffect implements VisualEffect {
   enabled = true;
   parameters = {
     maxParticles: 50,
-    connectionDistance: 1.0,
+    connectionDistance: 2.5,
     particleLifetime: 3.0,
     glowIntensity: 0.6,
     glowSoftness: 3.0,
@@ -35,6 +35,7 @@ export class ParticleNetworkEffect implements VisualEffect {
     particleSize: 15.0,
     particleSpawning: 0.0, // Modulation destination for particle spawning (0-1)
     spawnThreshold: 0.5, // Threshold for when modulation signal spawns particles
+    connectionOpacity: 0.8, // Opacity multiplier for connection lines
   };
 
   private internalScene!: THREE.Scene;
@@ -412,7 +413,7 @@ export class ParticleNetworkEffect implements VisualEffect {
     this.connectionGeometry.setColors([0, 0, 0, 0, 0, 0]);
     this.connectionMaterial = new LineMaterial({
       vertexColors: true,
-      linewidth: 2, // pixels
+      linewidth: 4, // pixels - increased for better visibility
       transparent: true,
       blending: THREE.AdditiveBlending,
       depthTest: false
@@ -431,12 +432,16 @@ export class ParticleNetworkEffect implements VisualEffect {
         const p2 = this.particles[j];
         const distance = p1.position.distanceTo(p2.position);
         if (distance < this.parameters.connectionDistance) {
-          const strength = (1.0 - distance / this.parameters.connectionDistance) * 
-                           Math.min(p1.life, p2.life) * 
-                           ((p1.noteVelocity + p2.noteVelocity) / 254);
+          // Improved strength calculation - less aggressive falloff
+          const distanceFactor = 1.0 - (distance / this.parameters.connectionDistance);
+          const lifeFactor = Math.min(p1.life, p2.life);
+          // Normalize velocity contribution (0.5 to 1.0 range instead of multiplying)
+          const velocityFactor = 0.5 + ((p1.noteVelocity + p2.noteVelocity) / 508);
+          const strength = distanceFactor * lifeFactor * velocityFactor * this.parameters.connectionOpacity;
+          
           const color = new THREE.Color().lerpColors(
-            this.getNoteColor(p1.note, p1.noteVelocity),
-            this.getNoteColor(p2.note, p2.noteVelocity),
+            this.getNoteColor(p1.note, p1.noteVelocity, p1.spawnType, p1.audioValue),
+            this.getNoteColor(p2.note, p2.noteVelocity, p2.spawnType, p2.audioValue),
             0.5
           );
           positions.push(
@@ -497,6 +502,9 @@ export class ParticleNetworkEffect implements VisualEffect {
         break;
       case 'spawnThreshold':
         this.parameters.spawnThreshold = value;
+        break;
+      case 'connectionOpacity':
+        this.parameters.connectionOpacity = value;
         break;
     }
   }

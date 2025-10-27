@@ -535,6 +535,9 @@ function getSliderMax(paramName: string) {
     case 'audioSpawnCooldown': return 1.0;
     case 'audioParticleSize': return 50;
     case 'audioSpawnIntensity': return 2.0;
+    case 'connectionDistance': return 5.0;
+    case 'maxParticles': return 200;
+    case 'connectionOpacity': return 1.0;
     default: return 1;
   }
 }
