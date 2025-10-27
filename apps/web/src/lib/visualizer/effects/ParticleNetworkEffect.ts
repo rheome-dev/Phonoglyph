@@ -1,9 +1,6 @@
 import * as THREE from 'three';
 import { VisualEffect, AudioAnalysisData, LiveMIDIData } from '@/types/visualizer';
 import { debugLog } from '@/lib/utils';
-import { Line2 } from 'three/examples/jsm/lines/Line2.js';
-import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
-import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
 
 interface Particle {
   position: THREE.Vector3;
@@ -42,7 +39,7 @@ export class ParticleNetworkEffect implements VisualEffect {
   private internalCamera!: THREE.PerspectiveCamera;
   private renderer!: THREE.WebGLRenderer;
   private particleSystem!: THREE.Points;
-  private connectionLines!: Line2;
+  private connectionLines!: THREE.LineSegments;
   private material!: THREE.ShaderMaterial;
   private uniforms!: Record<string, THREE.IUniform>;
   
@@ -54,8 +51,10 @@ export class ParticleNetworkEffect implements VisualEffect {
   private lives!: Float32Array;
   
   // Connection data
-  private connectionGeometry!: LineGeometry;
-  private connectionMaterial!: LineMaterial;
+  private connectionGeometry!: THREE.BufferGeometry;
+  private connectionMaterial!: THREE.LineBasicMaterial;
+  private connectionPositions!: Float32Array;
+  private connectionColors!: Float32Array;
   private maxConnections: number = 500; // Limit connections
   private activeConnections: number = 0;
   
@@ -405,32 +404,34 @@ export class ParticleNetworkEffect implements VisualEffect {
   }
   
   private createConnectionSystem() {
-    // AA/thick connections using Line2
-    this.connectionGeometry = new LineGeometry();
-    // Initialize with a minimal valid line (2 points = 6 values) to avoid Float32Array errors
-    // This will be updated with actual connection data in updateConnections
-    this.connectionGeometry.setPositions([0, 0, 0, 0, 0, 0]);
-    this.connectionGeometry.setColors([0, 0, 0, 0, 0, 0]);
-    this.connectionMaterial = new LineMaterial({
+    // Create connection line system using LineSegments for multiple disconnected lines
+    this.connectionGeometry = new THREE.BufferGeometry();
+    this.connectionPositions = new Float32Array(this.maxConnections * 6); // 2 points per line, 3 coords each
+    this.connectionColors = new Float32Array(this.maxConnections * 6); // 2 colors per line, 3 channels each
+    
+    this.connectionGeometry.setAttribute('position', new THREE.BufferAttribute(this.connectionPositions, 3));
+    this.connectionGeometry.setAttribute('color', new THREE.BufferAttribute(this.connectionColors, 3));
+    
+    this.connectionMaterial = new THREE.LineBasicMaterial({
       vertexColors: true,
-      linewidth: 4, // pixels - increased for better visibility
       transparent: true,
       blending: THREE.AdditiveBlending,
       depthTest: false
     });
-    this.connectionLines = new Line2(this.connectionGeometry, this.connectionMaterial);
+    
+    this.connectionLines = new THREE.LineSegments(this.connectionGeometry, this.connectionMaterial);
     this.internalScene.add(this.connectionLines);
   }
 
   private updateConnections() {
-    const positions: number[] = [];
-    const colors: number[] = [];
-    let connectionCount = 0;
-    for (let i = 0; i < this.particles.length - 1 && connectionCount < this.maxConnections; i++) {
-      for (let j = i + 1; j < this.particles.length && connectionCount < this.maxConnections; j++) {
+    let connectionIndex = 0;
+    
+    for (let i = 0; i < this.particles.length - 1 && connectionIndex < this.maxConnections; i++) {
+      for (let j = i + 1; j < this.particles.length && connectionIndex < this.maxConnections; j++) {
         const p1 = this.particles[i];
         const p2 = this.particles[j];
         const distance = p1.position.distanceTo(p2.position);
+        
         if (distance < this.parameters.connectionDistance) {
           // Improved strength calculation - less aggressive falloff
           const distanceFactor = 1.0 - (distance / this.parameters.connectionDistance);
@@ -444,32 +445,34 @@ export class ParticleNetworkEffect implements VisualEffect {
             this.getNoteColor(p2.note, p2.noteVelocity, p2.spawnType, p2.audioValue),
             0.5
           );
-          positions.push(
-            p1.position.x, p1.position.y, p1.position.z,
-            p2.position.x, p2.position.y, p2.position.z
-          );
-          colors.push(
-            color.r * strength, color.g * strength, color.b * strength,
-            color.r * strength, color.g * strength, color.b * strength
-          );
-          connectionCount++;
+          
+          // Set positions for this line segment (2 points)
+          const baseIndex = connectionIndex * 6;
+          this.connectionPositions[baseIndex] = p1.position.x;
+          this.connectionPositions[baseIndex + 1] = p1.position.y;
+          this.connectionPositions[baseIndex + 2] = p1.position.z;
+          this.connectionPositions[baseIndex + 3] = p2.position.x;
+          this.connectionPositions[baseIndex + 4] = p2.position.y;
+          this.connectionPositions[baseIndex + 5] = p2.position.z;
+          
+          // Set colors for this line segment (2 vertices)
+          this.connectionColors[baseIndex] = color.r * strength;
+          this.connectionColors[baseIndex + 1] = color.g * strength;
+          this.connectionColors[baseIndex + 2] = color.b * strength;
+          this.connectionColors[baseIndex + 3] = color.r * strength;
+          this.connectionColors[baseIndex + 4] = color.g * strength;
+          this.connectionColors[baseIndex + 5] = color.b * strength;
+          
+          connectionIndex++;
         }
       }
     }
     
-    // Only update geometry if we have connections, otherwise keep the minimal valid line
-    if (positions.length > 0) {
-      this.connectionGeometry.setPositions(positions);
-      this.connectionGeometry.setColors(colors);
-      this.connectionLines.computeLineDistances();
-    } else {
-      // Set to minimal valid line when no connections (prevents Float32Array error)
-      this.connectionGeometry.setPositions([0, 0, 0, 0, 0, 0]);
-      this.connectionGeometry.setColors([0, 0, 0, 0, 0, 0]);
-    }
-    
-    const size = this.renderer.getSize(new THREE.Vector2());
-    this.connectionMaterial.resolution.set(size.x, size.y);
+    // Set the draw range to only render active connections
+    this.connectionGeometry.setDrawRange(0, connectionIndex * 2); // 2 vertices per connection
+    this.connectionGeometry.attributes.position.needsUpdate = true;
+    this.connectionGeometry.attributes.color.needsUpdate = true;
+    this.activeConnections = connectionIndex;
   }
   
   updateParameter(paramName: string, value: any): void {
@@ -555,6 +558,7 @@ export class ParticleNetworkEffect implements VisualEffect {
   destroy(): void {
     if (this.instancedMesh) {
       this.internalScene.remove(this.instancedMesh);
+      this.instancedMesh.geometry.dispose();
       this.material.dispose();
     }
     
