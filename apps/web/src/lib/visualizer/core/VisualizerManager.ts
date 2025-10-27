@@ -132,6 +132,10 @@ export class VisualizerManager {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, config.canvas.pixelRatio || 2));
     this.renderer.setClearColor(0x000000, 0); // Transparent background for layer compositing
     
+    const clearColor = this.renderer.getClearColor(new THREE.Color());
+    const clearAlpha = this.renderer.getClearAlpha();
+    console.log('🎮 VisualizerManager: Renderer clear color =', clearColor.getHex().toString(16), 'alpha =', clearAlpha);
+    
     debugLog.log('🎮 Renderer configured with size:', config.canvas.width, 'x', config.canvas.height);
     
     // Performance optimizations for 30fps

@@ -109,6 +109,7 @@ export class ParticleNetworkEffect implements VisualEffect {
     // Create internal scene and a perspective camera for 3D effect
     this.internalScene = new THREE.Scene();
     this.internalScene.background = null; // Transparent background for layer compositing
+    console.log('✨ ParticleNetworkEffect: Scene created, background =', this.internalScene.background);
     const size = this.renderer.getSize(new THREE.Vector2());
     const aspect = size.x / size.y || 1;
     this.internalCamera = new THREE.PerspectiveCamera(60, aspect, 0.1, 1000);

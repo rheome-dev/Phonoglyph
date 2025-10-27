@@ -59,6 +59,7 @@ export class MetaballsEffect implements VisualEffect {
     // Create internal scene and camera for full-screen quad
     this.internalScene = new THREE.Scene();
     this.internalScene.background = null; // Transparent background for layer compositing
+    console.log('🎨 MetaballsEffect: Scene created, background =', this.internalScene.background);
     this.internalCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     // Set resolution uniform based on renderer size
     const size = renderer.getSize(new THREE.Vector2());

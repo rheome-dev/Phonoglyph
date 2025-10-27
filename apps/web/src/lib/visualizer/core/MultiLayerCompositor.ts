@@ -136,6 +136,8 @@ export class MultiLayerCompositor {
     camera: THREE.Camera,
     options: Partial<Omit<LayerRenderTarget, 'id' | 'scene' | 'camera'>> = {}
   ): LayerRenderTarget {
+    console.log(`🎬 Creating layer "${id}", scene.background =`, scene.background);
+    
     const isWebGL2 = (this.renderer.getContext() as WebGL2RenderingContext | WebGLRenderingContext).constructor.name.includes('WebGL2');
     const RTClass: any = (isWebGL2 && (THREE as any).WebGLMultisampleRenderTarget)
       ? (THREE as any).WebGLMultisampleRenderTarget
@@ -219,6 +221,10 @@ export class MultiLayerCompositor {
     for (const layerId of this.layerOrder) {
       const layer = this.layers.get(layerId);
       if (!layer || !layer.enabled) continue;
+      
+      const clearColor = this.renderer.getClearColor(new THREE.Color());
+      const clearAlpha = this.renderer.getClearAlpha();
+      console.log(`🎨 Rendering layer "${layerId}", clearColor:`, clearColor.getHex().toString(16), `clearAlpha: ${clearAlpha}, scene.background:`, layer.scene.background);
       
       this.renderer.setRenderTarget(layer.renderTarget);
       // Clear color/depth/stencil with transparent background
