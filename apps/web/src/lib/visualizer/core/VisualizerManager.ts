@@ -74,7 +74,7 @@ export class VisualizerManager {
   private initScene(config: VisualizerConfig) {
     // Scene setup
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x000000); // Pure black for bloom effect
+    this.scene.background = null; // Transparent background for proper layer compositing
     this.scene.fog = new THREE.Fog(0x000000, 10, 50);
     
       // Camera setup - use aspect ratio from config if available, otherwise use 1:1
@@ -130,7 +130,7 @@ export class VisualizerManager {
     
     this.renderer.setSize(config.canvas.width, config.canvas.height);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, config.canvas.pixelRatio || 2));
-    this.renderer.setClearColor(0x000000, 1); // Pure black background
+    this.renderer.setClearColor(0x000000, 0); // Transparent background for layer compositing
     
     debugLog.log('🎮 Renderer configured with size:', config.canvas.width, 'x', config.canvas.height);
     

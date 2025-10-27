@@ -58,6 +58,7 @@ export class MetaballsEffect implements VisualEffect {
     this.renderer = renderer;
     // Create internal scene and camera for full-screen quad
     this.internalScene = new THREE.Scene();
+    this.internalScene.background = null; // Transparent background for layer compositing
     this.internalCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     // Set resolution uniform based on renderer size
     const size = renderer.getSize(new THREE.Vector2());
@@ -275,8 +276,10 @@ export class MetaballsEffect implements VisualEffect {
           alpha += 0.25 * fresnel;
           alpha += 0.10 * pow(core, 2.0);
           alpha = clamp(alpha, 0.0, 0.70);
-          // Boost brightness slightly to compensate for loss of legacy bloom
-          color *= 1.5;
+          // Boost brightness significantly to simulate bloom effect
+          color *= 3.5;
+          // Add extra glow to mimic bloom
+          color += vec3(0.15) * fresnel * fresnel;
           // Premultiplied alpha for correct additive blending over transparent background
           finalColor = vec4(color * alpha, alpha);
         }
