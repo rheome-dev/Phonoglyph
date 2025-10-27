@@ -406,9 +406,10 @@ export class ParticleNetworkEffect implements VisualEffect {
   private createConnectionSystem() {
     // AA/thick connections using Line2
     this.connectionGeometry = new LineGeometry();
-    // Initialize with empty attributes to avoid undefined access before first update
-    this.connectionGeometry.setPositions([]);
-    this.connectionGeometry.setColors([]);
+    // Initialize with a minimal valid line (2 points = 6 values) to avoid Float32Array errors
+    // This will be updated with actual connection data in updateConnections
+    this.connectionGeometry.setPositions([0, 0, 0, 0, 0, 0]);
+    this.connectionGeometry.setColors([0, 0, 0, 0, 0, 0]);
     this.connectionMaterial = new LineMaterial({
       vertexColors: true,
       linewidth: 2, // pixels
