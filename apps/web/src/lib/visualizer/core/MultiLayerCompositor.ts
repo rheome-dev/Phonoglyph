@@ -238,8 +238,21 @@ export class MultiLayerCompositor {
     // Step 3: Post-processing chain and final output
     // Update the texture pass input to the composited target
     this.texturePass.map = this.mainRenderTarget.texture;
+    
+    // Save autoClear state and disable it temporarily
+    const autoClear = this.renderer.autoClear;
+    this.renderer.autoClear = false;
+    
     this.renderer.setRenderTarget(null);
+    
+    // CRITICAL: Clear canvas with transparency before post-processing renders
+    this.renderer.clear(true, true, true);
+    console.log('🖼️  Rendering to canvas with clearAlpha:', this.renderer.getClearAlpha());
+    
     this.postProcessingComposer.render();
+    
+    // Restore autoClear state
+    this.renderer.autoClear = autoClear;
   }
   
   /**
@@ -332,8 +345,20 @@ export class MultiLayerCompositor {
     
     this.postProcessingComposer = new EffectComposer(this.renderer, renderTarget);
     
+    // CRITICAL: Prevent EffectComposer from clearing our transparent background
+    this.postProcessingComposer.renderToScreen = true;
+    
     // Feed the composited texture into the composer
     this.texturePass = new TexturePass(this.mainRenderTarget.texture);
+    
+    // Configure TexturePass material for alpha transparency
+    if (this.texturePass.material) {
+      this.texturePass.material.transparent = true;
+      this.texturePass.material.blending = THREE.NormalBlending;
+      this.texturePass.material.depthTest = false;
+      this.texturePass.material.depthWrite = false;
+    }
+    
     this.postProcessingComposer.addPass(this.texturePass);
 
     if (this.config.enableBloom) {
@@ -350,6 +375,15 @@ export class MultiLayerCompositor {
     this.fxaaPass = new ShaderPass(FXAAShader);
     const pixelRatio = this.renderer.getPixelRatio();
     (this.fxaaPass.uniforms as any).resolution.value.set(1 / (this.config.width * pixelRatio), 1 / (this.config.height * pixelRatio));
+    
+    // Critical: Configure FXAA pass material to preserve alpha
+    if (this.fxaaPass.material) {
+      this.fxaaPass.material.transparent = true;
+      this.fxaaPass.material.blending = THREE.NormalBlending;
+      this.fxaaPass.material.depthTest = false;
+      this.fxaaPass.material.depthWrite = false;
+    }
+    
     this.postProcessingComposer.addPass(this.fxaaPass);
     
     console.log('🎬 EffectComposer initialized with alpha support');
