@@ -399,30 +399,30 @@ export class MultiLayerCompositor {
     // FXAA to reduce aliasing on lines and sprite edges
     // CRITICAL FIX: Create alpha-preserving version of FXAAShader
     const AlphaPreservingFXAAShader = {
-      // uniforms: THREE.UniformsUtils.clone(FXAAShader.uniforms), // Properly clone uniforms as THREE.Uniform objects
-      // vertexShader: FXAAShader.vertexShader,
-      // fragmentShader: FXAAShader.fragmentShader.replace(
-      //   // The original shader discards alpha. Find this line:
-      //   'gl_FragColor = vec4( rgb, luma );',
-      //   // And replace it with a version that preserves the original alpha:
-      //   'gl_FragColor = vec4( rgb, texture2D( tDiffuse, vUv ).a );'
-      // )
+      uniforms: THREE.UniformsUtils.clone(FXAAShader.uniforms), // Properly clone uniforms as THREE.Uniform objects
+      vertexShader: FXAAShader.vertexShader,
+      fragmentShader: FXAAShader.fragmentShader.replace(
+        // The original shader discards alpha. Find this line:
+        'gl_FragColor = vec4( rgb, luma );',
+        // And replace it with a version that preserves the original alpha:
+        'gl_FragColor = vec4( rgb, texture2D( tDiffuse, vUv ).a );'
+      )
     };
     
     // Use the alpha-preserving shader
-    // this.fxaaPass = new ShaderPass(AlphaPreservingFXAAShader);
-    // const pixelRatio = this.renderer.getPixelRatio();
-    // this.fxaaPass.uniforms['resolution'].value.set(1 / (this.config.width * pixelRatio), 1 / (this.config.height * pixelRatio));
+    this.fxaaPass = new ShaderPass(AlphaPreservingFXAAShader);
+    const pixelRatio = this.renderer.getPixelRatio();
+    this.fxaaPass.uniforms['resolution'].value.set(1 / (this.config.width * pixelRatio), 1 / (this.config.height * pixelRatio));
     
-    // // Critical: Configure FXAA pass material to preserve alpha
-    // if (this.fxaaPass.material) {
-    //   this.fxaaPass.material.transparent = true;
-    //   this.fxaaPass.material.blending = THREE.NormalBlending;
-    //   this.fxaaPass.material.depthTest = false;
-    //   this.fxaaPass.material.depthWrite = false;
-    // }
+    // Critical: Configure FXAA pass material to preserve alpha
+    if (this.fxaaPass.material) {
+      this.fxaaPass.material.transparent = true;
+      this.fxaaPass.material.blending = THREE.NormalBlending;
+      this.fxaaPass.material.depthTest = false;
+      this.fxaaPass.material.depthWrite = false;
+    }
     
-    // this.postProcessingComposer.addPass(this.fxaaPass);
+    this.postProcessingComposer.addPass(this.fxaaPass);
     
     console.log('🎬 EffectComposer initialized with alpha-preserving FXAA support');
   }
