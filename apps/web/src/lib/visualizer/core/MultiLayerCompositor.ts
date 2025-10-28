@@ -366,6 +366,25 @@ export class MultiLayerCompositor {
         0.8, // radius
         0.25 // threshold
       );
+
+      // CRITICAL FIX FOR BLOOM ALPHA
+      // The default composite material in UnrealBloomPass discards the original alpha.
+      // We must replace its fragment shader with a version that preserves it by taking
+      // the alpha from the original scene texture (`baseTexture`).
+      const finalCompositeShader = (this.bloomPass as any).compositeMaterial.fragmentShader
+        .replace(
+          // Find the line that outputs the final color
+          'gl_FragColor = linearToOutputTexel( composite );',
+          // And replace it with a version that re-injects the original alpha
+          `
+          vec4 baseTex = texture2D( baseTexture, vUv );
+          gl_FragColor = vec4(composite.rgb, baseTex.a);
+          `
+        );
+      
+      // Apply the modified shader to the bloom pass
+      (this.bloomPass as any).compositeMaterial.fragmentShader = finalCompositeShader;
+      
       this.postProcessingComposer.addPass(this.bloomPass);
     }
 
