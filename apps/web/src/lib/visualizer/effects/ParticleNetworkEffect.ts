@@ -24,7 +24,7 @@ export class ParticleNetworkEffect implements VisualEffect {
   enabled = true;
   parameters = {
     maxParticles: 50,
-    connectionDistance: 2.5,
+    connectionDistance: 1.0,
     particleLifetime: 3.0,
     glowIntensity: 0.6,
     glowSoftness: 3.0,
