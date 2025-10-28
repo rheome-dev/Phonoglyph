@@ -360,61 +360,61 @@ export class MultiLayerCompositor {
     this.postProcessingComposer.addPass(this.texturePass);
 
     if (this.config.enableBloom) {
-      this.bloomPass = new UnrealBloomPass(
-        new THREE.Vector2(this.config.width, this.config.height),
-        0.6, // strength (tuned up for visible glow)
-        0.8, // radius
-        0.25 // threshold
-      );
+      // this.bloomPass = new UnrealBloomPass(
+      //   new THREE.Vector2(this.config.width, this.config.height),
+      //   0.6, // strength (tuned up for visible glow)
+      //   0.8, // radius
+      //   0.25 // threshold
+      // );
 
       // CRITICAL FIX FOR BLOOM ALPHA
       // The default composite material in UnrealBloomPass discards the original alpha.
       // We must replace its fragment shader with a version that preserves it by taking
       // the alpha from the original scene texture (`baseTexture`).
-      const finalCompositeShader = (this.bloomPass as any).compositeMaterial.fragmentShader
-        .replace(
-          // Find the line that outputs the final color
-          'gl_FragColor = linearToOutputTexel( composite );',
-          // And replace it with a version that re-injects the original alpha
-          `
-          vec4 baseTex = texture2D( baseTexture, vUv );
-          gl_FragColor = vec4(composite.rgb, baseTex.a);
-          `
-        );
+      // const finalCompositeShader = (this.bloomPass as any).compositeMaterial.fragmentShader
+      //   .replace(
+      //     // Find the line that outputs the final color
+      //     'gl_FragColor = linearToOutputTexel( composite );',
+      //     // And replace it with a version that re-injects the original alpha
+      //     `
+      //     vec4 baseTex = texture2D( baseTexture, vUv );
+      //     gl_FragColor = vec4(composite.rgb, baseTex.a);
+      //     `
+      //   );
       
-      // Apply the modified shader to the bloom pass
-      (this.bloomPass as any).compositeMaterial.fragmentShader = finalCompositeShader;
+      // // Apply the modified shader to the bloom pass
+      // (this.bloomPass as any).compositeMaterial.fragmentShader = finalCompositeShader;
       
-      this.postProcessingComposer.addPass(this.bloomPass);
+      // this.postProcessingComposer.addPass(this.bloomPass);
     }
 
     // FXAA to reduce aliasing on lines and sprite edges
     // CRITICAL FIX: Create alpha-preserving version of FXAAShader
     const AlphaPreservingFXAAShader = {
-      uniforms: THREE.UniformsUtils.clone(FXAAShader.uniforms), // Properly clone uniforms as THREE.Uniform objects
-      vertexShader: FXAAShader.vertexShader,
-      fragmentShader: FXAAShader.fragmentShader.replace(
-        // The original shader discards alpha. Find this line:
-        'gl_FragColor = vec4( rgb, luma );',
-        // And replace it with a version that preserves the original alpha:
-        'gl_FragColor = vec4( rgb, texture2D( tDiffuse, vUv ).a );'
-      )
+      // uniforms: THREE.UniformsUtils.clone(FXAAShader.uniforms), // Properly clone uniforms as THREE.Uniform objects
+      // vertexShader: FXAAShader.vertexShader,
+      // fragmentShader: FXAAShader.fragmentShader.replace(
+      //   // The original shader discards alpha. Find this line:
+      //   'gl_FragColor = vec4( rgb, luma );',
+      //   // And replace it with a version that preserves the original alpha:
+      //   'gl_FragColor = vec4( rgb, texture2D( tDiffuse, vUv ).a );'
+      // )
     };
     
     // Use the alpha-preserving shader
-    this.fxaaPass = new ShaderPass(AlphaPreservingFXAAShader);
-    const pixelRatio = this.renderer.getPixelRatio();
-    this.fxaaPass.uniforms['resolution'].value.set(1 / (this.config.width * pixelRatio), 1 / (this.config.height * pixelRatio));
+    // this.fxaaPass = new ShaderPass(AlphaPreservingFXAAShader);
+    // const pixelRatio = this.renderer.getPixelRatio();
+    // this.fxaaPass.uniforms['resolution'].value.set(1 / (this.config.width * pixelRatio), 1 / (this.config.height * pixelRatio));
     
-    // Critical: Configure FXAA pass material to preserve alpha
-    if (this.fxaaPass.material) {
-      this.fxaaPass.material.transparent = true;
-      this.fxaaPass.material.blending = THREE.NormalBlending;
-      this.fxaaPass.material.depthTest = false;
-      this.fxaaPass.material.depthWrite = false;
-    }
+    // // Critical: Configure FXAA pass material to preserve alpha
+    // if (this.fxaaPass.material) {
+    //   this.fxaaPass.material.transparent = true;
+    //   this.fxaaPass.material.blending = THREE.NormalBlending;
+    //   this.fxaaPass.material.depthTest = false;
+    //   this.fxaaPass.material.depthWrite = false;
+    // }
     
-    this.postProcessingComposer.addPass(this.fxaaPass);
+    // this.postProcessingComposer.addPass(this.fxaaPass);
     
     console.log('🎬 EffectComposer initialized with alpha-preserving FXAA support');
   }
