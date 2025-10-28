@@ -29,6 +29,10 @@ export class VisualizerManager {
   // Layered compositor
   private multiLayerCompositor!: MultiLayerCompositor;
   
+  // Background color layer
+  private backgroundMaterial!: THREE.MeshBasicMaterial;
+  private backgroundMesh!: THREE.Mesh;
+  
   // GPU compositing system
   private audioTextureManager: AudioTextureManager | null = null;
   private mediaLayerManager: MediaLayerManager | null = null;
@@ -159,7 +163,27 @@ export class VisualizerManager {
       enableAntialiasing: true,
       pixelRatio: Math.min(window.devicePixelRatio, config.canvas.pixelRatio || 2)
     });
-    // Add base scene as background layer
+    
+    // --- START: BACKGROUND COLOR LAYER IMPLEMENTATION ---
+    // Create a dedicated scene for the background color
+    const backgroundScene = new THREE.Scene();
+    const backgroundCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    
+    // Create a material we can control. Start with black.
+    this.backgroundMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+    
+    // Create a full-screen quad
+    this.backgroundMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.backgroundMaterial);
+    backgroundScene.add(this.backgroundMesh);
+    
+    // Add it to the compositor with a very low zIndex (-100) so it renders first
+    this.multiLayerCompositor.createLayer('backgroundColor', backgroundScene, backgroundCamera, {
+      zIndex: -100,
+      enabled: true
+    });
+    // --- END: BACKGROUND COLOR LAYER IMPLEMENTATION ---
+    
+    // Add base scene as background layer (change zIndex to be above the color layer)
     this.multiLayerCompositor.createLayer('base', this.scene, this.camera, { zIndex: -1, enabled: true });
   }
 
@@ -824,6 +848,30 @@ export class VisualizerManager {
     if (this.audioTextureManager) {
       this.audioTextureManager.loadAudioAnalysis(analysisData);
       debugLog.log('🎵 Audio analysis loaded into GPU textures');
+    }
+  }
+
+  // Background Color Control Methods
+  
+  /**
+   * Set the background color of the visualizer
+   * @param color - THREE.js compatible color (hex, string, or Color object)
+   */
+  public setBackgroundColor(color: THREE.ColorRepresentation): void {
+    if (this.backgroundMaterial) {
+      this.backgroundMaterial.color.set(color);
+      debugLog.log('🎨 Background color set to:', color);
+    }
+  }
+
+  /**
+   * Control the visibility of the background color layer
+   * @param visible - true to show background, false for full transparency
+   */
+  public setBackgroundVisibility(visible: boolean): void {
+    if (this.backgroundMesh) {
+      this.backgroundMesh.visible = visible;
+      debugLog.log('🎨 Background visibility set to:', visible);
     }
   }
 } 
