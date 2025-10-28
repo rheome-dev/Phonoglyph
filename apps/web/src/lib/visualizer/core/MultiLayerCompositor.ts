@@ -311,7 +311,7 @@ export class MultiLayerCompositor {
       blending: blendMode,
       depthTest: false,
       depthWrite: false,
-      premultipliedAlpha: false
+      premultipliedAlpha: true // CRITICAL FIX: Changed from false to true for proper alpha blending
     });
     
     const mesh = new THREE.Mesh(this.quadGeometry, material);
@@ -372,7 +372,20 @@ export class MultiLayerCompositor {
     }
 
     // FXAA to reduce aliasing on lines and sprite edges
-    this.fxaaPass = new ShaderPass(FXAAShader);
+    // CRITICAL FIX: Create alpha-preserving version of FXAAShader
+    const AlphaPreservingFXAAShader = {
+      uniforms: JSON.parse(JSON.stringify(FXAAShader.uniforms)), // Deep copy uniforms
+      vertexShader: FXAAShader.vertexShader,
+      fragmentShader: FXAAShader.fragmentShader.replace(
+        // The original shader discards alpha. Find this line:
+        'gl_FragColor = vec4( rgb, luma );',
+        // And replace it with a version that preserves the original alpha:
+        'gl_FragColor = vec4( rgb, texture2D( tDiffuse, vUv ).a );'
+      )
+    };
+    
+    // Use the alpha-preserving shader
+    this.fxaaPass = new ShaderPass(AlphaPreservingFXAAShader);
     const pixelRatio = this.renderer.getPixelRatio();
     (this.fxaaPass.uniforms as any).resolution.value.set(1 / (this.config.width * pixelRatio), 1 / (this.config.height * pixelRatio));
     
@@ -386,7 +399,7 @@ export class MultiLayerCompositor {
     
     this.postProcessingComposer.addPass(this.fxaaPass);
     
-    console.log('🎬 EffectComposer initialized with alpha support');
+    console.log('🎬 EffectComposer initialized with alpha-preserving FXAA support');
   }
   
   /**
