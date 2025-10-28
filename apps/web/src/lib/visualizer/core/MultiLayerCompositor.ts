@@ -65,11 +65,10 @@ export class MultiLayerCompositor {
     this.renderer.setClearColor(0x000000, 0);
     this.renderer.setClearAlpha(0);
 
-    // Create render targets (use multisample if available for better AA)
-    const isWebGL2 = (this.renderer.getContext() as WebGL2RenderingContext | WebGLRenderingContext).constructor.name.includes('WebGL2');
-    const RTClass: any = (isWebGL2 && (THREE as any).WebGLMultisampleRenderTarget)
-      ? (THREE as any).WebGLMultisampleRenderTarget
-      : THREE.WebGLRenderTarget;
+    // Create render targets
+    // CRITICAL FIX: Force standard WebGLRenderTarget to ensure alpha stability
+    // MSAA's multisample resolve step corrupts alpha channel - use FXAA instead
+    const RTClass: any = THREE.WebGLRenderTarget;
 
     this.mainRenderTarget = new RTClass(
       this.config.width,
@@ -83,7 +82,7 @@ export class MultiLayerCompositor {
       }
     );
     if ('samples' in this.mainRenderTarget) {
-      (this.mainRenderTarget as any).samples = 4;
+      (this.mainRenderTarget as any).samples = 0; // Explicitly disable MSAA
     }
     
     this.bloomRenderTarget = new RTClass(
@@ -98,7 +97,7 @@ export class MultiLayerCompositor {
       }
     );
     if ('samples' in this.bloomRenderTarget) {
-      (this.bloomRenderTarget as any).samples = 4;
+      (this.bloomRenderTarget as any).samples = 0; // Explicitly disable MSAA
     }
     
     this.tempRenderTarget = new RTClass(
@@ -113,7 +112,7 @@ export class MultiLayerCompositor {
       }
     );
     if ('samples' in this.tempRenderTarget) {
-      (this.tempRenderTarget as any).samples = 4;
+      (this.tempRenderTarget as any).samples = 0; // Explicitly disable MSAA
     }
     
     // Create shared geometry and camera
@@ -138,10 +137,9 @@ export class MultiLayerCompositor {
   ): LayerRenderTarget {
     console.log(`🎬 Creating layer "${id}", scene.background =`, scene.background);
     
-    const isWebGL2 = (this.renderer.getContext() as WebGL2RenderingContext | WebGLRenderingContext).constructor.name.includes('WebGL2');
-    const RTClass: any = (isWebGL2 && (THREE as any).WebGLMultisampleRenderTarget)
-      ? (THREE as any).WebGLMultisampleRenderTarget
-      : THREE.WebGLRenderTarget;
+    // CRITICAL FIX: Force standard WebGLRenderTarget to ensure alpha stability
+    // MSAA's multisample resolve step corrupts alpha channel - use FXAA instead
+    const RTClass: any = THREE.WebGLRenderTarget;
 
     const renderTarget = new RTClass(
       this.config.width,
@@ -155,7 +153,7 @@ export class MultiLayerCompositor {
       }
     );
     if ('samples' in renderTarget) {
-      (renderTarget as any).samples = 4;
+      (renderTarget as any).samples = 0; // Explicitly disable MSAA
     }
     
     const layer: LayerRenderTarget = {
