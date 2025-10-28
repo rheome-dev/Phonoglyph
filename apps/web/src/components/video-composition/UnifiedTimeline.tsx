@@ -1,7 +1,7 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useDrop } from 'react-dnd';
 import { useDrag } from 'react-dnd';
-import { ChevronDown, ChevronUp, Plus, Video, Image, Zap, Music, FileAudio, FileMusic, Settings } from 'lucide-react';
+import { ChevronDown, ChevronUp, Plus, Video, Image, Zap, Music, FileAudio, FileMusic, Settings, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Layer } from '@/types/video-composition';
 import { useTimelineStore } from '@/stores/timelineStore';
@@ -47,6 +47,94 @@ interface UnifiedTimelineProps {
   // Collapsible sections
   className?: string;
 }
+
+// Header for composition layers in the fixed left column
+const CompositionLayerHeader: React.FC<{ layer: Layer }> = ({ layer }) => {
+  const { selectLayer, deleteLayer, selectedLayerId } = useTimelineStore();
+  const isEffect = layer.type === 'effect';
+  const isEmpty = !isEffect && !layer.src;
+  const isSelected = selectedLayerId === layer.id;
+
+  return (
+    <div
+      className={cn(
+        'flex items-center h-8 px-2 border-b border-stone-700/50',
+        isSelected ? 'bg-stone-700/50' : 'bg-transparent'
+      )}
+      onClick={() => selectLayer(layer.id)}
+    >
+      <div className="flex items-center gap-2 flex-1 min-w-0">
+        {isEmpty ? (
+          <Plus className="h-4 w-4 text-stone-500" />
+        ) : layer.type === 'video' ? (
+          <Video className="h-4 w-4 text-emerald-400" />
+        ) : layer.type === 'image' ? (
+          <Image className="h-4 w-4 text-blue-400" />
+        ) : (
+          <Zap className="h-4 w-4 text-purple-400" />
+        )}
+        <span className="text-sm font-medium text-stone-300 truncate">
+          {isEmpty ? 'Empty Layer' : layer.src || layer.effectType || 'Layer'}
+        </span>
+      </div>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="h-6 w-6 p-0 text-stone-400 hover:text-red-400"
+        onClick={(e) => {
+          e.stopPropagation();
+          deleteLayer(layer.id);
+        }}
+      >
+        <Trash2 className="h-3 w-3" />
+      </Button>
+    </div>
+  );
+};
+
+// Simple header row for stems in the fixed left column
+const StemTrackHeader: React.FC<{
+  id: string;
+  name: string;
+  isActive: boolean;
+  isSoloed: boolean;
+  onClick: () => void;
+  onToggleSolo?: () => void;
+  isMaster: boolean;
+}> = ({ id, name, isActive, isSoloed, onClick, onToggleSolo, isMaster }) => {
+  return (
+    <div
+      className={cn(
+        'flex items-center h-8 px-2 border-b border-stone-700/50',
+        isActive ? 'bg-stone-700/50' : 'bg-transparent'
+      )}
+      onClick={onClick}
+    >
+      <div className="flex items-center gap-2 flex-1 min-w-0">
+        <Music className="h-4 w-4 text-stone-400" />
+        <span className="text-sm font-medium text-stone-300 truncate">
+          {name} {isMaster ? '(Master)' : ''}
+        </span>
+      </div>
+      {onToggleSolo && (
+        <button
+          className={cn(
+            'text-[10px] px-2 py-0.5 rounded border',
+            isSoloed
+              ? 'text-yellow-300 border-yellow-400'
+              : 'text-stone-400 border-stone-600'
+          )}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleSolo();
+          }}
+        >
+          SOLO
+        </button>
+      )}
+    </div>
+  );
+};
 
 interface TimelineSectionProps {
   title: string;
@@ -447,6 +535,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
     selectLayer,
     setCurrentTime,
   } = useTimelineStore();
+  const timelineContainerRef = useRef<HTMLDivElement | null>(null);
   const [expandedSections, setExpandedSections] = useState({
     composition: true, // Combined visual and effects layers
     audio: true // Changed from false to true to ensure audio section is visible by default
@@ -645,167 +734,125 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
   };
 
   return (
-    <div className={cn("bg-stone-800 border border-stone-700 font-mono text-xs rounded-xl", className)}>
-      {/* Header */}
-      <div className="flex items-center gap-2 px-2 py-1 border-b border-stone-700 text-white font-bold font-mono text-xs uppercase tracking-widest rounded-t-xl">
-        <Zap className="h-4 w-4" /> Timeline
-      </div>
-      <div className="p-0">
-        <div className="overflow-x-auto">
-          <div className="min-w-max">
-            {/* Composition Layers Section */}
-            <TimelineSection
-              title="Composition Layers"
-              icon={<Video className="h-3 w-3" />}
-              isExpanded={expandedSections.composition}
-              onToggle={() => toggleSection('composition')}
-              itemCount={layers.length}
-              itemType="layers"
+    <div className={cn("bg-stone-800 border border-stone-700 rounded-xl overflow-hidden", className)}>
+      <div className="flex">
+        {/* Left column: Headers */}
+        <div className="w-56 flex-shrink-0 border-r border-stone-700">
+          {/* Composition header */}
+          <div className="flex items-center justify-between p-2 border-b border-stone-700">
+            <span className="text-xs font-bold uppercase tracking-wider">Composition</span>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 px-2"
+              onClick={() => {
+                const newLayer: Layer = {
+                  id: `layer-${Date.now()}`,
+                  type: 'image',
+                  src: '',
+                  position: { x: 50, y: 50 },
+                  scale: { x: 1, y: 1 },
+                  rotation: 0,
+                  opacity: 1,
+                  audioBindings: [],
+                  midiBindings: [],
+                  zIndex: layers.length,
+                  blendMode: 'normal',
+                  startTime: 0,
+                  endTime: duration,
+                  duration: duration
+                };
+                addLayer(newLayer);
+              }}
             >
-              <div className="space-y-1">
-                {/* Add Layer Button */}
-                <div className="flex justify-between items-center mb-2">
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => {
-                        const newLayer: Layer = {
-                          id: `layer-${Date.now()}`,
-                          type: 'image', // Placeholder type, will be replaced when content is dropped
-                          src: '', // Empty src indicates this is an empty lane
-                          position: { x: 50, y: 50 },
-                          scale: { x: 1, y: 1 },
-                          rotation: 0,
-                          opacity: 1,
-                          audioBindings: [],
-                          midiBindings: [],
-                          zIndex: layers.length,
-                          blendMode: 'normal',
-                          startTime: 0,
-                          endTime: duration,
-                          duration: duration
-                        };
-                        addLayer(newLayer);
-                      }}
-                      className="px-3 py-1 bg-stone-700 hover:bg-stone-600 text-white text-xs font-mono rounded border border-stone-600 transition-colors"
-                    >
-                      + Add Layer
-                    </button>
-                  </div>
-                </div>
+              <Plus className="h-4 w-4 mr-1" /> Add
+            </Button>
+          </div>
+          {/* Composition layer headers */}
+          {[...layers].sort((a, b) => a.zIndex - b.zIndex).map((layer) => (
+            <CompositionLayerHeader key={layer.id} layer={layer} />
+          ))}
 
-                {/* Combined Timeline */}
+          {/* Audio/MIDI header */}
+          <div className="flex items-center p-2 border-t border-b border-stone-700 mt-2">
+            <span className="text-xs font-bold uppercase tracking-wider">Audio & MIDI</span>
+          </div>
+
+          {/* Stem headers */}
+          {stems.map((stem) => (
+            <StemTrackHeader
+              key={stem.id}
+              id={stem.id}
+              name={stem.file_name}
+              isActive={stem.id === activeTrackId}
+              isSoloed={soloedStems.has(stem.id)}
+              onClick={() => onStemSelect?.(stem.id)}
+              onToggleSolo={onToggleSolo ? () => onToggleSolo(stem.id) : undefined}
+              isMaster={stem.id === masterStemId}
+            />
+          ))}
+        </div>
+
+        {/* Right column: Timeline lanes */}
+        <div className="flex-1 overflow-x-auto" ref={timelineContainerRef}>
+          <div
+            className="relative"
+            style={{ width: `${timelineWidth}px`, height: `${(layers.length + stems.length) * 32 + 16}px` }}
+            onClick={handleTimelineClick}
+          >
+            {/* Composition clips */}
+            {[...layers].sort((a, b) => a.zIndex - b.zIndex).map((layer, index) => {
+              const startX = timeToX(layer.startTime || 0);
+              const width = timeToX((layer.endTime || duration) - (layer.startTime || 0));
+              const isActive = currentTime >= (layer.startTime || 0) && currentTime <= (layer.endTime || duration);
+              const isSelected = selectedLayerId === layer.id;
+              const isEffect = layer.type === 'effect';
+              const isEmptyLane = !isEffect && !layer.src;
+
+              return (
+                <DroppableLane
+                  key={layer.id}
+                  layer={layer}
+                  index={index}
+                  startX={startX}
+                  width={width}
+                  isActive={isActive}
+                  isSelected={isSelected}
+                  isEmptyLane={isEmptyLane}
+                  onLayerSelect={selectLayer}
+                  onLayerDelete={deleteLayer}
+                  onAssetDrop={handleAssetDrop}
+                  currentTime={currentTime}
+                  duration={duration}
+                />
+              );
+            })}
+
+            {/* Audio waveforms */}
+            {stems.map((stem, sIndex) => {
+              const analysis: any = cachedAnalysis?.find((a: any) => a.fileMetadataId === stem.id);
+              return (
                 <div
-                  className="relative border-2 border-dashed border-stone-700 transition-all mb-1 bg-stone-800 rounded-lg overflow-hidden"
-                  onClick={handleTimelineClick}
-                  style={{ width: `${timelineWidth}px`, height: `${Math.max(layers.length, 1) * 32 + 16}px` }}
+                  key={`waveform-${stem.id}`}
+                  className="absolute w-full h-8"
+                  style={{ top: `${(layers.length + sIndex) * 32}px` }}
                 >
-                  {(layers.length === 0) && (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="text-center text-stone-500">
-                        <Plus className="h-4 w-4 mx-auto mb-1" />
-                        <div className="text-xs">Add layers and drag assets to them</div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Render layers in z-index order (bottom to top) */}
-                  {[...layers].sort((a, b) => a.zIndex - b.zIndex).map((layer, index) => {
-                    const startX = timeToX(layer.startTime || 0);
-                    const width = timeToX((layer.endTime || duration) - (layer.startTime || 0));
-                    const isActive = currentTime >= (layer.startTime || 0) && currentTime <= (layer.endTime || duration);
-                    const isSelected = selectedLayerId === layer.id;
-                    const isEffect = layer.type === 'effect';
-                    const isEmptyLane = !isEffect && !layer.src; // Empty lane that can accept any content
-                    
-                    return (
-                      <DroppableLane
-                        key={layer.id}
-                        layer={layer}
-                        index={index}
-                        startX={startX}
-                        width={width}
-                        isActive={isActive}
-                        isSelected={isSelected}
-                        isEmptyLane={isEmptyLane}
-                        onLayerSelect={selectLayer}
-                        onLayerDelete={deleteLayer}
-                        onAssetDrop={handleAssetDrop}
-                        currentTime={currentTime}
-                        duration={duration}
-                      />
-                    );
-                  })}
-
-                  {/* Current time indicator */}
-                  <div
-                    className="absolute top-0 w-0.5 bg-emerald-400 pointer-events-none z-10"
-                    style={{ 
-                      left: `${timeToX(currentTime)}px`,
-                      height: '100%'
-                    }}
+                  <StemWaveform
+                    waveformData={analysis?.waveformData ?? null}
+                    duration={duration}
+                    currentTime={currentTime}
+                    isPlaying={isPlaying}
+                    isLoading={stemLoadingState}
                   />
                 </div>
-              </div>
-            </TimelineSection>
-            {/* Audio/MIDI Section */}
-            <TimelineSection
-              title="Audio & MIDI"
-              icon={<Music className="h-3 w-3" />}
-              isExpanded={expandedSections.audio}
-              onToggle={() => toggleSection('audio')}
-              itemCount={stems.length}
-              itemType="tracks"
-            >
-              <div className="space-y-1">
-                {stems.map((stem) => {
-                  const analysis = cachedAnalysis?.find((a: any) => a.fileMetadataId === stem.id);
-                  const progress = analysisProgress?.[stem.id];
-                  return (
-                    <StemTrack
-                      key={stem.id}
-                      id={stem.id}
-                      name={stem.file_name}
-                      waveformData={analysis?.waveformData ?? null}
-                      isLoading={stemLoadingState}
-                      isActive={stem.id === activeTrackId}
-                      onClick={() => onStemSelect?.(stem.id)}
-                      isSoloed={soloedStems.has(stem.id)}
-                      onToggleSolo={() => onToggleSolo?.(stem.id)}
-                      isMaster={stem.id === masterStemId}
-                      onSeek={onSeek}
-                      currentTime={currentTime}
-                      stemType={analysis?.stemType ?? stem.stem_type ?? 'unknown'}
-                      isPlaying={isPlaying}
-                      analysisStatus={stem.analysis_status}
-                      analysisProgress={progress}
-                    />
-                  );
-                })}
-                {stems.length === 0 && (
-                  <div className="h-8 bg-stone-800 border-2 border-dashed border-stone-700 flex items-center justify-center rounded-lg">
-                    <div className="text-center text-stone-500">
-                      <div className="flex items-center gap-2 mb-1">
-                        <FileAudio className="h-3 w-3" />
-                        <FileMusic className="h-3 w-3" />
-                      </div>
-                      <div className="text-xs">No audio stems available</div>
-                    </div>
-                  </div>
-                )}
-                {stemError && <p className="text-xs text-red-500 p-2">{stemError}</p>}
-              </div>
-            </TimelineSection>
-            {/* HUD Overlays Section */}
-            <TimelineSection
-              title="HUD Overlays"
-              icon={<Settings className="h-3 w-3" />}
-              isExpanded={expandedSections.composition} // Assuming HUD overlays are part of composition
-              onToggle={() => toggleSection('composition')}
-              itemCount={0} // No direct count of overlays here, they are managed by context
-              itemType="overlays"
-            >
-              <OverlayLane />
-            </TimelineSection>
+              );
+            })}
+
+            {/* Playhead */}
+            <div
+              className="absolute top-0 w-0.5 h-full bg-emerald-400 z-50 pointer-events-none"
+              style={{ left: `${timeToX(currentTime)}px` }}
+            />
           </div>
         </div>
       </div>
