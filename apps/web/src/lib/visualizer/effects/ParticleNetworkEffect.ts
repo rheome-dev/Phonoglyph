@@ -442,11 +442,9 @@ export class ParticleNetworkEffect implements VisualEffect {
           const velocityFactor = 0.5 + ((p1.noteVelocity + p2.noteVelocity) / 508);
           const strength = distanceFactor * lifeFactor * velocityFactor * this.parameters.connectionOpacity;
           
-          const color = new THREE.Color().lerpColors(
-            this.getNoteColor(p1.note, p1.noteVelocity, p1.spawnType, p1.audioValue),
-            this.getNoteColor(p2.note, p2.noteVelocity, p2.spawnType, p2.audioValue),
-            0.5
-          );
+          // Use white for connection lines (user preference)
+          // With additive blending, strength controls brightness
+          const whiteColor = 1.0;
           
           // Set positions for this line segment (2 points)
           const baseIndex = connectionIndex * 6;
@@ -457,13 +455,13 @@ export class ParticleNetworkEffect implements VisualEffect {
           this.connectionPositions[baseIndex + 4] = p2.position.y;
           this.connectionPositions[baseIndex + 5] = p2.position.z;
           
-          // Set colors for this line segment (2 vertices)
-          this.connectionColors[baseIndex] = color.r * strength;
-          this.connectionColors[baseIndex + 1] = color.g * strength;
-          this.connectionColors[baseIndex + 2] = color.b * strength;
-          this.connectionColors[baseIndex + 3] = color.r * strength;
-          this.connectionColors[baseIndex + 4] = color.g * strength;
-          this.connectionColors[baseIndex + 5] = color.b * strength;
+          // Set white colors with strength for both vertices
+          this.connectionColors[baseIndex] = whiteColor * strength;
+          this.connectionColors[baseIndex + 1] = whiteColor * strength;
+          this.connectionColors[baseIndex + 2] = whiteColor * strength;
+          this.connectionColors[baseIndex + 3] = whiteColor * strength;
+          this.connectionColors[baseIndex + 4] = whiteColor * strength;
+          this.connectionColors[baseIndex + 5] = whiteColor * strength;
           
           connectionIndex++;
         }
@@ -555,6 +553,17 @@ export class ParticleNetworkEffect implements VisualEffect {
 
   public getCamera(): THREE.Camera {
     return this.internalCamera;
+  }
+
+  /**
+   * Handle resize events to maintain correct aspect ratio
+   */
+  public resize(width: number, height: number): void {
+    if (this.internalCamera) {
+      this.internalCamera.aspect = width / height;
+      this.internalCamera.updateProjectionMatrix();
+      debugLog.log('🎨 ParticleNetworkEffect camera aspect updated:', this.internalCamera.aspect);
+    }
   }
 
   destroy(): void {

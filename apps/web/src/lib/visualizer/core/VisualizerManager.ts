@@ -737,12 +737,19 @@ export class VisualizerManager {
     this.camera.aspect = canvasWidth / canvasHeight;
     this.camera.updateProjectionMatrix();
     
-    // Update resolution uniforms for all effects
+    // Update resolution uniforms and resize handlers for all effects
     this.effects.forEach(effect => {
+      // Update resolution uniforms
       if ('uniforms' in effect && (effect as any).uniforms?.uResolution) {
         (effect as any).uniforms.uResolution.value.set(canvasWidth, canvasHeight);
       }
+      
+      // Call resize method if effect has one (for updating internal cameras)
+      if ('resize' in effect && typeof (effect as any).resize === 'function') {
+        (effect as any).resize(canvasWidth, canvasHeight);
+      }
     });
+    
     // Resize compositor targets
     if (this.multiLayerCompositor) {
       this.multiLayerCompositor.resize(canvasWidth, canvasHeight);
