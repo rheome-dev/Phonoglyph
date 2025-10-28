@@ -257,16 +257,21 @@ export class MultiLayerCompositor {
    * Composite all layers to main render target
    */
   private compositeLayersToMain(): void {
+    // 1. Save the renderer's current autoClear state
+    const autoClear = this.renderer.autoClear;
+    // 2. CRITICAL: Disable auto clearing for the compositing process
+    this.renderer.autoClear = false;
+
     this.renderer.setRenderTarget(this.mainRenderTarget);
     
     const clearColor = this.renderer.getClearColor(new THREE.Color());
     const clearAlpha = this.renderer.getClearAlpha();
     console.log('🎬 Compositing to main RT, clearColor:', clearColor.getHex().toString(16), 'clearAlpha:', clearAlpha);
     
-    // Clear to transparent before compositing
+    // 3. Perform a single, manual clear at the very beginning
     this.renderer.clear(true, true, true);
     
-    // Composite layers in order
+    // 4. Composite layers in order. Now, each render will draw ON TOP of the previous one.
     for (const layerId of this.layerOrder) {
       const layer = this.layers.get(layerId);
       if (!layer || !layer.enabled) continue;
@@ -274,6 +279,9 @@ export class MultiLayerCompositor {
       console.log(`🔗 Compositing layer "${layerId}" with blend mode: ${layer.blendMode}`);
       this.renderLayerWithBlending(layer);
     }
+
+    // 5. Restore the original autoClear state for other rendering operations
+    this.renderer.autoClear = autoClear;
   }
   
   /**
