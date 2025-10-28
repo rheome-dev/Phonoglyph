@@ -209,6 +209,7 @@ const DroppableLane: React.FC<{
   onAssetDrop: (item: any, targetLayerId: string) => void;
   currentTime: number;
   duration: number;
+  yOffset: number;
 }> = ({
   layer,
   index,
@@ -221,7 +222,8 @@ const DroppableLane: React.FC<{
   onLayerDelete,
   onAssetDrop,
   currentTime,
-  duration
+  duration,
+  yOffset
 }) => {
   const isEffect = layer.type === 'effect';
   
@@ -265,8 +267,8 @@ const DroppableLane: React.FC<{
         left: `${startX}px`, 
         width: `${width}px`, 
         minWidth: '60px',
-        top: `${index * 32 + 8}px`,
-        height: '24px'
+        top: `${yOffset + index * 32}px`,
+        height: '32px'
       }}
       onClick={e => { 
         e.stopPropagation(); 
@@ -714,6 +716,12 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
   // Calculate timeline width based on duration to match audio stems
   const timelineWidth = Math.max(duration * 100, 800); // Minimum 800px width
 
+  // Unified vertical sizing
+  const ROW_HEIGHT = 32;
+  const SECTION_HEADER_HEIGHT = 32;
+  const compositionYOffset = SECTION_HEADER_HEIGHT;
+  const stemsYOffset = compositionYOffset + layers.length * ROW_HEIGHT + SECTION_HEADER_HEIGHT;
+
   const toggleSection = (section: keyof typeof expandedSections) => {
     setExpandedSections(prev => ({
       ...prev,
@@ -797,7 +805,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
         <div className="flex-1 overflow-x-auto" ref={timelineContainerRef}>
           <div
             className="relative"
-            style={{ width: `${timelineWidth}px`, height: `${(layers.length + stems.length) * 32 + 16}px` }}
+            style={{ width: `${timelineWidth}px`, height: `${compositionYOffset + layers.length * ROW_HEIGHT + SECTION_HEADER_HEIGHT + stems.length * ROW_HEIGHT}px` }}
             onClick={handleTimelineClick}
           >
             {/* Composition clips */}
@@ -824,6 +832,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
                   onAssetDrop={handleAssetDrop}
                   currentTime={currentTime}
                   duration={duration}
+                  yOffset={compositionYOffset}
                 />
               );
             })}
@@ -835,7 +844,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
                 <div
                   key={`waveform-${stem.id}`}
                   className="absolute w-full h-8"
-                  style={{ top: `${(layers.length + sIndex) * 32}px` }}
+                  style={{ top: `${stemsYOffset + sIndex * ROW_HEIGHT}px` }}
                 >
                   <StemWaveform
                     waveformData={analysis?.waveformData ?? null}
