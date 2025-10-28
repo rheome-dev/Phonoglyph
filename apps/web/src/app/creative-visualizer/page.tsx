@@ -29,6 +29,7 @@ import { Switch } from '@/components/ui/switch';
 import { MappingSourcesPanel } from '@/components/ui/MappingSourcesPanel';
 import { DroppableParameter } from '@/components/ui/droppable-parameter';
 import { LayerContainer } from '@/components/video-composition/LayerContainer';
+import { useTimelineStore } from '@/stores/timelineStore';
 import { UnifiedTimeline } from '@/components/video-composition/UnifiedTimeline';
 import { TestVideoComposition } from '@/components/video-composition/TestVideoComposition';
 import type { Layer } from '@/types/video-composition';
@@ -212,8 +213,20 @@ function CreativeVisualizerPage() {
   const [isInitialized, setIsInitialized] = useState(false);
   
   const [settings, setSettings] = useState<VisualizationSettings>(DEFAULT_VISUALIZATION_SETTINGS);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const {
+    layers,
+    currentTime,
+    isPlaying,
+    selectedLayerId,
+    addLayer,
+    updateLayer,
+    deleteLayer,
+    selectLayer,
+    setCurrentTime,
+    setDuration,
+    togglePlay,
+    setPlaying,
+  } = useTimelineStore();
   const [fps, setFps] = useState(60);
   const playbackIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [isMapMode, setIsMapMode] = useState(false);
@@ -237,19 +250,7 @@ function CreativeVisualizerPage() {
     usageCount: 0
   });
 
-  // Effects timeline state
-  const [effectClips, setEffectClips] = useState<Array<{
-    id: string;
-    effectId: string;
-    name: string;
-    startTime: number;
-    endTime: number;
-    parameters: Record<string, any>;
-  }>>([]);
-
-  // Video composition state
-  const [videoLayers, setVideoLayers] = useState<Layer[]>([]);
-  const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
+  // Effects timeline has been merged into layers via store
   const [showVideoComposition, setShowVideoComposition] = useState(false);
 
   // Effects carousel state (now for timeline-based effects)
@@ -547,7 +548,7 @@ function CreativeVisualizerPage() {
     setSelectedFileId(fileId);
     setUseDemoData(false);
     setCurrentTime(0);
-    setIsPlaying(false);
+    setPlaying(false);
     
     const params = new URLSearchParams(searchParams);
     params.set('fileId', fileId);
@@ -557,7 +558,7 @@ function CreativeVisualizerPage() {
   const handleDemoModeChange = useCallback((demoMode: boolean) => {
     setUseDemoData(demoMode);
     setCurrentTime(0);
-    setIsPlaying(false);
+    setPlaying(false);
     
     if (demoMode) {
       const params = new URLSearchParams(searchParams);
@@ -571,26 +572,26 @@ function CreativeVisualizerPage() {
     // Control both MIDI visualization and stem audio
     if (isPlaying) {
       stemAudio.pause();
-      setIsPlaying(false);
+      setPlaying(false);
     } else {
       // Only start if we have stems loaded
       if (hasStems) {
         try {
           await stemAudio.play();
-          setIsPlaying(true);
+          setPlaying(true);
         } catch (error) {
           debugLog.error('Failed to start audio playback:', error);
-          setIsPlaying(false);
+          setPlaying(false);
         }
       } else {
-        setIsPlaying(true);
+        setPlaying(true);
       }
     }
   };
 
   const handleReset = () => {
     stemAudio.stop();
-    setIsPlaying(false);
+    setPlaying(false);
     setCurrentTime(0);
   };
 
@@ -755,39 +756,7 @@ function CreativeVisualizerPage() {
     }));
   };
 
-  const handleEffectClipAdd = (effect: any) => {
-    const newClip = {
-      id: `${effect.id}-${Date.now()}`,
-      effectId: effect.id,
-      name: effect.name,
-      startTime: stemAudio.currentTime,
-      endTime: stemAudio.currentTime + 10, // Default 10 second duration
-      parameters: effect.parameters || {}
-    };
-    setEffectClips(prev => [...prev, newClip]);
-    
-    // Also enable the effect in the visualizer
-    setSelectedEffects(prev => ({
-      ...prev,
-      [effect.id]: true
-    }));
-    
-    debugLog.log('Effect added to timeline:', newClip);
-  };
-
-  const handleEffectClipRemove = (clipId: string) => {
-    setEffectClips(prev => prev.filter(clip => clip.id !== clipId));
-  };
-
-  const handleEffectClipEdit = (clipId: string) => {
-    const clip = effectClips.find(c => c.id === clipId);
-    if (clip) {
-      setOpenEffectModals(prev => ({
-        ...prev,
-        [clip.effectId]: true
-      }));
-    }
-  };
+  // Effect clip timeline is merged into layers via store; per-effect UI remains via modals
 
 
 
@@ -798,28 +767,7 @@ function CreativeVisualizerPage() {
     }));
   };
 
-  // Video composition handlers
-  const handleLayerAdd = (layer: Layer) => {
-    setVideoLayers(prev => [...prev, layer]);
-  };
-
-  const handleLayerUpdate = (layerId: string, updates: Partial<Layer>) => {
-    debugLog.log('handleLayerUpdate', layerId, updates);
-    setVideoLayers(prev => prev.map(layer => 
-      layer.id === layerId ? { ...layer, ...updates } : layer
-    ));
-  };
-
-  const handleLayerDelete = (layerId: string) => {
-    setVideoLayers(prev => prev.filter(layer => layer.id !== layerId));
-    if (selectedLayerId === layerId) {
-      setSelectedLayerId(null);
-    }
-  };
-
-  const handleLayerSelect = (layerId: string) => {
-    setSelectedLayerId(layerId);
-  };
+  // Video composition handlers moved into store (addLayer, updateLayer, deleteLayer, selectLayer)
 
 
 
@@ -1290,6 +1238,16 @@ function CreativeVisualizerPage() {
     return (midiData || sampleMidiData).file.duration;
   };
 
+  // Keep timeline store duration in sync with audio/midi duration
+  useEffect(() => {
+    try {
+      const d = getCurrentDuration();
+      if (typeof d === 'number' && isFinite(d) && d > 0) {
+        setDuration(d);
+      }
+    } catch {}
+  }, [hasStems, stemAudio.duration, midiData, sampleMidiData, setDuration]);
+
   // Update currentTime from stemAudio if stems are loaded
   useEffect(() => {
     if (!isPlaying) return;
@@ -1551,7 +1509,7 @@ function CreativeVisualizerPage() {
                 {/* Test Video Composition Controls */}
                 {showVideoComposition && (
                   <TestVideoComposition
-                    onAddLayer={handleLayerAdd}
+                    onAddLayer={addLayer}
                     className="ml-2"
                   />
                 )}
@@ -1579,9 +1537,9 @@ function CreativeVisualizerPage() {
                       settings={settings}
                       currentTime={currentTime}
                       isPlaying={isPlaying}
-                      layers={videoLayers}
+                      layers={layers}
                       selectedLayerId={selectedLayerId}
-                      onLayerSelect={handleLayerSelect}
+                      onLayerSelect={selectLayer}
                       onPlayPause={handlePlayPause}
                       onSettingsChange={setSettings}
                       onFpsUpdate={setFps}
@@ -1604,7 +1562,7 @@ function CreativeVisualizerPage() {
                   {/* Video Composition Layer Container */}
                   {showVideoComposition && (
                     <LayerContainer
-                      layers={videoLayers}
+                      layers={layers}
                       width={visualizerAspectRatio === 'mobile' ? 400 : 1280}
                       height={visualizerAspectRatio === 'mobile' ? 711 : 720}
                       currentTime={currentTime}
@@ -1624,8 +1582,8 @@ function CreativeVisualizerPage() {
                         totalNotes: 0,
                         trackActivity: {}
                       }}
-                      onLayerUpdate={handleLayerUpdate}
-                      onLayerDelete={handleLayerDelete}
+                      onLayerUpdate={updateLayer}
+                      onLayerDelete={deleteLayer}
                     />
                   )}
 
@@ -1641,18 +1599,6 @@ function CreativeVisualizerPage() {
                 {/* Unified Timeline */}
                 <div className="flex-shrink-0 mb-4">
                   <UnifiedTimeline
-                    layers={videoLayers}
-                    currentTime={currentTime}
-                    duration={(midiData || sampleMidiData).file.duration}
-                    onLayerAdd={handleLayerAdd}
-                    onLayerUpdate={handleLayerUpdate}
-                    onLayerDelete={handleLayerDelete}
-                    onLayerSelect={handleLayerSelect}
-                    selectedLayerId={selectedLayerId || undefined}
-                    effectClips={effectClips}
-                    onEffectClipAdd={handleEffectClipAdd}
-                    onEffectClipRemove={handleEffectClipRemove}
-                    onEffectClipEdit={handleEffectClipEdit}
                     stems={sortedAvailableStems}
                     masterStemId={projectFiles?.files?.find(f => f.is_master)?.id ?? null}
                     onStemSelect={handleStemSelect}
@@ -1663,8 +1609,7 @@ function CreativeVisualizerPage() {
                     cachedAnalysis={audioAnalysis.cachedAnalysis || []}
                     stemLoadingState={audioAnalysis.isLoading}
                     stemError={audioAnalysis.error}
-                    isPlaying={isPlaying}
-                    onSeek={setCurrentTime}
+                    onSeek={useTimelineStore.getState().setCurrentTime}
                     className="bg-stone-800 border border-gray-700"
                   />
                 </div>

@@ -4,6 +4,7 @@ import { useDrag } from 'react-dnd';
 import { ChevronDown, ChevronUp, Plus, Video, Image, Zap, Music, FileAudio, FileMusic, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Layer } from '@/types/video-composition';
+import { useTimelineStore } from '@/stores/timelineStore';
 import { StemWaveform, WaveformData } from '@/components/stem-visualization/stem-waveform';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -28,21 +29,7 @@ interface Stem {
 }
 
 interface UnifiedTimelineProps {
-  // Video composition layers
-  layers: Layer[];
-  onLayerAdd: (layer: Layer) => void;
-  onLayerUpdate: (layerId: string, updates: Partial<Layer>) => void;
-  onLayerDelete: (layerId: string) => void;
-  onLayerSelect: (layerId: string) => void;
-  selectedLayerId?: string;
-  
-  // Effects timeline (now part of layers)
-  effectClips: EffectClip[];
-  onEffectClipAdd: (effect: any) => void;
-  onEffectClipRemove: (clipId: string) => void;
-  onEffectClipEdit: (clipId: string) => void;
-  
-  // Audio/MIDI stems
+  // Audio/MIDI stems (external to timeline state)
   stems?: Stem[];
   masterStemId?: string | null;
   onStemSelect?: (stemId: string) => void;
@@ -53,11 +40,8 @@ interface UnifiedTimelineProps {
   cachedAnalysis?: any[]; // Using any for now to avoid complex type imports
   stemLoadingState?: boolean;
   stemError?: string | null;
-  
-  // Timeline state
-  currentTime: number;
-  duration: number;
-  isPlaying: boolean;
+
+  // Optional external seek override (store used by default)
   onSeek?: (time: number) => void;
   
   // Collapsible sections
@@ -134,8 +118,6 @@ const DroppableLane: React.FC<{
   isEmptyLane: boolean;
   onLayerSelect: (layerId: string) => void;
   onLayerDelete: (layerId: string) => void;
-  onEffectClipEdit: (layerId: string) => void;
-  onEffectClipRemove: (layerId: string) => void;
   onAssetDrop: (item: any, targetLayerId: string) => void;
   currentTime: number;
   duration: number;
@@ -149,8 +131,6 @@ const DroppableLane: React.FC<{
   isEmptyLane,
   onLayerSelect,
   onLayerDelete,
-  onEffectClipEdit,
-  onEffectClipRemove,
   onAssetDrop,
   currentTime,
   duration
@@ -202,17 +182,11 @@ const DroppableLane: React.FC<{
       }}
       onClick={e => { 
         e.stopPropagation(); 
-        if (isEffect) {
-          onEffectClipEdit(layer.id);
-        } else {
-          onLayerSelect(layer.id);
-        }
+        onLayerSelect(layer.id);
       }}
       onDoubleClick={e => { 
         e.stopPropagation(); 
-        if (isEffect) {
-          onEffectClipEdit(layer.id);
-        }
+        onLayerSelect(layer.id);
       }}
     >
       <div className="flex items-center gap-1">
@@ -245,11 +219,7 @@ const DroppableLane: React.FC<{
         className="ml-auto px-1 text-stone-400 hover:text-red-500 border-none bg-transparent focus:outline-none text-xs rounded"
         onClick={e => { 
           e.stopPropagation(); 
-          if (isEffect) {
-            onEffectClipRemove(layer.id);
-          } else {
-            onLayerDelete(layer.id);
-          }
+          onLayerDelete(layer.id);
         }}
         aria-label="Delete layer"
       >×</button>
@@ -452,16 +422,6 @@ const OverlayLane: React.FC = () => {
 };
 
 export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
-  layers,
-  onLayerAdd,
-  onLayerUpdate,
-  onLayerDelete,
-  onLayerSelect,
-  selectedLayerId,
-  effectClips,
-  onEffectClipAdd,
-  onEffectClipRemove,
-  onEffectClipEdit,
   stems = [],
   masterStemId = null,
   onStemSelect,
@@ -472,12 +432,21 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
   cachedAnalysis = [],
   stemLoadingState = false,
   stemError = null,
-  currentTime,
-  duration,
-  isPlaying,
   onSeek,
   className
 }) => {
+  const {
+    layers,
+    currentTime,
+    duration,
+    isPlaying,
+    selectedLayerId,
+    addLayer,
+    updateLayer,
+    deleteLayer,
+    selectLayer,
+    setCurrentTime,
+  } = useTimelineStore();
   const [expandedSections, setExpandedSections] = useState({
     composition: true, // Combined visual and effects layers
     audio: true // Changed from false to true to ensure audio section is visible by default
@@ -485,7 +454,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
 
   // Create a default empty lane if no layers exist
   useEffect(() => {
-    if (layers.length === 0 && effectClips.length === 0) {
+    if (layers.length === 0) {
       const defaultEmptyLane: Layer = {
         id: `layer-${Date.now()}`,
         type: 'image', // Placeholder type, will be replaced when content is dropped
@@ -502,7 +471,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
         endTime: duration,
         duration: duration
       };
-      onLayerAdd(defaultEmptyLane);
+      addLayer(defaultEmptyLane);
     }
   }, []); // Only run once on mount
 
@@ -516,20 +485,20 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
         // Fill the empty lane with the dropped content
         switch (item.type) {
           case 'VIDEO_FILE':
-            onLayerUpdate(targetLayerId, {
+            updateLayer(targetLayerId, {
               type: 'video',
               src: item.src
             });
             break;
           case 'IMAGE_FILE':
-            onLayerUpdate(targetLayerId, {
+            updateLayer(targetLayerId, {
               type: 'image',
               src: item.src
             });
             break;
           case 'EFFECT_CARD':
             // Convert effect to a layer
-            onLayerUpdate(targetLayerId, {
+            updateLayer(targetLayerId, {
               type: 'effect',
               src: item.name || item.id,
               effectType: item.id,
@@ -551,20 +520,20 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
       // Fill the empty lane with the dropped content
       switch (item.type) {
         case 'VIDEO_FILE':
-          onLayerUpdate(emptyLane.id, {
+          updateLayer(emptyLane.id, {
             type: 'video',
             src: item.src
           });
           break;
         case 'IMAGE_FILE':
-          onLayerUpdate(emptyLane.id, {
+          updateLayer(emptyLane.id, {
             type: 'image',
             src: item.src
           });
           break;
         case 'EFFECT_CARD':
           // Convert effect to a layer
-          onLayerUpdate(emptyLane.id, {
+          updateLayer(emptyLane.id, {
             type: 'effect',
             src: item.name || item.id,
             effectType: item.id,
@@ -595,7 +564,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
             endTime: duration,
             duration: duration
           };
-          onLayerAdd(videoLayer);
+          addLayer(videoLayer);
           break;
         case 'IMAGE_FILE':
           const imageLayer: Layer = {
@@ -614,7 +583,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
             endTime: duration,
             duration: duration
           };
-          onLayerAdd(imageLayer);
+          addLayer(imageLayer);
           break;
         case 'EFFECT_CARD':
           // Create a new effect layer
@@ -636,7 +605,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
             endTime: duration,
             duration: duration
           };
-          onLayerAdd(effectLayer);
+          addLayer(effectLayer);
           break;
         default:
           debugLog.warn('Unknown asset type:', item.type);
@@ -664,12 +633,15 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
   };
 
   const handleTimelineClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!onSeek) return;
-    
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const time = xToTime(x);
-    onSeek(Math.max(0, Math.min(duration, time)));
+    const nextTime = Math.max(0, Math.min(duration, time));
+    if (onSeek) {
+      onSeek(nextTime);
+    } else {
+      setCurrentTime(nextTime);
+    }
   };
 
   return (
@@ -687,7 +659,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
               icon={<Video className="h-3 w-3" />}
               isExpanded={expandedSections.composition}
               onToggle={() => toggleSection('composition')}
-              itemCount={layers.length + effectClips.length}
+              itemCount={layers.length}
               itemType="layers"
             >
               <div className="space-y-1">
@@ -712,7 +684,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
                           endTime: duration,
                           duration: duration
                         };
-                        onLayerAdd(newLayer);
+                        addLayer(newLayer);
                       }}
                       className="px-3 py-1 bg-stone-700 hover:bg-stone-600 text-white text-xs font-mono rounded border border-stone-600 transition-colors"
                     >
@@ -725,9 +697,9 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
                 <div
                   className="relative border-2 border-dashed border-stone-700 transition-all mb-1 bg-stone-800 rounded-lg overflow-hidden"
                   onClick={handleTimelineClick}
-                  style={{ width: `${timelineWidth}px`, height: `${Math.max(layers.length + effectClips.length, 1) * 32 + 16}px` }}
+                  style={{ width: `${timelineWidth}px`, height: `${Math.max(layers.length, 1) * 32 + 16}px` }}
                 >
-                  {(layers.length === 0 && effectClips.length === 0) && (
+                  {(layers.length === 0) && (
                     <div className="absolute inset-0 flex items-center justify-center">
                       <div className="text-center text-stone-500">
                         <Plus className="h-4 w-4 mx-auto mb-1" />
@@ -737,22 +709,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
                   )}
 
                   {/* Render layers in z-index order (bottom to top) */}
-                  {[...layers, ...effectClips.map((clip, clipIndex) => ({
-                    id: clip.id,
-                    type: 'effect' as const,
-                    src: clip.name,
-                    position: { x: 50, y: 50 },
-                    scale: { x: 1, y: 1 },
-                    rotation: 0,
-                    opacity: 1,
-                    audioBindings: [],
-                    midiBindings: [],
-                    zIndex: layers.length + clipIndex, // Use numeric index instead of string id
-                    blendMode: 'normal' as const,
-                    startTime: clip.startTime,
-                    endTime: clip.endTime,
-                    duration: clip.endTime - clip.startTime
-                  }))].sort((a, b) => a.zIndex - b.zIndex).map((layer, index) => {
+                  {[...layers].sort((a, b) => a.zIndex - b.zIndex).map((layer, index) => {
                     const startX = timeToX(layer.startTime || 0);
                     const width = timeToX((layer.endTime || duration) - (layer.startTime || 0));
                     const isActive = currentTime >= (layer.startTime || 0) && currentTime <= (layer.endTime || duration);
@@ -770,10 +727,8 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
                         isActive={isActive}
                         isSelected={isSelected}
                         isEmptyLane={isEmptyLane}
-                        onLayerSelect={onLayerSelect}
-                        onLayerDelete={onLayerDelete}
-                        onEffectClipEdit={onEffectClipEdit}
-                        onEffectClipRemove={onEffectClipRemove}
+                        onLayerSelect={selectLayer}
+                        onLayerDelete={deleteLayer}
                         onAssetDrop={handleAssetDrop}
                         currentTime={currentTime}
                         duration={duration}
