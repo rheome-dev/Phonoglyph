@@ -374,7 +374,7 @@ export class MultiLayerCompositor {
     // FXAA to reduce aliasing on lines and sprite edges
     // CRITICAL FIX: Create alpha-preserving version of FXAAShader
     const AlphaPreservingFXAAShader = {
-      uniforms: JSON.parse(JSON.stringify(FXAAShader.uniforms)), // Deep copy uniforms
+      uniforms: THREE.UniformsUtils.clone(FXAAShader.uniforms), // Properly clone uniforms as THREE.Uniform objects
       vertexShader: FXAAShader.vertexShader,
       fragmentShader: FXAAShader.fragmentShader.replace(
         // The original shader discards alpha. Find this line:
@@ -387,7 +387,7 @@ export class MultiLayerCompositor {
     // Use the alpha-preserving shader
     this.fxaaPass = new ShaderPass(AlphaPreservingFXAAShader);
     const pixelRatio = this.renderer.getPixelRatio();
-    (this.fxaaPass.uniforms as any).resolution.value.set(1 / (this.config.width * pixelRatio), 1 / (this.config.height * pixelRatio));
+    this.fxaaPass.uniforms['resolution'].value.set(1 / (this.config.width * pixelRatio), 1 / (this.config.height * pixelRatio));
     
     // Critical: Configure FXAA pass material to preserve alpha
     if (this.fxaaPass.material) {
