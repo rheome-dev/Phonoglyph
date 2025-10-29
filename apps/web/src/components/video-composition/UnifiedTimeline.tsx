@@ -16,6 +16,26 @@ import { Slider } from '@/components/ui/slider';
 import { HudOverlayProvider, HudOverlayConfig, useHudOverlayContext } from '@/components/hud/HudOverlayManager';
 import { debugLog } from '@/lib/utils';
 
+// Converts a linear slider value (0-100) to a logarithmic zoom level
+const sliderToZoom = (sliderValue: number): number => {
+  const minp = 0;
+  const maxp = 100;
+  const minv = Math.log(0.1); // min zoom
+  const maxv = Math.log(25);  // max zoom
+  const scale = (maxv - minv) / (maxp - minp);
+  return Math.exp(minv + scale * (sliderValue - minp));
+};
+
+// Converts a logarithmic zoom level back to a linear slider value (0-100)
+const zoomToSlider = (zoomValue: number): number => {
+  const minp = 0;
+  const maxp = 100;
+  const minv = Math.log(0.1);
+  const maxv = Math.log(25);
+  const scale = (maxv - minv) / (maxp - minp);
+  return (Math.log(zoomValue) - minv) / scale + minp;
+};
+
 // Consistent row sizing across headers and lanes
 const ROW_HEIGHT = 32; // h-8
 const HEADER_ROW_HEIGHT = 32; // header rows height
@@ -344,6 +364,7 @@ const StemTrackLane: React.FC<StemTrackLaneProps> = ({
   onSeek,
   isPlaying
 }) => {
+  const zoom = useTimelineStore(state => state.zoom);
   return (
     <div className={cn('flex items-center w-full border-b border-stone-700/50')} style={{ height: `${ROW_HEIGHT}px` }}>
       <div className="flex-1 min-w-0 px-2 overflow-hidden h-full">
@@ -363,6 +384,7 @@ const StemTrackLane: React.FC<StemTrackLaneProps> = ({
               onSeek={onSeek}
               isPlaying={isPlaying}
               isLoading={isLoading}
+              zoom={zoom}
             />
           </div>
         )}
@@ -371,17 +393,51 @@ const StemTrackLane: React.FC<StemTrackLaneProps> = ({
   );
 };
 
-// LayerClip component for draggable timeline clips
-const LayerClip: React.FC<{ layer: Layer; index: number }> = ({ layer, index }) => {
-  const { updateLayer, zoom, duration, selectLayer, selectedLayerId } = useTimelineStore();
-  
+// LayerClip component for draggable timeline clips and droppable empty lanes
+const LayerClip: React.FC<{
+  layer: Layer;
+  index: number;
+  onAssetDrop: (item: any, targetLayerId: string) => void;
+}> = ({ layer, index, onAssetDrop }) => {
+  const { zoom, selectLayer, selectedLayerId } = useTimelineStore();
+
+  const isSelected = selectedLayerId === layer.id;
+  const currentTime = useTimelineStore(state => state.currentTime);
+  const isActive = currentTime >= layer.startTime && currentTime <= layer.endTime;
+  const isEffect = layer.type === 'effect';
+  const isEmpty = !isEffect && !layer.src;
+
+  // dnd-kit for dragging existing clips (disabled for empty lanes)
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
     id: layer.id,
+    disabled: isEmpty,
   });
+
+  // react-dnd for dropping new assets onto empty lanes
+  const [{ isOver, canDrop }, drop] = useDrop({
+    accept: ['VIDEO_FILE', 'IMAGE_FILE', 'EFFECT_CARD'],
+    drop: (item: any) => {
+      if (isEmpty) {
+        onAssetDrop(item, layer.id);
+      }
+    },
+    canDrop: () => isEmpty,
+    collect: (monitor) => ({
+      isOver: monitor.isOver(),
+      canDrop: monitor.canDrop(),
+    }),
+  });
+
+  // Combine refs for both libs
+  const combinedRef = (node: HTMLDivElement | null) => {
+    setNodeRef(node);
+    if (isEmpty) {
+      drop(node as any);
+    }
+  };
 
   const PIXELS_PER_SECOND = 100;
   const timeToX = (time: number) => time * PIXELS_PER_SECOND * zoom;
-
   const startX = timeToX(layer.startTime);
   const clipWidth = timeToX(layer.endTime - layer.startTime);
 
@@ -392,34 +448,31 @@ const LayerClip: React.FC<{ layer: Layer; index: number }> = ({ layer, index }) 
     top: `${HEADER_ROW_HEIGHT + (index * ROW_HEIGHT)}px`,
     height: `${ROW_HEIGHT - 4}px`,
     marginTop: '2px',
-  };
-
-  const isSelected = selectedLayerId === layer.id;
-  const currentTime = useTimelineStore(state => state.currentTime);
-  const isActive = currentTime >= layer.startTime && currentTime <= layer.endTime;
-  const isEffect = layer.type === 'effect';
-  const isEmpty = !isEffect && !layer.src;
+  } as React.CSSProperties;
 
   return (
     <div
-      ref={setNodeRef}
+      ref={combinedRef}
       style={style}
-      {...listeners}
-      {...attributes}
+      {...(!isEmpty ? listeners : {})}
+      {...(!isEmpty ? attributes : {})}
       onClick={() => selectLayer(layer.id)}
       className={cn(
-        "absolute flex items-center px-2 rounded border cursor-grab active:cursor-grabbing z-10",
-        isEmpty 
-          ? "border-dashed border-stone-600 bg-stone-800/50 text-stone-400"
-          : isSelected 
-            ? "bg-white border-white text-black z-20 shadow-lg"
-            : isActive
-              ? isEffect ? "bg-purple-500/80 border-purple-400 text-white" : "bg-emerald-500/80 border-emerald-400 text-black"
-              : "bg-stone-700/80 border-stone-600 text-stone-200 hover:border-stone-400"
+        "absolute flex items-center px-2 rounded border z-10",
+        isEmpty
+          ? isOver && canDrop
+            ? "border-emerald-400 bg-emerald-950/80 ring-2 ring-emerald-500 z-20"
+            : "border-dashed border-stone-600 bg-stone-800/50 text-stone-400"
+          : "cursor-grab active:cursor-grabbing",
+        !isEmpty && (isSelected
+          ? "bg-white border-white text-black z-20 shadow-lg"
+          : isActive
+            ? (isEffect ? "bg-purple-500/80 border-purple-400 text-white" : "bg-emerald-500/80 border-emerald-400 text-black")
+            : "bg-stone-700/80 border-stone-600 text-stone-200 hover:border-stone-400")
       )}
     >
       <span className="text-xs font-medium truncate select-none">
-        {layer.name}
+        {isEmpty ? (isOver && canDrop ? 'Drop to Add' : '+ Drop Asset Here') : layer.name}
       </span>
     </div>
   );
@@ -800,14 +853,14 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
       <div className="absolute top-0 right-4 z-50 h-8 flex items-center gap-2 pointer-events-auto">
         <span className="text-xs text-stone-400 font-medium">Zoom</span>
         <Slider
-          value={[zoom]}
+          value={[zoomToSlider(zoom)]}
           onValueChange={([val]) => {
             userAdjustedZoomRef.current = true;
-            setZoom(val);
+            setZoom(sliderToZoom(val));
           }}
-          min={minZoom}
-          max={20}
-          step={0.1}
+          min={0}
+          max={100}
+          step={1}
           className="w-48"
         />
       </div>
@@ -825,6 +878,37 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
             {sortedLayers.map((layer) => (
               <CompositionLayerHeader key={layer.id} layer={layer} />
             ))}
+
+            {/* Background control header row (rendered after layers so it sits at the bottom of the Composition section) */}
+            <div
+              className={cn(
+                'flex items-center px-2 border-b border-stone-700/50'
+              )}
+              style={{ height: `${ROW_HEIGHT}px` }}
+            >
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <Palette className="h-4 w-4 text-stone-400" />
+                <span className="text-sm font-medium text-stone-300 truncate">Background</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={backgroundColor}
+                  onChange={(e) => setBackgroundColor(e.target.value)}
+                  className="w-6 h-6 p-0 border-none bg-transparent cursor-pointer"
+                  title="Change background color"
+                />
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 w-6 p-0 text-stone-400 hover:text-white"
+                  onClick={toggleBackgroundVisibility}
+                  title={isBackgroundVisible ? 'Hide background' : 'Show background'}
+                >
+                  {isBackgroundVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
             <div className={cn('flex items-center px-2 border-t border-b border-stone-700', `h-[${HEADER_ROW_HEIGHT}px]`)}>
               <span className="text-xs font-bold uppercase tracking-wider text-stone-400">Audio & MIDI</span>
             </div>
@@ -851,7 +935,12 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
                 onClick={handleTimelineClick}
               >
                 {sortedLayers.map((layer, index) => (
-                  <LayerClip key={layer.id} layer={layer} index={index} />
+                  <LayerClip
+                    key={layer.id}
+                    layer={layer}
+                    index={index}
+                    onAssetDrop={handleAssetDrop}
+                  />
                 ))}
 
                 {stems.map((stem, index) => {

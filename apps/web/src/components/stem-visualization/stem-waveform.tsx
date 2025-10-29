@@ -28,6 +28,7 @@ export interface StemWaveformProps {
   onSeek?: (time: number) => void;
   isPlaying: boolean;
   isLoading?: boolean;
+  zoom: number;
 }
 
 const MARKER_COLORS = {
@@ -51,6 +52,7 @@ const WaveformVisualizer: React.FC<StemWaveformProps> = ({
   onSeek,
   isPlaying,
   isLoading,
+  zoom,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -79,13 +81,13 @@ const WaveformVisualizer: React.FC<StemWaveformProps> = ({
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // Draw bipolar waveform
+    // Draw bipolar waveform; sample density based on zoom
     ctx.beginPath();
     const midY = height / 2;
     ctx.strokeStyle = '#ffffff'; // white
     ctx.lineWidth = 1;
-
-    for (let i = 0; i < numPoints; i++) {
+    const step = Math.max(1, Math.floor(10 / Math.max(zoom, 0.001)));
+    for (let i = 0; i < numPoints; i += step) {
       const x = (i / (numPoints - 1)) * width;
       const pointHeight = points[i] * midY;
       ctx.moveTo(x, midY - pointHeight);
@@ -93,7 +95,7 @@ const WaveformVisualizer: React.FC<StemWaveformProps> = ({
     }
     ctx.stroke();
 
-  }, [waveformData]);
+  }, [waveformData, zoom]);
 
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!onSeek || !containerRef.current) return;
