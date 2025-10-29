@@ -64,7 +64,7 @@ export const useTimelineStore = create<TimelineState & TimelineActions>((set) =>
   selectLayer: (layerId) => set({ selectedLayerId: layerId }),
   setCurrentTime: (time) => set({ currentTime: time }),
   setDuration: (duration) => set({ duration }),
-  setZoom: (zoom) => set({ zoom: Math.max(0.1, Math.min(20, zoom)) }),
+  setZoom: (zoom) => set({ zoom: Math.max(0.01, Math.min(3, zoom)) }), // Min can be very small, max is now 300%
   togglePlay: () => set((state) => ({ isPlaying: !state.isPlaying })),
   setPlaying: (playing) => set({ isPlaying: playing }),
 }));

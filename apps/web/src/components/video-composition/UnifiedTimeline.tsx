@@ -16,24 +16,30 @@ import { Slider } from '@/components/ui/slider';
 import { HudOverlayProvider, HudOverlayConfig, useHudOverlayContext } from '@/components/hud/HudOverlayManager';
 import { debugLog } from '@/lib/utils';
 
+// New, more constrained max zoom level
+const MAX_ZOOM_LEVEL = 3; // 300%
+
 // Converts a linear slider value (0-100) to a logarithmic zoom level
-const sliderToZoom = (sliderValue: number): number => {
+const sliderToZoom = (sliderValue: number, minZoom: number): number => {
   const minp = 0;
   const maxp = 100;
-  const minv = Math.log(0.1); // min zoom
-  const maxv = Math.log(25);  // max zoom
+  // minv is now dynamic based on the calculated minimum zoom to fit the timeline
+  const minv = Math.log(minZoom);
+  const maxv = Math.log(MAX_ZOOM_LEVEL);
   const scale = (maxv - minv) / (maxp - minp);
   return Math.exp(minv + scale * (sliderValue - minp));
 };
 
 // Converts a logarithmic zoom level back to a linear slider value (0-100)
-const zoomToSlider = (zoomValue: number): number => {
+const zoomToSlider = (zoomValue: number, minZoom: number): number => {
   const minp = 0;
   const maxp = 100;
-  const minv = Math.log(0.1);
-  const maxv = Math.log(25);
+  const minv = Math.log(minZoom);
+  const maxv = Math.log(MAX_ZOOM_LEVEL);
   const scale = (maxv - minv) / (maxp - minp);
-  return (Math.log(zoomValue) - minv) / scale + minp;
+  // Ensure we don't take log of zero or negative
+  const safeZoom = Math.max(minZoom, zoomValue);
+  return (Math.log(safeZoom) - minv) / scale + minp;
 };
 
 // Consistent row sizing across headers and lanes
@@ -445,7 +451,8 @@ const LayerClip: React.FC<{
     transform: CSS.Translate.toString(transform),
     left: `${startX}px`,
     width: `${clipWidth}px`,
-    top: `${HEADER_ROW_HEIGHT + ROW_HEIGHT + (index * ROW_HEIGHT)}px`,
+    // FIX: Corrected vertical position calculation. It starts after the main header.
+    top: `${HEADER_ROW_HEIGHT + (index * ROW_HEIGHT)}px`,
     height: `${ROW_HEIGHT - 4}px`,
     marginTop: '2px',
   } as React.CSSProperties;
@@ -767,7 +774,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
   };
 
   const timelineLanesRef = useRef<HTMLDivElement | null>(null);
-  const [paddingRight, setPaddingRight] = useState(0);
+  // FIX: Removed paddingRight state, as it caused incorrect scrolling behavior
   const userAdjustedZoomRef = useRef(false);
   const [minZoom, setMinZoom] = useState(0.1);
 
@@ -799,12 +806,15 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
     const ro = new ResizeObserver(() => {
       const containerWidth = container.clientWidth;
       if (containerWidth <= 0 || !duration || duration <= 0) return;
+
+      // This calculates the zoom level needed to make the timeline duration fit the container width
       const newMinZoom = containerWidth / (PIXELS_PER_SECOND * duration);
       setMinZoom(newMinZoom);
+
+      // If the user hasn't touched the zoom slider yet, automatically set it to fit
       if (!userAdjustedZoomRef.current && isFinite(newMinZoom) && newMinZoom > 0) {
         setZoom(newMinZoom);
       }
-      setPaddingRight(containerWidth);
     });
 
     ro.observe(container);
@@ -817,7 +827,6 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
       if (!userAdjustedZoomRef.current) {
         setZoom(initialMinZoom);
       }
-      setPaddingRight(initialWidth);
     }
 
     return () => ro.disconnect();
@@ -857,10 +866,11 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
       <div className="absolute top-0 right-4 z-50 h-8 flex items-center gap-2 pointer-events-auto">
         <span className="text-xs text-stone-400 font-medium">Zoom</span>
         <Slider
-          value={[zoomToSlider(zoom)]}
+          value={[zoomToSlider(zoom, minZoom)]}
           onValueChange={([val]) => {
             userAdjustedZoomRef.current = true;
-            setZoom(sliderToZoom(val));
+            // Pass minZoom to the conversion function
+            setZoom(sliderToZoom(val, minZoom));
           }}
           min={0}
           max={100}
@@ -932,7 +942,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
           </div>
 
           {/* ========== COLUMN 2: TIMELINE LANES (Scrollable & Interactive) ========== */}
-          <div className="flex-1 overflow-x-auto" ref={timelineLanesRef} style={{ paddingRight: `${paddingRight}px` }}>
+          <div className="flex-1 overflow-x-auto" ref={timelineLanesRef}>
             <DndContext onDragEnd={handleDragEnd}>
               <div
                 className="relative"
@@ -950,7 +960,12 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
 
                 {stems.map((stem, index) => {
                   const analysis: any = cachedAnalysis?.find((a: any) => a.fileMetadataId === stem.id);
-                  const yPos = HEADER_ROW_HEIGHT + (sortedLayers.length * ROW_HEIGHT) + HEADER_ROW_HEIGHT + ROW_HEIGHT + (index * ROW_HEIGHT);
+                  // This is the combined height of the entire composition section above the audio section
+                  const compositionSectionHeight = HEADER_ROW_HEIGHT + (sortedLayers.length * ROW_HEIGHT) + ROW_HEIGHT;
+                  // This is the height of the audio section header
+                  const audioHeaderHeight = HEADER_ROW_HEIGHT;
+                  // The top position for the first stem starts after all the above sections
+                  const yPos = compositionSectionHeight + audioHeaderHeight + (index * ROW_HEIGHT);
                   return (
                     <div key={`waveform-${stem.id}`} className="absolute w-full flex items-center" style={{ top: `${yPos}px`, height: `${ROW_HEIGHT}px` }}>
                       <StemTrackLane
