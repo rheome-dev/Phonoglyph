@@ -447,14 +447,26 @@ const LayerClip: React.FC<{
   const PIXELS_PER_SECOND = 100;
   const timeToX = (time: number) => time * PIXELS_PER_SECOND * zoom;
 
+  // Calculate snapped vertical position during drag
+  let verticalOffset = 0;
+  if (transform) {
+    // Snap to nearest layer row
+    const rowsMoved = Math.round(transform.y / ROW_HEIGHT);
+    verticalOffset = rowsMoved * ROW_HEIGHT;
+  }
+
   const style = {
-    // Only apply transform if it exists to avoid style conflicts on initialization
-    transform: transform ? CSS.Translate.toString(transform) : undefined,
+    // Apply both horizontal (free) and vertical (snapped) transforms
+    transform: transform 
+      ? `translate3d(${transform.x}px, ${verticalOffset}px, 0)` 
+      : undefined,
     left: `${timeToX(layer.startTime)}px`,
     width: `${timeToX(layer.endTime - layer.startTime)}px`,
     top: `${HEADER_ROW_HEIGHT + (index * ROW_HEIGHT)}px`,
     height: `${ROW_HEIGHT - 4}px`,
     marginTop: '2px',
+    // Add transition for smooth snapping
+    transition: transform ? 'none' : 'top 0.2s ease-out',
   } as React.CSSProperties;
 
   return (
@@ -474,7 +486,8 @@ const LayerClip: React.FC<{
           : "cursor-grab active:cursor-grabbing",
         !isEmpty && (isSelected
           ? "bg-white border-white text-black z-20 shadow-lg"
-          : "bg-stone-700 border-stone-600 text-stone-200 hover:border-stone-400")
+          : "bg-stone-700 border-stone-600 text-stone-200 hover:border-stone-400"),
+        transform && verticalOffset !== 0 && "ring-2 ring-blue-400 shadow-2xl" // Visual feedback during vertical drag
       )}
     >
       <span className="text-xs font-medium truncate select-none">
@@ -925,7 +938,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
     }
   };
 
-  // FIX: A single, precise handler for all drag events
+  // FIX: A single, precise handler for all drag events (horizontal and vertical)
   const handleDragEvent = (event: DragMoveEvent | DragEndEvent) => {
     const { active, delta } = event;
     const rawId = active.id as string;
@@ -937,17 +950,50 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
     const timeDelta = delta.x / (PIXELS_PER_SECOND * zoom);
 
     if (handle === 'handle-right') {
+      // Horizontal resize from right edge
       const newEndTime = Math.min(duration, Math.max(initialLayer.startTime + 0.1, initialLayer.endTime + timeDelta));
       updateLayer(layerId, { endTime: newEndTime });
     } else if (handle === 'handle-left') {
+      // Horizontal resize from left edge
       const newStartTime = Math.max(0, Math.min(initialLayer.endTime - 0.1, initialLayer.startTime + timeDelta));
       updateLayer(layerId, { startTime: newStartTime });
     } else {
+      // Main body drag - support both horizontal and vertical movement
       const clipDuration = initialLayer.endTime - initialLayer.startTime;
+      
+      // Horizontal movement
       let newStartTime = Math.max(0, initialLayer.startTime + timeDelta);
       newStartTime = Math.min(newStartTime, duration - clipDuration);
       const newEndTime = newStartTime + clipDuration;
-      updateLayer(layerId, { startTime: newStartTime, endTime: newEndTime });
+      
+      // Vertical movement - snap to layers
+      const sortedLayers = [...layers].sort((a, b) => b.zIndex - a.zIndex);
+      const currentIndex = sortedLayers.findIndex(l => l.id === layerId);
+      const verticalDelta = delta.y;
+      
+      // Calculate which layer we're hovering over based on vertical delta
+      const rowsMoved = Math.round(verticalDelta / ROW_HEIGHT);
+      const targetIndex = Math.max(0, Math.min(sortedLayers.length - 1, currentIndex + rowsMoved));
+      
+      // Only update z-index if we've moved to a different layer
+      if (targetIndex !== currentIndex) {
+        const targetLayer = sortedLayers[targetIndex];
+        const newZIndex = targetLayer.zIndex;
+        
+        updateLayer(layerId, { 
+          startTime: newStartTime, 
+          endTime: newEndTime,
+          zIndex: newZIndex 
+        });
+        
+        // Swap z-indices to maintain layer order
+        if (targetLayer.id !== layerId) {
+          updateLayer(targetLayer.id, { zIndex: initialLayer.zIndex });
+        }
+      } else {
+        // Just update time if no vertical movement
+        updateLayer(layerId, { startTime: newStartTime, endTime: newEndTime });
+      }
     }
 
     // If this is the final event in the drag sequence, clear the reference.
