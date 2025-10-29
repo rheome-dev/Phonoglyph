@@ -67,6 +67,7 @@ export const VideoCompositionTimeline: React.FC<VideoCompositionTimelineProps> =
 
   const createVideoLayer = (item: any): Layer => ({
     id: `video-${Date.now()}`,
+    name: item.name || item.id || 'Video Layer',
     type: 'video',
     src: item.src,
     position: { x: 50, y: 50 },
@@ -84,6 +85,7 @@ export const VideoCompositionTimeline: React.FC<VideoCompositionTimelineProps> =
 
   const createImageLayer = (item: any): Layer => ({
     id: `image-${Date.now()}`,
+    name: item.name || item.id || 'Image Layer',
     type: 'image',
     src: item.src,
     position: { x: 50, y: 50 },
@@ -101,6 +103,7 @@ export const VideoCompositionTimeline: React.FC<VideoCompositionTimelineProps> =
 
   const createEffectLayer = (item: any): Layer => ({
     id: `effect-${Date.now()}`,
+    name: item.name || item.effectId || 'Effect Layer',
     type: 'effect',
     effectType: item.effectId,
     settings: item.settings || {},
@@ -233,12 +236,7 @@ export const VideoCompositionTimeline: React.FC<VideoCompositionTimelineProps> =
                     {getLayerIcon(layer.type)}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-xs font-medium text-white truncate">
-                      {layer.type === 'video' || layer.type === 'image' 
-                        ? layer.src?.split('/').pop()?.split('.')[0] || 'Untitled'
-                        : layer.effectType || 'Effect'
-                      }
-                    </div>
+                    <div className="text-xs font-medium text-white truncate">{layer.name}</div>
                     <div className="text-xs text-stone-400">
                       {layer.startTime.toFixed(1)}s - {layer.endTime.toFixed(1)}s
                     </div>
