@@ -717,8 +717,25 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
   };
 
   return (
-    <div className={cn("bg-stone-800 border border-stone-700 rounded-xl overflow-hidden", className)}>
-      <div className="flex">
+    <div className={cn("relative", className)}>
+      {/* Zoom Slider floating, independent of horizontal scroll */}
+      <div className="absolute top-0 right-4 z-50 h-8 flex items-center gap-2 pointer-events-auto">
+        <span className="text-xs text-stone-400 font-medium">Zoom</span>
+        <Slider
+          value={[zoom]}
+          onValueChange={([val]) => {
+            userAdjustedZoomRef.current = true;
+            setZoom(val);
+          }}
+          min={0.1}
+          max={20}
+          step={0.1}
+          className="w-48"
+        />
+      </div>
+
+      <div className="bg-stone-800 border border-stone-700 rounded-xl overflow-hidden">
+        <div className="flex">
         {/* Left column: Headers */}
         <div className="w-56 flex-shrink-0 border-r border-stone-700">
           {/* Composition header */}
@@ -812,25 +829,13 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
           ))}
         </div>
 
-        {/* Right column: Timeline lanes and zoom controls */}
+        {/* Right column: Timeline lanes */}
         <div className="flex-1 relative">
-          {/* Zoom controls pinned to far right of top header row */}
-          <div className="absolute top-0 right-2 z-50 h-8 flex items-center gap-2 pointer-events-auto">
-            <span className="text-xs text-stone-400">Zoom</span>
-            <Slider
-              value={[Math.round(zoom * 100)]}
-              onValueChange={([val]) => {
-                userAdjustedZoomRef.current = true;
-                setZoom(val / 100);
-              }}
-              min={10}
-              max={400}
-              step={1}
-              className="w-80"
-            />
-            <span className="text-xs w-14 text-right">{Math.round(zoom * 100)}%</span>
-          </div>
-          <div className="overflow-x-auto" ref={timelineContainerRef}>
+          <div 
+            className="overflow-x-auto" 
+            ref={timelineContainerRef}
+            style={{ paddingRight: timelineContainerRef.current ? `${timelineContainerRef.current.clientWidth}px` : '100%' }}
+          >
           <div
             className="relative"
             style={{ width: `${timelineWidth}px`, height: `${HEADER_ROW_HEIGHT + (layers.length * ROW_HEIGHT) + ROW_HEIGHT + HEADER_ROW_HEIGHT + (stems.length * ROW_HEIGHT)}px` }}
@@ -893,7 +898,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
               style={{ left: `${timeToX(currentTime)}px` }}
             />
           </div>
-        </div>
+          </div>
         </div>
       </div>
     </div>
