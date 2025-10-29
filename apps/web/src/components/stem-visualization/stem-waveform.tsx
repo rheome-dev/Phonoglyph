@@ -76,24 +76,34 @@ const WaveformVisualizer: React.FC<StemWaveformProps> = ({
 
     ctx.clearRect(0, 0, width, height);
 
-    // FIX: Use a continuous path for a filled waveform
-    ctx.beginPath();
-    ctx.moveTo(0, midY);
+    const step = Math.max(1, Math.floor(numPoints / width));
 
-    const step = Math.max(1, Math.floor(1 / Math.max(zoom, 0.001)));
+    // FIX: Pre-calculate symmetrical points to prevent visual glitches.
+    const topPoints: { x: number; y: number }[] = [];
+    const bottomPoints: { x: number; y: number }[] = [];
 
-    // Draw top half
     for (let i = 0; i < numPoints; i += step) {
       const x = (i / (numPoints - 1)) * width;
       const pointHeight = points[i] * midY * 0.8;
-      ctx.lineTo(x, midY - pointHeight);
+      topPoints.push({ x, y: midY - pointHeight });
+      bottomPoints.push({ x, y: midY + pointHeight });
     }
 
-    // Draw bottom half in reverse
-    for (let i = numPoints - 1; i >= 0; i -= step) {
-      const x = (i / (numPoints - 1)) * width;
-      const pointHeight = points[i] * midY * 0.8;
-      ctx.lineTo(x, midY + pointHeight);
+    // Now, draw the filled polygon with the guaranteed symmetrical points.
+    ctx.beginPath();
+    
+    if (topPoints.length > 0) {
+      ctx.moveTo(topPoints[0].x, topPoints[0].y);
+      
+      for (const p of topPoints) {
+        ctx.lineTo(p.x, p.y);
+      }
+
+      // Draw the bottom half in reverse to close the polygon path.
+      for (let i = bottomPoints.length - 1; i >= 0; i--) {
+        const p = bottomPoints[i];
+        ctx.lineTo(p.x, p.y);
+      }
     }
 
     ctx.closePath();

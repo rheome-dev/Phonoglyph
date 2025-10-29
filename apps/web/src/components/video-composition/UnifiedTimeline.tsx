@@ -642,12 +642,20 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
   // FIX: When the project's duration changes (e.g., on audio load),
   // ensure all layers are clamped to the new duration.
   useEffect(() => {
-    layers.forEach(layer => {
-      if (layer.endTime > duration) {
-        updateLayer(layer.id, { endTime: duration });
-      }
-    });
-  }, [duration, layers, updateLayer]);
+    // Guard against running when duration is not yet finalized.
+    if (duration > 0) {
+      // Use the functional form of state update to get the most recent layers
+      // without adding 'layers' to the dependency array.
+      const currentLayers = useTimelineStore.getState().layers;
+      currentLayers.forEach(layer => {
+        if (layer.endTime !== duration) {
+          // This now correctly resizes the initial default layer and any other
+          // layers that might be out of sync.
+          updateLayer(layer.id, { endTime: duration });
+        }
+      });
+    }
+  }, [duration, updateLayer]); // Only re-run when the duration itself changes.
 
   const handleAssetDrop = (item: any, targetLayerId?: string) => {
     debugLog.log('Asset dropped on timeline:', item, 'target layer:', targetLayerId);
