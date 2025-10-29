@@ -464,7 +464,7 @@ const LayerClip: React.FC<{
       // The main body listeners are only applied when not empty
       {...(!isEmpty ? listeners : {})}
       {...(!isEmpty ? attributes : {})}
-      onClick={() => selectLayer(layer.id)}
+      onMouseDown={() => selectLayer(layer.id)}
       className={cn(
         "absolute flex items-center justify-center rounded border z-10 group",
         isEmpty
@@ -474,7 +474,7 @@ const LayerClip: React.FC<{
           : "cursor-grab active:cursor-grabbing",
         !isEmpty && (isSelected
           ? "bg-white border-white text-black z-20 shadow-lg"
-          : "bg-stone-700/80 border-stone-600 text-stone-200 hover:border-stone-400")
+          : "bg-stone-700 border-stone-600 text-stone-200 hover:border-stone-400")
       )}
     >
       <span className="text-xs font-medium truncate select-none">
