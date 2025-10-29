@@ -9,6 +9,7 @@ import { useTimelineStore } from '@/stores/timelineStore';
 import { StemWaveform, WaveformData } from '@/components/stem-visualization/stem-waveform';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Slider } from '@/components/ui/slider';
 import { HudOverlayProvider, HudOverlayConfig, useHudOverlayContext } from '@/components/hud/HudOverlayManager';
 import { debugLog } from '@/lib/utils';
 
@@ -496,6 +497,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
   } = useTimelineStore();
   const { backgroundColor, isBackgroundVisible, setBackgroundColor, toggleBackgroundVisibility } = useProjectSettingsStore();
   const timelineContainerRef = useRef<HTMLDivElement | null>(null);
+  const userAdjustedZoomRef = useRef(false);
   const [expandedSections, setExpandedSections] = useState({
     composition: true, // Combined visual and effects layers
     audio: true // Changed from false to true to ensure audio section is visible by default
@@ -664,6 +666,32 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
   // Calculate timeline width based on duration and zoom
   const timelineWidth = duration * PIXELS_PER_SECOND * zoom;
 
+  // Auto-fit zoom so the full duration is visible in the viewport by default
+  useEffect(() => {
+    const container = timelineContainerRef.current;
+    if (!container || !duration || duration <= 0) return;
+    const containerWidth = container.clientWidth;
+    if (containerWidth <= 0) return;
+    const fitZoom = containerWidth / (PIXELS_PER_SECOND * duration);
+    if (!userAdjustedZoomRef.current && isFinite(fitZoom) && fitZoom > 0) {
+      setZoom(fitZoom);
+    }
+  }, [duration, setZoom]);
+
+  // Recompute fit on container resize unless user has adjusted zoom
+  useEffect(() => {
+    const container = timelineContainerRef.current;
+    if (!container) return;
+    const ro = new ResizeObserver(() => {
+      if (userAdjustedZoomRef.current || !duration || duration <= 0) return;
+      const containerWidth = container.clientWidth;
+      const fitZoom = containerWidth / (PIXELS_PER_SECOND * duration);
+      if (isFinite(fitZoom) && fitZoom > 0) setZoom(fitZoom);
+    });
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, [duration, setZoom]);
+
   // Unified vertical sizing (use module-level constants)
   // Layers start immediately after the Composition section header; Background row renders after layers
   const compositionYOffset = HEADER_ROW_HEIGHT;
@@ -695,8 +723,8 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
         <div className="w-56 flex-shrink-0 border-r border-stone-700">
           {/* Composition header */}
           <div className="flex items-center justify-between px-2 border-b border-stone-700" style={{ height: `${HEADER_ROW_HEIGHT}px` }}>
-            <span className="text-xs font-bold uppercase tracking-wider">Composition</span>
             <div className="flex items-center gap-2">
+              <span className="text-xs font-bold uppercase tracking-wider">Composition</span>
               <Button
                 size="sm"
                 variant="ghost"
@@ -726,9 +754,21 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
               >
                 <Plus className="h-4 w-4 mr-1" /> Add
               </Button>
-              <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => setZoom(zoom / 1.5)}>Zoom Out</Button>
+            </div>
+            <div className="flex items-center gap-2 w-64">
+              <span className="text-xs text-stone-400">Zoom</span>
+              <Slider
+                value={[Math.round(zoom * 100)]}
+                onValueChange={([val]) => {
+                  userAdjustedZoomRef.current = true;
+                  setZoom(val / 100);
+                }}
+                min={10}
+                max={400}
+                step={1}
+                className="flex-1"
+              />
               <span className="text-xs w-12 text-right">{Math.round(zoom * 100)}%</span>
-              <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => setZoom(zoom * 1.5)}>Zoom In</Button>
             </div>
           </div>
           {/* Composition layer headers */}
