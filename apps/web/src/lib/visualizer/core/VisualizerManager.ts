@@ -437,6 +437,9 @@ export class VisualizerManager {
         ? (this.timelineCurrentTime >= effectLayer.startTime && this.timelineCurrentTime <= effectLayer.endTime)
         : true; // Default to true if no layer found
 
+      // FIX: Enable/disable the compositor layer based on timeline state
+      this.multiLayerCompositor.updateLayer(effect.id, { enabled: isLayerActive });
+
       if (isLayerActive && updatedEffects < maxEffectsPerFrame) {
         activeEffectCount++;
         updatedEffects++;
