@@ -9,6 +9,7 @@ interface TimelineState {
   duration: number;
   isPlaying: boolean;
   selectedLayerId: string | null;
+  zoom: number;
 }
 
 interface TimelineActions {
@@ -19,6 +20,7 @@ interface TimelineActions {
   selectLayer: (layerId: string | null) => void;
   setCurrentTime: (time: number) => void;
   setDuration: (duration: number) => void;
+  setZoom: (zoom: number) => void;
   togglePlay: () => void;
   setPlaying: (playing: boolean) => void;
 }
@@ -41,6 +43,7 @@ export const useTimelineStore = create<TimelineState & TimelineActions>((set) =>
   duration: 120,
   isPlaying: false,
   selectedLayerId: null,
+  zoom: 1,
 
   setLayers: (layers) => set({ layers }),
   addLayer: (layer) => set((state) => {
@@ -61,6 +64,7 @@ export const useTimelineStore = create<TimelineState & TimelineActions>((set) =>
   selectLayer: (layerId) => set({ selectedLayerId: layerId }),
   setCurrentTime: (time) => set({ currentTime: time }),
   setDuration: (duration) => set({ duration }),
+  setZoom: (zoom) => set({ zoom: Math.max(0.1, Math.min(20, zoom)) }),
   togglePlay: () => set((state) => ({ isPlaying: !state.isPlaying })),
   setPlaying: (playing) => set({ isPlaying: playing }),
 }));

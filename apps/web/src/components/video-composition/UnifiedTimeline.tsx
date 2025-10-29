@@ -491,6 +491,8 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
     deleteLayer,
     selectLayer,
     setCurrentTime,
+    zoom,
+    setZoom,
   } = useTimelineStore();
   const { backgroundColor, isBackgroundVisible, setBackgroundColor, toggleBackgroundVisibility } = useProjectSettingsStore();
   const timelineContainerRef = useRef<HTMLDivElement | null>(null);
@@ -653,16 +655,14 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
     }
   };
 
-  const timeToX = (time: number) => {
-    return time * 100; // 100px per second
-  };
+  const PIXELS_PER_SECOND = 100;
 
-  const xToTime = (x: number) => {
-    return x / 100;
-  };
+  const timeToX = (time: number): number => time * PIXELS_PER_SECOND * zoom;
 
-  // Calculate timeline width based on duration to match audio stems
-  const timelineWidth = Math.max(duration * 100, 800); // Minimum 800px width
+  const xToTime = (x: number): number => x / (PIXELS_PER_SECOND * zoom);
+
+  // Calculate timeline width based on duration and zoom
+  const timelineWidth = duration * PIXELS_PER_SECOND * zoom;
 
   // Unified vertical sizing (use module-level constants)
   // Layers start immediately after the Composition section header; Background row renders after layers
@@ -696,35 +696,40 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
           {/* Composition header */}
           <div className="flex items-center justify-between px-2 border-b border-stone-700" style={{ height: `${HEADER_ROW_HEIGHT}px` }}>
             <span className="text-xs font-bold uppercase tracking-wider">Composition</span>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-6 px-2"
-              onClick={() => {
-                const nextLayerNumber = layers.filter(l => l.name?.startsWith('Layer')).length + 1;
-                const newLayer: Layer = {
-                  id: `layer-${Date.now()}`,
-                  name: `Layer ${nextLayerNumber}`,
-                  type: 'image',
-                  src: '',
-                  position: { x: 50, y: 50 },
-                  scale: { x: 1, y: 1 },
-                  rotation: 0,
-                  opacity: 1,
-                  audioBindings: [],
-                  midiBindings: [],
-                  zIndex: layers.length,
-                  blendMode: 'normal',
-                  startTime: 0,
-                  endTime: duration,
-                  duration: duration,
-                  isDeletable: true
-                };
-                addLayer(newLayer);
-              }}
-            >
-              <Plus className="h-4 w-4 mr-1" /> Add
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 px-2"
+                onClick={() => {
+                  const nextLayerNumber = layers.filter(l => l.name?.startsWith('Layer')).length + 1;
+                  const newLayer: Layer = {
+                    id: `layer-${Date.now()}`,
+                    name: `Layer ${nextLayerNumber}`,
+                    type: 'image',
+                    src: '',
+                    position: { x: 50, y: 50 },
+                    scale: { x: 1, y: 1 },
+                    rotation: 0,
+                    opacity: 1,
+                    audioBindings: [],
+                    midiBindings: [],
+                    zIndex: layers.length,
+                    blendMode: 'normal',
+                    startTime: 0,
+                    endTime: duration,
+                    duration: duration,
+                    isDeletable: true
+                  };
+                  addLayer(newLayer);
+                }}
+              >
+                <Plus className="h-4 w-4 mr-1" /> Add
+              </Button>
+              <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => setZoom(zoom / 1.5)}>Zoom Out</Button>
+              <span className="text-xs w-12 text-right">{Math.round(zoom * 100)}%</span>
+              <Button size="sm" variant="ghost" className="h-6 px-2" onClick={() => setZoom(zoom * 1.5)}>Zoom In</Button>
+            </div>
           </div>
           {/* Composition layer headers */}
           {[...layers].sort((a, b) => b.zIndex - a.zIndex).map((layer) => (
