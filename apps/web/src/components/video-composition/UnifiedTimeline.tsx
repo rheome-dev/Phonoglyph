@@ -672,12 +672,16 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
         if (selectedLayerId) {
           const selectedLayer = layers.find(l => l.id === selectedLayerId);
           // Only clear if the layer has content (is not empty)
-          if (selectedLayer && selectedLayer.src) {
+          const hasContent = selectedLayer && (selectedLayer.src || selectedLayer.effectType);
+          if (hasContent) {
             e.preventDefault(); // Prevent browser back navigation on Backspace
-            // Clear the clip by removing its src and resetting name if it was auto-named
+            // Clear the clip by removing all content-related properties
             updateLayer(selectedLayerId, { 
               src: '',
-              name: selectedLayer.name?.startsWith('Layer') ? selectedLayer.name : `Layer ${layers.indexOf(selectedLayer) + 1}`
+              effectType: undefined,
+              settings: undefined,
+              type: 'image', // Reset to default type
+              name: `Layer ${layers.indexOf(selectedLayer) + 1}` // Reset to default name
             });
           }
         }
