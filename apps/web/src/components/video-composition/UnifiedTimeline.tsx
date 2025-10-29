@@ -1,6 +1,9 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useDrop } from 'react-dnd';
 import { useDrag } from 'react-dnd';
+import { DndContext, DragEndEvent } from '@dnd-kit/core';
+import { useDraggable } from '@dnd-kit/core';
+import { CSS } from '@dnd-kit/utilities';
 import { ChevronDown, ChevronUp, Plus, Video, Image, Zap, Music, FileAudio, FileMusic, Settings, Trash2, Eye, EyeOff, Palette } from 'lucide-react';
 import { useProjectSettingsStore } from '@/stores/projectSettingsStore';
 import { cn } from '@/lib/utils';
@@ -368,6 +371,60 @@ const StemTrackLane: React.FC<StemTrackLaneProps> = ({
   );
 };
 
+// LayerClip component for draggable timeline clips
+const LayerClip: React.FC<{ layer: Layer; index: number }> = ({ layer, index }) => {
+  const { updateLayer, zoom, duration, selectLayer, selectedLayerId } = useTimelineStore();
+  
+  const { attributes, listeners, setNodeRef, transform } = useDraggable({
+    id: layer.id,
+  });
+
+  const PIXELS_PER_SECOND = 100;
+  const timeToX = (time: number) => time * PIXELS_PER_SECOND * zoom;
+
+  const startX = timeToX(layer.startTime);
+  const clipWidth = timeToX(layer.endTime - layer.startTime);
+
+  const style = {
+    transform: CSS.Translate.toString(transform),
+    left: `${startX}px`,
+    width: `${clipWidth}px`,
+    top: `${HEADER_ROW_HEIGHT + (index * ROW_HEIGHT)}px`,
+    height: `${ROW_HEIGHT - 4}px`,
+    marginTop: '2px',
+  };
+
+  const isSelected = selectedLayerId === layer.id;
+  const currentTime = useTimelineStore(state => state.currentTime);
+  const isActive = currentTime >= layer.startTime && currentTime <= layer.endTime;
+  const isEffect = layer.type === 'effect';
+  const isEmpty = !isEffect && !layer.src;
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...listeners}
+      {...attributes}
+      onClick={() => selectLayer(layer.id)}
+      className={cn(
+        "absolute flex items-center px-2 rounded border cursor-grab active:cursor-grabbing z-10",
+        isEmpty 
+          ? "border-dashed border-stone-600 bg-stone-800/50 text-stone-400"
+          : isSelected 
+            ? "bg-white border-white text-black z-20 shadow-lg"
+            : isActive
+              ? isEffect ? "bg-purple-500/80 border-purple-400 text-white" : "bg-emerald-500/80 border-emerald-400 text-black"
+              : "bg-stone-700/80 border-stone-600 text-stone-200 hover:border-stone-400"
+      )}
+    >
+      <span className="text-xs font-medium truncate select-none">
+        {layer.name}
+      </span>
+    </div>
+  );
+};
+
 // Overlay Lane Card
 const OverlayCard: React.FC<{
   overlay: any;
@@ -497,7 +554,6 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
   } = useTimelineStore();
   const { backgroundColor, isBackgroundVisible, setBackgroundColor, toggleBackgroundVisibility } = useProjectSettingsStore();
   const timelineContainerRef = useRef<HTMLDivElement | null>(null);
-  const userAdjustedZoomRef = useRef(false);
   const [expandedSections, setExpandedSections] = useState({
     composition: true, // Combined visual and effects layers
     audio: true // Changed from false to true to ensure audio section is visible by default
@@ -657,68 +713,90 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
     }
   };
 
+  const timelineLanesRef = useRef<HTMLDivElement | null>(null);
+  const [paddingRight, setPaddingRight] = useState(0);
+  const userAdjustedZoomRef = useRef(false);
+  const [minZoom, setMinZoom] = useState(0.1);
+
   const PIXELS_PER_SECOND = 100;
 
   const timeToX = (time: number): number => time * PIXELS_PER_SECOND * zoom;
+  const xToTime = (x: number): number => {
+    if (!timelineLanesRef.current) return 0;
+    const rect = timelineLanesRef.current.getBoundingClientRect();
+    const scrollLeft = timelineLanesRef.current.scrollLeft;
+    const relativeX = x - rect.left + scrollLeft;
+    return relativeX / (PIXELS_PER_SECOND * zoom);
+  };
 
-  const xToTime = (x: number): number => x / (PIXELS_PER_SECOND * zoom);
-
-  // Calculate timeline width based on duration and zoom
   const timelineWidth = duration * PIXELS_PER_SECOND * zoom;
+  const totalHeight = (2 * HEADER_ROW_HEIGHT) + ((layers.length + stems.length) * ROW_HEIGHT);
 
-  // Auto-fit zoom so the full duration is visible in the viewport by default
-  useEffect(() => {
-    const container = timelineContainerRef.current;
-    if (!container || !duration || duration <= 0) return;
+  const calculateMinZoom = useCallback(() => {
+    const container = timelineLanesRef.current;
+    if (!container || !duration || duration <= 0) return 0.1;
     const containerWidth = container.clientWidth;
-    if (containerWidth <= 0) return;
-    const fitZoom = containerWidth / (PIXELS_PER_SECOND * duration);
-    if (!userAdjustedZoomRef.current && isFinite(fitZoom) && fitZoom > 0) {
-      setZoom(fitZoom);
-    }
-  }, [duration, setZoom]);
+    if (containerWidth <= 0) return 0.1;
+    return containerWidth / (PIXELS_PER_SECOND * duration);
+  }, [duration]);
 
-  // Recompute fit on container resize unless user has adjusted zoom
   useEffect(() => {
-    const container = timelineContainerRef.current;
+    const container = timelineLanesRef.current;
+    if (!container) return;
+
+    const ro = new ResizeObserver(() => {
+      const newMinZoom = calculateMinZoom();
+      setMinZoom(newMinZoom);
+      if (!userAdjustedZoomRef.current) {
+        setZoom(newMinZoom);
+      }
+    });
+
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, [calculateMinZoom, setZoom]);
+  
+  // Observer to update scroll padding (independent of zoom logic)
+  useEffect(() => {
+    const container = timelineLanesRef.current;
     if (!container) return;
     const ro = new ResizeObserver(() => {
-      if (userAdjustedZoomRef.current || !duration || duration <= 0) return;
-      const containerWidth = container.clientWidth;
-      const fitZoom = containerWidth / (PIXELS_PER_SECOND * duration);
-      if (isFinite(fitZoom) && fitZoom > 0) setZoom(fitZoom);
+        setPaddingRight(container.clientWidth);
     });
     ro.observe(container);
     return () => ro.disconnect();
   }, [duration, setZoom]);
 
-  // Unified vertical sizing (use module-level constants)
-  // Layers start immediately after the Composition section header; Background row renders after layers
-  const compositionYOffset = HEADER_ROW_HEIGHT;
-  const stemsYOffset = HEADER_ROW_HEIGHT + (layers.length * ROW_HEIGHT) + ROW_HEIGHT + HEADER_ROW_HEIGHT;
-
-  const toggleSection = (section: keyof typeof expandedSections) => {
-    setExpandedSections(prev => ({
-      ...prev,
-      [section]: !prev[section]
-    }));
-  };
-
   const handleTimelineClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const time = xToTime(x);
-    const nextTime = Math.max(0, Math.min(duration, time));
-    if (onSeek) {
-      onSeek(nextTime);
-    } else {
-      setCurrentTime(nextTime);
-    }
+    if (e.target !== e.currentTarget) return;
+    const time = xToTime(e.clientX);
+    const clampedTime = Math.max(0, Math.min(duration, time));
+    if (onSeek) onSeek(clampedTime);
+    else setCurrentTime(clampedTime);
   };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, delta } = event;
+    const layerId = active.id as string;
+    const timeDelta = delta.x / (PIXELS_PER_SECOND * zoom);
+
+    const originalLayer = layers.find(l => l.id === layerId);
+    if (!originalLayer) return;
+
+    const clipDuration = originalLayer.endTime - originalLayer.startTime;
+    let newStartTime = Math.max(0, originalLayer.startTime + timeDelta);
+    newStartTime = Math.min(newStartTime, duration - clipDuration); // Clamp to end
+    
+    const newEndTime = newStartTime + clipDuration;
+
+    updateLayer(layerId, { startTime: newStartTime, endTime: newEndTime });
+  };
+  
+  const sortedLayers = [...layers].sort((a, b) => b.zIndex - a.zIndex);
 
   return (
     <div className={cn("relative", className)}>
-      {/* Zoom Slider floating, independent of horizontal scroll */}
+      {/* Zoom Slider is now a sibling, positioned absolutely */}
       <div className="absolute top-0 right-4 z-50 h-8 flex items-center gap-2 pointer-events-auto">
         <span className="text-xs text-stone-400 font-medium">Zoom</span>
         <Slider
@@ -727,7 +805,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
             userAdjustedZoomRef.current = true;
             setZoom(val);
           }}
-          min={0.1}
+          min={minZoom}
           max={20}
           step={0.1}
           className="w-48"
@@ -736,168 +814,67 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
 
       <div className="bg-stone-800 border border-stone-700 rounded-xl overflow-hidden">
         <div className="flex">
-        {/* Left column: Headers */}
-        <div className="w-56 flex-shrink-0 border-r border-stone-700">
-          {/* Composition header */}
-          <div className="flex items-center justify-between px-2 border-b border-stone-700" style={{ height: `${HEADER_ROW_HEIGHT}px` }}>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold uppercase tracking-wider">Composition</span>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-6 px-2"
-                onClick={() => {
-                  const nextLayerNumber = layers.filter(l => l.name?.startsWith('Layer')).length + 1;
-                  const newLayer: Layer = {
-                    id: `layer-${Date.now()}`,
-                    name: `Layer ${nextLayerNumber}`,
-                    type: 'image',
-                    src: '',
-                    position: { x: 50, y: 50 },
-                    scale: { x: 1, y: 1 },
-                    rotation: 0,
-                    opacity: 1,
-                    audioBindings: [],
-                    midiBindings: [],
-                    zIndex: layers.length,
-                    blendMode: 'normal',
-                    startTime: 0,
-                    endTime: duration,
-                    duration: duration,
-                    isDeletable: true
-                  };
-                  addLayer(newLayer);
-                }}
-              >
-                <Plus className="h-4 w-4 mr-1" /> Add
+          {/* ========== COLUMN 1: TRACK HEADERS (Fixed Width) ========== */}
+          <div className="w-56 flex-shrink-0 border-r border-stone-700 bg-stone-900/30">
+            <div className={cn('flex items-center justify-between px-2 border-b border-stone-700', `h-[${HEADER_ROW_HEIGHT}px]`)}>
+              <span className="text-xs font-bold uppercase tracking-wider text-stone-400">Composition</span>
+              <Button size="sm" variant="ghost" className="h-6 px-1 text-stone-400" onClick={() => addLayer({ name: `Layer ${layers.length + 1}` } as Layer)}>
+                <Plus className="h-4 w-4" />
               </Button>
             </div>
-          </div>
-          {/* Composition layer headers */}
-          {[...layers].sort((a, b) => b.zIndex - a.zIndex).map((layer) => (
-            <CompositionLayerHeader key={layer.id} layer={layer} />
-          ))}
-
-          {/* Background control header row (rendered after layers so it sits at the bottom of the Composition section) */}
-          <div
-            className={cn(
-              'flex items-center px-2 border-b border-stone-700/50'
-            )}
-            style={{ height: `${ROW_HEIGHT}px` }}
-          >
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              <Palette className="h-4 w-4 text-stone-400" />
-              <span className="text-sm font-medium text-stone-300 truncate">Background</span>
+            {sortedLayers.map((layer) => (
+              <CompositionLayerHeader key={layer.id} layer={layer} />
+            ))}
+            <div className={cn('flex items-center px-2 border-t border-b border-stone-700', `h-[${HEADER_ROW_HEIGHT}px]`)}>
+              <span className="text-xs font-bold uppercase tracking-wider text-stone-400">Audio & MIDI</span>
             </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="color"
-                value={backgroundColor}
-                onChange={(e) => setBackgroundColor(e.target.value)}
-                className="w-6 h-6 p-0 border-none bg-transparent cursor-pointer"
-                title="Change background color"
+            {stems.map((stem) => (
+              <StemTrackHeader
+                key={stem.id}
+                id={stem.id}
+                name={stem.file_name}
+                isActive={stem.id === activeTrackId}
+                isSoloed={soloedStems.has(stem.id)}
+                onClick={() => onStemSelect?.(stem.id)}
+                onToggleSolo={onToggleSolo ? () => onToggleSolo(stem.id) : undefined}
+                isMaster={stem.id === masterStemId}
               />
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-6 w-6 p-0 text-stone-400 hover:text-white"
-                onClick={toggleBackgroundVisibility}
-                title={isBackgroundVisible ? 'Hide background' : 'Show background'}
+            ))}
+          </div>
+
+          {/* ========== COLUMN 2: TIMELINE LANES (Scrollable & Interactive) ========== */}
+          <div className="flex-1 overflow-x-auto" ref={timelineLanesRef} style={{ paddingRight: `${paddingRight}px` }}>
+            <DndContext onDragEnd={handleDragEnd}>
+              <div
+                className="relative"
+                style={{ width: `${timelineWidth}px`, height: `${totalHeight}px` }}
+                onClick={handleTimelineClick}
               >
-                {isBackgroundVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-              </Button>
-            </div>
-          </div>
+                {sortedLayers.map((layer, index) => (
+                  <LayerClip key={layer.id} layer={layer} index={index} />
+                ))}
 
-          {/* Audio/MIDI header */}
-          <div className="flex items-center px-2 border-t border-b border-stone-700" style={{ height: `${HEADER_ROW_HEIGHT}px` }}>
-            <span className="text-xs font-bold uppercase tracking-wider">Audio & MIDI</span>
-          </div>
+                {stems.map((stem, index) => {
+                  const analysis: any = cachedAnalysis?.find((a: any) => a.fileMetadataId === stem.id);
+                  const yPos = HEADER_ROW_HEIGHT + (layers.length * ROW_HEIGHT) + HEADER_ROW_HEIGHT + (index * ROW_HEIGHT);
+                  return (
+                    <div key={`waveform-${stem.id}`} className="absolute w-full flex items-center" style={{ top: `${yPos}px`, height: `${ROW_HEIGHT}px` }}>
+                      <StemTrackLane
+                        waveformData={analysis?.waveformData ?? null}
+                        duration={duration}
+                        currentTime={currentTime}
+                        isPlaying={isPlaying}
+                        isLoading={stemLoadingState}
+                        analysisProgress={analysisProgress?.[stem.id]}
+                        onSeek={onSeek}
+                      />
+                    </div>
+                  );
+                })}
 
-          {/* Stem headers */}
-          {stems.map((stem) => (
-            <StemTrackHeader
-              key={stem.id}
-              id={stem.id}
-              name={stem.file_name}
-              isActive={stem.id === activeTrackId}
-              isSoloed={soloedStems.has(stem.id)}
-              onClick={() => onStemSelect?.(stem.id)}
-              onToggleSolo={onToggleSolo ? () => onToggleSolo(stem.id) : undefined}
-              isMaster={stem.id === masterStemId}
-            />
-          ))}
-        </div>
-
-        {/* Right column: Timeline lanes */}
-        <div className="flex-1 relative">
-          <div 
-            className="overflow-x-auto" 
-            ref={timelineContainerRef}
-            style={{ paddingRight: timelineContainerRef.current ? `${timelineContainerRef.current.clientWidth}px` : '100%' }}
-          >
-          <div
-            className="relative"
-            style={{ width: `${timelineWidth}px`, height: `${HEADER_ROW_HEIGHT + (layers.length * ROW_HEIGHT) + ROW_HEIGHT + HEADER_ROW_HEIGHT + (stems.length * ROW_HEIGHT)}px` }}
-            onClick={handleTimelineClick}
-          >
-            {/* Composition clips */}
-            {[...layers].sort((a, b) => b.zIndex - a.zIndex).map((layer, index) => {
-              const startX = timeToX(layer.startTime || 0);
-              const width = timeToX((layer.endTime || duration) - (layer.startTime || 0));
-              const isActive = currentTime >= (layer.startTime || 0) && currentTime <= (layer.endTime || duration);
-              const isSelected = selectedLayerId === layer.id;
-              const isEffect = layer.type === 'effect';
-              const isEmptyLane = !isEffect && !layer.src;
-
-              return (
-                <DroppableLane
-                  key={layer.id}
-                  layer={layer}
-                  index={index}
-                  startX={startX}
-                  width={width}
-                  isActive={isActive}
-                  isSelected={isSelected}
-                  isEmptyLane={isEmptyLane}
-                  onLayerSelect={selectLayer}
-                  onLayerDelete={deleteLayer}
-                  onAssetDrop={handleAssetDrop}
-                  currentTime={currentTime}
-                  duration={duration}
-                  yOffset={compositionYOffset}
-                />
-              );
-            })}
-
-            {/* Audio waveforms */}
-            {stems.map((stem, sIndex) => {
-              const analysis: any = cachedAnalysis?.find((a: any) => a.fileMetadataId === stem.id);
-              return (
-                <div
-                  key={`waveform-${stem.id}`}
-                  className="absolute w-full flex items-center"
-                  style={{ top: `${stemsYOffset + sIndex * ROW_HEIGHT}px`, height: `${ROW_HEIGHT}px` }}
-                >
-                  <StemTrackLane
-                    waveformData={analysis?.waveformData ?? null}
-                    duration={duration}
-                    currentTime={currentTime}
-                    isPlaying={isPlaying}
-                    isLoading={stemLoadingState}
-                    analysisProgress={analysisProgress?.[stem.id]}
-                    onSeek={onSeek}
-                  />
-                </div>
-              );
-            })}
-
-            {/* Playhead */}
-            <div
-              className="absolute top-0 w-0.5 h-full bg-emerald-400 z-50 pointer-events-none"
-              style={{ left: `${timeToX(currentTime)}px` }}
-            />
-          </div>
+                <div className="absolute top-0 w-0.5 h-full bg-emerald-400 z-50 pointer-events-none" style={{ left: `${timeToX(currentTime)}px` }} />
+              </div>
+            </DndContext>
           </div>
         </div>
       </div>
