@@ -807,12 +807,16 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
       const containerWidth = container.clientWidth;
       if (containerWidth <= 0 || !duration || duration <= 0) return;
 
-      // This calculates the zoom level needed to make the timeline duration fit the container width
       const newMinZoom = containerWidth / (PIXELS_PER_SECOND * duration);
+
+      // Determine if we are currently at the fitted (min) zoom level
+      const isCurrentlyAtMinZoom = Math.abs(zoom - minZoom) < 0.001;
+
+      // Always update the dynamic minZoom bound
       setMinZoom(newMinZoom);
 
-      // If the user hasn't touched the zoom slider yet, automatically set it to fit
-      if (!userAdjustedZoomRef.current && isFinite(newMinZoom) && newMinZoom > 0) {
+      // Keep fitting on resize if user hasn't adjusted, or if already at min zoom
+      if ((!userAdjustedZoomRef.current || isCurrentlyAtMinZoom) && isFinite(newMinZoom) && newMinZoom > 0) {
         setZoom(newMinZoom);
       }
     });
