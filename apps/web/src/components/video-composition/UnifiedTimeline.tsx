@@ -738,7 +738,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
           ))}
 
           {/* Audio/MIDI header */}
-          <div className="flex items-center px-2 border-t border-b border-stone-700 mt-2" style={{ height: `${HEADER_ROW_HEIGHT}px` }}>
+          <div className="flex items-center px-2 border-t border-b border-stone-700" style={{ height: `${HEADER_ROW_HEIGHT}px` }}>
             <span className="text-xs font-bold uppercase tracking-wider">Audio & MIDI</span>
           </div>
 
