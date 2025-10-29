@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useDrop } from 'react-dnd';
 import { useDrag } from 'react-dnd';
-import { ChevronDown, ChevronUp, Plus, Video, Image, Zap, Music, FileAudio, FileMusic, Settings, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Plus, Video, Image, Zap, Music, FileAudio, FileMusic, Settings, Trash2, Eye, EyeOff, Palette } from 'lucide-react';
+import { useProjectSettingsStore } from '@/stores/projectSettingsStore';
 import { cn } from '@/lib/utils';
 import type { Layer } from '@/types/video-composition';
 import { useTimelineStore } from '@/stores/timelineStore';
@@ -495,6 +496,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
     selectLayer,
     setCurrentTime,
   } = useTimelineStore();
+  const { backgroundColor, isBackgroundVisible, setBackgroundColor, toggleBackgroundVisibility } = useProjectSettingsStore();
   const timelineContainerRef = useRef<HTMLDivElement | null>(null);
   const [expandedSections, setExpandedSections] = useState({
     composition: true, // Combined visual and effects layers
@@ -675,7 +677,8 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
   const timelineWidth = Math.max(duration * 100, 800); // Minimum 800px width
 
   // Unified vertical sizing (use module-level constants)
-  const compositionYOffset = HEADER_ROW_HEIGHT;
+  // Add an extra ROW_HEIGHT for the Background header row between section header and composition layers
+  const compositionYOffset = HEADER_ROW_HEIGHT + ROW_HEIGHT;
   const stemsYOffset = compositionYOffset + layers.length * ROW_HEIGHT + HEADER_ROW_HEIGHT;
 
   const toggleSection = (section: keyof typeof expandedSections) => {
@@ -731,6 +734,36 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
             >
               <Plus className="h-4 w-4 mr-1" /> Add
             </Button>
+          </div>
+          {/* Background control header row */}
+          <div
+            className={cn(
+              'flex items-center px-2 border-b border-stone-700/50'
+            )}
+            style={{ height: `${ROW_HEIGHT}px` }}
+          >
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <Palette className="h-4 w-4 text-stone-400" />
+              <span className="text-sm font-medium text-stone-300 truncate">Background</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                value={backgroundColor}
+                onChange={(e) => setBackgroundColor(e.target.value)}
+                className="w-6 h-6 p-0 border-none bg-transparent cursor-pointer"
+                title="Change background color"
+              />
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 w-6 p-0 text-stone-400 hover:text-white"
+                onClick={toggleBackgroundVisibility}
+                title={isBackgroundVisible ? 'Hide background' : 'Show background'}
+              >
+                {isBackgroundVisible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+              </Button>
+            </div>
           </div>
           {/* Composition layer headers */}
           {[...layers].sort((a, b) => a.zIndex - b.zIndex).map((layer) => (

@@ -37,6 +37,7 @@ import { useFeatureValue } from '@/hooks/use-feature-value';
 import { HudOverlayProvider, useHudOverlayContext } from '@/components/hud/HudOverlayManager';
 import { AspectRatioSelector } from '@/components/ui/aspect-ratio-selector';
 import { getAspectRatioConfig } from '@/lib/visualizer/aspect-ratios';
+import { useProjectSettingsStore } from '@/stores/projectSettingsStore';
 
 // Derived boolean: are stem URLs ready?
 // const stemUrlsReady = Object.keys(asyncStemUrlMap).length > 0; // This line was moved
@@ -870,6 +871,21 @@ function CreativeVisualizerPage() {
   const [activeSliderValues, setActiveSliderValues] = useState<Record<string, number>>({});
   const visualizerRef = useRef<any>(null);
   const animationFrameId = useRef<number>();
+
+  // Sync project-wide background settings to the visualizer engine
+  const { backgroundColor, isBackgroundVisible } = useProjectSettingsStore();
+  useEffect(() => {
+    const manager = visualizerRef.current;
+    if (!manager) return;
+    try {
+      if (typeof manager.setBackgroundColor === 'function') {
+        manager.setBackgroundColor(backgroundColor);
+      }
+      if (typeof manager.setBackgroundVisibility === 'function') {
+        manager.setBackgroundVisibility(isBackgroundVisible);
+      }
+    } catch {}
+  }, [backgroundColor, isBackgroundVisible, visualizerRef]);
 
   // Function to convert frontend feature names to backend analysis keys
   const getAnalysisKeyFromFeatureId = (featureId: string): string => {
