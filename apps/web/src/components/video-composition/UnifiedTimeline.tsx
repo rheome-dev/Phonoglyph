@@ -408,50 +408,50 @@ const LayerClip: React.FC<{
   const { zoom, selectLayer, selectedLayerId } = useTimelineStore();
 
   const isSelected = selectedLayerId === layer.id;
-  const currentTime = useTimelineStore(state => state.currentTime);
-  const isActive = currentTime >= layer.startTime && currentTime <= layer.endTime;
   const isEffect = layer.type === 'effect';
   const isEmpty = !isEffect && !layer.src;
 
-  // dnd-kit for dragging existing clips (disabled for empty lanes)
-  const { attributes, listeners, setNodeRef, transform } = useDraggable({
+  // --- Draggable Hooks ---
+  // 1. For the main body of the clip
+  const { attributes, listeners, setNodeRef: setBodyRef, transform } = useDraggable({
     id: layer.id,
     disabled: isEmpty,
   });
 
-  // react-dnd for dropping new assets onto empty lanes
-  const [{ isOver, canDrop }, drop] = useDrop({
-    accept: ['VIDEO_FILE', 'IMAGE_FILE', 'EFFECT_CARD'],
-    drop: (item: any) => {
-      if (isEmpty) {
-        onAssetDrop(item, layer.id);
-      }
-    },
-    canDrop: () => isEmpty,
-    collect: (monitor) => ({
-      isOver: monitor.isOver(),
-      canDrop: monitor.canDrop(),
-    }),
+  // 2. For the left resize handle
+  const { setNodeRef: setLeftHandleRef, listeners: leftHandleListeners } = useDraggable({
+    id: `${layer.id}::handle-left`,
+    disabled: isEmpty,
   });
 
-  // Combine refs for both libs
+  // 3. For the right resize handle
+  const { setNodeRef: setRightHandleRef, listeners: rightHandleListeners } = useDraggable({
+    id: `${layer.id}::handle-right`,
+    disabled: isEmpty,
+  });
+
+  // --- react-dnd hook for dropping new assets onto empty lanes ---
+  const [{ isOver, canDrop }, drop] = useDrop({
+    accept: ['VIDEO_FILE', 'IMAGE_FILE', 'EFFECT_CARD'],
+    drop: (item: any) => { if (isEmpty) onAssetDrop(item, layer.id); },
+    canDrop: () => isEmpty,
+    collect: (monitor) => ({ isOver: monitor.isOver(), canDrop: monitor.canDrop() }),
+  });
+
+  // Combine refs for dnd-kit dragging and react-dnd dropping
   const combinedRef = (node: HTMLDivElement | null) => {
-    setNodeRef(node);
-    if (isEmpty) {
-      drop(node as any);
-    }
+    setBodyRef(node);
+    if (isEmpty) drop(node as any);
   };
 
   const PIXELS_PER_SECOND = 100;
   const timeToX = (time: number) => time * PIXELS_PER_SECOND * zoom;
-  const startX = timeToX(layer.startTime);
-  const clipWidth = timeToX(layer.endTime - layer.startTime);
 
   const style = {
-    transform: CSS.Translate.toString(transform),
-    left: `${startX}px`,
-    width: `${clipWidth}px`,
-    // FIX: Corrected vertical position calculation. It starts after the main header.
+    // Only apply transform if it exists to avoid style conflicts on initialization
+    transform: transform ? CSS.Translate.toString(transform) : undefined,
+    left: `${timeToX(layer.startTime)}px`,
+    width: `${timeToX(layer.endTime - layer.startTime)}px`,
     top: `${HEADER_ROW_HEIGHT + (index * ROW_HEIGHT)}px`,
     height: `${ROW_HEIGHT - 4}px`,
     marginTop: '2px',
@@ -461,11 +461,12 @@ const LayerClip: React.FC<{
     <div
       ref={combinedRef}
       style={style}
+      // The main body listeners are only applied when not empty
       {...(!isEmpty ? listeners : {})}
       {...(!isEmpty ? attributes : {})}
       onClick={() => selectLayer(layer.id)}
       className={cn(
-        "absolute flex items-center px-2 rounded border z-10",
+        "absolute flex items-center justify-center rounded border z-10 group",
         isEmpty
           ? isOver && canDrop
             ? "border-emerald-400 bg-emerald-950/80 ring-2 ring-emerald-500 z-20"
@@ -473,14 +474,30 @@ const LayerClip: React.FC<{
           : "cursor-grab active:cursor-grabbing",
         !isEmpty && (isSelected
           ? "bg-white border-white text-black z-20 shadow-lg"
-          : isActive
-            ? (isEffect ? "bg-purple-500/80 border-purple-400 text-white" : "bg-emerald-500/80 border-emerald-400 text-black")
-            : "bg-stone-700/80 border-stone-600 text-stone-200 hover:border-stone-400")
+          : "bg-stone-700/80 border-stone-600 text-stone-200 hover:border-stone-400")
       )}
     >
       <span className="text-xs font-medium truncate select-none">
         {isEmpty ? (isOver && canDrop ? 'Drop to Add' : '+ Drop Asset Here') : layer.name}
       </span>
+      
+      {/* --- RESIZE HANDLES (only visible on selected, non-empty clips) --- */}
+      {!isEmpty && isSelected && (
+        <>
+          <div
+            ref={setLeftHandleRef}
+            {...leftHandleListeners}
+            className="absolute left-0 top-0 h-full w-2 cursor-ew-resize bg-white/30 rounded-l-sm z-30"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <div
+            ref={setRightHandleRef}
+            {...rightHandleListeners}
+            className="absolute right-0 top-0 h-full w-2 cursor-ew-resize bg-white/30 rounded-r-sm z-30"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </>
+      )}
     </div>
   );
 };
@@ -846,19 +863,36 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, delta } = event;
-    const layerId = active.id as string;
+    const rawId = active.id as string;
     const timeDelta = delta.x / (PIXELS_PER_SECOND * zoom);
+
+    // Parse the ID to see if we're dragging a handle or the body
+    const [layerId, handle] = rawId.split('::');
+    if (!layerId) return;
 
     const originalLayer = layers.find(l => l.id === layerId);
     if (!originalLayer) return;
 
-    const clipDuration = originalLayer.endTime - originalLayer.startTime;
-    let newStartTime = Math.max(0, originalLayer.startTime + timeDelta);
-    newStartTime = Math.min(newStartTime, duration - clipDuration); // Clamp to end
-    
-    const newEndTime = newStartTime + clipDuration;
+    if (handle === 'handle-right') {
+      // --- RESIZING FROM THE RIGHT ---
+      const newEndTime = Math.min(duration, Math.max(originalLayer.startTime + 0.1, originalLayer.endTime + timeDelta));
+      updateLayer(layerId, { endTime: newEndTime });
 
-    updateLayer(layerId, { startTime: newStartTime, endTime: newEndTime });
+    } else if (handle === 'handle-left') {
+      // --- RESIZING FROM THE LEFT ---
+      const newStartTime = Math.max(0, Math.min(originalLayer.endTime - 0.1, originalLayer.startTime + timeDelta));
+      updateLayer(layerId, { startTime: newStartTime });
+
+    } else {
+      // --- DRAGGING THE WHOLE CLIP (default case) ---
+      const clipDuration = originalLayer.endTime - originalLayer.startTime;
+      let newStartTime = Math.max(0, originalLayer.startTime + timeDelta);
+      // Clamp to ensure the clip does not go past the total duration
+      newStartTime = Math.min(newStartTime, duration - clipDuration);
+      
+      const newEndTime = newStartTime + clipDuration;
+      updateLayer(layerId, { startTime: newStartTime, endTime: newEndTime });
+    }
   };
   
   const sortedLayers = [...layers].sort((a, b) => b.zIndex - a.zIndex);
