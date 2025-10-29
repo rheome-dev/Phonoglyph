@@ -79,21 +79,21 @@ const CompositionLayerHeader: React.FC<{ layer: Layer }> = ({ layer }) => {
         ) : (
           <Zap className="h-4 w-4 text-purple-400" />
         )}
-        <span className="text-sm font-medium text-stone-300 truncate">
-          {layer.name || (isEmpty ? 'Empty Layer' : layer.effectType || 'Layer')}
-        </span>
+        <span className="text-sm font-medium text-stone-300 truncate">{layer.name}</span>
       </div>
-      <Button
-        size="sm"
-        variant="ghost"
-        className="h-6 w-6 p-0 text-stone-400 hover:text-red-400"
-        onClick={(e) => {
-          e.stopPropagation();
-          deleteLayer(layer.id);
-        }}
-      >
-        <Trash2 className="h-3 w-3" />
-      </Button>
+      {layer.isDeletable !== false && (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-6 w-6 p-0 text-stone-400 hover:text-red-400"
+          onClick={(e) => {
+            e.stopPropagation();
+            deleteLayer(layer.id);
+          }}
+        >
+          <Trash2 className="h-3 w-3" />
+        </Button>
+      )}
     </div>
   );
 };
@@ -299,11 +299,7 @@ const DroppableLane: React.FC<{
             {layer.type === 'video' ? <Video className="h-3 w-3" /> : 
              layer.type === 'image' ? <Image className="h-3 w-3" /> : 
              <Zap className="h-3 w-3" />}
-            <span className="truncate font-medium">
-              {layer.type === 'video' ? 'Video' : 
-               layer.type === 'image' ? 'Image' : 
-               layer.src || 'Effect'}
-            </span>
+            <span className="truncate font-medium">{layer.name}</span>
           </>
         )}
       </div>
@@ -503,28 +499,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
     audio: true // Changed from false to true to ensure audio section is visible by default
   });
 
-  // Create a default empty lane if no layers exist
-  useEffect(() => {
-    if (layers.length === 0) {
-      const defaultEmptyLane: Layer = {
-        id: `layer-${Date.now()}`,
-        type: 'image', // Placeholder type, will be replaced when content is dropped
-        src: '', // Empty src indicates this is an empty lane
-        position: { x: 50, y: 50 },
-        scale: { x: 1, y: 1 },
-        rotation: 0,
-        opacity: 1,
-        audioBindings: [],
-        midiBindings: [],
-        zIndex: 0,
-        blendMode: 'normal',
-        startTime: 0,
-        endTime: duration,
-        duration: duration
-      };
-      addLayer(defaultEmptyLane);
-    }
-  }, []); // Only run once on mount
+  // Default layer is now set in the store's initial state; no need to add here
 
   const handleAssetDrop = (item: any, targetLayerId?: string) => {
     debugLog.log('Asset dropped on timeline:', item, 'target layer:', targetLayerId);
@@ -534,19 +509,21 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
       const targetLayer = layers.find(layer => layer.id === targetLayerId);
       if (targetLayer && !targetLayer.src) {
         // Fill the empty lane with the dropped content
+        const shouldUpdateName = targetLayer.name?.startsWith('Layer');
+        const computedName = shouldUpdateName ? (item.name || item.id) : targetLayer.name;
         switch (item.type) {
           case 'VIDEO_FILE':
             updateLayer(targetLayerId, {
               type: 'video',
               src: item.src,
-              name: targetLayer.name ? targetLayer.name : (item.name || item.id)
+              ...(shouldUpdateName ? { name: computedName } : {})
             });
             break;
           case 'IMAGE_FILE':
             updateLayer(targetLayerId, {
               type: 'image',
               src: item.src,
-              name: targetLayer.name ? targetLayer.name : (item.name || item.id)
+              ...(shouldUpdateName ? { name: computedName } : {})
             });
             break;
           case 'EFFECT_CARD':
@@ -556,7 +533,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
               src: item.name || item.id,
               effectType: item.id,
               settings: item.parameters || {},
-              name: targetLayer.name ? targetLayer.name : (item.name || item.id)
+              ...(shouldUpdateName ? { name: computedName } : {})
             });
             break;
           default:
@@ -572,19 +549,21 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
     
     if (emptyLane) {
       // Fill the empty lane with the dropped content
+      const shouldUpdateName = emptyLane.name?.startsWith('Layer');
+      const computedName = shouldUpdateName ? (item.name || item.id) : emptyLane.name;
       switch (item.type) {
         case 'VIDEO_FILE':
           updateLayer(emptyLane.id, {
             type: 'video',
             src: item.src,
-            name: emptyLane.name ? emptyLane.name : (item.name || item.id)
+            ...(shouldUpdateName ? { name: computedName } : {})
           });
           break;
         case 'IMAGE_FILE':
           updateLayer(emptyLane.id, {
             type: 'image',
             src: item.src,
-            name: emptyLane.name ? emptyLane.name : (item.name || item.id)
+            ...(shouldUpdateName ? { name: computedName } : {})
           });
           break;
         case 'EFFECT_CARD':
@@ -594,7 +573,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
             src: item.name || item.id,
             effectType: item.id,
             settings: item.parameters || {},
-            name: emptyLane.name ? emptyLane.name : (item.name || item.id)
+            ...(shouldUpdateName ? { name: computedName } : {})
           });
           break;
         default:
@@ -607,6 +586,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
         case 'VIDEO_FILE':
           const videoLayer: Layer = {
             id: `video-${Date.now()}`,
+            name: item.name || item.id,
             type: 'video',
             src: item.src,
             position: { x: 50, y: 50 },
@@ -626,6 +606,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
         case 'IMAGE_FILE':
           const imageLayer: Layer = {
             id: `image-${Date.now()}`,
+            name: item.name || item.id,
             type: 'image',
             src: item.src,
             position: { x: 50, y: 50 },
@@ -646,6 +627,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
           // Create a new effect layer
           const effectLayer: Layer = {
             id: `effect-${Date.now()}`,
+            name: item.name || item.id,
             type: 'effect',
             src: item.name || item.id,
             effectType: item.id,
@@ -735,7 +717,8 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
                   blendMode: 'normal',
                   startTime: 0,
                   endTime: duration,
-                  duration: duration
+                  duration: duration,
+                  isDeletable: true
                 };
                 addLayer(newLayer);
               }}
@@ -774,7 +757,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
             </div>
           </div>
           {/* Composition layer headers */}
-          {[...layers].sort((a, b) => a.zIndex - b.zIndex).map((layer) => (
+          {[...layers].sort((a, b) => b.zIndex - a.zIndex).map((layer) => (
             <CompositionLayerHeader key={layer.id} layer={layer} />
           ))}
 
@@ -806,7 +789,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
             onClick={handleTimelineClick}
           >
             {/* Composition clips */}
-            {[...layers].sort((a, b) => a.zIndex - b.zIndex).map((layer, index) => {
+            {[...layers].sort((a, b) => b.zIndex - a.zIndex).map((layer, index) => {
               const startX = timeToX(layer.startTime || 0);
               const width = timeToX((layer.endTime || duration) - (layer.startTime || 0));
               const isActive = currentTime >= (layer.startTime || 0) && currentTime <= (layer.endTime || duration);

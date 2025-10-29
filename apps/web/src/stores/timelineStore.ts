@@ -24,14 +24,33 @@ interface TimelineActions {
 }
 
 export const useTimelineStore = create<TimelineState & TimelineActions>((set) => ({
-  layers: [],
+  layers: [
+    {
+      id: `default-empty-${Date.now()}`,
+      name: 'Layer 1',
+      type: 'image',
+      src: '',
+      zIndex: 1,
+      isDeletable: true,
+      startTime: 0,
+      endTime: 120,
+      duration: 120,
+    } as Layer,
+  ],
   currentTime: 0,
   duration: 120,
   isPlaying: false,
   selectedLayerId: null,
 
   setLayers: (layers) => set({ layers }),
-  addLayer: (layer) => set((state) => ({ layers: [...state.layers, layer] })),
+  addLayer: (layer) => set((state) => {
+    const maxZIndex = state.layers.reduce(
+      (max, l) => (l.zIndex > max ? l.zIndex : max),
+      -1
+    );
+    const newLayer = { ...layer, zIndex: maxZIndex + 1 } as Layer;
+    return { layers: [...state.layers, newLayer] };
+  }),
   updateLayer: (layerId, updates) => set((state) => ({
     layers: state.layers.map((l) => (l.id === layerId ? { ...l, ...updates } : l)),
   })),
