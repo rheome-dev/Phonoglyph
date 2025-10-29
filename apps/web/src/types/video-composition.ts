@@ -17,6 +17,7 @@ export interface MIDIBinding {
 
 export interface Layer {
   id: string;
+  name?: string;
   type: 'video' | 'image' | 'effect';
   src?: string;
   effectType?: EffectType;

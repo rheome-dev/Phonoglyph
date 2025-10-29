@@ -80,7 +80,7 @@ const CompositionLayerHeader: React.FC<{ layer: Layer }> = ({ layer }) => {
           <Zap className="h-4 w-4 text-purple-400" />
         )}
         <span className="text-sm font-medium text-stone-300 truncate">
-          {isEmpty ? 'Empty Layer' : layer.src || layer.effectType || 'Layer'}
+          {layer.name || (isEmpty ? 'Empty Layer' : layer.effectType || 'Layer')}
         </span>
       </div>
       <Button
@@ -538,13 +538,15 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
           case 'VIDEO_FILE':
             updateLayer(targetLayerId, {
               type: 'video',
-              src: item.src
+              src: item.src,
+              name: targetLayer.name ? targetLayer.name : (item.name || item.id)
             });
             break;
           case 'IMAGE_FILE':
             updateLayer(targetLayerId, {
               type: 'image',
-              src: item.src
+              src: item.src,
+              name: targetLayer.name ? targetLayer.name : (item.name || item.id)
             });
             break;
           case 'EFFECT_CARD':
@@ -553,7 +555,8 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
               type: 'effect',
               src: item.name || item.id,
               effectType: item.id,
-              settings: item.parameters || {}
+              settings: item.parameters || {},
+              name: targetLayer.name ? targetLayer.name : (item.name || item.id)
             });
             break;
           default:
@@ -573,13 +576,15 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
         case 'VIDEO_FILE':
           updateLayer(emptyLane.id, {
             type: 'video',
-            src: item.src
+            src: item.src,
+            name: emptyLane.name ? emptyLane.name : (item.name || item.id)
           });
           break;
         case 'IMAGE_FILE':
           updateLayer(emptyLane.id, {
             type: 'image',
-            src: item.src
+            src: item.src,
+            name: emptyLane.name ? emptyLane.name : (item.name || item.id)
           });
           break;
         case 'EFFECT_CARD':
@@ -588,7 +593,8 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
             type: 'effect',
             src: item.name || item.id,
             effectType: item.id,
-            settings: item.parameters || {}
+            settings: item.parameters || {},
+            name: emptyLane.name ? emptyLane.name : (item.name || item.id)
           });
           break;
         default:
@@ -713,8 +719,10 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
               variant="ghost"
               className="h-6 px-2"
               onClick={() => {
+                const nextLayerNumber = layers.filter(l => l.name?.startsWith('Layer')).length + 1;
                 const newLayer: Layer = {
                   id: `layer-${Date.now()}`,
+                  name: `Layer ${nextLayerNumber}`,
                   type: 'image',
                   src: '',
                   position: { x: 50, y: 50 },
