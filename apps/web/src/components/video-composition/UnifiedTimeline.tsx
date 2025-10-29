@@ -928,6 +928,9 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
     else setCurrentTime(clampedTime);
   };
 
+  // FIX: Track target layer during drag for z-index swap on drop
+  const dragTargetLayerRef = useRef<string | null>(null);
+
   // FIX: Capture the state of the layer when the drag begins
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
@@ -935,6 +938,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
     const layer = layers.find(l => l.id === layerId);
     if (layer) {
       activeDragLayerRef.current = { ...layer };
+      dragTargetLayerRef.current = null; // Reset target tracking
     }
   };
 
@@ -948,6 +952,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
 
     const [layerId, handle] = rawId.split('::');
     const timeDelta = delta.x / (PIXELS_PER_SECOND * zoom);
+    const isDragEnd = 'type' in event && event.type === 'dragend';
 
     if (handle === 'handle-right') {
       // Horizontal resize from right edge
@@ -977,16 +982,22 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
       // FIX: Clamp the target index to prevent dragging outside the composition area.
       const targetIndex = Math.max(0, Math.min(sortedLayers.length - 1, currentIndex + rowsMoved));
       
-      // Only perform a z-index swap if we've moved to a different valid row
+      // Track the target layer ID for visual feedback
       if (targetIndex !== currentIndex) {
         const targetLayer = sortedLayers[targetIndex];
+        dragTargetLayerRef.current = targetLayer.id;
         
-        // Perform the swap
-        // 1. The dragged layer gets the z-index of the layer it's dropped on.
-        updateLayer(layerId, { zIndex: targetLayer.zIndex });
-        
-        // 2. The target layer gets the original z-index of the layer that was dragged.
-        updateLayer(targetLayer.id, { zIndex: initialLayer.zIndex });
+        // FIX: Only perform z-index swap on dragend, not during dragmove
+        if (isDragEnd) {
+          // Perform the swap
+          // 1. The dragged layer gets the z-index of the layer it's dropped on.
+          updateLayer(layerId, { zIndex: targetLayer.zIndex });
+          
+          // 2. The target layer gets the original z-index of the layer that was dragged.
+          updateLayer(targetLayer.id, { zIndex: initialLayer.zIndex });
+        }
+      } else {
+        dragTargetLayerRef.current = null;
       }
       
       // Always update the time of the dragged layer, regardless of vertical movement.
@@ -994,8 +1005,9 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
     }
 
     // If this is the final event in the drag sequence, clear the reference.
-    if ('type' in event && event.type === 'dragend') {
+    if (isDragEnd) {
       activeDragLayerRef.current = null;
+      dragTargetLayerRef.current = null;
     }
   };
   
