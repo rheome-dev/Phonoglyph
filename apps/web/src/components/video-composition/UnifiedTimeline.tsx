@@ -783,7 +783,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
   };
 
   const timelineWidth = duration * PIXELS_PER_SECOND * zoom;
-  const totalHeight = (2 * HEADER_ROW_HEIGHT) + ((layers.length + stems.length) * ROW_HEIGHT);
+  const totalHeight = (2 * HEADER_ROW_HEIGHT) + (layers.length * ROW_HEIGHT) + (stems.length * ROW_HEIGHT);
 
   const calculateMinZoom = useCallback(() => {
     const container = timelineLanesRef.current;
@@ -945,7 +945,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
 
                 {stems.map((stem, index) => {
                   const analysis: any = cachedAnalysis?.find((a: any) => a.fileMetadataId === stem.id);
-                  const yPos = HEADER_ROW_HEIGHT + (layers.length * ROW_HEIGHT) + HEADER_ROW_HEIGHT + (index * ROW_HEIGHT);
+                  const yPos = HEADER_ROW_HEIGHT + (sortedLayers.length * ROW_HEIGHT) + HEADER_ROW_HEIGHT + (index * ROW_HEIGHT);
                   return (
                     <div key={`waveform-${stem.id}`} className="absolute w-full flex items-center" style={{ top: `${yPos}px`, height: `${ROW_HEIGHT}px` }}>
                       <StemTrackLane

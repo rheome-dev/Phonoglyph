@@ -58,42 +58,47 @@ const WaveformVisualizer: React.FC<StemWaveformProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!canvasRef.current || !waveformData) return;
+    if (!canvasRef.current || !waveformData?.points) return;
 
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
+    const dpr = window.devicePixelRatio || 1;
     const { width, height } = canvas.getBoundingClientRect();
-    canvas.width = width;
-    canvas.height = height;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    ctx.scale(dpr, dpr);
     
     const points = waveformData.points;
     const numPoints = points.length;
+    const midY = height / 2;
 
     ctx.clearRect(0, 0, width, height);
 
-    // Draw midline
+    // FIX: Use a continuous path for a filled waveform
     ctx.beginPath();
-    ctx.moveTo(0, height / 2);
-    ctx.lineTo(width, height / 2);
-    ctx.strokeStyle = '#444';
-    ctx.lineWidth = 1;
-    ctx.stroke();
+    ctx.moveTo(0, midY);
 
-    // Draw bipolar waveform; sample density based on zoom
-    ctx.beginPath();
-    const midY = height / 2;
-    ctx.strokeStyle = '#ffffff'; // white
-    ctx.lineWidth = 1;
-    const step = Math.max(1, Math.floor(10 / Math.max(zoom, 0.001)));
+    const step = Math.max(1, Math.floor(1 / Math.max(zoom, 0.001)));
+
+    // Draw top half
     for (let i = 0; i < numPoints; i += step) {
       const x = (i / (numPoints - 1)) * width;
-      const pointHeight = points[i] * midY;
-      ctx.moveTo(x, midY - pointHeight);
+      const pointHeight = points[i] * midY * 0.8;
+      ctx.lineTo(x, midY - pointHeight);
+    }
+
+    // Draw bottom half in reverse
+    for (let i = numPoints - 1; i >= 0; i -= step) {
+      const x = (i / (numPoints - 1)) * width;
+      const pointHeight = points[i] * midY * 0.8;
       ctx.lineTo(x, midY + pointHeight);
     }
-    ctx.stroke();
+
+    ctx.closePath();
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
 
   }, [waveformData, zoom]);
 
