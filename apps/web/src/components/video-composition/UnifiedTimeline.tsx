@@ -882,7 +882,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
     }
   };
 
-  // FIX: A completely new, more precise handler for both move and end events
+  // FIX: A single, precise handler for all drag events
   const handleDragEvent = (event: DragMoveEvent | DragEndEvent) => {
     const { active, delta } = event;
     const rawId = active.id as string;
@@ -894,30 +894,23 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
     const timeDelta = delta.x / (PIXELS_PER_SECOND * zoom);
 
     if (handle === 'handle-right') {
-      // --- RESIZING FROM THE RIGHT ---
       const newEndTime = Math.min(duration, Math.max(initialLayer.startTime + 0.1, initialLayer.endTime + timeDelta));
       updateLayer(layerId, { endTime: newEndTime });
-
     } else if (handle === 'handle-left') {
-      // --- RESIZING FROM THE LEFT ---
       const newStartTime = Math.max(0, Math.min(initialLayer.endTime - 0.1, initialLayer.startTime + timeDelta));
       updateLayer(layerId, { startTime: newStartTime });
-
     } else {
-      // --- DRAGGING THE WHOLE CLIP ---
       const clipDuration = initialLayer.endTime - initialLayer.startTime;
       let newStartTime = Math.max(0, initialLayer.startTime + timeDelta);
       newStartTime = Math.min(newStartTime, duration - clipDuration);
       const newEndTime = newStartTime + clipDuration;
       updateLayer(layerId, { startTime: newStartTime, endTime: newEndTime });
     }
-  };
 
-  const handleDragEnd = (event: DragEndEvent) => {
-    // Call the event handler for final update
-    handleDragEvent(event);
-    // Clear the ref on drag end
-    activeDragLayerRef.current = null;
+    // If this is the final event in the drag sequence, clear the reference.
+    if ('type' in event && event.type === 'dragend') {
+      activeDragLayerRef.current = null;
+    }
   };
   
   const sortedLayers = [...layers].sort((a, b) => b.zIndex - a.zIndex);
@@ -1032,7 +1025,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
           {/* ========== COLUMN 2: TIMELINE LANES (Scrollable & Interactive) ========== */}
           <div className="flex-1 overflow-x-auto" ref={timelineLanesRef}>
             {/* FIX: Added onDragStart for precision and onDragMove for live feedback */}
-            <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragMove={handleDragEvent}>
+            <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEvent} onDragMove={handleDragEvent}>
               <div
                 className="relative overflow-hidden"
                 style={{ width: `${timelineWidth}px`, height: `${totalHeight}px` }}
