@@ -253,13 +253,13 @@ export class VisualizerManager {
   }
   
   // Effect management
-  public addEffect(effect: VisualEffect) {
+  public addEffect(layerId: string, effect: VisualEffect) {
     try {
-      debugLog.log(`🎨 Adding effect: ${effect.name} (${effect.id})`);
+      debugLog.log(`🎨 Adding effect: ${effect.name} (for layer ${layerId})`);
       effect.init(this.renderer);
-      this.effects.set(effect.id, effect);
-      // Register a layer for this effect
-      this.multiLayerCompositor.createLayer(effect.id, effect.getScene(), effect.getCamera(), {
+      this.effects.set(layerId, effect);
+      // Register a layer for this effect using the unique layerId
+      this.multiLayerCompositor.createLayer(layerId, effect.getScene(), effect.getCamera(), {
         zIndex: this.effects.size,
         enabled: effect.enabled
       });
@@ -428,39 +428,35 @@ export class VisualizerManager {
     const maxEffectsPerFrame = 3; // Reduced back to 3 for 30fps
     let updatedEffects = 0;
     
-    this.effects.forEach(effect => {
-      if (!effect.enabled) {
-        // If the effect is globally disabled from the UI, ensure its compositor layer is also off.
-        this.multiLayerCompositor.updateLayer(effect.id, { enabled: false });
-        return;
-      }
+    this.effects.forEach((effect, layerId) => {
+      // Find the corresponding layer from the timeline state using the correct key
+      const effectLayer = this.timelineLayers.find(l => l.id === layerId);
 
-      // Check if the effect's corresponding layer is active based on the current time
-      const effectLayer = this.timelineLayers.find(l => l.id === effect.id);
-      const isLayerActive = effectLayer 
+      // Determine if the layer should be active.
+      // If globally disabled OR no matching layer found, it's inactive.
+      // Otherwise, check the time.
+      const isLayerActive = effect.enabled && effectLayer 
         ? (this.timelineCurrentTime >= effectLayer.startTime && this.timelineCurrentTime <= effectLayer.endTime)
-        : true; // Default to true for effects not managed by the timeline
+        : false;
 
-      // --- THIS IS THE CRITICAL FIX ---
-      // Update the compositor's layer visibility based on the timeline state in EVERY frame.
-      // This tells the renderer whether to draw the effect or not.
-      this.multiLayerCompositor.updateLayer(effect.id, { enabled: isLayerActive });
+      // Update the compositor's render state for this layer
+      this.multiLayerCompositor.updateLayer(layerId, { enabled: isLayerActive });
 
-      // Only call the effect's expensive CPU/GPU update logic if it's currently active.
+      // Only run the effect's update logic if it's visible on this frame
       if (isLayerActive && updatedEffects < maxEffectsPerFrame) {
-        activeEffectCount++;
-        updatedEffects++;
-        
-        try {
-          const audioData: AudioAnalysisData = this.currentAudioData || this.createMockAudioData();
-          const midiData: LiveMIDIData = this.currentMidiData || this.createMockMidiData();
-          effect.update(deltaTime, audioData, midiData);
-        } catch (error) {
-          debugLog.error(`❌ Effect ${effect.id} update failed:`, error);
-          effect.enabled = false;
-        }
+          activeEffectCount++;
+          updatedEffects++;
+          
+          try {
+            const audioData: AudioAnalysisData = this.currentAudioData || this.createMockAudioData();
+            const midiData: LiveMIDIData = this.currentMidiData || this.createMockMidiData();
+            effect.update(deltaTime, audioData, midiData);
+          } catch (error) {
+            debugLog.error(`❌ Effect ${layerId} update failed:`, error);
+            // You might want to disable the layer in the UI state here
+          }
       } else if (isLayerActive) {
-        activeEffectCount++; // Count active effects but skip update this frame due to performance cap
+        activeEffectCount++;
       }
     });
     

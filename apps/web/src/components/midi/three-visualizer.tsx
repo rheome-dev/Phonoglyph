@@ -211,8 +211,8 @@ export function ThreeVisualizer({
         const effect = EffectRegistry.createEffect(layer.effectType || 'metaballs', layer.settings);
         if (effect) {
           effectInstancesRef.current[layer.id] = effect;
-          // Add effect with its internal ID (e.g., 'particleNetwork', 'metaballs')
-          manager.addEffect(effect);
+          // Add effect with the unique layer ID from the timeline
+          manager.addEffect(layer.id, effect);
           debugLog.log(`[ThreeVisualizer] Added effect instance: ${layer.id} (${layer.effectType}) with effect ID: ${effect.id}`);
         } else {
           debugLog.warn(`[ThreeVisualizer] Failed to create effect: ${layer.effectType} for layer: ${layer.id}`);
