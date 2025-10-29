@@ -135,8 +135,6 @@ export class MultiLayerCompositor {
     camera: THREE.Camera,
     options: Partial<Omit<LayerRenderTarget, 'id' | 'scene' | 'camera'>> = {}
   ): LayerRenderTarget {
-    console.log(`🎬 Creating layer "${id}", scene.background =`, scene.background);
-    
     // CRITICAL FIX: Force standard WebGLRenderTarget to ensure alpha stability
     // MSAA's multisample resolve step corrupts alpha channel - use FXAA instead
     const RTClass: any = THREE.WebGLRenderTarget;
@@ -220,10 +218,6 @@ export class MultiLayerCompositor {
       const layer = this.layers.get(layerId);
       if (!layer || !layer.enabled) continue;
       
-      const clearColor = this.renderer.getClearColor(new THREE.Color());
-      const clearAlpha = this.renderer.getClearAlpha();
-      console.log(`🎨 Rendering layer "${layerId}", clearColor:`, clearColor.getHex().toString(16), `clearAlpha: ${clearAlpha}, scene.background:`, layer.scene.background);
-      
       this.renderer.setRenderTarget(layer.renderTarget);
       // Clear color/depth/stencil with transparent background
       this.renderer.clear(true, true, true);
@@ -245,7 +239,6 @@ export class MultiLayerCompositor {
     
     // CRITICAL: Clear canvas with transparency before post-processing renders
     this.renderer.clear(true, true, true);
-    console.log('🖼️  Rendering to canvas with clearAlpha:', this.renderer.getClearAlpha());
     
     this.postProcessingComposer.render();
     
@@ -264,10 +257,6 @@ export class MultiLayerCompositor {
 
     this.renderer.setRenderTarget(this.mainRenderTarget);
     
-    const clearColor = this.renderer.getClearColor(new THREE.Color());
-    const clearAlpha = this.renderer.getClearAlpha();
-    console.log('🎬 Compositing to main RT, clearColor:', clearColor.getHex().toString(16), 'clearAlpha:', clearAlpha);
-    
     // 3. Perform a single, manual clear at the very beginning
     this.renderer.clear(true, true, true);
     
@@ -276,7 +265,6 @@ export class MultiLayerCompositor {
       const layer = this.layers.get(layerId);
       if (!layer || !layer.enabled) continue;
       
-      console.log(`🔗 Compositing layer "${layerId}" with blend mode: ${layer.blendMode}`);
       this.renderLayerWithBlending(layer);
     }
 
@@ -423,8 +411,6 @@ export class MultiLayerCompositor {
     }
     
     this.postProcessingComposer.addPass(this.fxaaPass);
-    
-    console.log('🎬 EffectComposer initialized with alpha-preserving FXAA support');
   }
   
   /**

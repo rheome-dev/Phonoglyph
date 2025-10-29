@@ -858,7 +858,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
   };
   
   const sortedLayers = [...layers].sort((a, b) => b.zIndex - a.zIndex);
-  const totalHeight = (2 * HEADER_ROW_HEIGHT) + ((sortedLayers.length + stems.length) * ROW_HEIGHT);
+  const totalHeight = (2 * HEADER_ROW_HEIGHT) + ((sortedLayers.length + 1 + stems.length) * ROW_HEIGHT);
 
   return (
     <div className={cn("relative", className)}>
