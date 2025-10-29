@@ -66,7 +66,7 @@ export class MultiLayerCompositor {
     this.renderer.setClearAlpha(0);
 
     // Create render targets
-    // FIX: Use WebGLRenderTarget with samples for proper MSAA antialiasing
+    // FIX: Use WebGLRenderTarget with samples: 4 for proper MSAA antialiasing
     const RTClass: any = THREE.WebGLRenderTarget;
 
     this.mainRenderTarget = new RTClass(
@@ -128,7 +128,7 @@ export class MultiLayerCompositor {
     camera: THREE.Camera,
     options: Partial<Omit<LayerRenderTarget, 'id' | 'scene' | 'camera'>> = {}
   ): LayerRenderTarget {
-    // FIX: Use WebGLRenderTarget with samples for proper MSAA antialiasing
+    // FIX: Use WebGLRenderTarget with samples: 4 for proper MSAA antialiasing
     const RTClass: any = THREE.WebGLRenderTarget;
 
     const renderTarget = new RTClass(
