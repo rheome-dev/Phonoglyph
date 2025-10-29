@@ -657,7 +657,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
     }
   }, [duration, updateLayer]); // Only re-run when the duration itself changes.
 
-  // Keyboard shortcut: Delete selected layer with Delete or Backspace key
+  // Keyboard shortcut: Clear selected clip with Delete or Backspace key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Check if Delete or Backspace key is pressed
@@ -668,13 +668,17 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
           return;
         }
 
-        // Delete the selected layer if one is selected
+        // Clear the clip content from the selected layer
         if (selectedLayerId) {
           const selectedLayer = layers.find(l => l.id === selectedLayerId);
-          // Only delete if the layer is deletable
-          if (selectedLayer?.isDeletable) {
+          // Only clear if the layer has content (is not empty)
+          if (selectedLayer && selectedLayer.src) {
             e.preventDefault(); // Prevent browser back navigation on Backspace
-            deleteLayer(selectedLayerId);
+            // Clear the clip by removing its src and resetting name if it was auto-named
+            updateLayer(selectedLayerId, { 
+              src: '',
+              name: selectedLayer.name?.startsWith('Layer') ? selectedLayer.name : `Layer ${layers.indexOf(selectedLayer) + 1}`
+            });
           }
         }
       }
@@ -682,7 +686,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedLayerId, layers, deleteLayer]);
+  }, [selectedLayerId, layers, updateLayer]);
 
   const handleAssetDrop = (item: any, targetLayerId?: string) => {
     debugLog.log('Asset dropped on timeline:', item, 'target layer:', targetLayerId);
