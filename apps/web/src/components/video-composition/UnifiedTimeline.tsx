@@ -445,7 +445,7 @@ const LayerClip: React.FC<{
     transform: CSS.Translate.toString(transform),
     left: `${startX}px`,
     width: `${clipWidth}px`,
-    top: `${HEADER_ROW_HEIGHT + (index * ROW_HEIGHT)}px`,
+    top: `${HEADER_ROW_HEIGHT + ROW_HEIGHT + (index * ROW_HEIGHT)}px`,
     height: `${ROW_HEIGHT - 4}px`,
     marginTop: '2px',
   } as React.CSSProperties;
@@ -783,7 +783,6 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
   };
 
   const timelineWidth = duration * PIXELS_PER_SECOND * zoom;
-  const totalHeight = (2 * HEADER_ROW_HEIGHT) + (layers.length * ROW_HEIGHT) + (stems.length * ROW_HEIGHT);
 
   const calculateMinZoom = useCallback(() => {
     const container = timelineLanesRef.current;
@@ -798,25 +797,29 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
     if (!container) return;
 
     const ro = new ResizeObserver(() => {
-      const newMinZoom = calculateMinZoom();
+      const containerWidth = container.clientWidth;
+      if (containerWidth <= 0 || !duration || duration <= 0) return;
+      const newMinZoom = containerWidth / (PIXELS_PER_SECOND * duration);
       setMinZoom(newMinZoom);
-      if (!userAdjustedZoomRef.current) {
+      if (!userAdjustedZoomRef.current && isFinite(newMinZoom) && newMinZoom > 0) {
         setZoom(newMinZoom);
       }
+      setPaddingRight(containerWidth);
     });
 
     ro.observe(container);
-    return () => ro.disconnect();
-  }, [calculateMinZoom, setZoom]);
-  
-  // Observer to update scroll padding (independent of zoom logic)
-  useEffect(() => {
-    const container = timelineLanesRef.current;
-    if (!container) return;
-    const ro = new ResizeObserver(() => {
-        setPaddingRight(container.clientWidth);
-    });
-    ro.observe(container);
+
+    // Initial calculation on mount
+    const initialWidth = container.clientWidth;
+    if (initialWidth > 0 && duration > 0) {
+      const initialMinZoom = initialWidth / (PIXELS_PER_SECOND * duration);
+      setMinZoom(initialMinZoom);
+      if (!userAdjustedZoomRef.current) {
+        setZoom(initialMinZoom);
+      }
+      setPaddingRight(initialWidth);
+    }
+
     return () => ro.disconnect();
   }, [duration, setZoom]);
 
@@ -846,6 +849,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
   };
   
   const sortedLayers = [...layers].sort((a, b) => b.zIndex - a.zIndex);
+  const totalHeight = (2 * HEADER_ROW_HEIGHT) + ((sortedLayers.length + stems.length) * ROW_HEIGHT);
 
   return (
     <div className={cn("relative", className)}>
@@ -863,6 +867,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
           step={1}
           className="w-48"
         />
+        <span className="text-xs w-12 text-center text-stone-400">{Math.round(zoom * 100)}%</span>
       </div>
 
       <div className="bg-stone-800 border border-stone-700 rounded-xl overflow-hidden">
@@ -945,7 +950,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
 
                 {stems.map((stem, index) => {
                   const analysis: any = cachedAnalysis?.find((a: any) => a.fileMetadataId === stem.id);
-                  const yPos = HEADER_ROW_HEIGHT + (sortedLayers.length * ROW_HEIGHT) + HEADER_ROW_HEIGHT + (index * ROW_HEIGHT);
+                  const yPos = HEADER_ROW_HEIGHT + (sortedLayers.length * ROW_HEIGHT) + HEADER_ROW_HEIGHT + ROW_HEIGHT + (index * ROW_HEIGHT);
                   return (
                     <div key={`waveform-${stem.id}`} className="absolute w-full flex items-center" style={{ top: `${yPos}px`, height: `${ROW_HEIGHT}px` }}>
                       <StemTrackLane
