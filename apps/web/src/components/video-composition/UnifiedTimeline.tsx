@@ -11,6 +11,10 @@ import { Button } from '@/components/ui/button';
 import { HudOverlayProvider, HudOverlayConfig, useHudOverlayContext } from '@/components/hud/HudOverlayManager';
 import { debugLog } from '@/lib/utils';
 
+// Consistent row sizing across headers and lanes
+const ROW_HEIGHT = 32; // h-8
+const HEADER_ROW_HEIGHT = 32; // header rows height
+
 interface EffectClip {
   id: string;
   effectId: string;
@@ -58,9 +62,10 @@ const CompositionLayerHeader: React.FC<{ layer: Layer }> = ({ layer }) => {
   return (
     <div
       className={cn(
-        'flex items-center h-8 px-2 border-b border-stone-700/50',
+        'flex items-center px-2 border-b border-stone-700/50',
         isSelected ? 'bg-stone-700/50' : 'bg-transparent'
       )}
+      style={{ height: `${ROW_HEIGHT}px` }}
       onClick={() => selectLayer(layer.id)}
     >
       <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -105,9 +110,10 @@ const StemTrackHeader: React.FC<{
   return (
     <div
       className={cn(
-        'flex items-center h-8 px-2 border-b border-stone-700/50',
+        'flex items-center px-2 border-b border-stone-700/50',
         isActive ? 'bg-stone-700/50' : 'bg-transparent'
       )}
+      style={{ height: `${ROW_HEIGHT}px` }}
       onClick={onClick}
     >
       <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -267,8 +273,8 @@ const DroppableLane: React.FC<{
         left: `${startX}px`, 
         width: `${width}px`, 
         minWidth: '60px',
-        top: `${yOffset + index * 32}px`,
-        height: '32px'
+        top: `${yOffset + index * ROW_HEIGHT}px`,
+        height: `${ROW_HEIGHT}px`
       }}
       onClick={e => { 
         e.stopPropagation(); 
@@ -317,88 +323,41 @@ const DroppableLane: React.FC<{
   );
 };
 
-const StemTrack: React.FC<StemTrackProps> = ({
-  id,
-  name,
+// Waveform lane for the right column, sized to ROW_HEIGHT
+type StemTrackLaneProps = {
+  waveformData: any | null;
+  isLoading: boolean;
+  analysisProgress?: { progress: number; message: string } | null;
+  duration: number;
+  currentTime: number;
+  onSeek?: (time: number) => void;
+  isPlaying: boolean;
+};
+
+const StemTrackLane: React.FC<StemTrackLaneProps> = ({
   waveformData,
   isLoading,
-  isActive,
-  onClick,
-  isSoloed,
-  onToggleSolo,
-  isMaster,
-  onSeek,
-  currentTime,
-  stemType,
-  isPlaying,
-  analysisStatus,
   analysisProgress,
+  duration,
+  currentTime,
+  onSeek,
+  isPlaying
 }) => {
-  const [{ isDragging }, drag] = useDrag({
-    type: 'AUDIO_STEM',
-    item: { id, name, stemType },
-    collect: (monitor) => ({
-      isDragging: monitor.isDragging(),
-    }),
-  });
-
-  const getStatusText = () => {
-    if (waveformData) return null; // Has data, no text needed
-    if (isLoading) return 'Loading...';
-    if (analysisStatus === 'pending' || analysisStatus === 'processing') return 'Analyzing...';
-    return 'No analysis data.';
-  };
-
-  const statusText = getStatusText();
-
   return (
-    <div
-      ref={drag as unknown as React.Ref<HTMLDivElement>}
-      className={cn(
-        "flex items-center group bg-stone-900/50 cursor-pointer transition-all border-l-4",
-        isActive ? "border-emerald-400 bg-emerald-900/30" : "border-transparent hover:bg-stone-800/40"
-      )}
-      style={{ opacity: isDragging ? 0.5 : 1, height: '32px', minHeight: '32px' }}
-      onClick={onClick}
-    >
-      <div className="w-56 px-3 py-2 flex items-center justify-between gap-2 border-r border-stone-700/50 flex-shrink-0">
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-stone-200 truncate group-hover:text-emerald-400" title={name}>{name}</p>
-          {waveformData && <p className="text-xs text-stone-400">{waveformData.duration.toFixed(2)}s</p>}
-          {isLoading && !waveformData && <Badge variant="secondary" className="mt-1 text-xs">Loading...</Badge>}
-        </div>
-        
-        {isMaster ? (
-          <Badge variant="outline" className="border-amber-400 text-amber-400">MASTER</Badge>
-        ) : (
-          <Button
-            variant={isSoloed ? "secondary" : "ghost"}
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleSolo();
-            }}
-            className={cn(
-              "transition-all px-3 font-semibold",
-              isSoloed ? "bg-yellow-400/80 text-black hover:bg-yellow-400" : "text-stone-400 hover:text-white hover:bg-stone-700"
-            )}
-          >
-            Solo
-          </Button>
-        )}
-      </div>
-
-      <div className="flex-1 min-w-0 px-2 overflow-hidden">
+    <div className={cn('flex items-center w-full border-b border-stone-700/50')} style={{ height: `${ROW_HEIGHT}px` }}>
+      <div className="flex-1 min-w-0 px-2 overflow-hidden h-full">
         {analysisProgress ? (
-          <div className="w-full bg-stone-700 rounded-full h-2.5 my-auto">
-            <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${analysisProgress.progress * 100}%` }}></div>
-            <p className="text-xs text-stone-400 truncate">{analysisProgress.message}</p>
+          <div className="w-full h-full flex flex-col justify-center">
+            <div className="w-full bg-stone-700 rounded-full h-1.5">
+              <div className="bg-blue-600 h-1.5 rounded-full" style={{ width: `${analysisProgress.progress * 100}%` }}></div>
+            </div>
+            <p className="text-[10px] text-stone-400 truncate mt-1">{analysisProgress.message}</p>
           </div>
         ) : (
-          <div className="w-full overflow-hidden">
+          <div className="w-full h-full">
             <StemWaveform
               waveformData={waveformData}
-              duration={waveformData?.duration || 1}
+              duration={duration}
               currentTime={currentTime}
               onSeek={onSeek}
               isPlaying={isPlaying}
@@ -410,7 +369,6 @@ const StemTrack: React.FC<StemTrackProps> = ({
     </div>
   );
 };
-StemTrack.displayName = 'StemTrack';
 
 // Overlay Lane Card
 const OverlayCard: React.FC<{
@@ -716,11 +674,9 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
   // Calculate timeline width based on duration to match audio stems
   const timelineWidth = Math.max(duration * 100, 800); // Minimum 800px width
 
-  // Unified vertical sizing
-  const ROW_HEIGHT = 32;
-  const SECTION_HEADER_HEIGHT = 32;
-  const compositionYOffset = SECTION_HEADER_HEIGHT;
-  const stemsYOffset = compositionYOffset + layers.length * ROW_HEIGHT + SECTION_HEADER_HEIGHT;
+  // Unified vertical sizing (use module-level constants)
+  const compositionYOffset = HEADER_ROW_HEIGHT;
+  const stemsYOffset = compositionYOffset + layers.length * ROW_HEIGHT + HEADER_ROW_HEIGHT;
 
   const toggleSection = (section: keyof typeof expandedSections) => {
     setExpandedSections(prev => ({
@@ -747,7 +703,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
         {/* Left column: Headers */}
         <div className="w-56 flex-shrink-0 border-r border-stone-700">
           {/* Composition header */}
-          <div className="flex items-center justify-between p-2 border-b border-stone-700">
+          <div className="flex items-center justify-between px-2 border-b border-stone-700" style={{ height: `${HEADER_ROW_HEIGHT}px` }}>
             <span className="text-xs font-bold uppercase tracking-wider">Composition</span>
             <Button
               size="sm"
@@ -782,7 +738,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
           ))}
 
           {/* Audio/MIDI header */}
-          <div className="flex items-center p-2 border-t border-b border-stone-700 mt-2">
+          <div className="flex items-center px-2 border-t border-b border-stone-700 mt-2" style={{ height: `${HEADER_ROW_HEIGHT}px` }}>
             <span className="text-xs font-bold uppercase tracking-wider">Audio & MIDI</span>
           </div>
 
@@ -805,7 +761,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
         <div className="flex-1 overflow-x-auto" ref={timelineContainerRef}>
           <div
             className="relative"
-            style={{ width: `${timelineWidth}px`, height: `${compositionYOffset + layers.length * ROW_HEIGHT + SECTION_HEADER_HEIGHT + stems.length * ROW_HEIGHT}px` }}
+            style={{ width: `${timelineWidth}px`, height: `${compositionYOffset + layers.length * ROW_HEIGHT + HEADER_ROW_HEIGHT + stems.length * ROW_HEIGHT}px` }}
             onClick={handleTimelineClick}
           >
             {/* Composition clips */}
@@ -843,15 +799,17 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
               return (
                 <div
                   key={`waveform-${stem.id}`}
-                  className="absolute w-full h-8"
-                  style={{ top: `${stemsYOffset + sIndex * ROW_HEIGHT}px` }}
+                  className="absolute w-full flex items-center"
+                  style={{ top: `${stemsYOffset + sIndex * ROW_HEIGHT}px`, height: `${ROW_HEIGHT}px` }}
                 >
-                  <StemWaveform
+                  <StemTrackLane
                     waveformData={analysis?.waveformData ?? null}
                     duration={duration}
                     currentTime={currentTime}
                     isPlaying={isPlaying}
                     isLoading={stemLoadingState}
+                    analysisProgress={analysisProgress?.[stem.id]}
+                    onSeek={onSeek}
                   />
                 </div>
               );
