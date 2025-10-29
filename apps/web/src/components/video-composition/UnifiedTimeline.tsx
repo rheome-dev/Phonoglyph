@@ -973,7 +973,9 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
       const newEndTime = newStartTime + clipDuration;
       
       // Vertical movement - snap to layers
-      const sortedLayers = [...layers].sort((a, b) => b.zIndex - a.zIndex);
+      // FIX: Get the most recent state directly from the store to prevent using stale data.
+      const currentLayers = useTimelineStore.getState().layers;
+      const sortedLayers = [...currentLayers].sort((a, b) => b.zIndex - a.zIndex);
       const currentIndex = sortedLayers.findIndex(l => l.id === layerId);
       const verticalDelta = delta.y;
       
