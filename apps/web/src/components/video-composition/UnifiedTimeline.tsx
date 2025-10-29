@@ -886,7 +886,32 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
           <div className="w-56 flex-shrink-0 border-r border-stone-700 bg-stone-900/30">
             <div className={cn('flex items-center justify-between px-2 border-b border-stone-700', `h-[${HEADER_ROW_HEIGHT}px]`)}>
               <span className="text-xs font-bold uppercase tracking-wider text-stone-400">Composition</span>
-              <Button size="sm" variant="ghost" className="h-6 px-1 text-stone-400" onClick={() => addLayer({ name: `Layer ${layers.length + 1}` } as Layer)}>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 px-1 text-stone-400"
+                onClick={() => {
+                  const newLayer: Layer = {
+                    id: `layer-${Date.now()}`,
+                    name: `Layer ${layers.length + 1}`,
+                    type: 'image',
+                    src: '',
+                    zIndex: layers.length,
+                    isDeletable: true,
+                    startTime: 0,
+                    endTime: duration,
+                    duration: duration,
+                    position: { x: 50, y: 50 },
+                    scale: { x: 1, y: 1 },
+                    rotation: 0,
+                    opacity: 1,
+                    audioBindings: [],
+                    midiBindings: [],
+                    blendMode: 'normal',
+                  };
+                  addLayer(newLayer);
+                }}
+              >
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
