@@ -665,9 +665,9 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
   const timelineWidth = Math.max(duration * 100, 800); // Minimum 800px width
 
   // Unified vertical sizing (use module-level constants)
-  // Add an extra ROW_HEIGHT for the Background header row between section header and composition layers
-  const compositionYOffset = HEADER_ROW_HEIGHT + ROW_HEIGHT;
-  const stemsYOffset = compositionYOffset + layers.length * ROW_HEIGHT + HEADER_ROW_HEIGHT;
+  // Layers start immediately after the Composition section header; Background row renders after layers
+  const compositionYOffset = HEADER_ROW_HEIGHT;
+  const stemsYOffset = HEADER_ROW_HEIGHT + (layers.length * ROW_HEIGHT) + ROW_HEIGHT + HEADER_ROW_HEIGHT;
 
   const toggleSection = (section: keyof typeof expandedSections) => {
     setExpandedSections(prev => ({
@@ -726,7 +726,12 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
               <Plus className="h-4 w-4 mr-1" /> Add
             </Button>
           </div>
-          {/* Background control header row */}
+          {/* Composition layer headers */}
+          {[...layers].sort((a, b) => b.zIndex - a.zIndex).map((layer) => (
+            <CompositionLayerHeader key={layer.id} layer={layer} />
+          ))}
+
+          {/* Background control header row (rendered after layers so it sits at the bottom of the Composition section) */}
           <div
             className={cn(
               'flex items-center px-2 border-b border-stone-700/50'
@@ -756,10 +761,6 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
               </Button>
             </div>
           </div>
-          {/* Composition layer headers */}
-          {[...layers].sort((a, b) => b.zIndex - a.zIndex).map((layer) => (
-            <CompositionLayerHeader key={layer.id} layer={layer} />
-          ))}
 
           {/* Audio/MIDI header */}
           <div className="flex items-center px-2 border-t border-b border-stone-700" style={{ height: `${HEADER_ROW_HEIGHT}px` }}>
@@ -785,7 +786,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
         <div className="flex-1 overflow-x-auto" ref={timelineContainerRef}>
           <div
             className="relative"
-            style={{ width: `${timelineWidth}px`, height: `${compositionYOffset + layers.length * ROW_HEIGHT + HEADER_ROW_HEIGHT + stems.length * ROW_HEIGHT}px` }}
+            style={{ width: `${timelineWidth}px`, height: `${HEADER_ROW_HEIGHT + (layers.length * ROW_HEIGHT) + ROW_HEIGHT + HEADER_ROW_HEIGHT + (stems.length * ROW_HEIGHT)}px` }}
             onClick={handleTimelineClick}
           >
             {/* Composition clips */}
