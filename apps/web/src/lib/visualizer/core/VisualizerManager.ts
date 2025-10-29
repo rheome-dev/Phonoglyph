@@ -21,6 +21,10 @@ export class VisualizerManager {
   private isPlaying = false;
   private lastTime = 0;
   
+  // FIX: Add state to hold timeline data
+  private timelineLayers: any[] = [];
+  private timelineCurrentTime: number = 0;
+  
   // Audio analysis
   private audioContext: AudioContext | null = null;
   private audioSources: AudioBufferSourceNode[] = [];
@@ -425,22 +429,27 @@ export class VisualizerManager {
     let updatedEffects = 0;
     
     this.effects.forEach(effect => {
-      if (effect.enabled && updatedEffects < maxEffectsPerFrame) {
+      if (!effect.enabled) return;
+
+      // FIX: Check if the effect's corresponding layer is active on the timeline
+      const effectLayer = this.timelineLayers.find(l => l.id === effect.id);
+      const isLayerActive = effectLayer 
+        ? (this.timelineCurrentTime >= effectLayer.startTime && this.timelineCurrentTime <= effectLayer.endTime)
+        : true; // Default to true if no layer found
+
+      if (isLayerActive && updatedEffects < maxEffectsPerFrame) {
         activeEffectCount++;
         updatedEffects++;
         
         try {
-          // Use real data if available, otherwise fallback to mock data
           const audioData: AudioAnalysisData = this.currentAudioData || this.createMockAudioData();
           const midiData: LiveMIDIData = this.currentMidiData || this.createMockMidiData();
-          
           effect.update(deltaTime, audioData, midiData);
         } catch (error) {
           debugLog.error(`❌ Effect ${effect.id} update failed:`, error);
-          // Disable problematic effect to prevent further issues
           effect.enabled = false;
         }
-      } else if (effect.enabled) {
+      } else if (isLayerActive) {
         activeEffectCount++; // Count but don't update this frame
       }
     });
@@ -501,6 +510,15 @@ export class VisualizerManager {
       totalNotes: 0,
       trackActivity: {}
     };
+  }
+  
+  /**
+   * FIX: Public method to synchronize the visualizer with the timeline's state.
+   * This should be called from a useEffect hook in the UI.
+   */
+  public updateTimelineState(layers: any[], currentTime: number): void {
+    this.timelineLayers = layers;
+    this.timelineCurrentTime = currentTime;
   }
   
   // Update methods for real data

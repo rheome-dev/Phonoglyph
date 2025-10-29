@@ -81,9 +81,6 @@ export class MultiLayerCompositor {
         generateMipmaps: false
       }
     );
-    if ('samples' in this.mainRenderTarget) {
-      (this.mainRenderTarget as any).samples = 0; // Explicitly disable MSAA
-    }
     
     this.bloomRenderTarget = new RTClass(
       this.config.width,
@@ -96,9 +93,6 @@ export class MultiLayerCompositor {
         generateMipmaps: false
       }
     );
-    if ('samples' in this.bloomRenderTarget) {
-      (this.bloomRenderTarget as any).samples = 0; // Explicitly disable MSAA
-    }
     
     this.tempRenderTarget = new RTClass(
       this.config.width,
@@ -111,9 +105,6 @@ export class MultiLayerCompositor {
         generateMipmaps: false
       }
     );
-    if ('samples' in this.tempRenderTarget) {
-      (this.tempRenderTarget as any).samples = 0; // Explicitly disable MSAA
-    }
     
     // Create shared geometry and camera
     this.quadGeometry = new THREE.PlaneGeometry(2, 2);
@@ -150,9 +141,6 @@ export class MultiLayerCompositor {
         generateMipmaps: false
       }
     );
-    if ('samples' in renderTarget) {
-      (renderTarget as any).samples = 0; // Explicitly disable MSAA
-    }
     
     const layer: LayerRenderTarget = {
       id,

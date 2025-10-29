@@ -27,16 +27,24 @@ interface TimelineActions {
 
 export const useTimelineStore = create<TimelineState & TimelineActions>((set) => ({
   layers: [
+    // FIX: Ensure the default layer is a complete object to prevent rendering issues.
     {
-      id: `default-empty-${Date.now()}`,
+      id: `layer-default-${Date.now()}`,
       name: 'Layer 1',
       type: 'image',
       src: '',
-      zIndex: 1,
+      zIndex: 0,
       isDeletable: true,
       startTime: 0,
-      endTime: 120,
+      endTime: 120, // This will be updated when a project with a duration is loaded
       duration: 120,
+      position: { x: 50, y: 50 },
+      scale: { x: 1, y: 1 },
+      rotation: 0,
+      opacity: 1,
+      audioBindings: [],
+      midiBindings: [],
+      blendMode: 'normal',
     } as Layer,
   ],
   currentTime: 0,

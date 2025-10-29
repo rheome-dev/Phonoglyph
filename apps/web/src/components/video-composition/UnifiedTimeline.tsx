@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useDrop } from 'react-dnd';
 import { useDrag } from 'react-dnd';
-import { DndContext, DragEndEvent } from '@dnd-kit/core';
+import { DndContext, DragEndEvent, DragMoveEvent } from '@dnd-kit/core';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { ChevronDown, ChevronUp, Plus, Video, Image, Zap, Music, FileAudio, FileMusic, Settings, Trash2, Eye, EyeOff, Palette } from 'lucide-react';
@@ -861,7 +861,8 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
     else setCurrentTime(clampedTime);
   };
 
-  const handleDragEnd = (event: DragEndEvent) => {
+  // FIX: Renamed to handle both move and end events for live resizing
+  const handleDragEvent = (event: DragMoveEvent | DragEndEvent) => {
     const { active, delta } = event;
     const rawId = active.id as string;
     const timeDelta = delta.x / (PIXELS_PER_SECOND * zoom);
@@ -1006,7 +1007,8 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
 
           {/* ========== COLUMN 2: TIMELINE LANES (Scrollable & Interactive) ========== */}
           <div className="flex-1 overflow-x-auto" ref={timelineLanesRef}>
-            <DndContext onDragEnd={handleDragEnd}>
+            {/* FIX: Added onDragMove to enable live visual feedback during resize */}
+            <DndContext onDragEnd={handleDragEvent} onDragMove={handleDragEvent}>
               <div
                 className="relative overflow-hidden"
                 style={{ width: `${timelineWidth}px`, height: `${totalHeight}px` }}
