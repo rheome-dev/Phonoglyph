@@ -66,8 +66,7 @@ export class MultiLayerCompositor {
     this.renderer.setClearAlpha(0);
 
     // Create render targets
-    // CRITICAL FIX: Force standard WebGLRenderTarget to ensure alpha stability
-    // MSAA's multisample resolve step corrupts alpha channel - use FXAA instead
+    // FIX: Use WebGLRenderTarget with samples for proper MSAA antialiasing
     const RTClass: any = THREE.WebGLRenderTarget;
 
     this.mainRenderTarget = new RTClass(
@@ -78,7 +77,8 @@ export class MultiLayerCompositor {
         type: THREE.UnsignedByteType,
         minFilter: THREE.LinearFilter,
         magFilter: THREE.LinearFilter,
-        generateMipmaps: false
+        generateMipmaps: false,
+        samples: 4 // FIX: Enable 4x MSAA
       }
     );
     
@@ -90,7 +90,8 @@ export class MultiLayerCompositor {
         type: THREE.UnsignedByteType,
         minFilter: THREE.LinearFilter,
         magFilter: THREE.LinearFilter,
-        generateMipmaps: false
+        generateMipmaps: false,
+        samples: 4 // FIX: Enable 4x MSAA
       }
     );
     
@@ -102,7 +103,8 @@ export class MultiLayerCompositor {
         type: THREE.UnsignedByteType,
         minFilter: THREE.LinearFilter,
         magFilter: THREE.LinearFilter,
-        generateMipmaps: false
+        generateMipmaps: false,
+        samples: 4 // FIX: Enable 4x MSAA
       }
     );
     
@@ -126,8 +128,7 @@ export class MultiLayerCompositor {
     camera: THREE.Camera,
     options: Partial<Omit<LayerRenderTarget, 'id' | 'scene' | 'camera'>> = {}
   ): LayerRenderTarget {
-    // CRITICAL FIX: Force standard WebGLRenderTarget to ensure alpha stability
-    // MSAA's multisample resolve step corrupts alpha channel - use FXAA instead
+    // FIX: Use WebGLRenderTarget with samples for proper MSAA antialiasing
     const RTClass: any = THREE.WebGLRenderTarget;
 
     const renderTarget = new RTClass(
@@ -138,7 +139,8 @@ export class MultiLayerCompositor {
         type: THREE.UnsignedByteType,
         minFilter: THREE.LinearFilter,
         magFilter: THREE.LinearFilter,
-        generateMipmaps: false
+        generateMipmaps: false,
+        samples: 4 // FIX: Enable 4x MSAA for each layer
       }
     );
     

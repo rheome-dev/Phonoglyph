@@ -175,6 +175,16 @@ export function ThreeVisualizer({
     }
   }, [canvasSize, aspectRatioConfig]);
 
+  // FIX: Sync visualizer with timeline state (layers and currentTime)
+  useEffect(() => {
+    const vizManager = internalVisualizerRef.current;
+    if (vizManager) {
+      // This is the crucial link that was missing.
+      // It continuously sends the latest timeline data to the visualizer.
+      vizManager.updateTimelineState(layers, currentTime);
+    }
+  }, [layers, currentTime]);
+
   // Dynamic scene synchronization
   useEffect(() => {
     if (!internalVisualizerRef.current) return;

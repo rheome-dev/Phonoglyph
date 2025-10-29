@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useDrop } from 'react-dnd';
 import { useDrag } from 'react-dnd';
-import { DndContext, DragEndEvent, DragMoveEvent } from '@dnd-kit/core';
+import { DndContext, DragEndEvent, DragMoveEvent, DragStartEvent } from '@dnd-kit/core';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { ChevronDown, ChevronUp, Plus, Video, Image, Zap, Music, FileAudio, FileMusic, Settings, Trash2, Eye, EyeOff, Palette } from 'lucide-react';
@@ -630,6 +630,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
     setZoom,
   } = useTimelineStore();
   const { backgroundColor, isBackgroundVisible, setBackgroundColor, toggleBackgroundVisibility } = useProjectSettingsStore();
+  const activeDragLayerRef = useRef<Layer | null>(null); // FIX: Add ref to store layer state on drag start
   const timelineContainerRef = useRef<HTMLDivElement | null>(null);
   const [expandedSections, setExpandedSections] = useState({
     composition: true, // Combined visual and effects layers
@@ -637,6 +638,16 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
   });
 
   // Default layer is now set in the store's initial state; no need to add here
+
+  // FIX: When the project's duration changes (e.g., on audio load),
+  // ensure all layers are clamped to the new duration.
+  useEffect(() => {
+    layers.forEach(layer => {
+      if (layer.endTime > duration) {
+        updateLayer(layer.id, { endTime: duration });
+      }
+    });
+  }, [duration, layers, updateLayer]);
 
   const handleAssetDrop = (item: any, targetLayerId?: string) => {
     debugLog.log('Asset dropped on timeline:', item, 'target layer:', targetLayerId);
@@ -861,39 +872,52 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
     else setCurrentTime(clampedTime);
   };
 
-  // FIX: Renamed to handle both move and end events for live resizing
+  // FIX: Capture the state of the layer when the drag begins
+  const handleDragStart = (event: DragStartEvent) => {
+    const { active } = event;
+    const layerId = (active.id as string).split('::')[0];
+    const layer = layers.find(l => l.id === layerId);
+    if (layer) {
+      activeDragLayerRef.current = { ...layer };
+    }
+  };
+
+  // FIX: A completely new, more precise handler for both move and end events
   const handleDragEvent = (event: DragMoveEvent | DragEndEvent) => {
     const { active, delta } = event;
     const rawId = active.id as string;
-    const timeDelta = delta.x / (PIXELS_PER_SECOND * zoom);
+    
+    const initialLayer = activeDragLayerRef.current;
+    if (!initialLayer) return;
 
-    // Parse the ID to see if we're dragging a handle or the body
     const [layerId, handle] = rawId.split('::');
-    if (!layerId) return;
-
-    const originalLayer = layers.find(l => l.id === layerId);
-    if (!originalLayer) return;
+    const timeDelta = delta.x / (PIXELS_PER_SECOND * zoom);
 
     if (handle === 'handle-right') {
       // --- RESIZING FROM THE RIGHT ---
-      const newEndTime = Math.min(duration, Math.max(originalLayer.startTime + 0.1, originalLayer.endTime + timeDelta));
+      const newEndTime = Math.min(duration, Math.max(initialLayer.startTime + 0.1, initialLayer.endTime + timeDelta));
       updateLayer(layerId, { endTime: newEndTime });
 
     } else if (handle === 'handle-left') {
       // --- RESIZING FROM THE LEFT ---
-      const newStartTime = Math.max(0, Math.min(originalLayer.endTime - 0.1, originalLayer.startTime + timeDelta));
+      const newStartTime = Math.max(0, Math.min(initialLayer.endTime - 0.1, initialLayer.startTime + timeDelta));
       updateLayer(layerId, { startTime: newStartTime });
 
     } else {
-      // --- DRAGGING THE WHOLE CLIP (default case) ---
-      const clipDuration = originalLayer.endTime - originalLayer.startTime;
-      let newStartTime = Math.max(0, originalLayer.startTime + timeDelta);
-      // Clamp to ensure the clip does not go past the total duration
+      // --- DRAGGING THE WHOLE CLIP ---
+      const clipDuration = initialLayer.endTime - initialLayer.startTime;
+      let newStartTime = Math.max(0, initialLayer.startTime + timeDelta);
       newStartTime = Math.min(newStartTime, duration - clipDuration);
-      
       const newEndTime = newStartTime + clipDuration;
       updateLayer(layerId, { startTime: newStartTime, endTime: newEndTime });
     }
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    // Call the event handler for final update
+    handleDragEvent(event);
+    // Clear the ref on drag end
+    activeDragLayerRef.current = null;
   };
   
   const sortedLayers = [...layers].sort((a, b) => b.zIndex - a.zIndex);
@@ -1007,8 +1031,8 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
 
           {/* ========== COLUMN 2: TIMELINE LANES (Scrollable & Interactive) ========== */}
           <div className="flex-1 overflow-x-auto" ref={timelineLanesRef}>
-            {/* FIX: Added onDragMove to enable live visual feedback during resize */}
-            <DndContext onDragEnd={handleDragEvent} onDragMove={handleDragEvent}>
+            {/* FIX: Added onDragStart for precision and onDragMove for live feedback */}
+            <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragMove={handleDragEvent}>
               <div
                 className="relative overflow-hidden"
                 style={{ width: `${timelineWidth}px`, height: `${totalHeight}px` }}
