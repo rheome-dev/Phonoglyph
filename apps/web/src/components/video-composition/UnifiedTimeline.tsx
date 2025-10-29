@@ -755,21 +755,6 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
                 <Plus className="h-4 w-4 mr-1" /> Add
               </Button>
             </div>
-            <div className="flex items-center gap-2 w-64">
-              <span className="text-xs text-stone-400">Zoom</span>
-              <Slider
-                value={[Math.round(zoom * 100)]}
-                onValueChange={([val]) => {
-                  userAdjustedZoomRef.current = true;
-                  setZoom(val / 100);
-                }}
-                min={10}
-                max={400}
-                step={1}
-                className="flex-1"
-              />
-              <span className="text-xs w-12 text-right">{Math.round(zoom * 100)}%</span>
-            </div>
           </div>
           {/* Composition layer headers */}
           {[...layers].sort((a, b) => b.zIndex - a.zIndex).map((layer) => (
@@ -827,8 +812,25 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
           ))}
         </div>
 
-        {/* Right column: Timeline lanes */}
-        <div className="flex-1 overflow-x-auto" ref={timelineContainerRef}>
+        {/* Right column: Timeline lanes and zoom controls */}
+        <div className="flex-1 relative">
+          {/* Zoom controls pinned to far right of top header row */}
+          <div className="absolute top-0 right-2 z-50 h-8 flex items-center gap-2 pointer-events-auto">
+            <span className="text-xs text-stone-400">Zoom</span>
+            <Slider
+              value={[Math.round(zoom * 100)]}
+              onValueChange={([val]) => {
+                userAdjustedZoomRef.current = true;
+                setZoom(val / 100);
+              }}
+              min={10}
+              max={400}
+              step={1}
+              className="w-80"
+            />
+            <span className="text-xs w-14 text-right">{Math.round(zoom * 100)}%</span>
+          </div>
+          <div className="overflow-x-auto" ref={timelineContainerRef}>
           <div
             className="relative"
             style={{ width: `${timelineWidth}px`, height: `${HEADER_ROW_HEIGHT + (layers.length * ROW_HEIGHT) + ROW_HEIGHT + HEADER_ROW_HEIGHT + (stems.length * ROW_HEIGHT)}px` }}
@@ -891,6 +893,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
               style={{ left: `${timeToX(currentTime)}px` }}
             />
           </div>
+        </div>
         </div>
       </div>
     </div>
