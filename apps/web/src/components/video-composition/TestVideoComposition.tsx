@@ -17,6 +17,7 @@ export const TestVideoComposition: React.FC<TestVideoCompositionProps> = ({
   const addSampleVideoLayer = () => {
     const layer: Layer = {
       id: `video-${Date.now()}`,
+      name: 'Sample Video',
       type: 'video',
       src: 'https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4', // Sample video URL
       position: { x: 50, y: 50 },
@@ -51,6 +52,7 @@ export const TestVideoComposition: React.FC<TestVideoCompositionProps> = ({
   const addSampleImageLayer = () => {
     const layer: Layer = {
       id: `image-${Date.now()}`,
+      name: 'Sample Image',
       type: 'image',
       src: 'https://picsum.photos/400/300', // Random image
       position: { x: 25, y: 25 },
@@ -78,6 +80,7 @@ export const TestVideoComposition: React.FC<TestVideoCompositionProps> = ({
   const addSampleEffectLayer = () => {
     const layer: Layer = {
       id: `effect-${Date.now()}`,
+      name: 'Metaballs Effect',
       type: 'effect',
       effectType: 'metaballs',
       settings: {
