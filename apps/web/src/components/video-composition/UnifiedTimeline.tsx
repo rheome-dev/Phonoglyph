@@ -945,7 +945,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
           <div className="flex-1 overflow-x-auto" ref={timelineLanesRef}>
             <DndContext onDragEnd={handleDragEnd}>
               <div
-                className="relative"
+                className="relative overflow-hidden"
                 style={{ width: `${timelineWidth}px`, height: `${totalHeight}px` }}
                 onClick={handleTimelineClick}
               >
