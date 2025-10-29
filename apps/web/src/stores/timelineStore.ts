@@ -23,6 +23,7 @@ interface TimelineActions {
   setZoom: (zoom: number) => void;
   togglePlay: () => void;
   setPlaying: (playing: boolean) => void;
+  swapLayers: (layerIdA: string, layerIdB: string) => void;
 }
 
 export const useTimelineStore = create<TimelineState & TimelineActions>((set) => ({
@@ -75,6 +76,31 @@ export const useTimelineStore = create<TimelineState & TimelineActions>((set) =>
   setZoom: (zoom) => set({ zoom: Math.max(0.01, Math.min(3, zoom)) }), // Min can be very small, max is now 300%
   togglePlay: () => set((state) => ({ isPlaying: !state.isPlaying })),
   setPlaying: (playing) => set({ isPlaying: playing }),
+  
+  swapLayers: (layerIdA, layerIdB) => set((state) => {
+    const layerA = state.layers.find(l => l.id === layerIdA);
+    const layerB = state.layers.find(l => l.id === layerIdB);
+
+    if (!layerA || !layerB) {
+      return state; // Do nothing if one of the layers isn't found
+    }
+
+    // Store the original z-index of layer A
+    const originalZIndexA = layerA.zIndex;
+
+    // Create the new list of layers with swapped z-indices
+    const newLayers = state.layers.map(layer => {
+      if (layer.id === layerIdA) {
+        return { ...layer, zIndex: layerB.zIndex };
+      }
+      if (layer.id === layerIdB) {
+        return { ...layer, zIndex: originalZIndexA };
+      }
+      return layer;
+    });
+
+    return { layers: newLayers };
+  }),
 }));
 
 

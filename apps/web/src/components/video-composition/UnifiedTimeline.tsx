@@ -641,6 +641,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
     setCurrentTime,
     zoom,
     setZoom,
+    swapLayers,
   } = useTimelineStore();
   const { backgroundColor, isBackgroundVisible, setBackgroundColor, toggleBackgroundVisibility } = useProjectSettingsStore();
   const activeDragLayerRef = useRef<Layer | null>(null); // FIX: Add ref to store layer state on drag start
@@ -989,12 +990,8 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
         
         // FIX: Only perform z-index swap on dragend, not during dragmove
         if (isDragEnd) {
-          // Perform the swap
-          // 1. The dragged layer gets the z-index of the layer it's dropped on.
-          updateLayer(layerId, { zIndex: targetLayer.zIndex });
-          
-          // 2. The target layer gets the original z-index of the layer that was dragged.
-          updateLayer(targetLayer.id, { zIndex: initialLayer.zIndex });
+          // Perform the swap atomically to prevent race conditions.
+          swapLayers(layerId, targetLayer.id);
         }
       } else {
         dragTargetLayerRef.current = null;
