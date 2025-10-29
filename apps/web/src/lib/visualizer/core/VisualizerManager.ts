@@ -300,6 +300,27 @@ export class VisualizerManager {
   getAllEffects(): VisualEffect[] {
     return Array.from(this.effects.values());
   }
+
+  // Get all layer IDs that have a specific effect type
+  getLayerIdsByEffectType(effectType: string): string[] {
+    const layerIds: string[] = [];
+    this.effects.forEach((effect, layerId) => {
+      if (effect.id === effectType) {
+        layerIds.push(layerId);
+      }
+    });
+    return layerIds;
+  }
+
+  // Get the first effect instance of a specific type (for parameter inspection)
+  getEffectByType(effectType: string): VisualEffect | undefined {
+    for (const [_, effect] of this.effects) {
+      if (effect.id === effectType) {
+        return effect;
+      }
+    }
+    return undefined;
+  }
   
   enableEffect(effectId: string): void {
     const effect = this.effects.get(effectId);
@@ -542,23 +563,40 @@ export class VisualizerManager {
   
   
   updateEffectParameter(effectId: string, paramName: string, value: any): void {
-    const effect = this.effects.get(effectId);
-    if (effect && effect.parameters.hasOwnProperty(paramName)) {
-      const oldValue = (effect.parameters as any)[paramName];
+    // Try to get effect by layer ID first
+    let effect = this.effects.get(effectId);
+    
+    // If not found, assume effectId is an effect type (like 'metaballs')
+    // and update ALL instances of that effect type
+    if (!effect) {
+      const layerIds = this.getLayerIdsByEffectType(effectId);
+      if (layerIds.length > 0) {
+        // Update all instances of this effect type
+        layerIds.forEach(layerId => {
+          const effectInstance = this.effects.get(layerId);
+          if (effectInstance && effectInstance.parameters.hasOwnProperty(paramName)) {
+            (effectInstance.parameters as any)[paramName] = value;
+            if (typeof (effectInstance as any).updateParameter === 'function') {
+              (effectInstance as any).updateParameter(paramName, value);
+            }
+          }
+        });
+        return;
+      }
+      debugLog.warn(`⚠️ Effect ${effectId} not found (neither as layer ID nor effect type)`);
+      return;
+    }
+    
+    // Handle direct layer ID lookup
+    if (effect.parameters.hasOwnProperty(paramName)) {
       (effect.parameters as any)[paramName] = value;
       
-      // REMOVED VERBOSE LOGGING - Only log significant changes or errors
       // If the effect has an updateParameter method, call it for immediate updates
       if (typeof (effect as any).updateParameter === 'function') {
         (effect as any).updateParameter(paramName, value);
       }
     } else {
-      // Only log errors, not every parameter update
-      if (!effect) {
-        debugLog.warn(`⚠️ Effect ${effectId} not found`);
-      } else if (!effect.parameters.hasOwnProperty(paramName)) {
-        debugLog.warn(`⚠️ Parameter ${paramName} not found in effect ${effectId}`);
-      }
+      debugLog.warn(`⚠️ Parameter ${paramName} not found in effect ${effectId}`);
     }
   }
   

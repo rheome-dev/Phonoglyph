@@ -367,7 +367,8 @@ export function ThreeVisualizer({
         {/* Modals are now rendered within the full-width edit canvas */}
         {Object.entries(openEffectModals).map(([effectId, isOpen], index) => {
           if (!isOpen) return null;
-          const effectInstance = internalVisualizerRef.current?.getAllEffects().find((e: any) => e.id === effectId);
+          // Use getEffectByType to find the first instance of this effect type
+          const effectInstance = internalVisualizerRef.current?.getEffectByType(effectId);
           if (!effectInstance) return null;
           const sortedParams = Object.entries(effectInstance.parameters).sort(([, a], [, b]) => {
             if (typeof a === 'boolean' && typeof b !== 'boolean') return -1;
