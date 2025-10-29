@@ -973,27 +973,24 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
       
       // Calculate which layer we're hovering over based on vertical delta
       const rowsMoved = Math.round(verticalDelta / ROW_HEIGHT);
+      
+      // FIX: Clamp the target index to prevent dragging outside the composition area.
       const targetIndex = Math.max(0, Math.min(sortedLayers.length - 1, currentIndex + rowsMoved));
       
-      // Only update z-index if we've moved to a different layer
+      // Only perform a z-index swap if we've moved to a different valid row
       if (targetIndex !== currentIndex) {
         const targetLayer = sortedLayers[targetIndex];
-        const newZIndex = targetLayer.zIndex;
         
-        updateLayer(layerId, { 
-          startTime: newStartTime, 
-          endTime: newEndTime,
-          zIndex: newZIndex 
-        });
+        // Perform the swap
+        // 1. The dragged layer gets the z-index of the layer it's dropped on.
+        updateLayer(layerId, { zIndex: targetLayer.zIndex });
         
-        // Swap z-indices to maintain layer order
-        if (targetLayer.id !== layerId) {
-          updateLayer(targetLayer.id, { zIndex: initialLayer.zIndex });
-        }
-      } else {
-        // Just update time if no vertical movement
-        updateLayer(layerId, { startTime: newStartTime, endTime: newEndTime });
+        // 2. The target layer gets the original z-index of the layer that was dragged.
+        updateLayer(targetLayer.id, { zIndex: initialLayer.zIndex });
       }
+      
+      // Always update the time of the dragged layer, regardless of vertical movement.
+      updateLayer(layerId, { startTime: newStartTime, endTime: newEndTime });
     }
 
     // If this is the final event in the drag sequence, clear the reference.
