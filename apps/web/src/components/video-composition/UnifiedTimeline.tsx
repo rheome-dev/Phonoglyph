@@ -404,7 +404,8 @@ const LayerClip: React.FC<{
   layer: Layer;
   index: number;
   onAssetDrop: (item: any, targetLayerId: string) => void;
-}> = ({ layer, index, onAssetDrop }) => {
+  activeDragLayerId: string | null;
+}> = ({ layer, index, onAssetDrop, activeDragLayerId }) => {
   const { zoom, selectLayer, selectedLayerId } = useTimelineStore();
 
   const isSelected = selectedLayerId === layer.id;
@@ -455,6 +456,8 @@ const LayerClip: React.FC<{
     verticalOffset = rowsMoved * ROW_HEIGHT;
   }
 
+  const isDraggingThis = activeDragLayerId === layer.id;
+
   const style = {
     // Apply both horizontal (free) and vertical (snapped) transforms
     transform: transform 
@@ -465,8 +468,9 @@ const LayerClip: React.FC<{
     top: `${HEADER_ROW_HEIGHT + (index * ROW_HEIGHT)}px`,
     height: `${ROW_HEIGHT - 4}px`,
     marginTop: '2px',
-    // Remove transition to prevent snap-back animation after layer swaps
-    transition: 'none',
+    // Enable smooth vertical animation for non-dragging clips (e.g., the target layer clip)
+    // but disable it for the actively dragged clip to avoid snap-back.
+    transition: isDraggingThis ? 'none' : 'top 0.2s ease-out',
   } as React.CSSProperties;
 
   return (
@@ -645,6 +649,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
   } = useTimelineStore();
   const { backgroundColor, isBackgroundVisible, setBackgroundColor, toggleBackgroundVisibility } = useProjectSettingsStore();
   const activeDragLayerRef = useRef<Layer | null>(null); // FIX: Add ref to store layer state on drag start
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const timelineContainerRef = useRef<HTMLDivElement | null>(null);
   const [expandedSections, setExpandedSections] = useState({
     composition: true, // Combined visual and effects layers
@@ -940,6 +945,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
     if (layer) {
       activeDragLayerRef.current = { ...layer };
       dragTargetLayerRef.current = null; // Reset target tracking
+      setActiveDragId(layerId);
     }
   };
 
@@ -1020,6 +1026,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
 
   const handleDragEnd = (event: DragEndEvent) => {
     processDragEvent(event, true);
+    setActiveDragId(null);
   };
   
   const sortedLayers = [...layers].sort((a, b) => b.zIndex - a.zIndex);
@@ -1140,14 +1147,40 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
                 style={{ width: `${timelineWidth}px`, height: `${totalHeight}px` }}
                 onClick={handleTimelineClick}
               >
-                {sortedLayers.map((layer, index) => (
-                  <LayerClip
-                    key={layer.id}
-                    layer={layer}
-                    index={index}
-                    onAssetDrop={handleAssetDrop}
-                  />
-                ))}
+                {sortedLayers.map((layer, index) => {
+                  const PIXELS_PER_SECOND = 100;
+                  const leftPx = layer.startTime * PIXELS_PER_SECOND * zoom;
+                  const widthPx = (layer.endTime - layer.startTime) * PIXELS_PER_SECOND * zoom;
+                  const topPx = HEADER_ROW_HEIGHT + (index * ROW_HEIGHT);
+                  return (
+                    <React.Fragment key={layer.id}>
+                      <LayerClip
+                        layer={layer}
+                        index={index}
+                        onAssetDrop={handleAssetDrop}
+                        activeDragLayerId={activeDragId}
+                      />
+                      {activeDragId === layer.id && (
+                        <div
+                          className={cn(
+                            "absolute flex items-center justify-center rounded border border-dashed",
+                            "border-stone-600 bg-stone-800/50 text-stone-400 pointer-events-none"
+                          )}
+                          style={{
+                            left: `${leftPx}px`,
+                            width: `${widthPx}px`,
+                            top: `${topPx}px`,
+                            height: `${ROW_HEIGHT - 4}px`,
+                            marginTop: '2px',
+                            zIndex: 5,
+                          }}
+                        >
+                          <span className="text-xs font-medium truncate select-none">+ Drop Asset Here</span>
+                        </div>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
 
                 {stems.map((stem, index) => {
                   const analysis: any = cachedAnalysis?.find((a: any) => a.fileMetadataId === stem.id);
