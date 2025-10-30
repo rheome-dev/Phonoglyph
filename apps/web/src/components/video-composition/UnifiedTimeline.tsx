@@ -988,10 +988,22 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
         // FIX: Clamp the target index to prevent dragging outside the composition area.
         const targetIndex = Math.max(0, Math.min(sortedLayers.length - 1, currentIndex + rowsMoved));
         
+        console.log('Drag event:', { 
+          isDragEnd, 
+          eventType: event.type,
+          currentIndex, 
+          targetIndex, 
+          rowsMoved, 
+          verticalDelta,
+          numLayers: sortedLayers.length 
+        });
+        
         // Track the target layer ID for visual feedback
         if (targetIndex !== currentIndex) {
           const targetLayer = sortedLayers[targetIndex];
           dragTargetLayerRef.current = targetLayer.id;
+          
+          console.log('Target different from current, isDragEnd:', isDragEnd);
           
           // FIX: Only perform z-index swap on dragend, not during dragmove
           if (isDragEnd) {
