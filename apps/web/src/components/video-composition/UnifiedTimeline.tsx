@@ -458,6 +458,7 @@ const LayerClip: React.FC<{
   }
 
   const isDraggingThis = activeDragLayerId === layer.id;
+  const shouldDisableTransition = isDraggingThis || isEmpty || (postDropTransform && postDropTransform.id === layer.id);
 
   const effectiveTransform = transform
     ? `translate3d(${transform.x}px, ${verticalOffset}px, 0)`
@@ -475,7 +476,8 @@ const LayerClip: React.FC<{
     marginTop: '2px',
     // Enable smooth vertical animation for non-dragging clips (e.g., the target layer clip)
     // but disable it for the actively dragged clip to avoid snap-back.
-    transition: (isDraggingThis || (postDropTransform && postDropTransform.id === layer.id)) ? 'none' : 'top 0.2s ease-out',
+    transition: shouldDisableTransition ? 'none' : 'top 0.2s ease-out',
+    willChange: shouldDisableTransition ? undefined : 'top',
   } as React.CSSProperties;
 
   return (
