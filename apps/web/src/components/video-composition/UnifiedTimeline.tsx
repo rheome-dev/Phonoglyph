@@ -406,7 +406,8 @@ const LayerClip: React.FC<{
   onAssetDrop: (item: any, targetLayerId: string) => void;
   activeDragLayerId: string | null;
   postDropTransform?: { id: string; x: number; y: number } | null;
-}> = ({ layer, index, onAssetDrop, activeDragLayerId, postDropTransform }) => {
+  destinationAnimateId?: string | null;
+}> = ({ layer, index, onAssetDrop, activeDragLayerId, postDropTransform, destinationAnimateId }) => {
   const { zoom, selectLayer, selectedLayerId } = useTimelineStore();
 
   const isSelected = selectedLayerId === layer.id;
@@ -459,6 +460,7 @@ const LayerClip: React.FC<{
 
   const isDraggingThis = activeDragLayerId === layer.id;
   const shouldDisableTransition = isDraggingThis || isEmpty || (postDropTransform && postDropTransform.id === layer.id);
+  const shouldAnimateDestination = destinationAnimateId === layer.id;
 
   const effectiveTransform = transform
     ? `translate3d(${transform.x}px, ${verticalOffset}px, 0)`
@@ -476,7 +478,7 @@ const LayerClip: React.FC<{
     marginTop: '2px',
     // Enable smooth vertical animation for non-dragging clips (e.g., the target layer clip)
     // but disable it for the actively dragged clip to avoid snap-back.
-    transition: shouldDisableTransition ? 'none' : 'top 0.2s ease-out',
+    transition: shouldDisableTransition ? 'none' : (shouldAnimateDestination ? 'top 0.2s ease-out' : 'none'),
     willChange: shouldDisableTransition ? undefined : 'top',
   } as React.CSSProperties;
 
@@ -659,6 +661,8 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   // Keep the final drag transform for one frame after drop to prevent snap-back
   const [postDropTransform, setPostDropTransform] = useState<{ id: string; x: number; y: number } | null>(null);
+  // Identify which destination layer's clip should animate into place after swap
+  const [destinationAnimateId, setDestinationAnimateId] = useState<string | null>(null);
   const timelineContainerRef = useRef<HTMLDivElement | null>(null);
   const [expandedSections, setExpandedSections] = useState({
     composition: true, // Combined visual and effects layers
@@ -1003,7 +1007,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
         const targetIndex = Math.max(0, Math.min(sortedLayers.length - 1, currentIndex + rowsMoved));
         
         // Track the target layer ID for visual feedback
-        if (targetIndex !== currentIndex) {
+      if (targetIndex !== currentIndex) {
           const targetLayer = sortedLayers[targetIndex];
           dragTargetLayerRef.current = targetLayer.id;
           
@@ -1011,6 +1015,10 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
           if (isDragEnd) {
             // Perform the swap atomically to prevent race conditions.
             swapLayers(layerId, targetLayer.id);
+          // Mark the destination clip to animate into place
+          setDestinationAnimateId(targetLayer.id);
+          // Clear the animation flag after transition duration
+          setTimeout(() => setDestinationAnimateId(null), 250);
           }
         } else {
           dragTargetLayerRef.current = null;
@@ -1173,6 +1181,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
                         onAssetDrop={handleAssetDrop}
                     activeDragLayerId={activeDragId}
                         postDropTransform={postDropTransform}
+                        destinationAnimateId={destinationAnimateId}
                       />
                       {activeDragId === layer.id && (
                         <div
