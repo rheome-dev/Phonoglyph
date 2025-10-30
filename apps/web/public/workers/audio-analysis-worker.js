@@ -173,7 +173,7 @@ const STEM_FEATURES = {
   bass: ['rms', 'loudness', 'spectralCentroid'],
   vocals: ['rms', 'loudness', 'mfcc'],
   other: ['rms', 'loudness', 'spectralCentroid'], // For synths, guitars, etc.
-  master: ['rms', 'loudness', 'spectralCentroid', 'spectralRolloff', 'spectralFlatness', 'zcr', 'perceptualSpread', 'amplitudeSpectrum'] // Master stem gets comprehensive analysis including FFT
+  master: ['rms', 'loudness', 'spectralCentroid', 'spectralRolloff', 'spectralFlatness', 'zcr', 'perceptualSpread', 'amplitudeSpectrum', 'spectralFlux', 'perceptualSharpness', 'energy'] // Expanded for classification
 };
 
 // Quality presets for different performance levels
@@ -319,26 +319,25 @@ async function analyzeBuffer(data) {
 
     self.postMessage({
       type: 'ANALYSIS_PROGRESS',
-      data: { fileId, progress: 0.5, message: 'Analyzing features...' }
+      data: { fileId, progress: 0.1, message: 'Performing full feature extraction...' }
     });
 
-    let analysis;
+    // STEP 1: Always run the comprehensive single-pass analysis
+    const fullAnalysis = await performFullAnalysis(channelData, sampleRate, stemType, (progress) => {
+      self.postMessage({
+        type: 'ANALYSIS_PROGRESS',
+        data: { fileId, progress: 0.1 + progress * 0.7, message: 'Extracting features...' }
+      });
+    });
+
+    // STEP 2: If enhanced analysis is requested, run the lightweight classifier and add its results
     if (enhancedAnalysis) {
-      // Perform enhanced analysis with transient, chroma, and RMS detection
-      analysis = await performEnhancedAnalysis(channelData, sampleRate, stemType, analysisParams, (progress) => {
-        self.postMessage({
-          type: 'ANALYSIS_PROGRESS',
-          data: { fileId, progress: 0.5 + progress * 0.4, message: 'Extracting enhanced features...' }
-        });
+      self.postMessage({
+        type: 'ANALYSIS_PROGRESS',
+        data: { fileId, progress: 0.8, message: 'Classifying transients...' }
       });
-    } else {
-      // Perform regular analysis
-      analysis = await performFullAnalysis(channelData, sampleRate, stemType, (progress) => {
-        self.postMessage({
-          type: 'ANALYSIS_PROGRESS',
-          data: { fileId, progress: 0.5 + progress * 0.4, message: 'Extracting features...' }
-        });
-      });
+      const transients = performEnhancedAnalysis(fullAnalysis, sampleRate, analysisParams);
+      fullAnalysis.transients = transients;
     }
 
     self.postMessage({
@@ -347,22 +346,20 @@ async function analyzeBuffer(data) {
     });
     
     const waveformData = generateWaveformData(channelData, duration, 1024);
-
-    // Detect BPM using beat detector (with fallback)
     const bpm = await detectBpm(channelData, sampleRate);
 
     const result = {
       id: `client_${fileId}`,
       fileMetadataId: fileId,
       stemType: stemType,
-      analysisData: Object.assign({}, analysis, { bpm }), // include scalar bpm for backend persistence
+      analysisData: Object.assign({}, fullAnalysis, { bpm }),
       waveformData: waveformData,
       metadata: {
         sampleRate: sampleRate,
         duration: duration,
         bufferSize: 1024,
         bpm: bpm,
-        featuresExtracted: Object.keys(analysis),
+        featuresExtracted: Object.keys(fullAnalysis),
         analysisDuration: 0
       }
     };
@@ -692,21 +689,14 @@ async function performFullAnalysis(channelData, sampleRate, stemType, onProgress
   return flatFeatures;
 }
 
-async function performEnhancedAnalysis(channelData, sampleRate, stemType, analysisParams, onProgress) {
-  console.log('🎵 Performing enhanced analysis with spectral flux onset detection and classification');
+// This function now ONLY performs peak-picking and classification on pre-computed features.
+function performEnhancedAnalysis(fullAnalysis, sampleRate, analysisParams) {
+  console.log('🎵 Performing lightweight transient classification...');
 
-  const frameSize = 1024;
-  const hopSize = 512;
-  const numFrames = Math.max(0, Math.floor((channelData.length - frameSize) / hopSize) + 1);
-
-  // Defaults and tunables
   const params = Object.assign({
-    transientThreshold: 0.1,
     onsetThreshold: 0.3,
-    rmsWindowSize: 1024,
-    minNoteDuration: 0.05,
-    peakWindow: 8, // frames for local adaptive threshold
-    peakMultiplier: 1.5, // adaptive threshold multiplier
+    peakWindow: 8,
+    peakMultiplier: 1.5,
     classification: {
       highEnergyThreshold: 0.2,
       highZcrThreshold: 0.2,
@@ -715,59 +705,21 @@ async function performEnhancedAnalysis(channelData, sampleRate, stemType, analys
       hatCentroidMin: 8000,
       snareCentroidMin: 2000,
       snareCentroidMax: 6000,
-      postOnsetOffsetSamples: 256,
-      snippetLengthSamples: 2048,
     }
   }, analysisParams || {});
 
-  const rms = [];
-  const spectralFlux = [];
+  const { frameTimes, spectralFlux, spectralCentroid, perceptualSharpness, zcr, energy } = fullAnalysis;
 
-  // Pass 1: feature extraction (RMS + spectralFlux)
-  for (let i = 0; i < numFrames; i++) {
-    const start = i * hopSize;
-    const end = Math.min(start + frameSize, channelData.length);
-    const frame = channelData.slice(start, end);
-    const time = start / sampleRate;
-
-    // RMS
-    const rmsValue = Math.sqrt(frame.reduce((sum, s) => sum + s * s, 0) / Math.max(1, frame.length));
-    rms.push({ time, value: rmsValue });
-
-    // spectralFlux via Meyda if available, else simple magnitude diff
-    let flux = 0;
-    try {
-      const features = Meyda.extract(['spectralFlux', 'amplitudeSpectrum'], frame);
-      if (features && typeof features.spectralFlux === 'number') {
-        flux = features.spectralFlux;
-      } else if (features && Array.isArray(features.amplitudeSpectrum)) {
-        // crude flux approximation: sum of abs diff vs previous frame
-        if (i > 0 && spectralFlux[i - 1] && spectralFlux[i - 1].spectrum) {
-          const prev = spectralFlux[i - 1].spectrum;
-          const curr = features.amplitudeSpectrum;
-          const len = Math.min(prev.length, curr.length);
-          let sum = 0;
-          for (let k = 0; k < len; k++) sum += Math.max(0, curr[k] - prev[k]);
-          flux = sum / Math.max(1, len);
-        }
-      }
-      spectralFlux.push({ time, value: flux, spectrum: features && features.amplitudeSpectrum ? features.amplitudeSpectrum.slice(0) : null });
-    } catch (_) {
-      // Fallback: energy delta as flux
-      const prev = i > 0 ? rms[i - 1].value : 0;
-      flux = Math.max(0, rmsValue - prev);
-      spectralFlux.push({ time, value: flux, spectrum: null });
-    }
-
-    if (i % 100 === 0 && onProgress) onProgress(i / Math.max(1, numFrames));
+  if (!spectralFlux || spectralFlux.length === 0) {
+    console.warn('⚠️ Cannot perform enhanced analysis: spectralFlux data is missing.');
+    return [];
   }
 
   // Normalize flux
-  const fluxValues = spectralFlux.map(f => f.value);
-  const maxFlux = Math.max(1e-6, Math.max.apply(null, fluxValues));
-  const normFlux = fluxValues.map(v => v / maxFlux);
+  const maxFlux = Math.max(1e-6, ...spectralFlux);
+  const normFlux = spectralFlux.map(v => v / maxFlux);
 
-  // Pass 2: adaptive peak picking
+  // Adaptive peak picking
   const peaks = [];
   const w = Math.max(1, params.peakWindow | 0);
   for (let i = 0; i < normFlux.length; i++) {
@@ -776,58 +728,37 @@ async function performEnhancedAnalysis(channelData, sampleRate, stemType, analys
     let sum = 0, sumSq = 0, count = 0;
     for (let j = start; j < end; j++) { sum += normFlux[j]; sumSq += normFlux[j] * normFlux[j]; count++; }
     const mean = sum / Math.max(1, count);
-    const variance = Math.max(0, (sumSq / Math.max(1, count)) - mean * mean);
-    const std = Math.sqrt(variance);
+    const std = Math.sqrt(Math.max(0, (sumSq / Math.max(1, count)) - mean * mean));
     const threshold = mean + params.peakMultiplier * std;
     const isLocalMax = (i === 0 || normFlux[i] > normFlux[i - 1]) && (i === normFlux.length - 1 || normFlux[i] >= normFlux[i + 1]);
     if (isLocalMax && normFlux[i] > threshold && normFlux[i] > params.onsetThreshold) {
-      peaks.push({ frameIndex: i, time: spectralFlux[i].time, intensity: normFlux[i] });
+      peaks.push({ frameIndex: i, time: frameTimes ? frameTimes[i] : i, intensity: normFlux[i] });
     }
   }
 
-  // Refined transient classification per-peak
+  // Classification
   const transients = [];
   const c = params.classification;
   for (const peak of peaks) {
-    const onsetSample = peak.frameIndex * hopSize;
-    const snippetStart = Math.min(channelData.length - 1, Math.max(0, onsetSample + c.postOnsetOffsetSamples));
-    const snippetEnd = Math.min(channelData.length, snippetStart + c.snippetLengthSamples);
-    const snippet = channelData.slice(snippetStart, snippetEnd);
-
-    let centroid = 0, sharpness = 0, zcr = 0, energy = 0;
-    try {
-      const f = Meyda.extract(['spectralCentroid', 'perceptualSharpness', 'zcr', 'energy'], snippet);
-      centroid = (f && typeof f.spectralCentroid === 'number') ? f.spectralCentroid : 0;
-      sharpness = (f && typeof f.perceptualSharpness === 'number') ? f.perceptualSharpness : 0;
-      zcr = (f && typeof f.zcr === 'number') ? f.zcr : 0;
-      energy = (f && typeof f.energy === 'number') ? f.energy : 0;
-    } catch (_) {
-      // Compute simple fallbacks
-      energy = Math.sqrt(snippet.reduce((s, v) => s + v * v, 0) / Math.max(1, snippet.length));
-      // crude zcr
-      let zeroCrossings = 0;
-      for (let i = 1; i < snippet.length; i++) if ((snippet[i - 1] >= 0) !== (snippet[i] >= 0)) zeroCrossings++;
-      zcr = zeroCrossings / Math.max(1, snippet.length);
-    }
+    const i = peak.frameIndex;
+    const peakEnergy = Array.isArray(energy) ? (energy[i] || 0) : 0;
+    const peakCentroid = Array.isArray(spectralCentroid) ? (spectralCentroid[i] || 0) : 0;
+    const peakSharpness = Array.isArray(perceptualSharpness) ? (perceptualSharpness[i] || 0) : 0;
+    const peakZcr = Array.isArray(zcr) ? (zcr[i] || 0) : 0;
 
     let type = 'generic';
-    if (energy > c.highEnergyThreshold && centroid < c.kickCentroidMax) {
+    if (peakEnergy > c.highEnergyThreshold && peakCentroid < c.kickCentroidMax) {
       type = 'kick';
-    } else if (centroid > c.hatCentroidMin && zcr > c.highZcrThreshold) {
+    } else if (peakCentroid > c.hatCentroidMin && peakZcr > c.highZcrThreshold) {
       type = 'hat';
-    } else if (sharpness > c.snareSharpnessThreshold && centroid >= c.snareCentroidMin && centroid <= c.snareCentroidMax) {
+    } else if (peakSharpness > c.snareSharpnessThreshold && peakCentroid >= c.snareCentroidMin && peakCentroid <= c.snareCentroidMax) {
       type = 'snare';
     }
 
     transients.push({ time: peak.time, intensity: peak.intensity, type });
   }
 
-  return {
-    rms,
-    spectralFlux: normFlux.map((v, i) => ({ time: spectralFlux[i].time, value: v })),
-    transients,
-    analysisParams: params
-  };
+  return transients;
 }
 
 function setupStemAnalysis(data) {
