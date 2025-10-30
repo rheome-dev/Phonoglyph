@@ -1014,13 +1014,14 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const { active } = event;
     const layerId = (active.id as string).split('::')[0];
-    const layer = layers.find(l => l.id === layerId);
+    // Access fresh state directly from the store to avoid unstable deps
+    const layer = useTimelineStore.getState().layers.find(l => l.id === layerId);
     if (layer) {
       activeDragLayerRef.current = { ...layer };
       dragTargetLayerRef.current = null; // Reset target tracking
       setActiveDragId(layerId);
     }
-  }, [layers]);
+  }, []);
 
   // Shared drag logic for both move and end events
   const processDragEvent = useCallback((event: DragMoveEvent | DragEndEvent, isDragEnd: boolean) => {
@@ -1114,11 +1115,44 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
   const snapToGridModifier = useCallback((args: { transform: any }) => {
     const { transform } = args;
     if (!transform || !bpm || !activeDragId) return transform;
-    const layer = layers.find(l => l.id === activeDragId);
+
+    // Access fresh layers directly from the store
+    const currentLayers = useTimelineStore.getState().layers;
+    const layer = currentLayers.find(l => l.id === activeDragId);
     if (!layer) return transform;
-    const originX = layer.startTime * 100 * zoom; // timeToX without function dependency
+
+    // Recompute grid lines based on current scroll/zoom and bpm
+    const lines: Array<{ time: number; type: 'bar' | 'beat' | 'sixteenth'; x: number }> = [];
+    if (timelineLanesRef.current) {
+      const PPS = 100;
+      const container = timelineLanesRef.current;
+      const scrollLeft = container.scrollLeft;
+      const viewportWidth = container.clientWidth;
+      const totalWidth = duration * PPS * zoom;
+      const minX = Math.max(0, scrollLeft - 50);
+      const maxX = Math.min(totalWidth, scrollLeft + viewportWidth + 50);
+      const secondsPerBeat = 60 / bpm;
+      const pixelsPerBeat = secondsPerBeat * PPS * zoom;
+
+      let subdivision: number = 4; // default bars (4 beats)
+      let type: 'bar' | 'beat' | 'sixteenth' = 'bar';
+      if (pixelsPerBeat > 80) { subdivision = 0.25; type = 'sixteenth'; }
+      else if (pixelsPerBeat > 20) { subdivision = 1; type = 'beat'; }
+
+      const secondsPerStep = secondsPerBeat * subdivision;
+      const startTime = Math.max(0, (minX) / (PPS * zoom));
+      const firstStepIndex = Math.floor(startTime / secondsPerStep);
+      for (let i = firstStepIndex; ; i++) {
+        const time = i * secondsPerStep;
+        const x = time * PPS * zoom;
+        if (x > maxX) break;
+        lines.push({ time, type, x });
+      }
+    }
+
+    const originX = layer.startTime * 100 * zoom;
     const currentX = originX + transform.x;
-    const xs = gridLines.map(g => g.x);
+    const xs = lines.map(g => g.x);
     let snappedX = currentX;
     let minDist = Infinity;
     for (const gx of xs) {
@@ -1130,7 +1164,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
       return { ...transform, x: snappedX - originX };
     }
     return transform;
-  }, [bpm, activeDragId, layers, zoom, gridLines]);
+  }, [bpm, activeDragId, zoom, duration]);
   
   const sortedLayers = [...layers].sort((a, b) => b.zIndex - a.zIndex);
   const totalHeight = (2 * HEADER_ROW_HEIGHT) + ((sortedLayers.length + 1 + stems.length) * ROW_HEIGHT);
