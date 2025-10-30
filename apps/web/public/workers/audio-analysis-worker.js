@@ -2,6 +2,30 @@
 // Handles intensive audio analysis without blocking main thread
 
 // Import Meyda for audio analysis
+
+// Ensure worker outputs are fully JSON-serializable by converting any TypedArrays
+function sanitizeForSerialization(data) {
+  if (data === null || data === undefined) {
+    return data;
+  }
+  // Convert any TypedArray (e.g., Float32Array) to a plain Array
+  if (ArrayBuffer.isView(data) && !(data instanceof DataView)) {
+    return Array.from(data);
+  }
+  if (Array.isArray(data)) {
+    return data.map((item) => sanitizeForSerialization(item));
+  }
+  if (typeof data === 'object') {
+    const sanitizedObj = {};
+    for (const key in data) {
+      if (Object.prototype.hasOwnProperty.call(data, key)) {
+        sanitizedObj[key] = sanitizeForSerialization(data[key]);
+      }
+    }
+    return sanitizedObj;
+  }
+  return data;
+}
 let Meyda = null;
 let meydaLoadingPromise = null;
 
@@ -343,9 +367,12 @@ async function analyzeBuffer(data) {
       }
     };
 
+    // Sanitize before posting to ensure no TypedArrays leak to main thread
+    const sanitizedResult = sanitizeForSerialization(result);
+
     self.postMessage({
       type: 'ANALYSIS_COMPLETE',
-      data: { fileId, result }
+      data: { fileId, result: sanitizedResult }
     });
 
   } catch (error) {
