@@ -666,6 +666,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
   // Identify which destination layer's clip should animate into place after swap
   const [destinationAnimateId, setDestinationAnimateId] = useState<string | null>(null);
   const timelineContainerRef = useRef<HTMLDivElement | null>(null);
+  const timelineLanesRef = useRef<HTMLDivElement | null>(null);
   const [expandedSections, setExpandedSections] = useState({
     composition: true, // Combined visual and effects layers
     audio: true // Changed from false to true to ensure audio section is visible by default
@@ -936,7 +937,6 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
     }
   };
 
-  const timelineLanesRef = useRef<HTMLDivElement | null>(null);
   // FIX: Removed paddingRight state, as it caused incorrect scrolling behavior
   const userAdjustedZoomRef = useRef(false);
   const [minZoom, setMinZoom] = useState(0.1);
