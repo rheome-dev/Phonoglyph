@@ -943,8 +943,8 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
     }
   };
 
-  // FIX: A single, precise handler for all drag events (horizontal and vertical)
-  const handleDragEvent = (event: DragMoveEvent | DragEndEvent) => {
+  // Shared drag logic for both move and end events
+  const processDragEvent = (event: DragMoveEvent | DragEndEvent, isDragEnd: boolean) => {
     const { active, delta } = event;
     const rawId = active.id as string;
     
@@ -953,13 +953,6 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
 
     const [layerId, handle] = rawId.split('::');
     const timeDelta = delta.x / (PIXELS_PER_SECOND * zoom);
-    const isDragEnd = 'type' in event && event.type === 'dragend';
-    
-    console.log('handleDragEvent called:', {
-      hasType: 'type' in event,
-      type: 'type' in event ? event.type : 'NO TYPE',
-      isDragEnd
-    });
 
     if (handle === 'handle-right') {
       // Horizontal resize from right edge
@@ -994,27 +987,14 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
         // FIX: Clamp the target index to prevent dragging outside the composition area.
         const targetIndex = Math.max(0, Math.min(sortedLayers.length - 1, currentIndex + rowsMoved));
         
-        console.log('Drag event:', { 
-          isDragEnd, 
-          eventType: 'type' in event ? event.type : 'dragmove',
-          currentIndex, 
-          targetIndex, 
-          rowsMoved, 
-          verticalDelta,
-          numLayers: sortedLayers.length 
-        });
-        
         // Track the target layer ID for visual feedback
         if (targetIndex !== currentIndex) {
           const targetLayer = sortedLayers[targetIndex];
           dragTargetLayerRef.current = targetLayer.id;
           
-          console.log('Target different from current, isDragEnd:', isDragEnd);
-          
           // FIX: Only perform z-index swap on dragend, not during dragmove
           if (isDragEnd) {
             // Perform the swap atomically to prevent race conditions.
-            console.log('Swapping layers:', layerId, 'with', targetLayer.id, 'currentIndex:', currentIndex, 'targetIndex:', targetIndex);
             swapLayers(layerId, targetLayer.id);
           }
         } else {
@@ -1031,6 +1011,15 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
       activeDragLayerRef.current = null;
       dragTargetLayerRef.current = null;
     }
+  };
+
+  // Separate handlers that explicitly pass the isDragEnd flag
+  const handleDragMove = (event: DragMoveEvent) => {
+    processDragEvent(event, false);
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    processDragEvent(event, true);
   };
   
   const sortedLayers = [...layers].sort((a, b) => b.zIndex - a.zIndex);
@@ -1145,7 +1134,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
           {/* ========== COLUMN 2: TIMELINE LANES (Scrollable & Interactive) ========== */}
           <div className="flex-1 overflow-x-auto" ref={timelineLanesRef}>
             {/* FIX: Added onDragStart for precision and onDragMove for live feedback */}
-            <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEvent} onDragMove={handleDragEvent}>
+            <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragMove={handleDragMove}>
               <div
                 className="relative overflow-hidden"
                 style={{ width: `${timelineWidth}px`, height: `${totalHeight}px` }}
