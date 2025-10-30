@@ -4,7 +4,8 @@ import React, { useEffect, useState } from 'react';
 import { useDrag } from 'react-dnd';
 import { Zap, Music, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useAudioFeatures, AudioFeature } from '@/hooks/use-audio-features';
+// Import the plain function, not a hook
+import { getAudioFeatures, AudioFeature } from '@/hooks/use-audio-features';
 import { debugLog } from '@/lib/utils';
 
 // Enhanced FeatureNode with live meter
@@ -231,7 +232,10 @@ export function MappingSourcesPanel({
   cachedAnalysis = [],
   isPlaying = false
 }: MappingSourcesPanelProps) {
-  const features = useAudioFeatures(activeTrackId, selectedStemType, cachedAnalysis);
+  const features = React.useMemo(() =>
+    getAudioFeatures(activeTrackId, selectedStemType, cachedAnalysis),
+    [activeTrackId, selectedStemType, cachedAnalysis]
+  );
   
   const featuresByCategory = React.useMemo(() => {
     return features.reduce((acc, feature) => {
