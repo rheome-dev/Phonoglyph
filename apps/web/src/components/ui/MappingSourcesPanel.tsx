@@ -233,7 +233,7 @@ export function MappingSourcesPanel({
 }: MappingSourcesPanelProps) {
   const features = useAudioFeatures(activeTrackId, selectedStemType);
   
-  const featuresByCategory = useMemo(() => {
+  const featuresByCategory = React.useMemo(() => {
     return features.reduce((acc, feature) => {
       if (!acc[feature.category]) {
         acc[feature.category] = [];
