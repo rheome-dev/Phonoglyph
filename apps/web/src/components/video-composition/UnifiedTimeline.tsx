@@ -462,10 +462,12 @@ const LayerClip: React.FC<{
   const shouldDisableTransition = isDraggingThis || isEmpty || (postDropTransform && postDropTransform.id === layer.id);
   const shouldAnimateDestination = destinationAnimateId === layer.id;
 
+  // Horizontal live preview is driven by startTime/endTime updates; avoid double-applying X.
+  // Only apply vertical translation for snapping feedback during drag.
   const effectiveTransform = transform
-    ? `translate3d(${transform.x}px, ${verticalOffset}px, 0)`
+    ? `translate3d(0px, ${verticalOffset}px, 0)`
     : (postDropTransform && postDropTransform.id === layer.id
-        ? `translate3d(${postDropTransform.x}px, ${postDropTransform.y}px, 0)`
+        ? `translate3d(0px, ${postDropTransform.y}px, 0)`
         : undefined);
 
   const style = {
