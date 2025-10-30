@@ -5,6 +5,7 @@ import { useDrag } from 'react-dnd';
 import { Zap, Music, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { debugLog } from '@/lib/utils';
+import { useAudioFeatures } from '@/hooks/use-audio-features';
 
 export interface AudioFeature {
   id: string;
@@ -15,27 +16,7 @@ export interface AudioFeature {
   isEvent?: boolean;
 }
 
-export function getAudioFeatures(
-  trackId?: string,
-  stemType?: string,
-  cachedAnalysis?: any[]
-): AudioFeature[] {
-  if (!trackId || !cachedAnalysis || cachedAnalysis.length === 0) return [];
-  const analysis = cachedAnalysis.find(a => a.fileMetadataId === trackId);
-  if (!analysis || !analysis.analysisData) return [];
-  const features: AudioFeature[] = [];
-  if (analysis.analysisData.rms) features.push({ id: `${stemType}-volume`, name: 'Volume', description: 'Represents the loudness or intensity of the audio.', category: 'intensity', stemType });
-  if (analysis.analysisData.chroma) features.push({ id: `${stemType}-pitch`, name: 'Pitch', description: 'Represents the musical pitch center of the audio.', category: 'pitch', stemType });
-  if (analysis.analysisData.transients && analysis.analysisData.transients.length > 0) {
-    features.push({ id: `${stemType}-impact-all`, name: 'Impact (All)', description: 'Triggers on any detected rhythmic event.', category: 'rhythm', stemType, isEvent: true });
-    if (analysis.analysisData.transients.some((t: any) => t.type === 'kick')) features.push({ id: `${stemType}-impact-kick`, name: 'Kick Impact', description: 'Triggers only on low-frequency kick drum hits.', category: 'rhythm', stemType, isEvent: true });
-    if (analysis.analysisData.transients.some((t: any) => t.type === 'snare')) features.push({ id: `${stemType}-impact-snare`, name: 'Snare Impact', description: 'Triggers only on mid-frequency snare drum hits.', category: 'rhythm', stemType, isEvent: true });
-    if (analysis.analysisData.transients.some((t: any) => t.type === 'hat')) features.push({ id: `${stemType}-impact-hat`, name: 'Hat Impact', description: 'Triggers only on high-frequency hi-hat or cymbal hits.', category: 'rhythm', stemType, isEvent: true });
-  }
-  const bpm = analysis.bpm || analysis.metadata?.bpm || analysis.analysisData?.bpm;
-  if (bpm) features.push({ id: `${stemType}-bpm`, name: 'BPM', description: `The detected tempo of the track: ${Math.round(bpm)} BPM. This is a constant value.`, category: 'rhythm', stemType });
-  return features;
-}
+// getAudioFeatures refactored into useAudioFeatures hook; BPM feature intentionally omitted
 
 // Enhanced FeatureNode with live meter
 const FeatureNode = ({ 
@@ -154,6 +135,44 @@ const FeatureNode = ({
     debugLog.warn('Drag context not available for FeatureNode:', error);
   }
   
+  const VolumeMeter = ({ value }: { value: number }) => (
+    <div className="w-full bg-gray-800 rounded-sm h-2 mb-1 overflow-hidden">
+      <div className="h-full bg-yellow-500 transition-all duration-150 ease-out" style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%` }} />
+    </div>
+  );
+
+  const PitchMeter = ({ value }: { value: number }) => (
+    <div className="w-full h-6 bg-gray-900 border border-gray-800 rounded-sm mb-1 relative overflow-hidden">
+      <div className="absolute top-0 bottom-0 w-px bg-blue-500 transition-all duration-150" style={{ left: `${Math.max(0, Math.min(1, value)) * 100}%` }} />
+    </div>
+  );
+
+  const ImpactMeter = ({ value }: { value: number }) => (
+    <div className="w-full bg-gray-800 rounded-sm h-2 mb-1 overflow-hidden">
+      <div className="h-full bg-red-500 transition-all duration-100 ease-out" style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%` }} />
+    </div>
+  );
+
+  const renderMeter = () => {
+    if (feature.name.toLowerCase().includes('impact')) return <ImpactMeter value={liveValue} />;
+    if (feature.name === 'Pitch') return <PitchMeter value={liveValue} />;
+    if (feature.name === 'Volume') return <VolumeMeter value={liveValue} />;
+    return (
+      <div className="w-full bg-gray-800 rounded-sm h-1 mb-1 overflow-hidden">
+        <div 
+          className={cn(
+            "h-full rounded-sm transition-all duration-150 ease-out",
+            category === 'rhythm' && "bg-red-500",
+            category === 'pitch' && "bg-blue-500", 
+            category === 'intensity' && "bg-yellow-500",
+            category === 'timbre' && "bg-purple-500"
+          )}
+          style={{ width: `${liveValue * 100}%` }}
+        />
+      </div>
+    );
+  };
+
   return (
     <div 
       ref={dragRef}
@@ -178,26 +197,9 @@ const FeatureNode = ({
             </span>
           )}
         </div>
-        
-        {/* Live Meter */}
-        <div className="w-full bg-gray-800 rounded-sm h-1 mb-1 overflow-hidden">
-          <div 
-            className={cn(
-              "h-full rounded-sm transition-all duration-150 ease-out",
-              category === 'rhythm' && "bg-red-500",
-              category === 'pitch' && "bg-blue-500", 
-              category === 'intensity' && "bg-yellow-500",
-              category === 'timbre' && "bg-purple-500"
-            )}
-            style={{ 
-              width: `${liveValue * 100}%`,
-              transform: isActive ? 'scaleY(1.1)' : 'scaleY(1)',
-              transition: 'width 150ms ease-out, transform 150ms ease-out'
-            }}
-          />
-        </div>
-        
-        {/* Value indicator */}
+
+        {renderMeter()}
+
         <div className="flex items-center justify-between text-xs opacity-70 text-gray-400">
           <span>{(liveValue * 100).toFixed(0)}%</span>
           {isActive && (
@@ -261,7 +263,7 @@ export function MappingSourcesPanel({
   cachedAnalysis = [],
   isPlaying = false
 }: MappingSourcesPanelProps) {
-  const features = useMemo(() => getAudioFeatures(activeTrackId, selectedStemType, cachedAnalysis), [activeTrackId, selectedStemType, cachedAnalysis]);
+  const features = useAudioFeatures(activeTrackId, selectedStemType, cachedAnalysis);
   
   const featuresByCategory = useMemo(() => {
     return features.reduce((acc, feature) => {
