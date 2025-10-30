@@ -665,6 +665,8 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
   const [postDropTransform, setPostDropTransform] = useState<{ id: string; x: number; y: number } | null>(null);
   // Identify which destination layer's clip should animate into place after swap
   const [destinationAnimateId, setDestinationAnimateId] = useState<string | null>(null);
+  // Live layer updates during drag (isolated from global store)
+  const [liveLayerUpdate, setLiveLayerUpdate] = useState<Layer | null>(null);
   const timelineContainerRef = useRef<HTMLDivElement | null>(null);
   const timelineLanesRef = useRef<HTMLDivElement | null>(null);
   const [expandedSections, setExpandedSections] = useState({
@@ -1014,17 +1016,16 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const { active } = event;
     const layerId = (active.id as string).split('::')[0];
-    // Access fresh state directly from the store to avoid unstable deps
     const layer = useTimelineStore.getState().layers.find(l => l.id === layerId);
     if (layer) {
       activeDragLayerRef.current = { ...layer };
-      dragTargetLayerRef.current = null; // Reset target tracking
+      setLiveLayerUpdate({ ...layer });
       setActiveDragId(layerId);
     }
   }, []);
 
   // Shared drag logic for both move and end events
-  const processDragEvent = useCallback((event: DragMoveEvent | DragEndEvent, isDragEnd: boolean) => {
+  const processDragEvent = useCallback((event: DragMoveEvent | DragEndEvent) => {
     const { active, delta } = event;
     const rawId = active.id as string;
     
@@ -1034,82 +1035,56 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
     const [layerId, handle] = rawId.split('::');
     const timeDelta = delta.x / (PIXELS_PER_SECOND * zoom);
 
-    if (handle === 'handle-right') {
-      // Horizontal resize from right edge
-      const newEndTime = Math.min(duration, Math.max(initialLayer.startTime + 0.1, initialLayer.endTime + timeDelta));
-      updateLayer(layerId, { endTime: newEndTime });
-    } else if (handle === 'handle-left') {
-      // Horizontal resize from left edge
-      const newStartTime = Math.max(0, Math.min(initialLayer.endTime - 0.1, initialLayer.startTime + timeDelta));
-      updateLayer(layerId, { startTime: newStartTime });
-    } else {
-      // Main body drag - support both horizontal and vertical movement
-      const clipDuration = initialLayer.endTime - initialLayer.startTime;
-      
-      // Horizontal movement
-      let newStartTime = Math.max(0, initialLayer.startTime + timeDelta);
-      newStartTime = Math.min(newStartTime, duration - clipDuration);
-      const newEndTime = newStartTime + clipDuration;
-      
-      // Vertical movement - snap to layers
-      // FIX: Get the most recent state directly from the store to prevent using stale data.
-      const currentLayers = useTimelineStore.getState().layers;
-      const sortedLayers = [...currentLayers].sort((a, b) => b.zIndex - a.zIndex);
-      const currentIndex = sortedLayers.findIndex(l => l.id === layerId);
-      
-      // Only proceed with vertical swap if we found the layer
-      if (currentIndex !== -1) {
-        const verticalDelta = delta.y;
-        
-        // Calculate which layer we're hovering over based on vertical delta
-        const rowsMoved = Math.round(verticalDelta / ROW_HEIGHT);
-        
-        // FIX: Clamp the target index to prevent dragging outside the composition area.
-        const targetIndex = Math.max(0, Math.min(sortedLayers.length - 1, currentIndex + rowsMoved));
-        
-        // Track the target layer ID for visual feedback
-      if (targetIndex !== currentIndex) {
-          const targetLayer = sortedLayers[targetIndex];
-          dragTargetLayerRef.current = targetLayer.id;
-          
-          // FIX: Only perform z-index swap on dragend, not during dragmove
-          if (isDragEnd) {
-            // Perform the swap atomically to prevent race conditions.
-            swapLayers(layerId, targetLayer.id);
-          // Mark the destination clip to animate into place
-          setDestinationAnimateId(targetLayer.id);
-          // Clear the animation flag after transition duration
-          setTimeout(() => setDestinationAnimateId(null), 250);
-          }
-        } else {
-          dragTargetLayerRef.current = null;
-        }
+    setLiveLayerUpdate(prev => {
+      if (!prev) return null;
+      let newStartTime = prev.startTime;
+      let newEndTime = prev.endTime;
+      if (handle === 'handle-right') {
+        newEndTime = Math.min(duration, Math.max(initialLayer.startTime + 0.1, initialLayer.endTime + timeDelta));
+      } else if (handle === 'handle-left') {
+        newStartTime = Math.max(0, Math.min(initialLayer.endTime - 0.1, initialLayer.startTime + timeDelta));
+      } else {
+        const clipDuration = initialLayer.endTime - initialLayer.startTime;
+        newStartTime = Math.max(0, initialLayer.startTime + timeDelta);
+        newStartTime = Math.min(newStartTime, duration - clipDuration);
+        newEndTime = newStartTime + clipDuration;
       }
-      
-      // Always update the time of the dragged layer, regardless of vertical movement.
-      updateLayer(layerId, { startTime: newStartTime, endTime: newEndTime });
-    }
-
-    // If this is the final event in the drag sequence, clear the reference.
-    if (isDragEnd) {
-      // Preserve the final transform for one frame to avoid visual snap-back
-      setPostDropTransform({ id: layerId, x: delta.x, y: Math.round(delta.y / ROW_HEIGHT) * ROW_HEIGHT });
-      // Clear on next frame
-      requestAnimationFrame(() => setPostDropTransform(null));
-      activeDragLayerRef.current = null;
-      dragTargetLayerRef.current = null;
-    }
-  }, [zoom, duration, updateLayer, swapLayers, setDestinationAnimateId, setPostDropTransform]);
+      return { ...prev, startTime: newStartTime, endTime: newEndTime } as Layer;
+    });
+  }, [zoom, duration]);
 
   // Separate handlers that explicitly pass the isDragEnd flag
   const handleDragMove = useCallback((event: DragMoveEvent) => {
-    processDragEvent(event, false);
+    processDragEvent(event);
   }, [processDragEvent]);
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
-    processDragEvent(event, true);
+    const initialLayer = activeDragLayerRef.current;
+    if (liveLayerUpdate && initialLayer) {
+      // Commit final state to the global store
+      updateLayer(liveLayerUpdate.id, {
+        startTime: liveLayerUpdate.startTime,
+        endTime: liveLayerUpdate.endTime,
+      });
+
+      // Handle vertical swap on drag end
+      const { delta } = event;
+      const rowsMoved = Math.round(delta.y / ROW_HEIGHT);
+      if (rowsMoved !== 0) {
+        const currentLayers = useTimelineStore.getState().layers;
+        const sorted = [...currentLayers].sort((a, b) => b.zIndex - a.zIndex);
+        const currentIndex = sorted.findIndex(l => l.id === initialLayer.id);
+        const targetIndex = Math.max(0, Math.min(sorted.length - 1, currentIndex + rowsMoved));
+        if (targetIndex !== currentIndex) {
+          const targetLayer = sorted[targetIndex];
+          swapLayers(initialLayer.id, targetLayer.id);
+        }
+      }
+    }
     setActiveDragId(null);
-  }, [processDragEvent]);
+    setLiveLayerUpdate(null);
+    activeDragLayerRef.current = null;
+  }, [liveLayerUpdate, updateLayer, swapLayers]);
 
   // Memoized snap-to-grid modifier for DnD context
   const snapToGridModifier = useCallback((args: { transform: any }) => {
@@ -1301,14 +1276,15 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
                   />
                 ))}
                 {sortedLayers.map((layer, index) => {
+                  const displayLayer = liveLayerUpdate && liveLayerUpdate.id === layer.id ? liveLayerUpdate : layer;
                   const PIXELS_PER_SECOND = 100;
-                  const leftPx = layer.startTime * PIXELS_PER_SECOND * zoom;
-                  const widthPx = (layer.endTime - layer.startTime) * PIXELS_PER_SECOND * zoom;
+                  const leftPx = displayLayer.startTime * PIXELS_PER_SECOND * zoom;
+                  const widthPx = (displayLayer.endTime - displayLayer.startTime) * PIXELS_PER_SECOND * zoom;
                   const topPx = HEADER_ROW_HEIGHT + (index * ROW_HEIGHT);
                   return (
                     <React.Fragment key={layer.id}>
                       <LayerClip
-                        layer={layer}
+                        layer={displayLayer}
                         index={index}
                         onAssetDrop={handleAssetDrop}
                     activeDragLayerId={activeDragId}
