@@ -226,7 +226,7 @@ export function useAudioAnalysis(): UseAudioAnalysis {
     }
 
     // Time-series features - timestamp-based indexing using analysisData.frameTimes
-    const getTimeSeriesValue = (arr: Float32Array | undefined): number => {
+    const getTimeSeriesValue = (arr: Float32Array | number[] | undefined): number => {
       if (!arr || arr.length === 0) return 0;
       const times = (analysisData as any).frameTimes as Float32Array | number[] | undefined;
       if (!times || times.length === 0) return 0;
