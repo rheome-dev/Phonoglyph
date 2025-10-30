@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useDrop } from 'react-dnd';
 import { useDrag } from 'react-dnd';
 import { DndContext, DragEndEvent, DragMoveEvent, DragStartEvent } from '@dnd-kit/core';
@@ -671,6 +671,64 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
     audio: true // Changed from false to true to ensure audio section is visible by default
   });
 
+  // Derive BPM from cached analysis (prefer master track)
+  const bpm: number | null = useMemo(() => {
+    if (!cachedAnalysis || cachedAnalysis.length === 0) return null;
+    const master = masterStemId
+      ? (cachedAnalysis as any[]).find(a => a.fileMetadataId === masterStemId)
+      : null;
+    const candidate = (master ?? (cachedAnalysis as any[])[0]) as any;
+    const val = candidate?.bpm ?? candidate?.metadata?.bpm ?? candidate?.analysisData?.bpm;
+    return typeof val === 'number' && isFinite(val) ? val : null;
+  }, [cachedAnalysis, masterStemId]);
+
+  // Compute visible grid lines based on bpm, duration, zoom and scroll position
+  const gridLines = useMemo(() => {
+    const lines: Array<{ time: number; type: 'bar' | 'beat' | 'sixteenth'; x: number }> = [];
+    if (!bpm || bpm <= 0 || !timelineLanesRef.current) return lines;
+
+    const PPS = 100;
+    const container = timelineLanesRef.current;
+    const scrollLeft = container.scrollLeft;
+    const viewportWidth = container.clientWidth;
+    const totalWidth = duration * PPS * zoom;
+    const minX = Math.max(0, scrollLeft - 50);
+    const maxX = Math.min(totalWidth, scrollLeft + viewportWidth + 50);
+
+    const secondsPerBeat = 60 / bpm;
+    const pixelsPerBeat = secondsPerBeat * PPS * zoom;
+
+    let stepType: 'bar' | 'beat' | 'sixteenth';
+    let subdivision = 1; // beats per division
+    if (pixelsPerBeat > 80) {
+      stepType = 'sixteenth';
+      subdivision = 0.25; // quarter of a beat
+    } else if (pixelsPerBeat > 20) {
+      stepType = 'beat';
+      subdivision = 1; // one beat
+    } else {
+      stepType = 'bar';
+      subdivision = 4; // 4/4 bar
+    }
+
+    const secondsPerStep = secondsPerBeat * subdivision;
+    const pixelsPerStep = secondsPerStep * PPS * zoom;
+
+    // Start from first step before minX
+    const startTime = Math.max(0, (minX) / (PPS * zoom));
+    const firstStepIndex = Math.floor(startTime / secondsPerStep);
+    for (let i = firstStepIndex; ; i++) {
+      const time = i * secondsPerStep;
+      const x = time * PPS * zoom;
+      if (x > maxX) break;
+      const type: 'bar' | 'beat' | 'sixteenth' = stepType === 'bar'
+        ? 'bar'
+        : (stepType === 'beat' ? 'beat' : 'sixteenth');
+      lines.push({ time, type, x });
+    }
+    return lines;
+  }, [bpm, duration, zoom]);
+
   // Default layer is now set in the store's initial state; no need to add here
 
   // FIX: When the project's duration changes (e.g., on audio load),
@@ -1163,13 +1221,51 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
 
           {/* ========== COLUMN 2: TIMELINE LANES (Scrollable & Interactive) ========== */}
           <div className="flex-1 overflow-x-auto" ref={timelineLanesRef}>
-            {/* FIX: Added onDragStart for precision and onDragMove for live feedback */}
-            <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragMove={handleDragMove}>
+            {/* FIX: Added onDragStart for precision and onDragMove for live feedback; include snap-to-grid modifier */}
+            <DndContext
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              onDragMove={handleDragMove}
+              modifiers={[
+                (args) => {
+                  const { transform } = args;
+                  if (!transform || !bpm || !activeDragId) return transform;
+                  const layer = layers.find(l => l.id === activeDragId);
+                  if (!layer) return transform;
+                  const originX = layer.startTime * 100 * zoom; // timeToX without function dependency
+                  const currentX = originX + transform.x;
+                  // visible grid xs
+                  const xs = gridLines.map(g => g.x);
+                  let snappedX = currentX;
+                  let minDist = Infinity;
+                  for (const gx of xs) {
+                    const d = Math.abs(gx - currentX);
+                    if (d < minDist) { minDist = d; snappedX = gx; }
+                  }
+                  const threshold = 10; // pixels
+                  if (minDist <= threshold) {
+                    return { ...transform, x: snappedX - originX };
+                  }
+                  return transform;
+                }
+              ]}
+            >
               <div
                 className="relative overflow-hidden"
                 style={{ width: `${timelineWidth}px`, height: `${totalHeight}px` }}
                 onClick={handleTimelineClick}
               >
+                {/* BPM-Aware Grid Lines */}
+                {gridLines.map((g: { time: number; type: 'bar' | 'beat' | 'sixteenth'; x: number }, idx: number) => (
+                  <div
+                    key={`grid-${idx}`}
+                    className={cn(
+                      'absolute top-0 h-full',
+                      g.type === 'bar' ? 'w-0.5 bg-white/30' : g.type === 'beat' ? 'w-0.5 bg-white/15' : 'w-px bg-white/10'
+                    )}
+                    style={{ left: `${g.x}px` }}
+                  />
+                ))}
                 {sortedLayers.map((layer, index) => {
                   const PIXELS_PER_SECOND = 100;
                   const leftPx = layer.startTime * PIXELS_PER_SECOND * zoom;

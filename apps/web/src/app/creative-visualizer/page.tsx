@@ -1490,11 +1490,19 @@ function CreativeVisualizerPage() {
                 <div className="text-xs font-mono uppercase tracking-wider px-2 py-1 rounded text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
                   <span className="font-creative-mono">{currentTime.toFixed(1)}</span><span className="font-creative-mono">S</span> / <span className="font-creative-mono">{getCurrentDuration().toFixed(1)}</span><span className="font-creative-mono">S</span>
                 </div>
+                {/* BPM on the left, FPS on the right */}
                 <div className="text-xs font-mono uppercase tracking-wider px-2 py-1 rounded text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                  FPS: <span className="font-creative-mono">{fps}</span>
+                  BPM: <span className="font-creative-mono">{(() => {
+                    const masterId = projectFiles?.files?.find(f => f.is_master)?.id;
+                    const ca = audioAnalysis.cachedAnalysis || [];
+                    const master = masterId ? ca.find((a: any) => a.fileMetadataId === masterId) : null;
+                    const candidate: any = master ?? ca[0];
+                    const bpmVal = candidate?.bpm ?? candidate?.metadata?.bpm ?? candidate?.analysisData?.bpm;
+                    return typeof bpmVal === 'number' && isFinite(bpmVal) ? Math.round(bpmVal) : '—';
+                  })()}</span>
                 </div>
                 <div className="text-xs font-mono uppercase tracking-wider px-2 py-1 rounded text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                  NOTES: <span className="font-creative-mono">{(midiData || sampleMidiData).tracks.reduce((sum, track) => sum + track.notes.length, 0)}</span>
+                  FPS: <span className="font-creative-mono">{fps}</span>
                 </div>
                 {hasStems && (
                   <div className="text-xs font-mono uppercase tracking-wider px-2 py-1 rounded text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
