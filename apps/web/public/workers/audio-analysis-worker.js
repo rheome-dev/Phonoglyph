@@ -172,8 +172,8 @@ const STEM_FEATURES = {
   drums: ['rms', 'zcr', 'spectralCentroid'],
   bass: ['rms', 'loudness', 'spectralCentroid'],
   vocals: ['rms', 'loudness', 'mfcc'],
-  other: ['rms', 'loudness', 'spectralCentroid'], // For synths, guitars, etc.
-  master: ['rms', 'loudness', 'spectralCentroid', 'spectralRolloff', 'spectralFlatness', 'zcr', 'perceptualSpread', 'amplitudeSpectrum', 'spectralFlux', 'perceptualSharpness', 'energy'] // Expanded for classification
+  other: ['rms', 'loudness', 'spectralCentroid', 'chroma'], // For synths, guitars, etc.
+  master: ['rms', 'loudness', 'spectralCentroid', 'spectralRolloff', 'spectralFlatness', 'zcr', 'perceptualSpread', 'amplitudeSpectrum', 'spectralFlux', 'perceptualSharpness', 'energy', 'chroma'] // Expanded for classification & pitch
 };
 
 // Quality presets for different performance levels

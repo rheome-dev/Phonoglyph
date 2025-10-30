@@ -18,8 +18,7 @@ export function useAudioFeatures(
 ): AudioFeature[] {
   return useMemo(() => {
     if (!trackId || !cachedAnalysis || cachedAnalysis.length === 0) return [];
-    const analysis = cachedAnalysis.find(a => a.fileMetadataId === trackId && (!stemType || a.stemType === stemType))
-      || cachedAnalysis.find(a => a.fileMetadataId === trackId);
+    const analysis = cachedAnalysis.find(a => a.fileMetadataId === trackId);
     if (!analysis || !analysis.analysisData) return [];
 
     const features: AudioFeature[] = [];
