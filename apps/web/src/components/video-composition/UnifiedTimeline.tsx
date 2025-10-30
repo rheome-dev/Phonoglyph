@@ -996,6 +996,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
           // FIX: Only perform z-index swap on dragend, not during dragmove
           if (isDragEnd) {
             // Perform the swap atomically to prevent race conditions.
+            console.log('Swapping layers:', layerId, 'with', targetLayer.id, 'currentIndex:', currentIndex, 'targetIndex:', targetIndex);
             swapLayers(layerId, targetLayer.id);
           }
         } else {
