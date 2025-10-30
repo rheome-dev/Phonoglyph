@@ -990,7 +990,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
         
         console.log('Drag event:', { 
           isDragEnd, 
-          eventType: event.type,
+          eventType: 'type' in event ? event.type : 'dragmove',
           currentIndex, 
           targetIndex, 
           rowsMoved, 
