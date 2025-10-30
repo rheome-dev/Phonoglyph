@@ -10,7 +10,7 @@ export interface AnalysisParams {
 export interface TransientData {
   time: number;
   intensity: number;
-  frequency: number;
+  type: 'kick' | 'snare' | 'hat' | 'generic';
 }
 
 export interface ChromaData {
@@ -32,6 +32,7 @@ export type AnalysisMethod = 'original' | 'enhanced' | 'both';
 // This is the target data structure for the analysis worker to produce
 export interface FullAudioAnalysis {
   bpm: number;
-  // ... other analysis fields
+  transients: TransientData[];
+  // ... plus all other features needed for HUDs (rms, chroma, etc.)
 }
 

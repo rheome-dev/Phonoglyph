@@ -50,6 +50,86 @@ function loadMeyda() {
 // Start loading Meyda immediately but don't wait for it
 loadMeyda();
 
+// Try to load web-audio-beat-detector for BPM detection (best-effort)
+let BeatDetector = null;
+let beatDetectorLoadingPromise = null;
+function loadBeatDetector() {
+  if (beatDetectorLoadingPromise) return beatDetectorLoadingPromise;
+  beatDetectorLoadingPromise = new Promise((resolve) => {
+    const tryLoad = (url, globalKey) => {
+      try {
+        importScripts(url);
+        // Some CDN builds attach to global; try common keys
+        if (self.webAudioBeatDetector) {
+          BeatDetector = self.webAudioBeatDetector;
+          resolve(true);
+          return true;
+        }
+        if (self.beatDetector) {
+          BeatDetector = self.beatDetector;
+          resolve(true);
+          return true;
+        }
+        if (typeof self.analyze === 'function') {
+          BeatDetector = { analyze: self.analyze };
+          resolve(true);
+          return true;
+        }
+      } catch (e) {
+        // noop; will try next URL
+      }
+      return false;
+    };
+
+    // Attempt a few plausible UMD bundles; if none work we'll fallback
+    const urls = [
+      'https://unpkg.com/web-audio-beat-detector@8.2.31/build/umd/index.js',
+      'https://cdn.jsdelivr.net/npm/web-audio-beat-detector@8.2.31/build/umd/index.js',
+    ];
+    for (const url of urls) {
+      if (tryLoad(url)) return;
+    }
+    resolve(false);
+  });
+  return beatDetectorLoadingPromise;
+}
+
+async function detectBpm(channelData, sampleRate) {
+  try {
+    await loadBeatDetector();
+    if (BeatDetector && typeof BeatDetector.analyze === 'function') {
+      // Some implementations accept Float32Array & sampleRate
+      try {
+        const bpm = await BeatDetector.analyze(channelData, sampleRate);
+        if (typeof bpm === 'number' && isFinite(bpm)) return bpm;
+      } catch (_) {}
+    }
+  } catch (_) {}
+
+  // Fallback: naive autocorrelation-based BPM estimate
+  try {
+    const minBpm = 60;
+    const maxBpm = 200;
+    const minLag = Math.floor(sampleRate * 60 / maxBpm);
+    const maxLag = Math.floor(sampleRate * 60 / minBpm);
+    let bestLag = minLag;
+    let bestCorr = -Infinity;
+    for (let lag = minLag; lag <= maxLag; lag++) {
+      let corr = 0;
+      for (let i = 0; i < channelData.length - lag; i += 2) {
+        corr += channelData[i] * channelData[i + lag];
+      }
+      if (corr > bestCorr) {
+        bestCorr = corr;
+        bestLag = lag;
+      }
+    }
+    const estimatedBpm = Math.round((60 * sampleRate) / bestLag);
+    if (estimatedBpm >= minBpm && estimatedBpm <= maxBpm) return estimatedBpm;
+  } catch (_) {}
+  return 0;
+}
+
 console.log('🔧 Audio analysis worker script loaded');
 
 let audioContext = null;
@@ -244,16 +324,20 @@ async function analyzeBuffer(data) {
     
     const waveformData = generateWaveformData(channelData, duration, 1024);
 
+    // Detect BPM using beat detector (with fallback)
+    const bpm = await detectBpm(channelData, sampleRate);
+
     const result = {
       id: `client_${fileId}`,
       fileMetadataId: fileId,
       stemType: stemType,
-      analysisData: analysis, // <-- this is now the flatFeatures object
+      analysisData: Object.assign({}, analysis, { bpm }), // include scalar bpm for backend persistence
       waveformData: waveformData,
       metadata: {
         sampleRate: sampleRate,
         duration: duration,
         bufferSize: 1024,
+        bpm: bpm,
         featuresExtracted: Object.keys(analysis),
         analysisDuration: 0
       }
@@ -582,79 +666,139 @@ async function performFullAnalysis(channelData, sampleRate, stemType, onProgress
 }
 
 async function performEnhancedAnalysis(channelData, sampleRate, stemType, analysisParams, onProgress) {
-  console.log('🎵 Performing enhanced analysis with transient, chroma, and RMS detection');
-  
+  console.log('🎵 Performing enhanced analysis with spectral flux onset detection and classification');
+
   const frameSize = 1024;
   const hopSize = 512;
-  const numFrames = Math.floor((channelData.length - frameSize) / hopSize) + 1;
-  
-  const transients = [];
-  const chroma = [];
-  const rms = [];
-  
-  // Default parameters if not provided
-  const params = {
+  const numFrames = Math.max(0, Math.floor((channelData.length - frameSize) / hopSize) + 1);
+
+  // Defaults and tunables
+  const params = Object.assign({
     transientThreshold: 0.1,
     onsetThreshold: 0.3,
-    chromaSmoothing: 0.8,
     rmsWindowSize: 1024,
-    pitchConfidence: 0.5,
-    minNoteDuration: 0.1,
-    ...analysisParams
-  };
-  
+    minNoteDuration: 0.05,
+    peakWindow: 8, // frames for local adaptive threshold
+    peakMultiplier: 1.5, // adaptive threshold multiplier
+    classification: {
+      highEnergyThreshold: 0.2,
+      highZcrThreshold: 0.2,
+      snareSharpnessThreshold: 0.6,
+      kickCentroidMax: 500,
+      hatCentroidMin: 8000,
+      snareCentroidMin: 2000,
+      snareCentroidMax: 6000,
+      postOnsetOffsetSamples: 256,
+      snippetLengthSamples: 2048,
+    }
+  }, analysisParams || {});
+
+  const rms = [];
+  const spectralFlux = [];
+
+  // Pass 1: feature extraction (RMS + spectralFlux)
   for (let i = 0; i < numFrames; i++) {
     const start = i * hopSize;
     const end = Math.min(start + frameSize, channelData.length);
     const frame = channelData.slice(start, end);
-    
     const time = start / sampleRate;
-    
-    // RMS Analysis
-    const rmsValue = Math.sqrt(frame.reduce((sum, sample) => sum + sample * sample, 0) / frame.length);
+
+    // RMS
+    const rmsValue = Math.sqrt(frame.reduce((sum, s) => sum + s * s, 0) / Math.max(1, frame.length));
     rms.push({ time, value: rmsValue });
-    
-    // Transient Detection (simple energy-based)
-    if (i > 0) {
-      const prevFrame = channelData.slice(start - hopSize, start - hopSize + frameSize);
-      const prevRms = Math.sqrt(prevFrame.reduce((sum, sample) => sum + sample * sample, 0) / prevFrame.length);
-      const energyDiff = rmsValue - prevRms;
-      
-      if (energyDiff > params.transientThreshold) {
-        transients.push({
-          time,
-          intensity: Math.min(energyDiff, 1.0),
-          frequency: 0 // Simplified - would need FFT for actual frequency
-        });
+
+    // spectralFlux via Meyda if available, else simple magnitude diff
+    let flux = 0;
+    try {
+      const features = Meyda.extract(['spectralFlux', 'amplitudeSpectrum'], frame);
+      if (features && typeof features.spectralFlux === 'number') {
+        flux = features.spectralFlux;
+      } else if (features && Array.isArray(features.amplitudeSpectrum)) {
+        // crude flux approximation: sum of abs diff vs previous frame
+        if (i > 0 && spectralFlux[i - 1] && spectralFlux[i - 1].spectrum) {
+          const prev = spectralFlux[i - 1].spectrum;
+          const curr = features.amplitudeSpectrum;
+          const len = Math.min(prev.length, curr.length);
+          let sum = 0;
+          for (let k = 0; k < len; k++) sum += Math.max(0, curr[k] - prev[k]);
+          flux = sum / Math.max(1, len);
+        }
       }
+      spectralFlux.push({ time, value: flux, spectrum: features && features.amplitudeSpectrum ? features.amplitudeSpectrum.slice(0) : null });
+    } catch (_) {
+      // Fallback: energy delta as flux
+      const prev = i > 0 ? rms[i - 1].value : 0;
+      flux = Math.max(0, rmsValue - prev);
+      spectralFlux.push({ time, value: flux, spectrum: null });
     }
-    
-    // Chroma Analysis (simplified pitch detection)
-    // This is a basic implementation - in practice you'd use FFT and chroma vector
-    const pitch = Math.random() * 0.5 + 0.25; // Placeholder - would need actual pitch detection
-    const confidence = Math.min(rmsValue * 2, 1.0);
-    
-    chroma.push({
-      time,
-      chroma: new Array(12).fill(0).map(() => Math.random() * 0.1), // Placeholder chroma vector
-      confidence,
-      pitch
-    });
-    
-    // Update progress
-    if (i % 100 === 0) {
-      onProgress(i / numFrames);
+
+    if (i % 100 === 0 && onProgress) onProgress(i / Math.max(1, numFrames));
+  }
+
+  // Normalize flux
+  const fluxValues = spectralFlux.map(f => f.value);
+  const maxFlux = Math.max(1e-6, Math.max.apply(null, fluxValues));
+  const normFlux = fluxValues.map(v => v / maxFlux);
+
+  // Pass 2: adaptive peak picking
+  const peaks = [];
+  const w = Math.max(1, params.peakWindow | 0);
+  for (let i = 0; i < normFlux.length; i++) {
+    const start = Math.max(0, i - w);
+    const end = Math.min(normFlux.length, i + w + 1);
+    let sum = 0, sumSq = 0, count = 0;
+    for (let j = start; j < end; j++) { sum += normFlux[j]; sumSq += normFlux[j] * normFlux[j]; count++; }
+    const mean = sum / Math.max(1, count);
+    const variance = Math.max(0, (sumSq / Math.max(1, count)) - mean * mean);
+    const std = Math.sqrt(variance);
+    const threshold = mean + params.peakMultiplier * std;
+    const isLocalMax = (i === 0 || normFlux[i] > normFlux[i - 1]) && (i === normFlux.length - 1 || normFlux[i] >= normFlux[i + 1]);
+    if (isLocalMax && normFlux[i] > threshold && normFlux[i] > params.onsetThreshold) {
+      peaks.push({ frameIndex: i, time: spectralFlux[i].time, intensity: normFlux[i] });
     }
   }
-  
-  // Generate waveform data
-  const waveform = generateWaveformData(channelData, sampleRate);
-  
+
+  // Refined transient classification per-peak
+  const transients = [];
+  const c = params.classification;
+  for (const peak of peaks) {
+    const onsetSample = peak.frameIndex * hopSize;
+    const snippetStart = Math.min(channelData.length - 1, Math.max(0, onsetSample + c.postOnsetOffsetSamples));
+    const snippetEnd = Math.min(channelData.length, snippetStart + c.snippetLengthSamples);
+    const snippet = channelData.slice(snippetStart, snippetEnd);
+
+    let centroid = 0, sharpness = 0, zcr = 0, energy = 0;
+    try {
+      const f = Meyda.extract(['spectralCentroid', 'perceptualSharpness', 'zcr', 'energy'], snippet);
+      centroid = (f && typeof f.spectralCentroid === 'number') ? f.spectralCentroid : 0;
+      sharpness = (f && typeof f.perceptualSharpness === 'number') ? f.perceptualSharpness : 0;
+      zcr = (f && typeof f.zcr === 'number') ? f.zcr : 0;
+      energy = (f && typeof f.energy === 'number') ? f.energy : 0;
+    } catch (_) {
+      // Compute simple fallbacks
+      energy = Math.sqrt(snippet.reduce((s, v) => s + v * v, 0) / Math.max(1, snippet.length));
+      // crude zcr
+      let zeroCrossings = 0;
+      for (let i = 1; i < snippet.length; i++) if ((snippet[i - 1] >= 0) !== (snippet[i] >= 0)) zeroCrossings++;
+      zcr = zeroCrossings / Math.max(1, snippet.length);
+    }
+
+    let type = 'generic';
+    if (energy > c.highEnergyThreshold && centroid < c.kickCentroidMax) {
+      type = 'kick';
+    } else if (centroid > c.hatCentroidMin && zcr > c.highZcrThreshold) {
+      type = 'hat';
+    } else if (sharpness > c.snareSharpnessThreshold && centroid >= c.snareCentroidMin && centroid <= c.snareCentroidMax) {
+      type = 'snare';
+    }
+
+    transients.push({ time: peak.time, intensity: peak.intensity, type });
+  }
+
   return {
-    transients,
-    chroma,
     rms,
-    waveform,
+    spectralFlux: normFlux.map((v, i) => ({ time: spectralFlux[i].time, value: v })),
+    transients,
     analysisParams: params
   };
 }
