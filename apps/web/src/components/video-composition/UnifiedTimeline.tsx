@@ -465,8 +465,8 @@ const LayerClip: React.FC<{
     top: `${HEADER_ROW_HEIGHT + (index * ROW_HEIGHT)}px`,
     height: `${ROW_HEIGHT - 4}px`,
     marginTop: '2px',
-    // Add transition for smooth snapping
-    transition: transform ? 'none' : 'top 0.2s ease-out',
+    // Remove transition to prevent snap-back animation after layer swaps
+    transition: 'none',
   } as React.CSSProperties;
 
   return (
