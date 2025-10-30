@@ -685,49 +685,27 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
     return typeof val === 'number' && isFinite(val) ? val : null;
   }, [cachedAnalysis, masterStemId]);
 
-  // Compute visible grid lines based on bpm, duration, zoom and scroll position
+  // Compute grid lines for the full duration to avoid truncation on zoom/scroll
   const gridLines = React.useMemo(() => {
     const lines: Array<{ time: number; type: 'bar' | 'beat' | 'sixteenth'; x: number }> = [];
-    if (!bpm || bpm <= 0 || !timelineLanesRef.current) return lines;
+    if (!bpm || bpm <= 0) return lines;
 
     const PPS = 100;
-    const container = timelineLanesRef.current;
-    const scrollLeft = container.scrollLeft;
-    const viewportWidth = container.clientWidth;
-    const totalWidth = duration * PPS * zoom;
-    const minX = Math.max(0, scrollLeft - 50);
-    const maxX = Math.min(totalWidth, scrollLeft + viewportWidth + 50);
-
     const secondsPerBeat = 60 / bpm;
     const pixelsPerBeat = secondsPerBeat * PPS * zoom;
 
     let stepType: 'bar' | 'beat' | 'sixteenth';
     let subdivision = 1; // beats per division
-    if (pixelsPerBeat > 80) {
-      stepType = 'sixteenth';
-      subdivision = 0.25; // quarter of a beat
-    } else if (pixelsPerBeat > 20) {
-      stepType = 'beat';
-      subdivision = 1; // one beat
-    } else {
-      stepType = 'bar';
-      subdivision = 4; // 4/4 bar
-    }
+    if (pixelsPerBeat > 80) { stepType = 'sixteenth'; subdivision = 0.25; }
+    else if (pixelsPerBeat > 20) { stepType = 'beat'; subdivision = 1; }
+    else { stepType = 'bar'; subdivision = 4; }
 
     const secondsPerStep = secondsPerBeat * subdivision;
-    const pixelsPerStep = secondsPerStep * PPS * zoom;
-
-    // Start from first step before minX
-    const startTime = Math.max(0, (minX) / (PPS * zoom));
-    const firstStepIndex = Math.floor(startTime / secondsPerStep);
-    for (let i = firstStepIndex; ; i++) {
+    const totalSteps = Math.ceil(duration / secondsPerStep);
+    for (let i = 0; i <= totalSteps; i++) {
       const time = i * secondsPerStep;
       const x = time * PPS * zoom;
-      if (x > maxX) break;
-      const type: 'bar' | 'beat' | 'sixteenth' = stepType === 'bar'
-        ? 'bar'
-        : (stepType === 'beat' ? 'beat' : 'sixteenth');
-      lines.push({ time, type, x });
+      lines.push({ time, type: stepType, x });
     }
     return lines;
   }, [bpm, duration, zoom]);
@@ -1265,17 +1243,23 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
                 onClick={handleTimelineClick}
               >
                 {/* BPM-Aware Grid Lines */}
-                {gridLines.map((g: { time: number; type: 'bar' | 'beat' | 'sixteenth'; x: number }, idx: number) => (
-                  <div
-                    key={`grid-${idx}`}
-                    className={cn(
-                      'absolute',
-                      // Subtler, thinner grid lines
-                      g.type === 'bar' ? 'w-px bg-white/15' : g.type === 'beat' ? 'w-[0.5px] bg-white/10' : 'w-[0.5px] bg-white/5'
-                    )}
-                    style={{ left: `${g.x}px`, top: HEADER_ROW_HEIGHT, height: `calc(100% - ${HEADER_ROW_HEIGHT}px)` }}
-                  />
-                ))}
+                {gridLines.map((g: { time: number; type: 'bar' | 'beat' | 'sixteenth'; x: number }, idx: number) => {
+                  const lineClass = cn(
+                    'absolute',
+                    g.type === 'bar' ? 'w-px bg-white/15' : g.type === 'beat' ? 'w-[0.5px] bg-white/10' : 'w-[0.5px] bg-white/5'
+                  );
+                  const compTop = HEADER_ROW_HEIGHT;
+                  const compHeight = (sortedLayers.length * ROW_HEIGHT) + ROW_HEIGHT; // layers + background header
+                  const audioHeaderTop = compTop + compHeight; // Audio & MIDI title row
+                  const audioLanesTop = audioHeaderTop + HEADER_ROW_HEIGHT;
+                  const audioLanesHeight = Math.max(0, totalHeight - audioLanesTop);
+                  return (
+                    <React.Fragment key={`grid-${idx}`}>
+                      <div className={lineClass} style={{ left: `${g.x}px`, top: compTop, height: `${compHeight}px` }} />
+                      <div className={lineClass} style={{ left: `${g.x}px`, top: audioLanesTop, height: `${audioLanesHeight}px` }} />
+                    </React.Fragment>
+                  );
+                })}
                 {sortedLayers.map((layer, index) => {
                   const displayLayer = liveLayerUpdate && liveLayerUpdate.id === layer.id ? liveLayerUpdate : layer;
                   const PIXELS_PER_SECOND = 100;
