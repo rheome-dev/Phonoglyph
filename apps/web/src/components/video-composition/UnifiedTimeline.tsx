@@ -954,6 +954,12 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
     const [layerId, handle] = rawId.split('::');
     const timeDelta = delta.x / (PIXELS_PER_SECOND * zoom);
     const isDragEnd = 'type' in event && event.type === 'dragend';
+    
+    console.log('handleDragEvent called:', {
+      hasType: 'type' in event,
+      type: 'type' in event ? event.type : 'NO TYPE',
+      isDragEnd
+    });
 
     if (handle === 'handle-right') {
       // Horizontal resize from right edge
