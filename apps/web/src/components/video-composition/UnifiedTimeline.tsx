@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useDrop } from 'react-dnd';
 import { useDrag } from 'react-dnd';
 import { DndContext, DragEndEvent, DragMoveEvent, DragStartEvent } from '@dnd-kit/core';
@@ -672,7 +672,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
   });
 
   // Derive BPM from cached analysis (prefer master track)
-  const bpm: number | null = useMemo(() => {
+  const bpm: number | null = React.useMemo(() => {
     if (!cachedAnalysis || cachedAnalysis.length === 0) return null;
     const master = masterStemId
       ? (cachedAnalysis as any[]).find(a => a.fileMetadataId === masterStemId)
@@ -683,7 +683,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
   }, [cachedAnalysis, masterStemId]);
 
   // Compute visible grid lines based on bpm, duration, zoom and scroll position
-  const gridLines = useMemo(() => {
+  const gridLines = React.useMemo(() => {
     const lines: Array<{ time: number; type: 'bar' | 'beat' | 'sixteenth'; x: number }> = [];
     if (!bpm || bpm <= 0 || !timelineLanesRef.current) return lines;
 
