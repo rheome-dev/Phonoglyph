@@ -1109,6 +1109,28 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
     processDragEvent(event, true);
     setActiveDragId(null);
   }, [processDragEvent]);
+
+  // Memoized snap-to-grid modifier for DnD context
+  const snapToGridModifier = useCallback((args: { transform: any }) => {
+    const { transform } = args;
+    if (!transform || !bpm || !activeDragId) return transform;
+    const layer = layers.find(l => l.id === activeDragId);
+    if (!layer) return transform;
+    const originX = layer.startTime * 100 * zoom; // timeToX without function dependency
+    const currentX = originX + transform.x;
+    const xs = gridLines.map(g => g.x);
+    let snappedX = currentX;
+    let minDist = Infinity;
+    for (const gx of xs) {
+      const d = Math.abs(gx - currentX);
+      if (d < minDist) { minDist = d; snappedX = gx; }
+    }
+    const threshold = 10;
+    if (minDist <= threshold) {
+      return { ...transform, x: snappedX - originX };
+    }
+    return transform;
+  }, [bpm, activeDragId, layers, zoom, gridLines]);
   
   const sortedLayers = [...layers].sort((a, b) => b.zIndex - a.zIndex);
   const totalHeight = (2 * HEADER_ROW_HEIGHT) + ((sortedLayers.length + 1 + stems.length) * ROW_HEIGHT);
@@ -1226,29 +1248,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
               onDragMove={handleDragMove}
-              modifiers={[
-                (args) => {
-                  const { transform } = args;
-                  if (!transform || !bpm || !activeDragId) return transform;
-                  const layer = layers.find(l => l.id === activeDragId);
-                  if (!layer) return transform;
-                  const originX = layer.startTime * 100 * zoom; // timeToX without function dependency
-                  const currentX = originX + transform.x;
-                  // visible grid xs
-                  const xs = gridLines.map(g => g.x);
-                  let snappedX = currentX;
-                  let minDist = Infinity;
-                  for (const gx of xs) {
-                    const d = Math.abs(gx - currentX);
-                    if (d < minDist) { minDist = d; snappedX = gx; }
-                  }
-                  const threshold = 10; // pixels
-                  if (minDist <= threshold) {
-                    return { ...transform, x: snappedX - originX };
-                  }
-                  return transform;
-                }
-              ]}
+              modifiers={[snapToGridModifier]}
             >
               <div
                 className="relative overflow-hidden"
