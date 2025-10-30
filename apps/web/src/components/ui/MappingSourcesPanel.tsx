@@ -1,12 +1,41 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useDrag } from 'react-dnd';
 import { Zap, Music, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
-// Import the plain function, not a hook
-import { getAudioFeatures, AudioFeature } from '@/hooks/use-audio-features';
 import { debugLog } from '@/lib/utils';
+
+export interface AudioFeature {
+  id: string;
+  name: string;
+  description: string;
+  category: 'rhythm' | 'pitch' | 'intensity' | 'timbre';
+  stemType?: string;
+  isEvent?: boolean;
+}
+
+export function getAudioFeatures(
+  trackId?: string,
+  stemType?: string,
+  cachedAnalysis?: any[]
+): AudioFeature[] {
+  if (!trackId || !cachedAnalysis || cachedAnalysis.length === 0) return [];
+  const analysis = cachedAnalysis.find(a => a.fileMetadataId === trackId);
+  if (!analysis || !analysis.analysisData) return [];
+  const features: AudioFeature[] = [];
+  if (analysis.analysisData.rms) features.push({ id: `${stemType}-volume`, name: 'Volume', description: 'Represents the loudness or intensity of the audio.', category: 'intensity', stemType });
+  if (analysis.analysisData.chroma) features.push({ id: `${stemType}-pitch`, name: 'Pitch', description: 'Represents the musical pitch center of the audio.', category: 'pitch', stemType });
+  if (analysis.analysisData.transients && analysis.analysisData.transients.length > 0) {
+    features.push({ id: `${stemType}-impact-all`, name: 'Impact (All)', description: 'Triggers on any detected rhythmic event.', category: 'rhythm', stemType, isEvent: true });
+    if (analysis.analysisData.transients.some((t: any) => t.type === 'kick')) features.push({ id: `${stemType}-impact-kick`, name: 'Kick Impact', description: 'Triggers only on low-frequency kick drum hits.', category: 'rhythm', stemType, isEvent: true });
+    if (analysis.analysisData.transients.some((t: any) => t.type === 'snare')) features.push({ id: `${stemType}-impact-snare`, name: 'Snare Impact', description: 'Triggers only on mid-frequency snare drum hits.', category: 'rhythm', stemType, isEvent: true });
+    if (analysis.analysisData.transients.some((t: any) => t.type === 'hat')) features.push({ id: `${stemType}-impact-hat`, name: 'Hat Impact', description: 'Triggers only on high-frequency hi-hat or cymbal hits.', category: 'rhythm', stemType, isEvent: true });
+  }
+  const bpm = analysis.bpm || analysis.metadata?.bpm || analysis.analysisData?.bpm;
+  if (bpm) features.push({ id: `${stemType}-bpm`, name: 'BPM', description: `The detected tempo of the track: ${Math.round(bpm)} BPM. This is a constant value.`, category: 'rhythm', stemType });
+  return features;
+}
 
 // Enhanced FeatureNode with live meter
 const FeatureNode = ({ 
@@ -232,12 +261,9 @@ export function MappingSourcesPanel({
   cachedAnalysis = [],
   isPlaying = false
 }: MappingSourcesPanelProps) {
-  const features = React.useMemo(() =>
-    getAudioFeatures(activeTrackId, selectedStemType, cachedAnalysis),
-    [activeTrackId, selectedStemType, cachedAnalysis]
-  );
+  const features = useMemo(() => getAudioFeatures(activeTrackId, selectedStemType, cachedAnalysis), [activeTrackId, selectedStemType, cachedAnalysis]);
   
-  const featuresByCategory = React.useMemo(() => {
+  const featuresByCategory = useMemo(() => {
     return features.reduce((acc, feature) => {
       if (!acc[feature.category]) {
         acc[feature.category] = [];
