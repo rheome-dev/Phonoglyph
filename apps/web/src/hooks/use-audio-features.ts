@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 
 export interface AudioFeature {
   id: string;
@@ -17,7 +17,7 @@ export interface AudioFeature {
  */
 export function useAudioFeatures(trackId?: string, stemType?: string): AudioFeature[] {
   // Use useMemo to compute features without state updates during render
-  const features = useMemo(() => {
+  const features = React.useMemo(() => {
     if (!trackId) {
       return [];
     }

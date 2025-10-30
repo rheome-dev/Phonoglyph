@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { useDrag } from 'react-dnd';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -130,7 +130,7 @@ export function EffectsLibrarySidebar({
   });
 
   // Filter effects based on search query
-  const filteredEffects = useMemo(() => {
+  const filteredEffects = React.useMemo(() => {
     if (!searchQuery.trim()) return effects;
     
     const query = searchQuery.toLowerCase();
@@ -143,7 +143,7 @@ export function EffectsLibrarySidebar({
   }, [effects, searchQuery]);
 
   // Group filtered effects by category
-  const categorizedEffects = useMemo(() => {
+  const categorizedEffects = React.useMemo(() => {
     const categories: Record<string, EffectUIData[]> = {
       'Generative': [],
       'Overlays': [],
