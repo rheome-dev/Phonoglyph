@@ -1011,7 +1011,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
   const dragTargetLayerRef = useRef<string | null>(null);
 
   // FIX: Capture the state of the layer when the drag begins
-  const handleDragStart = (event: DragStartEvent) => {
+  const handleDragStart = useCallback((event: DragStartEvent) => {
     const { active } = event;
     const layerId = (active.id as string).split('::')[0];
     const layer = layers.find(l => l.id === layerId);
@@ -1020,10 +1020,10 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
       dragTargetLayerRef.current = null; // Reset target tracking
       setActiveDragId(layerId);
     }
-  };
+  }, [layers]);
 
   // Shared drag logic for both move and end events
-  const processDragEvent = (event: DragMoveEvent | DragEndEvent, isDragEnd: boolean) => {
+  const processDragEvent = useCallback((event: DragMoveEvent | DragEndEvent, isDragEnd: boolean) => {
     const { active, delta } = event;
     const rawId = active.id as string;
     
@@ -1098,17 +1098,17 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
       activeDragLayerRef.current = null;
       dragTargetLayerRef.current = null;
     }
-  };
+  }, [zoom, duration, updateLayer, swapLayers, setDestinationAnimateId, setPostDropTransform]);
 
   // Separate handlers that explicitly pass the isDragEnd flag
-  const handleDragMove = (event: DragMoveEvent) => {
+  const handleDragMove = useCallback((event: DragMoveEvent) => {
     processDragEvent(event, false);
-  };
+  }, [processDragEvent]);
 
-  const handleDragEnd = (event: DragEndEvent) => {
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
     processDragEvent(event, true);
     setActiveDragId(null);
-  };
+  }, [processDragEvent]);
   
   const sortedLayers = [...layers].sort((a, b) => b.zIndex - a.zIndex);
   const totalHeight = (2 * HEADER_ROW_HEIGHT) + ((sortedLayers.length + 1 + stems.length) * ROW_HEIGHT);
