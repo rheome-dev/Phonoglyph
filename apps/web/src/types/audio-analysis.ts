@@ -29,3 +29,9 @@ export type AnalysisMethod = 'original' | 'enhanced' | 'both';
 
 
 
+// This is the target data structure for the analysis worker to produce
+export interface FullAudioAnalysis {
+  bpm: number;
+  // ... other analysis fields
+}
+

@@ -1,73 +1,11 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { analyze as detectBpm } from 'web-audio-beat-detector';
 import { trpc } from '@/lib/trpc';
 import { debugLog } from '@/lib/utils';
-import { WaveformData } from '@/components/stem-visualization/stem-waveform';
+import type { WorkerResponse } from '@/types/worker-messages';
+import type { AudioAnalysisData } from '@/types/audio-analysis-data';
 
-interface TransientData {
-  time: number;
-  intensity: number;
-  frequency?: number;
-}
-
-interface ChromaData {
-  time: number;
-  pitch: number;
-  confidence: number;
-  chroma: number[];
-}
-
-// Consolidated data structure matching worker output
-export interface AudioAnalysisData {
-  id: string;
-  fileMetadataId: string;
-  stemType: string;
-  
-  // Keep as 'analysisData' to match worker output
-  analysisData: {
-    // Shared frame timestamps for dense time-series features
-    frameTimes?: Float32Array;
-    // Core time-series features
-    rms: Float32Array;
-    loudness: Float32Array;
-    spectralCentroid: Float32Array;
-    spectralRolloff?: Float32Array;
-    spectralFlatness?: Float32Array;
-    zcr?: Float32Array;
-    
-    // FFT data
-    fft: Float32Array;
-    fftFrequencies?: Float32Array;
-    amplitudeSpectrum?: Float32Array;
-    
-    // Legacy/derived fields (for backward compatibility)
-    volume?: Float32Array;
-    bass?: Float32Array;
-    mid?: Float32Array;
-    treble?: Float32Array;
-    features?: Float32Array;
-    markers?: Float32Array;
-    frequencies?: Float32Array;
-    timeData?: Float32Array;
-    
-    // Stereo data
-    stereoWindow_left?: Float32Array;
-    stereoWindow_right?: Float32Array;
-    
-    // Enhanced features
-    transients?: TransientData[];
-    chroma?: ChromaData[];
-  };
-  
-  waveformData: WaveformData;
-  
-  metadata: {
-    sampleRate: number;
-    duration: number;
-    bufferSize: number;
-    featuresExtracted: string[];
-    analysisDuration: number;
-  };
-}
+// Types moved to '@/types/audio-analysis-data'
 
 export interface UseAudioAnalysis {
   // State
@@ -90,6 +28,7 @@ export function useAudioAnalysis(): UseAudioAnalysis {
   const [error, setError] = useState<string | null>(null);
   const [analysisProgress, setAnalysisProgress] = useState<Record<string, { progress: number; message: string }>>({});
   
+  // Legacy worker ref no longer used; worker is created per-analysis for TS worker bundling
   const workerRef = useRef<Worker | null>(null);
   const [queryState, setQueryState] = useState<{ fileIds: string[]; stemType?: string }>({ fileIds: [] });
 
@@ -114,58 +53,7 @@ export function useAudioAnalysis(): UseAudioAnalysis {
     }
   });
 
-  // Worker initialization
-  useEffect(() => {
-    workerRef.current = new Worker('/workers/audio-analysis-worker.js');
-
-    workerRef.current.onmessage = (event) => {
-      const { type, data } = event.data;
-      
-      switch (type) {
-        case 'ANALYSIS_PROGRESS':
-          setAnalysisProgress(prev => ({ 
-            ...prev, 
-            [data.fileId]: { progress: data.progress, message: data.message } 
-          }));
-          break;
-          
-        case 'ANALYSIS_COMPLETE':
-          debugLog.log('🎵 Analysis complete for:', data.fileId);
-          const newAnalysis: AudioAnalysisData = data.result;
-          
-          setCachedAnalysis(prev => [
-            ...prev.filter(a => !(a.fileMetadataId === data.fileId && a.stemType === newAnalysis.stemType)),
-            newAnalysis
-          ]);
-          
-          setAnalysisProgress(prev => {
-            const { [data.fileId]: removed, ...rest } = prev;
-            return rest;
-          });
-          
-          // Cache to backend
-          cacheMutation.mutate(newAnalysis as any);
-          break;
-          
-        case 'ANALYSIS_ERROR':
-          debugLog.error(`❌ Analysis error for ${data.fileId}:`, data.error);
-          setAnalysisProgress(prev => ({ 
-            ...prev, 
-            [data.fileId]: { progress: 1, message: `Error: ${data.error}` } 
-          }));
-          setError(`Analysis failed for ${data.fileId}: ${data.error}`);
-          break;
-      }
-    };
-
-    return () => {
-      if (workerRef.current) {
-        debugLog.log('🧹 Terminating audio analysis worker');
-        workerRef.current.terminate();
-        workerRef.current = null;
-      }
-    };
-  }, []); // Empty deps - worker should only init once on mount
+  // No global worker; we spin up a per-analysis TS worker when needed
 
   // Handle cached data from server
   useEffect(() => {
@@ -209,12 +97,7 @@ export function useAudioAnalysis(): UseAudioAnalysis {
     }
   }, [cachedAnalysis]);
 
-  const analyze = useCallback((fileId: string, audioBuffer: AudioBuffer, stemType: string) => {
-    if (!workerRef.current) {
-      debugLog.error("❌ Analysis worker not initialized");
-      return;
-    }
-    
+  const analyze = useCallback(async (fileId: string, audioBuffer: AudioBuffer, stemType: string) => {
     // Skip if already in progress
     if (analysisProgress[fileId]) {
       debugLog.log('⏭️ Analysis already in progress:', fileId);
@@ -227,28 +110,78 @@ export function useAudioAnalysis(): UseAudioAnalysis {
       debugLog.log('⏭️ Analysis already exists:', fileId, stemType);
       return;
     }
-    
+
     debugLog.log('🎵 Starting analysis:', fileId, stemType);
-    setAnalysisProgress(prev => ({ 
-      ...prev, 
-      [fileId]: { progress: 0, message: 'Queued for analysis...' } 
+    setAnalysisProgress(prev => ({
+      ...prev,
+      [fileId]: { progress: 0, message: 'Detecting BPM and analyzing...' }
     }));
-    
-    // Copy channel data to avoid detachment
-    const channelData = audioBuffer.getChannelData(0);
-    const channelDataCopy = new Float32Array(channelData);
-    
-    workerRef.current.postMessage({
+
+    // 1) Calculate BPM on the main thread
+    let bpm: number | null = null;
+    try {
+      const detected = await detectBpm(audioBuffer as unknown as AudioBuffer);
+      if (Number.isFinite(detected)) bpm = detected as number;
+    } catch (err) {
+      debugLog.error('BPM detection failed:', err);
+    }
+
+    // 2) Create the TS worker via module URL
+    const worker = new Worker(new URL('../app/workers/audio-analysis.worker.ts', import.meta.url));
+
+    worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
+      const { type, data } = (event.data as WorkerResponse) || ({} as any);
+      if (type === 'ANALYSIS_COMPLETE') {
+        const result = (data as any).result as AudioAnalysisData;
+        // Merge BPM into analysis results
+        const merged: AudioAnalysisData = {
+          ...result,
+          analysisData: bpm !== null ? { ...result.analysisData, bpm } : { ...result.analysisData },
+          metadata: bpm !== null ? { ...result.metadata, bpm } : { ...result.metadata },
+          ...(bpm !== null ? { bpm } : {}),
+        };
+
+        setCachedAnalysis(prev => [
+          ...prev.filter(a => !(a.fileMetadataId === fileId && a.stemType === merged.stemType)),
+          merged,
+        ]);
+
+        setAnalysisProgress(prev => {
+          const { [fileId]: _removed, ...rest } = prev;
+          return rest;
+        });
+
+        cacheMutation.mutate(merged as any);
+        worker.terminate();
+      } else if (type === 'ANALYSIS_PROGRESS') {
+        setAnalysisProgress(prev => ({
+          ...prev,
+          [fileId]: { progress: data.progress, message: data.message }
+        }));
+      } else if (type === 'ANALYSIS_ERROR') {
+        debugLog.error(`❌ Analysis error for ${fileId}:`, data.error);
+        setAnalysisProgress(prev => ({
+          ...prev,
+          [fileId]: { progress: 1, message: `Error: ${data.error}` }
+        }));
+        setError(`Analysis failed for ${fileId}: ${data.error}`);
+        worker.terminate();
+      }
+    };
+
+    // 4) Post audio data to worker (without BPM responsibility)
+    const channelDataCopy = new Float32Array(audioBuffer.getChannelData(0));
+    worker.postMessage({
       type: 'ANALYZE_BUFFER',
-      data: { 
-        fileId, 
+      data: {
+        fileId,
         channelData: channelDataCopy,
         sampleRate: audioBuffer.sampleRate,
         duration: audioBuffer.duration,
         stemType,
       }
     });
-  }, [analysisProgress, cachedAnalysis]);
+  }, [analysisProgress, cachedAnalysis, cacheMutation, debugLog]);
 
   const getAnalysis = useCallback((fileId: string, stemType?: string): AudioAnalysisData | null => {
     const targetStemType = stemType ?? 'master';

@@ -239,7 +239,8 @@ export const stemRouter = router({
     .input(z.object({
       fileMetadataId: z.string(),
       stemType: z.string(),
-      analysisData: z.record(z.string(), z.array(z.number())),
+      // Allow scalar values like bpm in addition to numeric arrays
+      analysisData: z.record(z.string(), z.union([z.array(z.number()), z.number()])),
       waveformData: z.object({
         points: z.array(z.number()),
         sampleRate: z.number(),
@@ -256,6 +257,7 @@ export const stemRouter = router({
         duration: z.number(),
         bufferSize: z.number(),
         featuresExtracted: z.array(z.string()),
+        bpm: z.number().optional(),
       }),
     }))
     .mutation(async ({ ctx, input }) => {
