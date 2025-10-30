@@ -977,26 +977,30 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
       const currentLayers = useTimelineStore.getState().layers;
       const sortedLayers = [...currentLayers].sort((a, b) => b.zIndex - a.zIndex);
       const currentIndex = sortedLayers.findIndex(l => l.id === layerId);
-      const verticalDelta = delta.y;
       
-      // Calculate which layer we're hovering over based on vertical delta
-      const rowsMoved = Math.round(verticalDelta / ROW_HEIGHT);
-      
-      // FIX: Clamp the target index to prevent dragging outside the composition area.
-      const targetIndex = Math.max(0, Math.min(sortedLayers.length - 1, currentIndex + rowsMoved));
-      
-      // Track the target layer ID for visual feedback
-      if (targetIndex !== currentIndex) {
-        const targetLayer = sortedLayers[targetIndex];
-        dragTargetLayerRef.current = targetLayer.id;
+      // Only proceed with vertical swap if we found the layer
+      if (currentIndex !== -1) {
+        const verticalDelta = delta.y;
         
-        // FIX: Only perform z-index swap on dragend, not during dragmove
-        if (isDragEnd) {
-          // Perform the swap atomically to prevent race conditions.
-          swapLayers(layerId, targetLayer.id);
+        // Calculate which layer we're hovering over based on vertical delta
+        const rowsMoved = Math.round(verticalDelta / ROW_HEIGHT);
+        
+        // FIX: Clamp the target index to prevent dragging outside the composition area.
+        const targetIndex = Math.max(0, Math.min(sortedLayers.length - 1, currentIndex + rowsMoved));
+        
+        // Track the target layer ID for visual feedback
+        if (targetIndex !== currentIndex) {
+          const targetLayer = sortedLayers[targetIndex];
+          dragTargetLayerRef.current = targetLayer.id;
+          
+          // FIX: Only perform z-index swap on dragend, not during dragmove
+          if (isDragEnd) {
+            // Perform the swap atomically to prevent race conditions.
+            swapLayers(layerId, targetLayer.id);
+          }
+        } else {
+          dragTargetLayerRef.current = null;
         }
-      } else {
-        dragTargetLayerRef.current = null;
       }
       
       // Always update the time of the dragged layer, regardless of vertical movement.
