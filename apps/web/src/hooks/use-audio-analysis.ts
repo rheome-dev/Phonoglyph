@@ -123,7 +123,9 @@ export function useAudioAnalysis(): UseAudioAnalysis {
       const detected = await detectBpm(audioBuffer as unknown as AudioBuffer);
       if (Number.isFinite(detected)) bpm = detected as number;
     } catch (err) {
-      debugLog.error('BPM detection failed:', err);
+      // Some audio has no detectable beats; record as null without noisy errors
+      debugLog.warn ? debugLog.warn('BPM detection unavailable for this audio') : debugLog.log('BPM detection unavailable for this audio');
+      bpm = null;
     }
 
     // 2) Create the TS worker via module URL
