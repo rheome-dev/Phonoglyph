@@ -405,7 +405,8 @@ const LayerClip: React.FC<{
   index: number;
   onAssetDrop: (item: any, targetLayerId: string) => void;
   activeDragLayerId: string | null;
-}> = ({ layer, index, onAssetDrop, activeDragLayerId }) => {
+  postDropTransform?: { id: string; x: number; y: number } | null;
+}> = ({ layer, index, onAssetDrop, activeDragLayerId, postDropTransform }) => {
   const { zoom, selectLayer, selectedLayerId } = useTimelineStore();
 
   const isSelected = selectedLayerId === layer.id;
@@ -458,11 +459,15 @@ const LayerClip: React.FC<{
 
   const isDraggingThis = activeDragLayerId === layer.id;
 
+  const effectiveTransform = transform
+    ? `translate3d(${transform.x}px, ${verticalOffset}px, 0)`
+    : (postDropTransform && postDropTransform.id === layer.id
+        ? `translate3d(${postDropTransform.x}px, ${postDropTransform.y}px, 0)`
+        : undefined);
+
   const style = {
     // Apply both horizontal (free) and vertical (snapped) transforms
-    transform: transform 
-      ? `translate3d(${transform.x}px, ${verticalOffset}px, 0)` 
-      : undefined,
+    transform: effectiveTransform,
     left: `${timeToX(layer.startTime)}px`,
     width: `${timeToX(layer.endTime - layer.startTime)}px`,
     top: `${HEADER_ROW_HEIGHT + (index * ROW_HEIGHT)}px`,
@@ -470,7 +475,7 @@ const LayerClip: React.FC<{
     marginTop: '2px',
     // Enable smooth vertical animation for non-dragging clips (e.g., the target layer clip)
     // but disable it for the actively dragged clip to avoid snap-back.
-    transition: isDraggingThis ? 'none' : 'top 0.2s ease-out',
+    transition: (isDraggingThis || (postDropTransform && postDropTransform.id === layer.id)) ? 'none' : 'top 0.2s ease-out',
   } as React.CSSProperties;
 
   return (
@@ -650,6 +655,8 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
   const { backgroundColor, isBackgroundVisible, setBackgroundColor, toggleBackgroundVisibility } = useProjectSettingsStore();
   const activeDragLayerRef = useRef<Layer | null>(null); // FIX: Add ref to store layer state on drag start
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  // Keep the final drag transform for one frame after drop to prevent snap-back
+  const [postDropTransform, setPostDropTransform] = useState<{ id: string; x: number; y: number } | null>(null);
   const timelineContainerRef = useRef<HTMLDivElement | null>(null);
   const [expandedSections, setExpandedSections] = useState({
     composition: true, // Combined visual and effects layers
@@ -1014,6 +1021,10 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
 
     // If this is the final event in the drag sequence, clear the reference.
     if (isDragEnd) {
+      // Preserve the final transform for one frame to avoid visual snap-back
+      setPostDropTransform({ id: layerId, x: delta.x, y: Math.round(delta.y / ROW_HEIGHT) * ROW_HEIGHT });
+      // Clear on next frame
+      requestAnimationFrame(() => setPostDropTransform(null));
       activeDragLayerRef.current = null;
       dragTargetLayerRef.current = null;
     }
@@ -1158,7 +1169,8 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
                         layer={layer}
                         index={index}
                         onAssetDrop={handleAssetDrop}
-                        activeDragLayerId={activeDragId}
+                    activeDragLayerId={activeDragId}
+                        postDropTransform={postDropTransform}
                       />
                       {activeDragId === layer.id && (
                         <div
@@ -1172,6 +1184,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
                             top: `${topPx}px`,
                             height: `${ROW_HEIGHT - 4}px`,
                             marginTop: '2px',
+                            transition: 'none',
                             zIndex: 5,
                           }}
                         >
