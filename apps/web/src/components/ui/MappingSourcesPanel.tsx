@@ -231,7 +231,7 @@ export function MappingSourcesPanel({
   cachedAnalysis = [],
   isPlaying = false
 }: MappingSourcesPanelProps) {
-  const features = useAudioFeatures(activeTrackId, selectedStemType);
+  const features = useAudioFeatures(activeTrackId, selectedStemType, cachedAnalysis);
   
   const featuresByCategory = React.useMemo(() => {
     return features.reduce((acc, feature) => {
