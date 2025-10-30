@@ -373,7 +373,7 @@ const StemTrackLane: React.FC<StemTrackLaneProps> = ({
   const zoom = useTimelineStore(state => state.zoom);
   return (
     <div className={cn('flex items-center w-full border-b border-stone-700/50')} style={{ height: `${ROW_HEIGHT}px` }}>
-      <div className="flex-1 min-w-0 px-2 overflow-hidden h-full">
+      <div className="flex-1 min-w-0 px-0 overflow-hidden h-full">
         {analysisProgress ? (
           <div className="w-full h-full flex flex-col justify-center">
             <div className="w-full bg-stone-700 rounded-full h-1.5">
@@ -1269,10 +1269,11 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
                   <div
                     key={`grid-${idx}`}
                     className={cn(
-                      'absolute top-0 h-full',
-                      g.type === 'bar' ? 'w-0.5 bg-white/30' : g.type === 'beat' ? 'w-0.5 bg-white/15' : 'w-px bg-white/10'
+                      'absolute',
+                      // Subtler, thinner grid lines
+                      g.type === 'bar' ? 'w-px bg-white/15' : g.type === 'beat' ? 'w-[0.5px] bg-white/10' : 'w-[0.5px] bg-white/5'
                     )}
-                    style={{ left: `${g.x}px` }}
+                    style={{ left: `${g.x}px`, top: HEADER_ROW_HEIGHT, height: `calc(100% - ${HEADER_ROW_HEIGHT}px)` }}
                   />
                 ))}
                 {sortedLayers.map((layer, index) => {
