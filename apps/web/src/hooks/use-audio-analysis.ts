@@ -231,10 +231,11 @@ export function useAudioAnalysis(): UseAudioAnalysis {
       let storedTransient: { time: number; intensity: number } | undefined = lastTransientRefs.current[envelopeKey];
 
       // **FIX 1: LOOP DETECTION & STATE RESET**
-      // If time is less than the stored transient's time, we've looped. Reset the state.
+      // If the current time is significantly less than the stored transient's time, 
+      // it means the audio has looped. We must reset the state for this feature.
       if (storedTransient && time < storedTransient.time) {
         delete lastTransientRefs.current[envelopeKey];
-        storedTransient = undefined; // Ensure local var is also cleared
+        storedTransient = undefined; 
       }
       
       const latestTransient = relevantTransients.reduce((latest: any, t: any) => {
@@ -244,6 +245,9 @@ export function useAudioAnalysis(): UseAudioAnalysis {
         return latest;
       }, null);
       
+      // **FIX 2: ROBUST STATE UPDATE**
+      // If we found a transient, it should become our new "active" transient,
+      // replacing whatever was there before if it's newer.
       if (latestTransient) {
         if (!storedTransient || latestTransient.time > storedTransient.time) {
           lastTransientRefs.current[envelopeKey] = { time: latestTransient.time, intensity: latestTransient.intensity };
@@ -254,7 +258,6 @@ export function useAudioAnalysis(): UseAudioAnalysis {
       if (activeTransient) {
         const elapsedTime = time - activeTransient.time;
         if (elapsedTime >= 0 && elapsedTime < decayTime) {
-          // This is the correct, enveloped modulation signal
           return activeTransient.intensity * (1 - (elapsedTime / decayTime));
         }
       }

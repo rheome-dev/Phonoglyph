@@ -106,14 +106,20 @@ const FeatureNode = ({
     const time = currentTime;
     let featureValue = 0;
     
-    // --- NEW ENVELOPE LOGIC FOR TRANSIENTS ---
+    // --- ENVELOPE LOGIC FOR TRANSIENTS ---
     if (isTransientFeature) {
+        // **FIX 3: ADD LOOP DETECTION TO THE UI COMPONENT**
+        let storedTransient = lastTransientRef.current;
+        if (storedTransient && time < storedTransient.time) {
+            lastTransientRef.current = null;
+            storedTransient = null;
+        }
+
         const transientType = feature.id.split('-').pop();
         const relevantTransients = analysisData.transients?.filter((t: any) =>
             transientType === 'all' || t.type === transientType
         );
 
-        // Find the most recent transient that has occurred up to the current time
         const latestTransient = relevantTransients?.reduce((latest: any, t: any) => {
             if (t.time <= time && (!latest || t.time > latest.time)) {
                 return t;
@@ -121,19 +127,18 @@ const FeatureNode = ({
             return latest;
         }, null);
 
-        // If a new transient is found that is more recent than our last latched one, update the ref.
-        if (latestTransient && latestTransient.time > (lastTransientRef.current?.time ?? -1)) {
-            lastTransientRef.current = { time: latestTransient.time, intensity: latestTransient.intensity };
+        if (latestTransient) {
+            if (!storedTransient || latestTransient.time > storedTransient.time) {
+                lastTransientRef.current = { time: latestTransient.time, intensity: latestTransient.intensity };
+            }
         }
 
-        // Calculate envelope value based on the last seen transient
-        if (lastTransientRef.current) {
-            const elapsedTime = time - lastTransientRef.current.time;
+        const activeTransient = lastTransientRef.current;
+        if (activeTransient) {
+            const elapsedTime = time - activeTransient.time;
             if (elapsedTime >= 0 && elapsedTime < decayTime) {
-                // Linear decay
-                featureValue = lastTransientRef.current.intensity * (1 - (elapsedTime / decayTime));
+                featureValue = activeTransient.intensity * (1 - (elapsedTime / decayTime));
             } else {
-                // Decay has finished
                 featureValue = 0;
             }
         } else {
