@@ -232,6 +232,10 @@ export function useAudioAnalysis(): UseAudioAnalysis {
         transientType === 'all' || t.type === transientType
       ) || [];
       
+      // Create a unique key for this feature to track its envelope state
+      // Use full feature ID to match FeatureNode (e.g., "drums-impact-all")
+      const envelopeKey = `${fileId}-${featureKey}`;
+      
       // Find the most recent transient that has occurred up to the current time
       const latestTransient = relevantTransients.reduce((latest: any, t: any) => {
         if (t.time <= time && (!latest || t.time > latest.time)) {
@@ -240,25 +244,54 @@ export function useAudioAnalysis(): UseAudioAnalysis {
         return latest;
       }, null);
       
-      // Create a unique key for this feature to track its envelope state
-      // Use full feature ID to match FeatureNode (e.g., "drums-impact-all")
-      const envelopeKey = `${fileId}-${featureKey}`;
+      // Get the last stored transient
+      const storedTransient = lastTransientRefs.current[envelopeKey];
       
-      // If a new transient is found that is more recent than our last latched one, update the ref
-      if (latestTransient && latestTransient.time > (lastTransientRefs.current[envelopeKey]?.time ?? -1)) {
-        lastTransientRefs.current[envelopeKey] = { time: latestTransient.time, intensity: latestTransient.intensity };
+      // Update the ref if we found a new transient that's more recent
+      // Also handle looping: if time has wrapped around (current time < stored time), treat it as a reset
+      if (latestTransient) {
+        if (!storedTransient || latestTransient.time > storedTransient.time || time < storedTransient.time) {
+          // New transient found, or time has looped (current time < stored time means we've looped)
+          lastTransientRefs.current[envelopeKey] = { time: latestTransient.time, intensity: latestTransient.intensity };
+        }
+      } else if (storedTransient && time < storedTransient.time) {
+        // Time has looped and no transient found yet - clear the old envelope state
+        delete lastTransientRefs.current[envelopeKey];
       }
       
       // Calculate envelope value based on the last seen transient
-      if (lastTransientRefs.current[envelopeKey]) {
-        const elapsedTime = time - lastTransientRefs.current[envelopeKey].time;
+      const lastTransient = lastTransientRefs.current[envelopeKey];
+      if (lastTransient) {
+        const elapsedTime = time - lastTransient.time;
         if (elapsedTime >= 0 && elapsedTime < decayTime) {
-          // Linear decay
-          return lastTransientRefs.current[envelopeKey].intensity * (1 - (elapsedTime / decayTime));
-        } else {
-          // Decay has finished
-          return 0;
+          // Linear decay from peak intensity to zero
+          const envelopeValue = lastTransient.intensity * (1 - (elapsedTime / decayTime));
+          const finalValue = Math.max(0, envelopeValue);
+          // Debug log (remove after debugging)
+          if (finalValue > 0.01) {
+            debugLog.log('[getFeatureValue] Impact envelope:', {
+              featureKey,
+              time,
+              lastTransientTime: lastTransient.time,
+              elapsedTime,
+              intensity: lastTransient.intensity,
+              decayTime,
+              envelopeValue: finalValue
+            });
+          }
+          return finalValue;
         }
+      }
+      
+      // Debug: log when no envelope value is returned
+      if (relevantTransients.length > 0 && !lastTransient) {
+        debugLog.log('[getFeatureValue] Impact feature returning 0:', {
+          featureKey,
+          time,
+          transientCount: relevantTransients.length,
+          firstTransientTime: relevantTransients[0]?.time,
+          hasEnvelope: !!lastTransientRefs.current[envelopeKey]
+        });
       }
       
       return 0;
