@@ -11,6 +11,11 @@ export interface UploadFile {
   error?: string
   fileId?: string
   compressedSize?: number
+  metadata?: {
+    projectId?: string
+    isMaster?: boolean
+    stemType?: string
+  }
 }
 
 export interface UseUploadOptions {
@@ -33,7 +38,6 @@ export function useUpload(options: UseUploadOptions = {}) {
    */
   const getUploadUrlMutation = trpc.file.getUploadUrl.useMutation()
   const confirmUploadMutation = trpc.file.confirmUpload.useMutation()
-  const uploadFileMutation = trpc.file.uploadFile.useMutation()
 
   // Generate unique ID for each file
   const generateFileId = useCallback(() => {
@@ -96,18 +100,19 @@ export function useUpload(options: UseUploadOptions = {}) {
   }, [toast])
 
   // Add files to upload queue
-  const addFiles = useCallback((newFiles: File[]) => {
+  const addFiles = useCallback((newFiles: File[], metadata?: { projectId?: string; isMaster?: boolean; stemType?: string }) => {
     const validFiles = validateFiles(newFiles)
     const uploadFiles: UploadFile[] = validFiles.map(file => ({
       file,
       id: generateFileId(),
       status: 'pending',
       progress: 0,
+      metadata: metadata || (projectId ? { projectId } : undefined),
     }))
 
     setFiles(prev => [...prev, ...uploadFiles])
     return uploadFiles
-  }, [generateFileId, validateFiles])
+  }, [generateFileId, validateFiles, projectId])
 
   // Remove file from queue
   const removeFile = useCallback((fileId: string) => {
@@ -155,7 +160,8 @@ export function useUpload(options: UseUploadOptions = {}) {
   }
 
   /**
-   * Core upload routine – uploads file directly through backend to avoid CORS issues
+   * Core upload routine – uses presigned URLs to upload directly to S3/R2
+   * This avoids payload size limits in tRPC and improves performance
    * EXTENDED for video and image support
    */
   const uploadFileToS3 = useCallback(async (uploadFile: UploadFile) => {
@@ -163,73 +169,52 @@ export function useUpload(options: UseUploadOptions = {}) {
       updateFileStatus(uploadFile.id, { status: 'uploading', progress: 10 })
 
       /* ------------------------------------------------------------------ */
-      /* 1. Convert file to base64 and upload through backend               */
+      /* 1. Get presigned URL from backend                                  */
       /* ------------------------------------------------------------------ */
-      const fileReader = new FileReader()
-      
-      await new Promise<void>((resolve, reject) => {
-        fileReader.onload = async () => {
-          try {
-            const base64Data = (fileReader.result as string).split(',')[1] // Remove data URL prefix
-            
-            updateFileStatus(uploadFile.id, { progress: 30 })
-            
-            // Determine file type - EXTENDED
-            const extension = uploadFile.file.name.toLowerCase().split('.').pop()
-            let fileType: 'midi' | 'audio' | 'video' | 'image'
-            
-            if (['mid', 'midi'].includes(extension || '')) {
-              fileType = 'midi'
-            } else if (['mp3', 'wav'].includes(extension || '')) {
-              fileType = 'audio'
-            } else if (['mp4', 'mov', 'webm'].includes(extension || '')) {
-              fileType = 'video'
-            } else if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(extension || '')) {
-              fileType = 'image'
-            } else {
-              throw new Error('Unsupported file type')
-            }
-            
-            const result = await uploadFileMutation.mutateAsync({
-              fileName: uploadFile.file.name,
-              fileType,
-              mimeType: uploadFile.file.type || 'application/octet-stream',
-              fileSize: uploadFile.file.size,
-              fileData: base64Data,
-              projectId: projectId, // NEW: Associate with project
-            })
-            
-            updateFileStatus(uploadFile.id, { 
-              status: 'completed', 
-              progress: 100,
-              fileId: result.fileId 
-            })
-            
-            // After successful upload and updateFileStatus, call onUploadComplete with fileId
-            onUploadComplete?.({ ...uploadFile, fileId: result.fileId, status: 'completed', progress: 100 });
-            
-            resolve()
-          } catch (error) {
-            reject(error)
-          }
-        }
-        
-        fileReader.onerror = () => {
-          reject(new Error('Failed to read file'))
-        }
-        
-        fileReader.readAsDataURL(uploadFile.file)
+      const { uploadUrl, fileId } = await getUploadUrlMutation.mutateAsync({
+        fileName: uploadFile.file.name,
+        fileSize: uploadFile.file.size,
+        mimeType: uploadFile.file.type || 'application/octet-stream',
+        projectId: uploadFile.metadata?.projectId || projectId, // Use per-file or global projectId
+        isMaster: uploadFile.metadata?.isMaster,
+        stemType: uploadFile.metadata?.stemType,
       })
 
-      /* ------------------------------------------------------------------ */
-      /* 2. Mark local state as completed                                   */
-      /* ------------------------------------------------------------------ */
-      updateFileStatus(uploadFile.id, { status: 'completed', progress: 100 })
+      updateFileStatus(uploadFile.id, { progress: 30, fileId })
 
       /* ------------------------------------------------------------------ */
-      /* 3. Notify caller of completion                                     */
+      /* 2. Upload file directly to presigned URL using PUT                 */
       /* ------------------------------------------------------------------ */
-      onAllUploadsComplete?.()
+      const uploadResponse = await fetch(uploadUrl, {
+        method: 'PUT',
+        body: uploadFile.file,
+        headers: {
+          'Content-Type': uploadFile.file.type || 'application/octet-stream',
+        },
+      })
+
+      if (!uploadResponse.ok) {
+        throw new Error(`Failed to upload file to storage: ${uploadResponse.statusText}`)
+      }
+
+      updateFileStatus(uploadFile.id, { progress: 90 })
+
+      /* ------------------------------------------------------------------ */
+      /* 3. Confirm upload completion with backend                          */
+      /* ------------------------------------------------------------------ */
+      await confirmUploadMutation.mutateAsync({
+        fileId,
+        success: true,
+      })
+
+      updateFileStatus(uploadFile.id, { 
+        status: 'completed', 
+        progress: 100,
+        fileId 
+      })
+
+      // Notify caller of completion
+      onUploadComplete?.({ ...uploadFile, fileId, status: 'completed', progress: 100 })
 
     } catch (error) {
       debugLog.error('Upload error:', error)
@@ -242,21 +227,28 @@ export function useUpload(options: UseUploadOptions = {}) {
       
       onUploadError?.(uploadFile, errorMessage)
     }
-  }, [updateFileStatus, uploadFileMutation, onUploadComplete, onUploadError, onAllUploadsComplete])
+  }, [updateFileStatus, getUploadUrlMutation, confirmUploadMutation, onUploadComplete, onUploadError])
 
   // Add files and immediately start uploading them (bypasses state timing issues)
-  const addAndUploadFiles = useCallback(async (newFiles: File[]) => {
+  const addAndUploadFiles = useCallback(async (newFiles: File[], metadata?: { projectId?: string; isMaster?: boolean; stemType?: string } | ((file: File, index: number) => { projectId?: string; isMaster?: boolean; stemType?: string })) => {
     // Validate files first
     const validFiles = validateFiles(newFiles)
     if (validFiles.length === 0) return []
 
     // Create upload file objects
-    const uploadFiles: UploadFile[] = validFiles.map(file => ({
-      file,
-      id: generateFileId(),
-      status: 'pending',
-      progress: 0,
-    }))
+    const uploadFiles: UploadFile[] = validFiles.map((file, index) => {
+      const fileMetadata = typeof metadata === 'function' 
+        ? metadata(file, index)
+        : metadata || (projectId ? { projectId } : undefined)
+      
+      return {
+        file,
+        id: generateFileId(),
+        status: 'pending',
+        progress: 0,
+        metadata: fileMetadata,
+      }
+    })
 
     // Add to state for UI display
     setFiles(prev => [...prev, ...uploadFiles])

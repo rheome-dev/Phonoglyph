@@ -360,7 +360,6 @@ export function ProjectCreationModal({ isOpen, onClose, defaultMidiFilePath }: P
   const [stemTypes, setStemTypes] = useState<Record<string, string>>({})
   const { toast } = useToast()
   const router = useRouter()
-  const { addAndUploadFiles } = useUpload()
 
   const {
     register,
@@ -400,18 +399,19 @@ export function ProjectCreationModal({ isOpen, onClose, defaultMidiFilePath }: P
     }
   })
 
-  const uploadFileMutation = trpc.file.uploadFile.useMutation({
-    onSuccess: (result) => {
-      debugLog.log('File uploaded successfully:', result.fileId)
-    },
-    onError: (error) => {
-      debugLog.error('Upload error:', error)
-      throw error
-    }
-  })
-
   // Get tRPC utils for query invalidation
   const utils = trpc.useUtils()
+  
+  // Use the useUpload hook to handle file uploads
+  const { addAndUploadFiles } = useUpload({
+    projectId: undefined, // Will be set per-file after project creation
+    onUploadComplete: (uploadFile) => {
+      debugLog.log('File uploaded successfully:', uploadFile.fileId)
+    },
+    onUploadError: (uploadFile, error) => {
+      debugLog.error('Upload error:', error)
+    },
+  })
 
   const onSubmit = async (data: any) => {
     if (selectedMethod === 'stems' && (!masterFileName || selectedFiles.length < 2 || Object.values(stemTypes).filter(Boolean).length !== selectedFiles.length)) {
@@ -446,52 +446,17 @@ export function ProjectCreationModal({ isOpen, onClose, defaultMidiFilePath }: P
       
       // Upload files if stems method is selected
       if (selectedMethod === 'stems' && selectedFiles.length > 0) {
-        // Upload files using tRPC mutation with project ID
-        const uploadPromises = selectedFiles.map(async (file) => {
-          // Convert file to base64
-          const base64Data = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader()
-            reader.onload = () => {
-              const result = reader.result as string
-              // Remove the data URL prefix
-              const base64 = result.split(',')[1]
-              resolve(base64)
-            }
-            reader.onerror = reject
-            reader.readAsDataURL(file)
-          })
-          
-          // Determine file type
-          const extension = file.name.toLowerCase().split('.').pop()
-          let fileType: 'midi' | 'audio' | 'video' | 'image'
-          
-          if (['mid', 'midi'].includes(extension || '')) {
-            fileType = 'midi'
-          } else if (['mp3', 'wav', 'ogg', 'm4a', 'aac'].includes(extension || '')) {
-            fileType = 'audio'
-          } else if (['mp4', 'mov', 'avi', 'mkv', 'webm'].includes(extension || '')) {
-            fileType = 'video'
-          } else if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(extension || '')) {
-            fileType = 'image'
-          } else {
-            throw new Error(`Unsupported file type: ${extension}`)
-          }
-          
-          return uploadFileMutation.mutateAsync({
-            fileName: file.name,
-            fileType,
-            mimeType: file.type || 'application/octet-stream',
-            fileSize: file.size,
-            fileData: base64Data,
-            projectId: project.id, // Pass the project ID
-            isMaster: file.name === masterFileName, // Tag master file
-            stemType: file.name === masterFileName ? 'master' : (stemTypes[file.name] || 'melody') // Master files get 'master' type, others get their assigned type
-          })
-        })
-
         try {
-          const uploadResults = await Promise.all(uploadPromises)
-          const fileIds = uploadResults.map(result => result.fileId)
+          // Use useUpload hook to upload files with per-file metadata
+          const uploadFiles = await addAndUploadFiles(
+            selectedFiles,
+            // Metadata function to provide per-file metadata
+            (file: File) => ({
+              projectId: project.id,
+              isMaster: file.name === masterFileName,
+              stemType: file.name === masterFileName ? 'master' : (stemTypes[file.name] || 'melody'),
+            })
+          )
           
           // Invalidate file queries to refresh the sidebar
           utils.file.getUserFiles.invalidate()

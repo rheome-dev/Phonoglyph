@@ -33,7 +33,11 @@ export const fileRouter = router({
   
   // Generate pre-signed URL for file upload - EXTENDED
   getUploadUrl: protectedProcedure
-    .input(FileUploadSchema)
+    .input(FileUploadSchema.extend({
+      projectId: z.string().optional(), // Associate with project
+      isMaster: z.boolean().optional(), // Tag as master track
+      stemType: z.string().optional(), // Tag stem type
+    }))
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.user.id
       
@@ -85,6 +89,9 @@ export const fileRouter = router({
             s3_key: s3Key,
             s3_bucket: process.env.CLOUDFLARE_R2_BUCKET || 'phonoglyph-uploads',
             processing_status: MediaProcessor.requiresProcessing(validation.fileType) ? 'pending' : 'completed',
+            project_id: input.projectId, // Associate with project
+            is_master: input.isMaster || false, // Store master tag
+            stem_type: input.stemType || null, // Store stem type
           })
 
         if (dbError) {
