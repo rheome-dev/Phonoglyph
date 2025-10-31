@@ -63,22 +63,11 @@ function performFullAnalysis(
   const effectiveStemType = isSingleAudioFile ? 'master' : stemType;
   const featuresToExtract = STEM_FEATURES[effectiveStemType] || STEM_FEATURES['other'];
 
-  const bufferSize = 1024; // Meyda works best with powers of 2
-  const hopSize = 512;
-
-  // --- START: KEY CHANGE - CREATE MEYDA ANALYZER INSTANCE ---
-  const meydaAnalyzer = (Meyda as any).createMeydaAnalyzer({
-    audioContext: { sampleRate: sampleRate },
-    source: { bufferSize: bufferSize, getChannelData: () => new Float32Array(bufferSize) }, // Dummy source
-    bufferSize: bufferSize,
-    featureExtractors: featuresToExtract,
-    callback: () => {},
-  });
-  // --- END: KEY CHANGE ---
-
   const featureFrames: Record<string, any> = {};
   const frameTimes: number[] = [];
-  featuresToExtract.forEach((f) => featureFrames[f] = []);
+  featuresToExtract.forEach((f) => {
+    featureFrames[f] = [];
+  });
   // Add manual and derived features
   featureFrames.spectralFlux = [];
   featureFrames.volume = [];
@@ -86,22 +75,30 @@ function performFullAnalysis(
   featureFrames.mid = [];
   featureFrames.treble = [];
 
+  const bufferSize = 1024;
+  const hopSize = 512;
   let currentPosition = 0;
   let previousSpectrum: number[] | null = null;
 
   while (currentPosition + bufferSize <= channelData.length) {
     const buffer = channelData.slice(currentPosition, currentPosition + bufferSize);
-    
-    // --- START: KEY CHANGE - USE THE INSTANCE ---
-    meydaAnalyzer.setSource({ bufferSize: bufferSize, getChannelData: () => buffer });
-    const features = meydaAnalyzer.get(featuresToExtract);
-    // --- END: KEY CHANGE ---
+    let features: any = null;
 
-    // Manual spectral flux calculation (stateful)
+    try {
+      // Revert to using the stateless Meyda.extract method
+      features = (Meyda as any).extract(featuresToExtract, buffer);
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Meyda extraction failed:', error);
+      features = {}; // Silently fail for this frame but continue
+    }
+
+    // --- Manual spectral flux calculation (stateful) ---
     const currentSpectrum = features?.amplitudeSpectrum as number[] | undefined;
     let flux = 0;
-    if (previousSpectrum && currentSpectrum) {
-      for (let i = 0; i < currentSpectrum.length; i++) {
+    if (previousSpectrum && currentSpectrum && Array.isArray(previousSpectrum) && Array.isArray(currentSpectrum)) {
+      const len = Math.min(previousSpectrum.length, currentSpectrum.length);
+      for (let i = 0; i < len; i++) {
         const diff = (currentSpectrum[i] || 0) - (previousSpectrum[i] || 0);
         if (diff > 0) flux += diff;
       }
@@ -111,35 +108,35 @@ function performFullAnalysis(
 
     // Process and sanitize all extracted features
     if (features) {
-        for (const feature of featuresToExtract) {
-            const value = features[feature];
-            if (Array.isArray(value)) {
-                const sanitizedArray = value.map(v => (typeof v === 'number' && isFinite(v) ? v : 0));
-                if (feature === 'chroma') {
-                    const dominantChromaIndex = sanitizedArray.indexOf(Math.max(...sanitizedArray));
-                    featureFrames[feature].push(dominantChromaIndex);
-                } else {
-                    featureFrames[feature].push(sanitizedArray[0] || 0); // e.g., for mfcc
-                }
-            } else {
-                const sanitizedValue = (typeof value === 'number' && isFinite(value)) ? value : 0;
-                featureFrames[feature].push(sanitizedValue);
-            }
+      for (const feature of featuresToExtract) {
+        const value = features[feature];
+        if (Array.isArray(value)) {
+          const sanitizedArray = value.map(v => (typeof v === 'number' && isFinite(v) ? v : 0));
+          if (feature === 'chroma') {
+            const dominantChromaIndex = sanitizedArray.indexOf(Math.max(...sanitizedArray));
+            featureFrames[feature].push(dominantChromaIndex);
+          } else {
+            featureFrames[feature].push(sanitizedArray[0] || 0); // e.g., for mfcc
+          }
+        } else {
+          const sanitizedValue = (typeof value === 'number' && isFinite(value)) ? value : 0;
+          featureFrames[feature].push(sanitizedValue);
         }
-        // Derived features
-        const rms = features.rms || 0;
-        const spectralCentroid = features.spectralCentroid || 0;
-        featureFrames.volume.push(rms);
-        featureFrames.bass.push(spectralCentroid < 200 ? rms : 0);
-        featureFrames.mid.push(spectralCentroid >= 200 && spectralCentroid < 2000 ? rms : 0);
-        featureFrames.treble.push(spectralCentroid >= 2000 ? rms : 0);
+      }
+      // Derived features
+      const rms = features.rms || 0;
+      const spectralCentroid = features.spectralCentroid || 0;
+      featureFrames.volume.push(rms);
+      featureFrames.bass.push(spectralCentroid < 200 ? rms : 0);
+      featureFrames.mid.push(spectralCentroid >= 200 && spectralCentroid < 2000 ? rms : 0);
+      featureFrames.treble.push(spectralCentroid >= 2000 ? rms : 0);
     } else {
-        // If features object is null, push default values to maintain array alignment
-        featuresToExtract.forEach(f => featureFrames[f].push(0));
-        featureFrames.volume.push(0);
-        featureFrames.bass.push(0);
-        featureFrames.mid.push(0);
-        featureFrames.treble.push(0);
+      // If features object is null or empty, push default values to maintain array alignment
+      featuresToExtract.forEach(f => featureFrames[f].push(0));
+      featureFrames.volume.push(0);
+      featureFrames.bass.push(0);
+      featureFrames.mid.push(0);
+      featureFrames.treble.push(0);
     }
 
     const frameStartTime = currentPosition / sampleRate;
@@ -148,10 +145,8 @@ function performFullAnalysis(
     if (onProgress) onProgress(currentPosition / channelData.length);
   }
 
-  // Final cleanup and shaping remains mostly the same
+  // Final cleanup and shaping
   const flatFeatures: Record<string, any> = { ...featureFrames, frameTimes };
-  // No need for the complex flatFeatures loop, as we've built it directly
-
   return flatFeatures as Record<string, number[] | number>;
 }
 
