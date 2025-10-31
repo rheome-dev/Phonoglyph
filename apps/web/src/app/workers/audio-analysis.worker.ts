@@ -63,6 +63,8 @@ function performFullAnalysis(
   const effectiveStemType = isSingleAudioFile ? 'master' : stemType;
   const featuresToExtract = STEM_FEATURES[effectiveStemType] || STEM_FEATURES['other'];
 
+  // Debug: configuration for this analysis (moved below buffer vars)
+
   const featureFrames: Record<string, any> = {};
   const frameTimes: number[] = [];
   featuresToExtract.forEach((f) => {
@@ -107,11 +109,30 @@ function performFullAnalysis(
   let previousSpectrum: number[] | null = null;
   const totalSteps = Math.max(1, Math.floor((channelData.length - bufferSize) / hopSize));
 
+  // eslint-disable-next-line no-console
+  console.log('[worker] performFullAnalysis: start', {
+    stemType,
+    effectiveStemType,
+    bufferSize,
+    hopSize,
+    featuresToExtract
+  });
+
   while (currentPosition + bufferSize <= channelData.length) {
     const buffer = channelData.slice(currentPosition, currentPosition + bufferSize);
     let features: any = null;
     try {
       features = (Meyda as any).extract(featuresToExtract, buffer);
+      // Periodic debug of what Meyda returned
+      if ((frameTimes.length % 100) === 0) {
+        // eslint-disable-next-line no-console
+        console.debug('[worker] Meyda.extract frame', frameTimes.length, {
+          returnedKeys: features ? Object.keys(features) : [],
+          hasChroma: !!features?.chroma,
+          hasAmplitudeSpectrum: Array.isArray(features?.amplitudeSpectrum),
+          hasRms: typeof features?.rms === 'number'
+        });
+      }
       if (features) {
         for (const feature of featuresToExtract) {
           if (feature === 'loudness') {
@@ -192,6 +213,10 @@ function performFullAnalysis(
     if (!featureFrames.spectralFlux) featureFrames.spectralFlux = [];
     featureFrames.spectralFlux.push(flux);
     previousSpectrum = currentSpectrum ? Array.from(currentSpectrum) : null;
+    if ((frameTimes.length % 100) === 0) {
+      // eslint-disable-next-line no-console
+      console.debug('[worker] spectralFlux frame', frameTimes.length, { fluxValue: flux });
+    }
 
     if (features) {
       const rms = features.rms || 0;
@@ -237,6 +262,20 @@ function performFullAnalysis(
       flatFeatures[key] = featureFrames[key];
     }
   }
+
+  // Debug summary of extracted feature array lengths (safe subset)
+  try {
+    // eslint-disable-next-line no-console
+    console.log('[worker] performFullAnalysis: summary', {
+      keys: Object.keys(flatFeatures),
+      lengths: {
+        spectralFlux: Array.isArray(flatFeatures.spectralFlux) ? flatFeatures.spectralFlux.length : 0,
+        chroma: Array.isArray(flatFeatures.chroma) ? flatFeatures.chroma.length : 0,
+        rms: Array.isArray(flatFeatures.rms) ? flatFeatures.rms.length : 0,
+        volume: Array.isArray(flatFeatures.volume) ? flatFeatures.volume.length : 0,
+      }
+    });
+  } catch {}
 
   return flatFeatures as Record<string, number[] | number>;
 }
@@ -329,6 +368,19 @@ self.onmessage = function (event: MessageEvent<WorkerMessage>) {
       
       // NEW: Run enhanced analysis for transients
       const transients = performEnhancedAnalysis(analysis, sampleRate, analysisParams);
+
+      // Debug: transients and critical arrays
+      try {
+        // eslint-disable-next-line no-console
+        console.log('[worker] onmessage ANALYZE_BUFFER: result snapshot', {
+          fileId,
+          stemType,
+          frameCount: Array.isArray((analysis as any).frameTimes) ? (analysis as any).frameTimes.length : 0,
+          spectralFluxLen: Array.isArray((analysis as any).spectralFlux) ? (analysis as any).spectralFlux.length : 0,
+          chromaLen: Array.isArray((analysis as any).chroma) ? (analysis as any).chroma.length : 0,
+          transientsCount: Array.isArray(transients) ? transients.length : 0
+        });
+      } catch {}
 
       const result = {
         id: `client_${fileId}`,
