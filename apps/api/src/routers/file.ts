@@ -13,6 +13,7 @@ import {
 import { MediaProcessor } from '../services/media-processor'
 import { AssetManager } from '../services/asset-manager'
 import { logger } from '../lib/logger';
+import { randomUUID } from 'crypto';
 
 // Create rate limiter instance
 const uploadRateLimit = createUploadRateLimit()
@@ -75,7 +76,7 @@ export const fileRouter = router({
         const uploadUrl = await generateUploadUrl(s3Key, input.mimeType, 3600) // 1 hour expiry
 
         // Create file metadata record in database
-        const fileId = `file_${Date.now()}_${Math.random().toString(36).substring(2)}`
+        const fileId = randomUUID()
         
         const { error: dbError } = await ctx.supabase
           .from('file_metadata')
