@@ -92,40 +92,11 @@ function performFullAnalysis(
         windowingFunction: 'hanning'
       });
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error('[worker] Meyda extraction failed for a frame:', error);
       features = {}; // Ensure features is an object to prevent further errors
     }
 
     // --- Manual spectral flux calculation (stateful) ---
     const currentSpectrum = features?.amplitudeSpectrum as any;
-    // Dump amplitudeSpectrum CSV for every frame
-    try {
-      const isTypedArrayFrame = currentSpectrum && (Array.isArray(currentSpectrum) || ArrayBuffer.isView(currentSpectrum));
-      if (isTypedArrayFrame) {
-        const frameIndex = frameTimes.length; // current frame index before push
-        const arr = Array.from(currentSpectrum as unknown as number[]);
-        // eslint-disable-next-line no-console
-        console.log(`[worker] amplitudeSpectrum csv(frame ${frameIndex}):`, arr.join(','));
-      }
-    } catch {}
-    // Debug first frame spectrum
-    if (currentPosition === 0) {
-      try {
-        const isTypedArray = currentSpectrum && (Array.isArray(currentSpectrum) || ArrayBuffer.isView(currentSpectrum));
-        const arr = isTypedArray ? Array.from(currentSpectrum as unknown as number[]) : [];
-        // eslint-disable-next-line no-console
-        console.log('[worker] First frame features:', {
-          hasAmplitudeSpectrum: !!currentSpectrum,
-          spectrumLength: currentSpectrum?.length,
-          firstValues: arr.slice(0, 10)
-        });
-        if (isTypedArray) {
-          // eslint-disable-next-line no-console
-          console.log('[worker] First frame amplitudeSpectrum csv(all):', arr.join(','));
-        }
-      } catch {}
-    }
     let flux = 0;
     if (previousSpectrum && currentSpectrum && Array.isArray(previousSpectrum) && ArrayBuffer.isView(currentSpectrum)) {
       const prevArr = previousSpectrum;
@@ -191,7 +162,6 @@ function performEnhancedAnalysis(
   stemType: string,
   analysisParams?: any
 ): { time: number; intensity: number; type: string }[] {
-  console.log(`🎵 Performing transient classification for stem: ${stemType}`);
 
   const params = Object.assign({
     onsetThreshold: 0.1,
@@ -211,7 +181,6 @@ function performEnhancedAnalysis(
   const { frameTimes, spectralFlux, spectralCentroid, perceptualSharpness, zcr, energy } = fullAnalysis;
 
   if (!spectralFlux || !Array.isArray(spectralFlux) || spectralFlux.length === 0) {
-    console.warn(`⚠️ Cannot perform enhanced analysis for ${stemType}: spectralFlux data is missing or empty.`);
     return [];
   }
 
@@ -280,45 +249,8 @@ self.onmessage = function (event: MessageEvent<WorkerMessage>) {
       const analysis = performFullAnalysis(channelData, sampleRate, stemType, () => {});
       const waveformData = generateWaveformData(channelData, duration, 1024);
       
-      // NEW: Run enhanced analysis for transients (pass stemType)
+      // Run enhanced analysis for transients
       const transients = performEnhancedAnalysis(analysis, sampleRate, stemType, analysisParams);
-
-      // Debug: transients and critical arrays
-      try {
-        // eslint-disable-next-line no-console
-        console.log('[worker] onmessage ANALYZE_BUFFER: result snapshot', {
-          fileId,
-          stemType,
-          frameCount: Array.isArray((analysis as any).frameTimes) ? (analysis as any).frameTimes.length : 0,
-          // Dump actual arrays for inspection instead of only lengths
-          spectralFlux: Array.isArray((analysis as any).spectralFlux) ? (analysis as any).spectralFlux : [],
-          chroma: Array.isArray((analysis as any).chroma) ? (analysis as any).chroma : [],
-          transientsCount: Array.isArray(transients) ? transients.length : 0
-        });
-        // Additional explicit dumps for easy viewing in console
-        const sf = (analysis as any).spectralFlux as number[] | undefined;
-        if (Array.isArray(sf)) {
-          const head = sf.slice(0, 50);
-          const tail = sf.slice(Math.max(0, sf.length - 50));
-          // eslint-disable-next-line no-console
-          console.log('[worker] spectralFlux head(50):', head);
-          // eslint-disable-next-line no-console
-          console.log('[worker] spectralFlux tail(50):', tail);
-          // eslint-disable-next-line no-console
-          console.log('[worker] spectralFlux csv(all):', sf.join(','));
-        }
-        const ch = (analysis as any).chroma as number[] | undefined;
-        if (Array.isArray(ch)) {
-          const headC = ch.slice(0, 50);
-          const tailC = ch.slice(Math.max(0, ch.length - 50));
-          // eslint-disable-next-line no-console
-          console.log('[worker] chroma head(50):', headC);
-          // eslint-disable-next-line no-console
-          console.log('[worker] chroma tail(50):', tailC);
-          // eslint-disable-next-line no-console
-          console.log('[worker] chroma csv(all):', ch.join(','));
-        }
-      } catch {}
 
       const result = {
         id: `client_${fileId}`,
