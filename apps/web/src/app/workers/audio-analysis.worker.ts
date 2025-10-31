@@ -63,219 +63,94 @@ function performFullAnalysis(
   const effectiveStemType = isSingleAudioFile ? 'master' : stemType;
   const featuresToExtract = STEM_FEATURES[effectiveStemType] || STEM_FEATURES['other'];
 
-  // Debug: configuration for this analysis (moved below buffer vars)
+  const bufferSize = 1024; // Meyda works best with powers of 2
+  const hopSize = 512;
+
+  // --- START: KEY CHANGE - CREATE MEYDA ANALYZER INSTANCE ---
+  const meydaAnalyzer = (Meyda as any).createMeydaAnalyzer({
+    audioContext: { sampleRate: sampleRate },
+    source: { bufferSize: bufferSize, getChannelData: () => new Float32Array(bufferSize) }, // Dummy source
+    bufferSize: bufferSize,
+    featureExtractors: featuresToExtract,
+    callback: () => {},
+  });
+  // --- END: KEY CHANGE ---
 
   const featureFrames: Record<string, any> = {};
   const frameTimes: number[] = [];
-  featuresToExtract.forEach((f) => {
-    if (f === 'loudness') {
-      featureFrames.loudness = { specific: [], total: [] };
-    } else {
-      featureFrames[f] = [];
-    }
-  });
-  featureFrames.fft = [];
-  featureFrames.fftFrequencies = [];
-  featureFrames.amplitudeSpectrum = [];
-  featureFrames.stereoWindow_left = [];
-  featureFrames.stereoWindow_right = [];
+  featuresToExtract.forEach((f) => featureFrames[f] = []);
+  // Add manual and derived features
+  featureFrames.spectralFlux = [];
   featureFrames.volume = [];
   featureFrames.bass = [];
   featureFrames.mid = [];
   featureFrames.treble = [];
-  featureFrames.features = [];
 
-  if (featuresToExtract.length === 0) {
-    if (onProgress) onProgress(1);
-    return {
-      features: [],
-      markers: [],
-      frequencies: [],
-      timeData: [],
-      volume: [],
-      bass: [],
-      mid: [],
-      treble: [],
-      stereoWindow_left: [],
-      stereoWindow_right: [],
-      fft: [],
-      fftFrequencies: [],
-    } as Record<string, number[] | number>;
-  }
-
-  const bufferSize = 1024;
-  const hopSize = 512;
   let currentPosition = 0;
   let previousSpectrum: number[] | null = null;
-  const totalSteps = Math.max(1, Math.floor((channelData.length - bufferSize) / hopSize));
-
-  // eslint-disable-next-line no-console
-  console.log('[worker] performFullAnalysis: start', {
-    stemType,
-    effectiveStemType,
-    bufferSize,
-    hopSize,
-    featuresToExtract
-  });
 
   while (currentPosition + bufferSize <= channelData.length) {
     const buffer = channelData.slice(currentPosition, currentPosition + bufferSize);
-    let features: any = null;
-    try {
-      features = (Meyda as any).extract(featuresToExtract, buffer);
-      // Periodic debug of what Meyda returned
-      if ((frameTimes.length % 100) === 0) {
-        // eslint-disable-next-line no-console
-        console.debug('[worker] Meyda.extract frame', frameTimes.length, {
-          returnedKeys: features ? Object.keys(features) : [],
-          hasChroma: !!features?.chroma,
-          hasAmplitudeSpectrum: Array.isArray(features?.amplitudeSpectrum),
-          hasRms: typeof features?.rms === 'number'
-        });
-      }
-      if (features) {
-        for (const feature of featuresToExtract) {
-          if (feature === 'loudness') {
-            if (features.loudness && features.loudness.total !== undefined) {
-              featureFrames.loudness.specific.push(features.loudness.specific);
-              featureFrames.loudness.total.push(features.loudness.total);
-            } else {
-              featureFrames.loudness.specific.push([]);
-              featureFrames.loudness.total.push(0);
-            }
-          } else if (feature === 'amplitudeSpectrum') {
-            const amplitudeData = features.amplitudeSpectrum;
-            if (amplitudeData && Array.isArray(amplitudeData) && amplitudeData.length > 0) {
-              featureFrames.amplitudeSpectrum.push([...amplitudeData]);
-            } else if (amplitudeData && typeof amplitudeData === 'object' && !Array.isArray(amplitudeData)) {
-              let magnitudes: number[] = [];
-              if (amplitudeData.real && amplitudeData.imag && Array.isArray(amplitudeData.real) && Array.isArray(amplitudeData.imag)) {
-                for (let i = 0; i < Math.min(amplitudeData.real.length, amplitudeData.imag.length); i++) {
-                  const real = amplitudeData.real[i];
-                  const imag = amplitudeData.imag[i];
-                  if (typeof real === 'number' && typeof imag === 'number') {
-                    const magnitude = Math.sqrt(real * real + imag * imag);
-                    magnitudes.push(magnitude);
-                  }
-                }
-              } else if (amplitudeData.length !== undefined) {
-                magnitudes = Array.from(amplitudeData);
-              }
-              featureFrames.amplitudeSpectrum.push(magnitudes);
-            } else {
-              featureFrames.amplitudeSpectrum.push([]);
-            }
-          } else {
-            const value = features[feature];
-            if (Array.isArray(value)) {
-              // Sanitize array values
-              const sanitizedArray = value.map((v: any) => (typeof v === 'number' && isFinite(v) ? v : 0));
-              if (feature === 'chroma') {
-                // Map 12-bin chroma array to a single dominant pitch class index (0-11)
-                let maxVal = -Infinity;
-                let maxIdx = 0;
-                for (let i = 0; i < sanitizedArray.length; i++) {
-                  if (sanitizedArray[i] > maxVal) {
-                    maxVal = sanitizedArray[i];
-                    maxIdx = i;
-                  }
-                }
-                featureFrames[feature].push(maxIdx);
-              } else {
-                // For other array features (e.g., mfcc), take first element as representative
-                featureFrames[feature].push(sanitizedArray[0] || 0);
-              }
-            } else {
-              // For single-value features, sanitize and push a valid number
-              const sanitizedValue = (typeof value === 'number' && isFinite(value)) ? value : 0;
-              featureFrames[feature].push(sanitizedValue);
-            }
-          }
-        }
-      }
-    } catch (error) {
-      // Expose underlying Meyda extraction error for diagnosis
-      // eslint-disable-next-line no-console
-      console.error('Meyda extraction failed:', error);
-      features = {};
-    }
+    
+    // --- START: KEY CHANGE - USE THE INSTANCE ---
+    meydaAnalyzer.setSource({ bufferSize: bufferSize, getChannelData: () => buffer });
+    const features = meydaAnalyzer.get(featuresToExtract);
+    // --- END: KEY CHANGE ---
 
-    // --- Manual spectral flux calculation (stateful) ---
-    const currentSpectrum = (features as any)?.amplitudeSpectrum as number[] | undefined;
+    // Manual spectral flux calculation (stateful)
+    const currentSpectrum = features?.amplitudeSpectrum as number[] | undefined;
     let flux = 0;
-    if (previousSpectrum && currentSpectrum && Array.isArray(previousSpectrum) && Array.isArray(currentSpectrum)) {
-      const len = Math.min(previousSpectrum.length, currentSpectrum.length);
-      for (let i = 0; i < len; i++) {
+    if (previousSpectrum && currentSpectrum) {
+      for (let i = 0; i < currentSpectrum.length; i++) {
         const diff = (currentSpectrum[i] || 0) - (previousSpectrum[i] || 0);
         if (diff > 0) flux += diff;
       }
     }
-    if (!featureFrames.spectralFlux) featureFrames.spectralFlux = [];
     featureFrames.spectralFlux.push(flux);
     previousSpectrum = currentSpectrum ? Array.from(currentSpectrum) : null;
-    if ((frameTimes.length % 100) === 0) {
-      // eslint-disable-next-line no-console
-      console.debug('[worker] spectralFlux frame', frameTimes.length, { fluxValue: flux });
-    }
 
+    // Process and sanitize all extracted features
     if (features) {
-      const rms = features.rms || 0;
-      featureFrames.volume.push(rms);
-      const spectralCentroid = features.spectralCentroid || 0;
-      featureFrames.bass.push(spectralCentroid < 200 ? rms : 0);
-      featureFrames.mid.push(spectralCentroid >= 200 && spectralCentroid < 2000 ? rms : 0);
-      featureFrames.treble.push(spectralCentroid >= 2000 ? rms : 0);
-      const allFeatures = Object.values(features).flat().filter((v) => typeof v === 'number');
-      featureFrames.features.push(allFeatures.length > 0 ? (allFeatures[0] as number) : 0);
+        for (const feature of featuresToExtract) {
+            const value = features[feature];
+            if (Array.isArray(value)) {
+                const sanitizedArray = value.map(v => (typeof v === 'number' && isFinite(v) ? v : 0));
+                if (feature === 'chroma') {
+                    const dominantChromaIndex = sanitizedArray.indexOf(Math.max(...sanitizedArray));
+                    featureFrames[feature].push(dominantChromaIndex);
+                } else {
+                    featureFrames[feature].push(sanitizedArray[0] || 0); // e.g., for mfcc
+                }
+            } else {
+                const sanitizedValue = (typeof value === 'number' && isFinite(value)) ? value : 0;
+                featureFrames[feature].push(sanitizedValue);
+            }
+        }
+        // Derived features
+        const rms = features.rms || 0;
+        const spectralCentroid = features.spectralCentroid || 0;
+        featureFrames.volume.push(rms);
+        featureFrames.bass.push(spectralCentroid < 200 ? rms : 0);
+        featureFrames.mid.push(spectralCentroid >= 200 && spectralCentroid < 2000 ? rms : 0);
+        featureFrames.treble.push(spectralCentroid >= 2000 ? rms : 0);
+    } else {
+        // If features object is null, push default values to maintain array alignment
+        featuresToExtract.forEach(f => featureFrames[f].push(0));
+        featureFrames.volume.push(0);
+        featureFrames.bass.push(0);
+        featureFrames.mid.push(0);
+        featureFrames.treble.push(0);
     }
 
-    const N = 1024;
-    const leftWindow = buffer.slice(-N);
-    featureFrames.stereoWindow_left = Array.from(leftWindow);
-    featureFrames.stereoWindow_right = Array.from(leftWindow);
     const frameStartTime = currentPosition / sampleRate;
     frameTimes.push(frameStartTime);
     currentPosition += hopSize;
     if (onProgress) onProgress(currentPosition / channelData.length);
   }
 
-  const flatFeatures: Record<string, any> = {};
-  flatFeatures.frameTimes = Array.from(frameTimes);
-
-  for (const key in featureFrames) {
-    if (key === 'loudness' && featureFrames.loudness.total) {
-      flatFeatures.loudness = featureFrames.loudness.total;
-    } else if (key === 'amplitudeSpectrum') {
-      // Use the last frame's spectrum as representative FFT
-      flatFeatures.fft = featureFrames.amplitudeSpectrum.length > 0
-        ? featureFrames.amplitudeSpectrum[featureFrames.amplitudeSpectrum.length - 1]
-        : [];
-      if (flatFeatures.fft.length > 0) {
-        const fftFrequencies: number[] = [];
-        for (let i = 0; i < flatFeatures.fft.length; i++) {
-          fftFrequencies.push((i * sampleRate) / 1024);
-        }
-        flatFeatures.fftFrequencies = fftFrequencies;
-      }
-    } else {
-      // Copy through all other features as extracted
-      flatFeatures[key] = featureFrames[key];
-    }
-  }
-
-  // Debug summary of extracted feature array lengths (safe subset)
-  try {
-    // eslint-disable-next-line no-console
-    console.log('[worker] performFullAnalysis: summary', {
-      keys: Object.keys(flatFeatures),
-      lengths: {
-        spectralFlux: Array.isArray(flatFeatures.spectralFlux) ? flatFeatures.spectralFlux.length : 0,
-        chroma: Array.isArray(flatFeatures.chroma) ? flatFeatures.chroma.length : 0,
-        rms: Array.isArray(flatFeatures.rms) ? flatFeatures.rms.length : 0,
-        volume: Array.isArray(flatFeatures.volume) ? flatFeatures.volume.length : 0,
-      }
-    });
-  } catch {}
+  // Final cleanup and shaping remains mostly the same
+  const flatFeatures: Record<string, any> = { ...featureFrames, frameTimes };
+  // No need for the complex flatFeatures loop, as we've built it directly
 
   return flatFeatures as Record<string, number[] | number>;
 }
