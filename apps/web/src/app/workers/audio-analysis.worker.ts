@@ -79,14 +79,24 @@ function performFullAnalysis(
   const hopSize = 512;
   let currentPosition = 0;
   let previousSpectrum: number[] | null = null;
+  // Create Hann window for improved FFT results
+  const hannWindow = new Float32Array(bufferSize);
+  for (let i = 0; i < bufferSize; i++) {
+    hannWindow[i] = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (bufferSize - 1)));
+  }
 
   while (currentPosition + bufferSize <= channelData.length) {
     const buffer = channelData.slice(currentPosition, currentPosition + bufferSize);
+    // Apply windowing to the buffer for cleaner amplitudeSpectrum
+    const windowedBuffer = new Float32Array(bufferSize);
+    for (let i = 0; i < bufferSize; i++) {
+      windowedBuffer[i] = buffer[i] * hannWindow[i];
+    }
     let features: any = null;
 
     try {
-      // Revert to using the stateless Meyda.extract method
-      features = (Meyda as any).extract(featuresToExtract, buffer);
+      // Use stateless Meyda.extract with windowed buffer and sampleRate context
+      features = (Meyda as any).extract(featuresToExtract, windowedBuffer, sampleRate);
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('[worker] Meyda extraction failed for a frame:', error);
