@@ -160,7 +160,10 @@ function performFullAnalysis(
           }
         }
       }
-    } catch {
+    } catch (error) {
+      // Expose underlying Meyda extraction error for diagnosis
+      // eslint-disable-next-line no-console
+      console.error('Meyda extraction failed:', error);
       features = {};
     }
 
@@ -187,54 +190,27 @@ function performFullAnalysis(
 
   const flatFeatures: Record<string, any> = {};
   flatFeatures.frameTimes = Array.from(frameTimes);
+
   for (const key in featureFrames) {
-    if (key === 'loudness') {
+    if (key === 'loudness' && featureFrames.loudness.total) {
       flatFeatures.loudness = featureFrames.loudness.total;
-    } else if (key === 'fft') {
-      flatFeatures.fft = featureFrames.fft.length > 0 ? featureFrames.fft[featureFrames.fft.length - 1] : [];
-      flatFeatures.fftFrequencies = featureFrames.fftFrequencies;
     } else if (key === 'amplitudeSpectrum') {
-      flatFeatures.fft = featureFrames.amplitudeSpectrum.length > 0 ? featureFrames.amplitudeSpectrum[featureFrames.amplitudeSpectrum.length - 1] : [];
-      if (featureFrames.fftFrequencies.length === 0 && flatFeatures.fft.length > 0) {
-        const fftFrequencies = [] as number[];
+      // Use the last frame's spectrum as representative FFT
+      flatFeatures.fft = featureFrames.amplitudeSpectrum.length > 0
+        ? featureFrames.amplitudeSpectrum[featureFrames.amplitudeSpectrum.length - 1]
+        : [];
+      if (flatFeatures.fft.length > 0) {
+        const fftFrequencies: number[] = [];
         for (let i = 0; i < flatFeatures.fft.length; i++) {
-          const frequency = (i * sampleRate) / 1024;
-          fftFrequencies.push(frequency);
+          fftFrequencies.push((i * sampleRate) / 1024);
         }
         flatFeatures.fftFrequencies = fftFrequencies;
       }
-    } else if (
-      key === 'stereoWindow_left' ||
-      key === 'stereoWindow_right' ||
-      key === 'volume' ||
-      key === 'bass' ||
-      key === 'mid' ||
-      key === 'treble' ||
-      key === 'features'
-    ) {
-      flatFeatures[key] = Array.isArray(featureFrames[key]) ? featureFrames[key] : [];
-    } else if (key === 'chroma' || key === 'mfcc') {
-      // Preserve array features as-is (array of arrays)
-      flatFeatures[key] = featureFrames[key];
     } else {
+      // Copy through all other features as extracted
       flatFeatures[key] = featureFrames[key];
     }
   }
-
-  // Normalize numeric arrays, but preserve array features like chroma/mfcc
-  Object.keys(flatFeatures).forEach((k) => {
-    const val = flatFeatures[k];
-    if (Array.isArray(val) && val.length > 0) {
-      // If it's an array of arrays (like chroma), preserve structure
-      if (Array.isArray(val[0])) {
-        // Keep array features as-is
-        flatFeatures[k] = val;
-      } else {
-        // Normalize numeric arrays
-        flatFeatures[k] = val.map((v) => (typeof v === 'number' && isFinite(v) ? v : 0));
-      }
-    }
-  });
 
   return flatFeatures as Record<string, number[] | number>;
 }
