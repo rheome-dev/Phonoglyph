@@ -98,40 +98,48 @@ function performFullAnalysis(
     }
 
     // --- Manual spectral flux calculation (stateful) ---
-    const currentSpectrum = features?.amplitudeSpectrum as number[] | undefined;
+    const currentSpectrum = features?.amplitudeSpectrum as any;
     // Dump amplitudeSpectrum CSV for every frame
     try {
-      if (Array.isArray(currentSpectrum)) {
+      const isTypedArrayFrame = currentSpectrum && (Array.isArray(currentSpectrum) || ArrayBuffer.isView(currentSpectrum));
+      if (isTypedArrayFrame) {
         const frameIndex = frameTimes.length; // current frame index before push
+        const arr = Array.from(currentSpectrum as unknown as number[]);
         // eslint-disable-next-line no-console
-        console.log(`[worker] amplitudeSpectrum csv(frame ${frameIndex}):`, currentSpectrum.join(','));
+        console.log(`[worker] amplitudeSpectrum csv(frame ${frameIndex}):`, arr.join(','));
       }
     } catch {}
     // Debug first frame spectrum
     if (currentPosition === 0) {
       try {
+        const isTypedArray = currentSpectrum && (Array.isArray(currentSpectrum) || ArrayBuffer.isView(currentSpectrum));
+        const arr = isTypedArray ? Array.from(currentSpectrum as unknown as number[]) : [];
         // eslint-disable-next-line no-console
         console.log('[worker] First frame features:', {
           hasAmplitudeSpectrum: !!currentSpectrum,
           spectrumLength: currentSpectrum?.length,
-          firstValues: Array.isArray(currentSpectrum) ? currentSpectrum.slice(0, 10) : []
+          firstValues: arr.slice(0, 10)
         });
-        if (Array.isArray(currentSpectrum)) {
+        if (isTypedArray) {
           // eslint-disable-next-line no-console
-          console.log('[worker] First frame amplitudeSpectrum csv(all):', currentSpectrum.join(','));
+          console.log('[worker] First frame amplitudeSpectrum csv(all):', arr.join(','));
         }
       } catch {}
     }
     let flux = 0;
-    if (previousSpectrum && currentSpectrum && Array.isArray(previousSpectrum) && Array.isArray(currentSpectrum)) {
-      const len = Math.min(previousSpectrum.length, currentSpectrum.length);
+    if (previousSpectrum && currentSpectrum && Array.isArray(previousSpectrum) && ArrayBuffer.isView(currentSpectrum)) {
+      const prevArr = previousSpectrum;
+      const currArr = Array.from(currentSpectrum as unknown as number[]);
+      const len = Math.min(prevArr.length, currArr.length);
       for (let i = 0; i < len; i++) {
-        const diff = (currentSpectrum[i] || 0) - (previousSpectrum[i] || 0);
+        const diff = (currArr[i] || 0) - (prevArr[i] || 0);
         if (diff > 0) flux += diff;
       }
+      previousSpectrum = currArr;
+    } else {
+      previousSpectrum = currentSpectrum ? Array.from(currentSpectrum as unknown as number[]) : null;
     }
     featureFrames.spectralFlux.push(flux);
-    previousSpectrum = currentSpectrum ? Array.from(currentSpectrum) : null;
 
     // Process and sanitize all extracted features
     if (features) {
