@@ -434,25 +434,16 @@ export function useStemAudioController(): UseStemAudioController {
   useEffect(() => {
     if (!isPlaying || !audioContextRef.current) return;
 
-    // Use requestAnimationFrame for more accurate timing, but cap at 30fps
     let animationFrameId: number;
-    let lastUpdateTime = 0;
-    const targetFrameTime = 1000 / 30; // 33.33ms for 30fps
-    
     const updateTime = () => {
       try {
-        const now = performance.now();
-        const elapsed = now - lastUpdateTime;
+        const elapsedTime = audioContextRef.current!.currentTime - startTimeRef.current;
         
-        // Only update if enough time has passed (30fps cap)
-        if (elapsed >= targetFrameTime) {
-          const elapsedTime = audioContextRef.current!.currentTime - startTimeRef.current;
-          // 🔥 FIX: Handle looping by wrapping currentTime to audio duration
-          const masterDuration = getMasterDuration();
-          const currentAudioTime = masterDuration > 0 ? elapsedTime % masterDuration : Math.max(0, elapsedTime);
-          setCurrentTime(currentAudioTime);
-          lastUpdateTime = now;
-        }
+        // **FIX 2: HANDLE LOOPING BY WRAPPING THE CURRENT TIME**
+        const masterDuration = getMasterDuration();
+        const currentAudioTime = masterDuration > 0 ? elapsedTime % masterDuration : Math.max(0, elapsedTime);
+        
+        setCurrentTime(currentAudioTime);
         
         animationFrameId = requestAnimationFrame(updateTime);
       } catch (error) {
@@ -467,7 +458,7 @@ export function useStemAudioController(): UseStemAudioController {
         cancelAnimationFrame(animationFrameId);
       }
     };
-  }, [isPlaying]);
+  }, [isPlaying]); // Dependency array is correct, no need to add more
 
   // Add user interaction handler to resume audio context
   useEffect(() => {
