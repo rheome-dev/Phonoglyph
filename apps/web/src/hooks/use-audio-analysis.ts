@@ -205,37 +205,34 @@ export function useAudioAnalysis(): UseAudioAnalysis {
     time: number,
     stemType?: string
   ): number => {
-    const [parsedStem, parsedFeature] = feature.includes('-') 
-      ? feature.split('-', 2) 
-      : [stemType ?? 'master', feature];
-    
+    const featureParts = feature.includes('-') ? feature.split('-') : [feature];
+    const parsedStem = featureParts.length > 1 ? featureParts[0] : (stemType ?? 'master');
     const analysis = getAnalysis(fileId, parsedStem);
+    
     if (!analysis?.analysisData || time < 0 || time > analysis.metadata.duration) {
       return 0;
     }
 
-    const { analysisData, metadata } = analysis;
-    const featureLower = parsedFeature.toLowerCase();
+    const { analysisData } = analysis;
+    const featureName = featureParts.length > 1 ? featureParts.slice(1).join('-') : feature;
 
     // --- ENVELOPE LOGIC FOR "IMPACT" FEATURES ---
-    if (featureLower.includes('impact')) {
-      const featureKey = feature.includes('-') ? feature : `${parsedStem}-${featureLower}`;
-      const decayTime = featureDecayTimesRef.current[featureKey] ?? 0.5;
-      const transientType = featureLower.split('-').pop();
+    if (featureName.startsWith('impact')) {
+      const decayTime = featureDecayTimesRef.current[feature] ?? 0.5;
+      const transientType = featureName.split('-').pop(); // 'all', 'kick', etc.
       
       const relevantTransients = analysisData.transients?.filter((t: any) => 
         transientType === 'all' || t.type === transientType
       ) || [];
       
-      const envelopeKey = `${fileId}-${featureKey}`;
+      const envelopeKey = `${fileId}-${feature}`;
       let storedTransient: { time: number; intensity: number } | undefined = lastTransientRefs.current[envelopeKey];
 
-      // **FIX 1: LOOP DETECTION & STATE RESET**
-      // If the current time is significantly less than the stored transient's time, 
-      // it means the audio has looped. We must reset the state for this feature.
-      if (storedTransient && time < storedTransient.time) {
+      // *** FIX A: LOOP DETECTION & STATE RESET ***
+      // If time is much smaller than the stored transient's time, we've looped. Reset state.
+      if (storedTransient && (time < storedTransient.time - 0.5)) {
         delete lastTransientRefs.current[envelopeKey];
-        storedTransient = undefined; 
+        storedTransient = undefined;
       }
       
       const latestTransient = relevantTransients.reduce((latest: any, t: any) => {
@@ -245,9 +242,6 @@ export function useAudioAnalysis(): UseAudioAnalysis {
         return latest;
       }, null);
       
-      // **FIX 2: ROBUST STATE UPDATE**
-      // If we found a transient, it should become our new "active" transient,
-      // replacing whatever was there before if it's newer.
       if (latestTransient) {
         if (!storedTransient || latestTransient.time > storedTransient.time) {
           lastTransientRefs.current[envelopeKey] = { time: latestTransient.time, intensity: latestTransient.intensity };
@@ -258,6 +252,7 @@ export function useAudioAnalysis(): UseAudioAnalysis {
       if (activeTransient) {
         const elapsedTime = time - activeTransient.time;
         if (elapsedTime >= 0 && elapsedTime < decayTime) {
+          // This is the correct, enveloped modulation signal
           return activeTransient.intensity * (1 - (elapsedTime / decayTime));
         }
       }
@@ -265,13 +260,13 @@ export function useAudioAnalysis(): UseAudioAnalysis {
       return 0;
     }
     
-    // --- LEGACY & OTHER FEATURE LOGIC ---
-    if (featureLower === 'pitch-height' || featureLower === 'pitch') {
+    // --- PITCH & TIME-SERIES LOGIC ---
+    if (featureName === 'pitch') {
       const chroma = analysisData.chroma?.find(c => Math.abs(c.time - time) < 0.05);
-      return chroma?.pitch ? chroma.pitch / 11 : 0; // Normalize pitch
+      return chroma?.pitch ? chroma.pitch / 11 : 0;
     }
 
-    if (featureLower === 'brightness' || featureLower === 'confidence') {
+    if (featureName === 'brightness' || featureName === 'confidence') {
       const chroma = analysisData.chroma?.find(c => Math.abs(c.time - time) < 0.05);
       return chroma?.confidence ?? 0;
     }
@@ -297,7 +292,7 @@ export function useAudioAnalysis(): UseAudioAnalysis {
       return arr[index] ?? 0;
     };
 
-    switch (featureLower) {
+    switch (featureName) {
       case 'rms':
         return getTimeSeriesValue(analysisData.rms);
       case 'volume':

@@ -108,9 +108,9 @@ const FeatureNode = ({
     
     // --- ENVELOPE LOGIC FOR TRANSIENTS ---
     if (isTransientFeature) {
-        // **FIX 3: ADD LOOP DETECTION TO THE UI COMPONENT**
+        // *** FIX B: LOOP DETECTION FOR THE UI COMPONENT ***
         let storedTransient = lastTransientRef.current;
-        if (storedTransient && time < storedTransient.time) {
+        if (storedTransient && (time < storedTransient.time - 0.5)) {
             lastTransientRef.current = null;
             storedTransient = null;
         }
