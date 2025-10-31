@@ -251,6 +251,29 @@ self.onmessage = function (event: MessageEvent<WorkerMessage>) {
           chroma: Array.isArray((analysis as any).chroma) ? (analysis as any).chroma : [],
           transientsCount: Array.isArray(transients) ? transients.length : 0
         });
+        // Additional explicit dumps for easy viewing in console
+        const sf = (analysis as any).spectralFlux as number[] | undefined;
+        if (Array.isArray(sf)) {
+          const head = sf.slice(0, 50);
+          const tail = sf.slice(Math.max(0, sf.length - 50));
+          // eslint-disable-next-line no-console
+          console.log('[worker] spectralFlux head(50):', head);
+          // eslint-disable-next-line no-console
+          console.log('[worker] spectralFlux tail(50):', tail);
+          // eslint-disable-next-line no-console
+          console.log('[worker] spectralFlux csv(first 200):', sf.slice(0, 200).join(','));
+        }
+        const ch = (analysis as any).chroma as number[] | undefined;
+        if (Array.isArray(ch)) {
+          const headC = ch.slice(0, 50);
+          const tailC = ch.slice(Math.max(0, ch.length - 50));
+          // eslint-disable-next-line no-console
+          console.log('[worker] chroma head(50):', headC);
+          // eslint-disable-next-line no-console
+          console.log('[worker] chroma tail(50):', tailC);
+          // eslint-disable-next-line no-console
+          console.log('[worker] chroma csv(first 200):', ch.slice(0, 200).join(','));
+        }
       } catch {}
 
       const result = {
