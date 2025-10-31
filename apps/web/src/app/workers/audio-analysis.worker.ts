@@ -22,7 +22,7 @@ type WorkerMessage = AnalyzeBufferMessage | { type: string; data?: unknown };
 
 const STEM_FEATURES: Record<string, string[]> = {
   // For drums, compute spectralFlux manually from amplitudeSpectrum
-  drums: ['rms', 'zcr', 'spectralCentroid', 'amplitudeSpectrum', 'energy', 'perceptualSharpness'],
+  drums: ['rms', 'zcr', 'spectralCentroid', 'amplitudeSpectrum', 'energy', 'perceptualSharpness', 'loudness'],
   bass: ['rms', 'loudness', 'spectralCentroid'],
   vocals: ['rms', 'loudness', 'mfcc', 'chroma'],
   other: ['rms', 'loudness', 'spectralCentroid', 'chroma'],
