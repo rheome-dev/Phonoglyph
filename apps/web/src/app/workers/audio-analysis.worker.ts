@@ -21,7 +21,7 @@ type AnalyzeBufferMessage = {
 type WorkerMessage = AnalyzeBufferMessage | { type: string; data?: unknown };
 
 const STEM_FEATURES: Record<string, string[]> = {
-  drums: ['rms', 'zcr', 'spectralCentroid', 'spectralFlux'],
+  drums: ['rms', 'zcr', 'spectralCentroid', 'spectralFlux', 'energy', 'perceptualSharpness'],
   bass: ['rms', 'loudness', 'spectralCentroid'],
   vocals: ['rms', 'loudness', 'mfcc', 'chroma'],
   other: ['rms', 'loudness', 'spectralCentroid', 'chroma'],
