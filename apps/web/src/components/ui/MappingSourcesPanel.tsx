@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { useAudioFeatures, AudioFeature } from '@/hooks/use-audio-features';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
+import { featureDecayTimesRef } from '@/hooks/use-audio-analysis';
 
 // --- Meter Sub-Components ---
 
@@ -75,10 +76,18 @@ const FeatureNode = ({
 }) => {
   const [liveValue, setLiveValue] = useState(0);
   const [isActive, setIsActive] = useState(false);
-  const [decayTime, setDecayTime] = useState(0.5); // 500ms default decay
+  // Initialize decayTime from shared ref if available, otherwise default to 0.5s
+  const [decayTime, setDecayTime] = useState(featureDecayTimesRef.current[feature.id] ?? 0.5);
   const lastTransientRef = useRef<{ time: number; intensity: number } | null>(null);
   
   const isTransientFeature = feature.isEvent && feature.id.includes('impact');
+  
+  // Initialize shared ref on mount
+  useEffect(() => {
+    if (isTransientFeature && !featureDecayTimesRef.current[feature.id]) {
+      featureDecayTimesRef.current[feature.id] = decayTime;
+    }
+  }, [feature.id, isTransientFeature, decayTime]);
 
   useEffect(() => {
     if (!isPlaying || !feature.stemType) {
@@ -166,7 +175,11 @@ const FeatureNode = ({
 
   const [{ isDragging }, dragRef] = useDrag({
     type: 'feature',
-    item: { id: feature.id, name: feature.name, stemType: feature.stemType },
+    item: () => ({ 
+      id: feature.id, 
+      name: feature.name, 
+      stemType: feature.stemType
+    }),
     collect: (monitor) => ({ isDragging: monitor.isDragging() }),
   });
   const drag = React.useCallback((node: HTMLDivElement | null) => {
@@ -181,41 +194,49 @@ const FeatureNode = ({
   };
 
   return (
+    // Main container is no longer draggable
     <div 
-      ref={drag}
-      className={`cursor-grab transition-all duration-200 ${isDragging ? 'opacity-40' : ''}`} 
-      title={feature.description}
-    >
-      <div className={cn(
+      className={cn(
         "w-full px-2 py-1.5 text-xs font-medium border border-gray-700 bg-gray-900/50 rounded-md transition-all duration-200",
         "hover:bg-gray-800",
         isActive && "ring-1 ring-opacity-70",
         isActive && feature.category === 'rhythm' && "ring-red-400",
         isActive && feature.category === 'pitch' && "ring-blue-400", 
         isActive && feature.category === 'intensity' && "ring-yellow-400",
-        isActive && feature.category === 'timbre' && "ring-purple-400"
-      )}>
+        isActive && feature.category === 'timbre' && "ring-purple-400",
+        isDragging && "opacity-40"
+      )}
+      title={feature.description}
+    >
+      {/* This inner div is now the draggable handle */}
+      <div ref={drag} className="cursor-grab">
         <div className="flex items-center justify-between w-full mb-1.5">
           <span className="truncate font-medium text-gray-300">{feature.name}</span>
         </div>
         {renderMeter()}
-        {isTransientFeature && (
-          <div className="mt-2 space-y-1">
-            <div className="flex items-center justify-between">
-              <Label className="text-[10px] text-gray-400">Decay</Label>
-              <span className="text-[10px] text-gray-300">{decayTime.toFixed(2)}s</span>
-            </div>
+      </div>
+      {/* Slider is now outside the draggable handle */}
+      {isTransientFeature && (
+        <div className="mt-2 space-y-1">
+          <div className="flex items-center justify-between">
+            <Label className="text-[10px] text-gray-400">Decay</Label>
+            <span className="text-[10px] text-gray-300">{decayTime.toFixed(2)}s</span>
+          </div>
             <Slider
               value={[decayTime]}
-              onValueChange={(value) => setDecayTime(value[0])}
+              onValueChange={(value) => {
+                const newDecayTime = value[0];
+                setDecayTime(newDecayTime);
+                // Update shared ref so getFeatureValue uses this decayTime for envelope generation
+                featureDecayTimesRef.current[feature.id] = newDecayTime;
+              }}
               min={0.05}
               max={2.0}
               step={0.05}
               className="h-2"
             />
-          </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };

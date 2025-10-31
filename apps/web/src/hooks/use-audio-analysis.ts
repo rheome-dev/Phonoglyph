@@ -7,6 +7,9 @@ import type { AudioAnalysisData } from '@/types/audio-analysis-data';
 
 // Types moved to '@/types/audio-analysis-data'
 
+// Shared decay time storage - allows FeatureNode slider to control envelope generation
+export const featureDecayTimesRef = { current: {} as Record<string, number> };
+
 export interface UseAudioAnalysis {
   // State
   cachedAnalysis: AudioAnalysisData[]; // Keep name for backward compatibility
@@ -31,6 +34,9 @@ export function useAudioAnalysis(): UseAudioAnalysis {
   // Legacy worker ref no longer used; worker is created per-analysis for TS worker bundling
   const workerRef = useRef<Worker | null>(null);
   const [queryState, setQueryState] = useState<{ fileIds: string[]; stemType?: string }>({ fileIds: [] });
+  
+  // Track last transient for each impact feature to generate envelope signals
+  const lastTransientRefs = useRef<Record<string, { time: number; intensity: number }>>({});
 
   // tRPC hooks
   const {
@@ -181,6 +187,7 @@ export function useAudioAnalysis(): UseAudioAnalysis {
         sampleRate: audioBuffer.sampleRate,
         duration: audioBuffer.duration,
         stemType,
+        enhancedAnalysis: true,
       }
     });
   }, [analysisProgress, cachedAnalysis, cacheMutation, debugLog]);
@@ -212,7 +219,53 @@ export function useAudioAnalysis(): UseAudioAnalysis {
     const featureLower = parsedFeature.toLowerCase();
 
     // Event-based features (transients, chroma)
-    if (featureLower === 'impact' || featureLower === 'transient') {
+    // Generate envelope signal for impact features (AD envelope with user-controlled decay)
+    if (featureLower.includes('impact')) {
+      // Use full feature ID as key to match FeatureNode (e.g., "drums-impact-all")
+      const featureKey = feature.includes('-') ? feature : `${parsedStem}-${parsedFeature}`;
+      // Use decayTime from shared ref if set by FeatureNode slider, otherwise default to 0.5s
+      const decayTime = featureDecayTimesRef.current[featureKey] ?? 0.5;
+      const transientType = featureLower.split('-').pop(); // 'all', 'kick', 'snare', 'hat', etc.
+      
+      // Filter relevant transients based on type
+      const relevantTransients = analysisData.transients?.filter((t: any) => 
+        transientType === 'all' || t.type === transientType
+      ) || [];
+      
+      // Find the most recent transient that has occurred up to the current time
+      const latestTransient = relevantTransients.reduce((latest: any, t: any) => {
+        if (t.time <= time && (!latest || t.time > latest.time)) {
+          return t;
+        }
+        return latest;
+      }, null);
+      
+      // Create a unique key for this feature to track its envelope state
+      // Use full feature ID to match FeatureNode (e.g., "drums-impact-all")
+      const envelopeKey = `${fileId}-${featureKey}`;
+      
+      // If a new transient is found that is more recent than our last latched one, update the ref
+      if (latestTransient && latestTransient.time > (lastTransientRefs.current[envelopeKey]?.time ?? -1)) {
+        lastTransientRefs.current[envelopeKey] = { time: latestTransient.time, intensity: latestTransient.intensity };
+      }
+      
+      // Calculate envelope value based on the last seen transient
+      if (lastTransientRefs.current[envelopeKey]) {
+        const elapsedTime = time - lastTransientRefs.current[envelopeKey].time;
+        if (elapsedTime >= 0 && elapsedTime < decayTime) {
+          // Linear decay
+          return lastTransientRefs.current[envelopeKey].intensity * (1 - (elapsedTime / decayTime));
+        } else {
+          // Decay has finished
+          return 0;
+        }
+      }
+      
+      return 0;
+    }
+    
+    // Legacy transient detection (for backward compatibility)
+    if (featureLower === 'transient') {
       const transient = analysisData.transients?.find(t => Math.abs(t.time - time) < 0.05);
       return transient?.intensity ?? 0;
     }
