@@ -2,32 +2,71 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { useDrag } from 'react-dnd';
-import { Zap, Music, Activity } from 'lucide-react';
+import { Zap, Music, Activity, BarChart2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { debugLog } from '@/lib/utils';
-import { useAudioFeatures } from '@/hooks/use-audio-features';
+import { useAudioFeatures, AudioFeature } from '@/hooks/use-audio-features';
 
-export interface AudioFeature {
-  id: string;
-  name: string;
-  description: string;
-  category: 'rhythm' | 'pitch' | 'intensity' | 'timbre';
-  stemType?: string;
-  isEvent?: boolean;
-}
+// --- Meter Sub-Components ---
 
-// getAudioFeatures refactored into useAudioFeatures hook; BPM feature intentionally omitted
+const VolumeMeter = ({ value }: { value: number }) => (
+  <div className="w-full h-4 bg-gray-800 rounded-sm overflow-hidden border border-gray-700 relative">
+    <div 
+      className="h-full bg-gradient-to-r from-yellow-500 to-amber-400 transition-all duration-75 ease-out" 
+      style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%` }} 
+    />
+    <div className="absolute inset-0 flex items-center justify-center">
+      <span className="text-[10px] font-bold text-white mix-blend-difference">
+        {(value * 100).toFixed(0)}%
+      </span>
+    </div>
+  </div>
+);
 
-// Enhanced FeatureNode with live meter
+const PitchMeter = ({ value }: { value: number }) => {
+  const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  const noteIndex = Math.floor(value * 12);
+  const noteName = noteNames[noteIndex] || '...';
+
+  return (
+    <div className="w-full h-4 bg-gray-900 border border-gray-700 rounded-sm relative overflow-hidden flex items-center justify-center">
+      {/* Background represents a mini-keyboard */}
+      <div className="absolute inset-0 flex">
+        {[...Array(12)].map((_, i) => (
+          <div key={i} className={`flex-1 h-full ${[1,3,6,8,10].includes(i) ? 'bg-gray-700' : 'bg-gray-800'}`} />
+        ))}
+      </div>
+      <div 
+        className="absolute top-0 bottom-0 w-1 bg-blue-400 transition-all duration-100 ease-out" 
+        style={{ left: `calc(${Math.max(0, Math.min(1, value)) * 100}% - 2px)` }} 
+      />
+      <span className="text-[10px] font-bold text-white mix-blend-difference z-10">{noteName}</span>
+    </div>
+  );
+};
+
+const ImpactMeter = ({ value }: { value: number }) => (
+  <div className="w-full bg-gray-800 rounded-sm h-4 overflow-hidden border border-gray-700 relative">
+    <div 
+      className="h-full bg-gradient-to-r from-red-500 to-orange-400 transition-all duration-75 ease-out" 
+      style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%` }} 
+    />
+    <div className="absolute inset-0 flex items-center justify-center">
+      <span className="text-[10px] font-bold text-white mix-blend-difference">
+        {value > 0.01 ? 'HIT' : '—'}
+      </span>
+    </div>
+  </div>
+);
+
+// --- Main FeatureNode Component ---
+
 const FeatureNode = ({ 
   feature, 
-  category, 
   currentTime, 
   cachedAnalysis,
   isPlaying 
 }: { 
   feature: AudioFeature; 
-  category: string;
   currentTime: number;
   cachedAnalysis: any[];
   isPlaying: boolean;
@@ -35,229 +74,122 @@ const FeatureNode = ({
   const [liveValue, setLiveValue] = useState(0);
   const [isActive, setIsActive] = useState(false);
   
-  // Calculate live feature value from cached analysis
   useEffect(() => {
-    if (!cachedAnalysis || cachedAnalysis.length === 0 || !feature.stemType) {
+    if (!isPlaying || !feature.stemType) {
       setLiveValue(0);
       setIsActive(false);
       return;
     }
 
-    // Find the analysis data for this feature's stem type
     const analysis = cachedAnalysis.find(a => a.stemType === feature.stemType);
-    if (!analysis || !analysis.analysisData) {
-      setLiveValue(0);
-      setIsActive(false);
+    if (!analysis?.analysisData) {
       return;
     }
 
-    // Map feature ID to enhanced analysis data (aligned with consolidated hook shape)
-    const getEnhancedFeatureValue = (featureId: string, time: number): number => {
-      const parts = featureId.split('-');
-      if (parts.length >= 2) {
-        const featureName = parts.slice(1).join('-');
+    const { analysisData } = analysis;
+    const time = currentTime;
+    let featureValue = 0;
 
-        const times = (analysis.analysisData as any).frameTimes as Float32Array | number[] | undefined;
-        const getTimeSeriesValue = (arr: Float32Array | undefined): number => {
-          if (!arr || arr.length === 0 || !times || times.length === 0) return 0;
-          // Binary search on times
-          let lo = 0;
-          let hi = Math.min(times.length - 1, arr.length - 1);
+    // Time-series features (like Volume/RMS)
+    if (!feature.isEvent) {
+      const times = analysisData.frameTimes;
+      const values = analysisData.volume || analysisData.rms;
+      if (times && values && Array.isArray(times) && Array.isArray(values)) {
+        let lo = 0, hi = times.length - 1;
+        while (lo < hi) {
+          const mid = (lo + hi + 1) >>> 1;
+          if (times[mid] <= time) lo = mid; else hi = mid - 1;
+        }
+        featureValue = values[lo] ?? 0;
+      }
+    } 
+    // Event-based features (Impact, Pitch)
+    else {
+      if (feature.id.includes('impact')) {
+        const transientType = feature.id.split('-').pop(); // 'all', 'kick', 'snare', 'hat'
+        const relevantTransients = analysisData.transients?.filter((t: any) => 
+          transientType === 'all' || t.type === transientType
+        );
+        const transient = relevantTransients?.find((t: any) => Math.abs(t.time - time) < 0.05); // 50ms window
+        featureValue = transient?.intensity ?? 0;
+      } else if (feature.id.includes('pitch')) {
+        // Chroma is a time-series array, find the closest frame
+        const times = analysisData.frameTimes;
+        const chromaValues = analysisData.chroma;
+        if (times && chromaValues && Array.isArray(times) && Array.isArray(chromaValues)) {
+          let lo = 0, hi = times.length - 1;
           while (lo < hi) {
             const mid = (lo + hi + 1) >>> 1;
-            const tmid = (times as any)[mid];
-            if (tmid <= time) lo = mid; else hi = mid - 1;
+            if (times[mid] <= time) lo = mid; else hi = mid - 1;
           }
-          const index = Math.max(0, Math.min(arr.length - 1, lo));
-          return arr[index] ?? 0;
-        };
-
-        switch (featureName) {
-          case 'impact': {
-            const transient = analysis.analysisData.transients?.find((t: any) => Math.abs(t.time - time) < 0.1);
-            return transient?.intensity ?? 0;
-          }
-          case 'pitch-height': {
-            const chromaHit = analysis.analysisData.chroma?.find((c: any) => Math.abs(c.time - time) < 0.1);
-            return chromaHit?.pitch ?? 0;
-          }
-          case 'brightness': {
-            const chromaHit = analysis.analysisData.chroma?.find((c: any) => Math.abs(c.time - time) < 0.1);
-            return chromaHit?.confidence ?? 0;
-          }
-          case 'rms':
-            return getTimeSeriesValue(analysis.analysisData.rms);
-          case 'volume':
-            return getTimeSeriesValue(analysis.analysisData.volume ?? analysis.analysisData.rms);
-          case 'loudness':
-            return getTimeSeriesValue(analysis.analysisData.loudness);
-          default:
-            return 0;
+          const chromaValue = chromaValues[lo] ?? 0;
+          // Normalize pitch from 0-11 to 0-1 for the meter
+          featureValue = chromaValue / 11;
         }
       }
-      return 0;
-    };
-
-    const featureValue = getEnhancedFeatureValue(feature.id, currentTime);
-    if (feature.name === 'Pitch') {
-      // Debug: verify pitch value over time
-      // eslint-disable-next-line no-console
-      console.log(`[FeatureNode] Pitch value at time ${currentTime.toFixed(2)}s: ${featureValue}`);
     }
     
-    // Normalize value to 0-1 range for display
+    // Normalize to 0-1 range
     const normalizedValue = Math.max(0, Math.min(1, featureValue));
-    
     setLiveValue(normalizedValue);
-    setIsActive(isPlaying && normalizedValue > 0.1); // Active if playing and has significant value
+    setIsActive(isPlaying && normalizedValue > 0.1);
   }, [feature, currentTime, cachedAnalysis, isPlaying]);
 
-  // Wrap useDrag in try-catch to handle context errors
-  let dragState = { isDragging: false };
-  let dragRef: React.RefCallback<HTMLDivElement> = () => {};
+  const [{ isDragging }, dragRef] = useDrag({
+    type: 'feature',
+    item: { id: feature.id, name: feature.name, stemType: feature.stemType },
+    collect: (monitor) => ({ isDragging: monitor.isDragging() }),
+  });
+  const drag = React.useCallback((node: HTMLDivElement | null) => {
+    dragRef(node);
+  }, [dragRef]);
   
-  try {
-    const dragResult = useDrag({
-      type: 'feature',
-      item: { 
-        id: feature.id, 
-        name: feature.name, 
-        stemType: feature.stemType 
-      },
-      collect: (monitor) => ({
-        isDragging: monitor.isDragging(),
-      }),
-    });
-    
-    dragState = dragResult[0];
-    const drag = dragResult[1];
-    
-    dragRef = React.useCallback((node: HTMLDivElement | null) => {
-      drag(node);
-    }, [drag]);
-  } catch (error) {
-    // If drag context is not available, just use a no-op
-    debugLog.warn('Drag context not available for FeatureNode:', error);
-  }
-  
-  const VolumeMeter = ({ value }: { value: number }) => (
-    <div className="w-full bg-gray-800 rounded-sm h-2 mb-1 overflow-hidden">
-      <div className="h-full bg-yellow-500 transition-all duration-150 ease-out" style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%` }} />
-    </div>
-  );
-
-  const PitchMeter = ({ value }: { value: number }) => (
-    <div className="w-full h-6 bg-gray-900 border border-gray-800 rounded-sm mb-1 relative overflow-hidden">
-      <div className="absolute top-0 bottom-0 w-px bg-blue-500 transition-all duration-150" style={{ left: `${Math.max(0, Math.min(1, value)) * 100}%` }} />
-    </div>
-  );
-
-  const ImpactMeter = ({ value }: { value: number }) => (
-    <div className="w-full bg-gray-800 rounded-sm h-2 mb-1 overflow-hidden">
-      <div className="h-full bg-red-500 transition-all duration-100 ease-out" style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%` }} />
-    </div>
-  );
-
   const renderMeter = () => {
-    if (feature.name.toLowerCase().includes('impact')) return <ImpactMeter value={liveValue} />;
+    if (feature.name.includes('Impact')) return <ImpactMeter value={liveValue} />;
     if (feature.name === 'Pitch') return <PitchMeter value={liveValue} />;
     if (feature.name === 'Volume') return <VolumeMeter value={liveValue} />;
-    return (
-      <div className="w-full bg-gray-800 rounded-sm h-1 mb-1 overflow-hidden">
-        <div 
-          className={cn(
-            "h-full rounded-sm transition-all duration-150 ease-out",
-            category === 'rhythm' && "bg-red-500",
-            category === 'pitch' && "bg-blue-500", 
-            category === 'intensity' && "bg-yellow-500",
-            category === 'timbre' && "bg-purple-500"
-          )}
-          style={{ width: `${liveValue * 100}%` }}
-        />
-      </div>
-    );
+    // Fallback meter
+    return <div className="w-full bg-gray-800 rounded-sm h-1 mb-1" />;
   };
 
   return (
     <div 
-      ref={dragRef}
-      className={`cursor-grab transition-all duration-200 hover:bg-gray-800 ${dragState.isDragging ? 'opacity-50' : ''}`} 
+      ref={drag}
+      className={`cursor-grab transition-all duration-200 ${isDragging ? 'opacity-40' : ''}`} 
       title={feature.description}
     >
       <div className={cn(
-        "w-full px-2 py-1.5 text-xs font-medium border border-gray-700 transition-all duration-200",
-        "bg-black hover:bg-gray-900",
-        dragState.isDragging && "shadow-lg",
-        isActive && "ring-1 ring-opacity-50",
-        isActive && category === 'rhythm' && "ring-red-400",
-        isActive && category === 'pitch' && "ring-blue-400", 
-        isActive && category === 'intensity' && "ring-yellow-400",
-        isActive && category === 'timbre' && "ring-purple-400"
+        "w-full px-2 py-1.5 text-xs font-medium border border-gray-700 bg-gray-900/50 rounded-md transition-all duration-200",
+        "hover:bg-gray-800",
+        isActive && "ring-1 ring-opacity-70",
+        isActive && feature.category === 'rhythm' && "ring-red-400",
+        isActive && feature.category === 'pitch' && "ring-blue-400", 
+        isActive && feature.category === 'intensity' && "ring-yellow-400",
+        isActive && feature.category === 'timbre' && "ring-purple-400"
       )}>
-        <div className="flex items-center justify-between w-full mb-1">
+        <div className="flex items-center justify-between w-full mb-1.5">
           <span className="truncate font-medium text-gray-300">{feature.name}</span>
-          {feature.stemType && (
-            <span className="text-xs opacity-60 ml-1 text-gray-400">
-              {getStemTypeDisplayName(feature.stemType)}
-            </span>
-          )}
         </div>
-
         {renderMeter()}
-
-        <div className="flex items-center justify-between text-xs opacity-70 text-gray-400">
-          <span>{(liveValue * 100).toFixed(0)}%</span>
-          {isActive && (
-            <span className={cn(
-              "w-1 h-1 rounded-full animate-pulse",
-              category === 'rhythm' && "bg-red-400",
-              category === 'pitch' && "bg-blue-400",
-              category === 'intensity' && "bg-yellow-400", 
-              category === 'timbre' && "bg-purple-400"
-            )} />
-          )}
-        </div>
       </div>
     </div>
   );
 };
 
-interface MappingSourcesPanelProps {
-  activeTrackId?: string;
-  className?: string;
-  selectedStemType?: string;
-  currentTime?: number;
-  cachedAnalysis?: any[];
-  isPlaying?: boolean;
-}
+// --- Panel and Category Components ---
 
-const categoryIcons = {
+const categoryIcons: Record<string, React.ElementType> = {
   rhythm: Activity,
   pitch: Music,
   intensity: Zap,
-  timbre: Music, // Using Music as fallback for timbre
+  timbre: BarChart2,
 };
 
-
-
-// Map technical category names to intuitive display names
-const categoryDisplayNames = {
-  rhythm: 'Rhythm & Groove',
-  pitch: 'Pitch & Tone',
-  intensity: 'Energy & Impact',
+const categoryDisplayNames: Record<string, string> = {
+  rhythm: 'Rhythm & Impact',
+  pitch: 'Pitch & Melody',
+  intensity: 'Energy & Loudness',
   timbre: 'Texture & Character',
-};
-
-// Map stem types to intuitive display names
-const getStemTypeDisplayName = (stemType: string): string => {
-  const displayNames: Record<string, string> = {
-    'drums': '🥁 Drums',
-    'bass': '🎸 Bass',
-    'vocals': '🎤 Vocals',
-    'melody': '🎹 Melody',
-    'other': '🎼 Other',
-  };
-  return displayNames[stemType] || stemType;
 };
 
 export function MappingSourcesPanel({ 
@@ -267,79 +199,72 @@ export function MappingSourcesPanel({
   currentTime = 0,
   cachedAnalysis = [],
   isPlaying = false
-}: MappingSourcesPanelProps) {
+}: {
+  activeTrackId?: string;
+  className?: string;
+  selectedStemType?: string;
+  currentTime?: number;
+  cachedAnalysis?: any[];
+  isPlaying?: boolean;
+}) {
   const features = useAudioFeatures(activeTrackId, selectedStemType, cachedAnalysis);
   
   const featuresByCategory = useMemo(() => {
     return features.reduce((acc, feature) => {
-      if (!acc[feature.category]) {
-        acc[feature.category] = [];
-      }
-      acc[feature.category].push(feature);
+      (acc[feature.category] = acc[feature.category] || []).push(feature);
       return acc;
     }, {} as Record<string, AudioFeature[]>);
   }, [features]);
 
-  if (!activeTrackId) {
+  if (!activeTrackId || !selectedStemType) {
     return (
-      <div className={cn("bg-black border border-gray-800", className)}>
+      <div className={cn("bg-black border border-gray-800 rounded-lg", className)}>
         <div className="p-3 border-b border-gray-800">
-          <div className="flex items-center gap-2">
-            <Zap className="h-4 w-4 text-gray-300" />
-            <span className="text-sm font-semibold text-gray-100">Audio Features</span>
-          </div>
+          <h3 className="text-sm font-semibold text-gray-100 flex items-center gap-2"><Zap size={16}/> Audio Features</h3>
         </div>
-        <div className="p-4">
-          <div className="text-xs text-gray-500 text-center py-2">
-            Select a track to see available features
-          </div>
+        <div className="p-4 text-center text-xs text-gray-500">
+          Select a track in the timeline to see its available modulation sources.
         </div>
       </div>
     );
   }
 
   return (
-    <div className={cn("bg-black border border-gray-800 flex flex-col", className)}>
+    <div className={cn("bg-black border border-gray-800 rounded-lg flex flex-col", className)}>
       <div className="p-3 border-b border-gray-800">
-        <div className="flex items-center gap-2">
-          <Zap className="h-4 w-4 text-gray-300" />
-          <span className="text-sm font-semibold text-gray-100">Audio Features</span>
-        </div>
-        <div className="text-xs text-gray-500 mt-1">
-          Drag features to map to effect parameters
-        </div>
+        <h3 className="text-sm font-semibold text-gray-100 flex items-center gap-2"><Zap size={16}/> {selectedStemType} Features</h3>
+        <p className="text-xs text-gray-500 mt-1">Drag a feature onto an effect parameter to create a mapping.</p>
       </div>
-      <div className="flex-1 overflow-y-auto p-3 space-y-3">
-        {Object.entries(featuresByCategory).map(([category, categoryFeatures]) => {
-          const Icon = categoryIcons[category as keyof typeof categoryIcons];
-          
-          return (
-            <div key={category} className="space-y-1.5">
-              <div className="flex items-center gap-2">
-                <Icon className="h-3 w-3 text-gray-400" />
-                <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">
-                  {categoryDisplayNames[category as keyof typeof categoryDisplayNames] || category}
-                </span>
-                <span className="text-xs text-gray-600 bg-gray-800 px-1.5 py-0.5 rounded border border-gray-700">
-                  {categoryFeatures.length}
-                </span>
+      <div className="flex-1 overflow-y-auto p-3 space-y-4">
+        {Object.entries(featuresByCategory).length > 0 ? (
+          Object.entries(featuresByCategory).map(([category, categoryFeatures]) => {
+            const Icon = categoryIcons[category];
+            return (
+              <div key={category} className="space-y-2">
+                <h4 className="flex items-center gap-2 text-xs font-medium text-gray-400 uppercase tracking-wider">
+                  {Icon && <Icon size={14} />}
+                  {categoryDisplayNames[category] || category}
+                </h4>
+                <div className="space-y-1.5">
+                  {categoryFeatures.map((feature) => (
+                    <FeatureNode
+                      key={feature.id}
+                      feature={feature}
+                      currentTime={currentTime}
+                      cachedAnalysis={cachedAnalysis}
+                      isPlaying={isPlaying}
+                    />
+                  ))}
+                </div>
               </div>
-              <div className="space-y-1">
-                {(categoryFeatures as AudioFeature[]).map((feature) => (
-                  <FeatureNode
-                    key={feature.id}
-                    feature={feature}
-                    category={feature.category}
-                    currentTime={currentTime}
-                    cachedAnalysis={cachedAnalysis}
-                    isPlaying={isPlaying}
-                  />
-                ))}
-              </div>
-            </div>
-          );
-        })}
+            );
+          })
+        ) : (
+          <div className="text-xs text-gray-500 text-center py-4">
+            No analysis data available for this stem yet. Press play to begin analysis.
+          </div>
+        )}
       </div>
     </div>
   );
-} 
+}
