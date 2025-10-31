@@ -88,6 +88,7 @@ export const fileRouter = router({
             file_size: input.fileSize,
             s3_key: s3Key,
             s3_bucket: process.env.CLOUDFLARE_R2_BUCKET || 'phonoglyph-uploads',
+            upload_status: 'uploading',
             processing_status: MediaProcessor.requiresProcessing(validation.fileType) ? 'pending' : 'completed',
             project_id: input.projectId, // Associate with project
             is_master: input.isMaster || false, // Store master tag
