@@ -158,7 +158,7 @@ function performEnhancedAnalysis(
   console.log('🎵 Performing lightweight transient classification...');
 
   const params = Object.assign({
-    onsetThreshold: 0.3,
+    onsetThreshold: 0.01,
     peakWindow: 8,
     peakMultiplier: 1.5,
     classification: {

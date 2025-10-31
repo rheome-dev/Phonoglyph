@@ -99,6 +99,11 @@ const FeatureNode = ({
     };
 
     const featureValue = getEnhancedFeatureValue(feature.id, currentTime);
+    if (feature.name === 'Pitch') {
+      // Debug: verify pitch value over time
+      // eslint-disable-next-line no-console
+      console.log(`[FeatureNode] Pitch value at time ${currentTime.toFixed(2)}s: ${featureValue}`);
+    }
     
     // Normalize value to 0-1 range for display
     const normalizedValue = Math.max(0, Math.min(1, featureValue));
