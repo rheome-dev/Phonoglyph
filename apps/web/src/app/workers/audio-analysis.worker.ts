@@ -261,7 +261,7 @@ self.onmessage = function (event: MessageEvent<WorkerMessage>) {
           // eslint-disable-next-line no-console
           console.log('[worker] spectralFlux tail(50):', tail);
           // eslint-disable-next-line no-console
-          console.log('[worker] spectralFlux csv(first 200):', sf.slice(0, 200).join(','));
+          console.log('[worker] spectralFlux csv(all):', sf.join(','));
         }
         const ch = (analysis as any).chroma as number[] | undefined;
         if (Array.isArray(ch)) {
@@ -272,7 +272,7 @@ self.onmessage = function (event: MessageEvent<WorkerMessage>) {
           // eslint-disable-next-line no-console
           console.log('[worker] chroma tail(50):', tailC);
           // eslint-disable-next-line no-console
-          console.log('[worker] chroma csv(first 200):', ch.slice(0, 200).join(','));
+          console.log('[worker] chroma csv(all):', ch.join(','));
         }
       } catch {}
 
