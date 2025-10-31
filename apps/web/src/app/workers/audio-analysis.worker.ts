@@ -21,11 +21,11 @@ type AnalyzeBufferMessage = {
 type WorkerMessage = AnalyzeBufferMessage | { type: string; data?: unknown };
 
 const STEM_FEATURES: Record<string, string[]> = {
-  // For drums, compute spectralFlux manually from amplitudeSpectrum
+  // All stem types now request amplitudeSpectrum
   drums: ['rms', 'zcr', 'spectralCentroid', 'amplitudeSpectrum', 'energy', 'perceptualSharpness', 'loudness'],
-  bass: ['rms', 'loudness', 'spectralCentroid'],
-  vocals: ['rms', 'loudness', 'mfcc', 'chroma'],
-  other: ['rms', 'loudness', 'spectralCentroid', 'chroma'],
+  bass: ['rms', 'loudness', 'spectralCentroid', 'amplitudeSpectrum'],
+  vocals: ['rms', 'loudness', 'mfcc', 'chroma', 'amplitudeSpectrum'],
+  other: ['rms', 'loudness', 'spectralCentroid', 'chroma', 'amplitudeSpectrum'],
   master: ['rms', 'loudness', 'spectralCentroid', 'spectralRolloff', 'spectralFlatness', 'zcr', 'perceptualSpread', 'amplitudeSpectrum', 'perceptualSharpness', 'energy', 'chroma'],
 };
 
@@ -89,8 +89,8 @@ function performFullAnalysis(
       features = (Meyda as any).extract(featuresToExtract, buffer);
     } catch (error) {
       // eslint-disable-next-line no-console
-      console.error('Meyda extraction failed:', error);
-      features = {}; // Silently fail for this frame but continue
+      console.error('[worker] Meyda extraction failed for a frame:', error);
+      features = {}; // Ensure features is an object to prevent further errors
     }
 
     // --- Manual spectral flux calculation (stateful) ---
@@ -153,12 +153,13 @@ function performFullAnalysis(
 function performEnhancedAnalysis(
   fullAnalysis: Record<string, number[] | number>,
   sampleRate: number,
+  stemType: string,
   analysisParams?: any
 ): { time: number; intensity: number; type: string }[] {
-  console.log('🎵 Performing lightweight transient classification...');
+  console.log(`🎵 Performing transient classification for stem: ${stemType}`);
 
   const params = Object.assign({
-    onsetThreshold: 0.01,
+    onsetThreshold: 0.1,
     peakWindow: 8,
     peakMultiplier: 1.5,
     classification: {
@@ -175,54 +176,62 @@ function performEnhancedAnalysis(
   const { frameTimes, spectralFlux, spectralCentroid, perceptualSharpness, zcr, energy } = fullAnalysis;
 
   if (!spectralFlux || !Array.isArray(spectralFlux) || spectralFlux.length === 0) {
-    console.warn('⚠️ Cannot perform enhanced analysis: spectralFlux data is missing.');
+    console.warn(`⚠️ Cannot perform enhanced analysis for ${stemType}: spectralFlux data is missing or empty.`);
     return [];
   }
 
-  const maxFlux = Math.max(1e-6, ...(spectralFlux as number[]));
-  const normFlux = (spectralFlux as number[]).map(v => v / maxFlux);
+  const finiteFlux = (spectralFlux as number[]).filter(isFinite);
+  if (finiteFlux.length === 0) return [];
+  
+  const maxFlux = Math.max(1e-6, ...finiteFlux);
+  const normFlux = (spectralFlux as number[]).map(v => isFinite(v) ? v / maxFlux : 0);
 
   const peaks: { frameIndex: number; time: number; intensity: number }[] = [];
   const w = Math.max(1, params.peakWindow | 0);
   for (let i = 0; i < normFlux.length; i++) {
     const start = Math.max(0, i - w);
     const end = Math.min(normFlux.length, i + w + 1);
-    let sum = 0, sumSq = 0, count = 0;
-    for (let j = start; j < end; j++) { sum += normFlux[j]; sumSq += normFlux[j] * normFlux[j]; count++; }
-    const mean = sum / Math.max(1, count);
-    const std = Math.sqrt(Math.max(0, (sumSq / Math.max(1, count)) - mean * mean));
-    const threshold = mean + params.peakMultiplier * std;
-    const isLocalMax = (i === 0 || normFlux[i] > normFlux[i - 1]) && (i === normFlux.length - 1 || normFlux[i] >= normFlux[i + 1]);
-    if (isLocalMax && normFlux[i] > threshold && normFlux[i] > params.onsetThreshold) {
+    const localSlice = normFlux.slice(start, end);
+    const mean = localSlice.reduce((a, b) => a + b, 0) / localSlice.length;
+    
+    const isLocalMax = normFlux[i] >= Math.max(...localSlice);
+
+    if (isLocalMax && normFlux[i] > (mean + params.onsetThreshold)) {
       const frameTimesArray = Array.isArray(frameTimes) ? frameTimes : [];
-      peaks.push({ frameIndex: i, time: frameTimesArray[i] ?? i, intensity: normFlux[i] });
+      peaks.push({ frameIndex: i, time: frameTimesArray[i] ?? i * (512 / sampleRate), intensity: normFlux[i] });
     }
   }
 
   const transients: { time: number; intensity: number; type: string }[] = [];
   const c = params.classification;
+  
   for (const peak of peaks) {
-    const i = peak.frameIndex;
-    const energyArray = Array.isArray(energy) ? energy : [];
-    const spectralCentroidArray = Array.isArray(spectralCentroid) ? spectralCentroid : [];
-    const perceptualSharpnessArray = Array.isArray(perceptualSharpness) ? perceptualSharpness : [];
-    const zcrArray = Array.isArray(zcr) ? zcr : [];
-    
-    const peakEnergy = energyArray[i] ?? 0;
-    const peakCentroid = spectralCentroidArray[i] ?? 0;
-    const peakSharpness = perceptualSharpnessArray[i] ?? 0;
-    const peakZcr = zcrArray[i] ?? 0;
+    // Conditional classification for drums
+    if (stemType === 'drums') {
+      const i = peak.frameIndex;
+      const energyArray = Array.isArray(energy) ? energy : [];
+      const spectralCentroidArray = Array.isArray(spectralCentroid) ? spectralCentroid : [];
+      const perceptualSharpnessArray = Array.isArray(perceptualSharpness) ? perceptualSharpness : [];
+      const zcrArray = Array.isArray(zcr) ? zcr : [];
+      
+      const peakEnergy = energyArray[i] ?? 0;
+      const peakCentroid = spectralCentroidArray[i] ?? 0;
+      const peakSharpness = perceptualSharpnessArray[i] ?? 0;
+      const peakZcr = zcrArray[i] ?? 0;
 
-    let type = 'generic';
-    if (peakEnergy > c.highEnergyThreshold && peakCentroid < c.kickCentroidMax) {
-      type = 'kick';
-    } else if (peakCentroid > c.hatCentroidMin && peakZcr > c.highZcrThreshold) {
-      type = 'hat';
-    } else if (peakSharpness > c.snareSharpnessThreshold && peakCentroid >= c.snareCentroidMin && peakCentroid <= c.snareCentroidMax) {
-      type = 'snare';
+      let type = 'generic';
+      if (peakEnergy > c.highEnergyThreshold && peakCentroid < c.kickCentroidMax) {
+        type = 'kick';
+      } else if (peakCentroid > c.hatCentroidMin && peakZcr > c.highZcrThreshold) {
+        type = 'hat';
+      } else if (peakSharpness > c.snareSharpnessThreshold && peakCentroid >= c.snareCentroidMin && peakCentroid <= c.snareCentroidMax) {
+        type = 'snare';
+      }
+      transients.push({ time: peak.time, intensity: peak.intensity, type });
+    } else {
+      // Generic peaks for non-drum stems
+      transients.push({ time: peak.time, intensity: peak.intensity, type: 'generic' });
     }
-
-    transients.push({ time: peak.time, intensity: peak.intensity, type });
   }
 
   return transients;
@@ -236,8 +245,8 @@ self.onmessage = function (event: MessageEvent<WorkerMessage>) {
       const analysis = performFullAnalysis(channelData, sampleRate, stemType, () => {});
       const waveformData = generateWaveformData(channelData, duration, 1024);
       
-      // NEW: Run enhanced analysis for transients
-      const transients = performEnhancedAnalysis(analysis, sampleRate, analysisParams);
+      // NEW: Run enhanced analysis for transients (pass stemType)
+      const transients = performEnhancedAnalysis(analysis, sampleRate, stemType, analysisParams);
 
       // Debug: transients and critical arrays
       try {
