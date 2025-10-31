@@ -21,7 +21,8 @@ type AnalyzeBufferMessage = {
 type WorkerMessage = AnalyzeBufferMessage | { type: string; data?: unknown };
 
 const STEM_FEATURES: Record<string, string[]> = {
-  drums: ['rms', 'zcr', 'spectralCentroid', 'spectralFlux', 'energy', 'perceptualSharpness'],
+  // For drums, compute spectralFlux manually from amplitudeSpectrum
+  drums: ['rms', 'zcr', 'spectralCentroid', 'amplitudeSpectrum', 'energy', 'perceptualSharpness'],
   bass: ['rms', 'loudness', 'spectralCentroid'],
   vocals: ['rms', 'loudness', 'mfcc', 'chroma'],
   other: ['rms', 'loudness', 'spectralCentroid', 'chroma'],
@@ -103,6 +104,7 @@ function performFullAnalysis(
   const bufferSize = 1024;
   const hopSize = 512;
   let currentPosition = 0;
+  let previousSpectrum: number[] | null = null;
   const totalSteps = Math.max(1, Math.floor((channelData.length - bufferSize) / hopSize));
 
   while (currentPosition + bufferSize <= channelData.length) {
@@ -161,6 +163,20 @@ function performFullAnalysis(
       console.error('Meyda extraction failed:', error);
       features = {};
     }
+
+    // --- Manual spectral flux calculation (stateful) ---
+    const currentSpectrum = (features as any)?.amplitudeSpectrum as number[] | undefined;
+    let flux = 0;
+    if (previousSpectrum && currentSpectrum && Array.isArray(previousSpectrum) && Array.isArray(currentSpectrum)) {
+      const len = Math.min(previousSpectrum.length, currentSpectrum.length);
+      for (let i = 0; i < len; i++) {
+        const diff = (currentSpectrum[i] || 0) - (previousSpectrum[i] || 0);
+        if (diff > 0) flux += diff;
+      }
+    }
+    if (!featureFrames.spectralFlux) featureFrames.spectralFlux = [];
+    featureFrames.spectralFlux.push(flux);
+    previousSpectrum = currentSpectrum ? Array.from(currentSpectrum) : null;
 
     if (features) {
       const rms = features.rms || 0;
