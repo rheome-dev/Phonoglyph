@@ -145,17 +145,12 @@ function performFullAnalysis(
           } else {
             const value = features[feature];
             if (Array.isArray(value)) {
-              // For array features like chroma or mfcc, push the whole array
-              featureFrames[feature].push(value);
+              // For array features like chroma or mfcc, sanitize contents to valid numbers
+              featureFrames[feature].push(value.map((v: any) => (typeof v === 'number' && isFinite(v) ? v : 0)));
             } else {
-              // For single-value features, push the number
-              let numericValue = 0;
-              if (typeof value === 'number') {
-                numericValue = value;
-              } else if (value && typeof value === 'object' && 'value' in value && typeof value.value === 'number') {
-                numericValue = value.value;
-              }
-              featureFrames[feature].push(numericValue);
+              // For single-value features, sanitize and push a valid number
+              const sanitizedValue = (typeof value === 'number' && isFinite(value)) ? value : 0;
+              featureFrames[feature].push(sanitizedValue);
             }
           }
         }
