@@ -26,7 +26,7 @@ const STEM_FEATURES: Record<string, string[]> = {
   bass: ['rms', 'loudness', 'spectralCentroid'],
   vocals: ['rms', 'loudness', 'mfcc', 'chroma'],
   other: ['rms', 'loudness', 'spectralCentroid', 'chroma'],
-  master: ['rms', 'loudness', 'spectralCentroid', 'spectralRolloff', 'spectralFlatness', 'zcr', 'perceptualSpread', 'amplitudeSpectrum', 'spectralFlux', 'perceptualSharpness', 'energy', 'chroma'],
+  master: ['rms', 'loudness', 'spectralCentroid', 'spectralRolloff', 'spectralFlatness', 'zcr', 'perceptualSpread', 'amplitudeSpectrum', 'perceptualSharpness', 'energy', 'chroma'],
 };
 
 function generateWaveformData(channelData: Float32Array, duration: number, points = 1024) {
