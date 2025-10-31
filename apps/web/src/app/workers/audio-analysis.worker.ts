@@ -99,6 +99,14 @@ function performFullAnalysis(
 
     // --- Manual spectral flux calculation (stateful) ---
     const currentSpectrum = features?.amplitudeSpectrum as number[] | undefined;
+    // Dump amplitudeSpectrum CSV for every frame
+    try {
+      if (Array.isArray(currentSpectrum)) {
+        const frameIndex = frameTimes.length; // current frame index before push
+        // eslint-disable-next-line no-console
+        console.log(`[worker] amplitudeSpectrum csv(frame ${frameIndex}):`, currentSpectrum.join(','));
+      }
+    } catch {}
     // Debug first frame spectrum
     if (currentPosition === 0) {
       try {
@@ -108,6 +116,10 @@ function performFullAnalysis(
           spectrumLength: currentSpectrum?.length,
           firstValues: Array.isArray(currentSpectrum) ? currentSpectrum.slice(0, 10) : []
         });
+        if (Array.isArray(currentSpectrum)) {
+          // eslint-disable-next-line no-console
+          console.log('[worker] First frame amplitudeSpectrum csv(all):', currentSpectrum.join(','));
+        }
       } catch {}
     }
     let flux = 0;
