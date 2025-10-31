@@ -246,8 +246,9 @@ self.onmessage = function (event: MessageEvent<WorkerMessage>) {
           fileId,
           stemType,
           frameCount: Array.isArray((analysis as any).frameTimes) ? (analysis as any).frameTimes.length : 0,
-          spectralFluxLen: Array.isArray((analysis as any).spectralFlux) ? (analysis as any).spectralFlux.length : 0,
-          chromaLen: Array.isArray((analysis as any).chroma) ? (analysis as any).chroma.length : 0,
+          // Dump actual arrays for inspection instead of only lengths
+          spectralFlux: Array.isArray((analysis as any).spectralFlux) ? (analysis as any).spectralFlux : [],
+          chroma: Array.isArray((analysis as any).chroma) ? (analysis as any).chroma : [],
           transientsCount: Array.isArray(transients) ? transients.length : 0
         });
       } catch {}
