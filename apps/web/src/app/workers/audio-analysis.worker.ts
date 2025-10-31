@@ -147,8 +147,23 @@ function performFullAnalysis(
           } else {
             const value = features[feature];
             if (Array.isArray(value)) {
-              // For array features like chroma or mfcc, sanitize contents to valid numbers
-              featureFrames[feature].push(value.map((v: any) => (typeof v === 'number' && isFinite(v) ? v : 0)));
+              // Sanitize array values
+              const sanitizedArray = value.map((v: any) => (typeof v === 'number' && isFinite(v) ? v : 0));
+              if (feature === 'chroma') {
+                // Map 12-bin chroma array to a single dominant pitch class index (0-11)
+                let maxVal = -Infinity;
+                let maxIdx = 0;
+                for (let i = 0; i < sanitizedArray.length; i++) {
+                  if (sanitizedArray[i] > maxVal) {
+                    maxVal = sanitizedArray[i];
+                    maxIdx = i;
+                  }
+                }
+                featureFrames[feature].push(maxIdx);
+              } else {
+                // For other array features (e.g., mfcc), take first element as representative
+                featureFrames[feature].push(sanitizedArray[0] || 0);
+              }
             } else {
               // For single-value features, sanitize and push a valid number
               const sanitizedValue = (typeof value === 'number' && isFinite(value)) ? value : 0;
