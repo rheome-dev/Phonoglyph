@@ -21,11 +21,11 @@ type AnalyzeBufferMessage = {
 type WorkerMessage = AnalyzeBufferMessage | { type: string; data?: unknown };
 
 const STEM_FEATURES: Record<string, string[]> = {
-  drums: ['rms', 'zcr', 'spectralCentroid'],
+  drums: ['rms', 'zcr', 'spectralCentroid', 'spectralFlux'],
   bass: ['rms', 'loudness', 'spectralCentroid'],
-  vocals: ['rms', 'loudness', 'mfcc'],
-  other: ['rms', 'loudness', 'spectralCentroid'],
-  master: ['rms', 'loudness', 'spectralCentroid', 'spectralRolloff', 'spectralFlatness', 'zcr', 'perceptualSpread', 'amplitudeSpectrum'],
+  vocals: ['rms', 'loudness', 'mfcc', 'chroma'],
+  other: ['rms', 'loudness', 'spectralCentroid', 'chroma'],
+  master: ['rms', 'loudness', 'spectralCentroid', 'spectralRolloff', 'spectralFlatness', 'zcr', 'perceptualSpread', 'amplitudeSpectrum', 'spectralFlux', 'perceptualSharpness', 'energy', 'chroma'],
 };
 
 function generateWaveformData(channelData: Float32Array, duration: number, points = 1024) {
@@ -144,11 +144,19 @@ function performFullAnalysis(
             }
           } else {
             const value = features[feature];
-            let numericValue = 0;
-            if (typeof value === 'number') numericValue = value;
-            else if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'number') numericValue = value[0];
-            else if (value && typeof value === 'object' && 'value' in value && typeof value.value === 'number') numericValue = value.value;
-            featureFrames[feature].push(numericValue);
+            if (Array.isArray(value)) {
+              // For array features like chroma or mfcc, push the whole array
+              featureFrames[feature].push(value);
+            } else {
+              // For single-value features, push the number
+              let numericValue = 0;
+              if (typeof value === 'number') {
+                numericValue = value;
+              } else if (value && typeof value === 'object' && 'value' in value && typeof value.value === 'number') {
+                numericValue = value.value;
+              }
+              featureFrames[feature].push(numericValue);
+            }
           }
         }
       }
@@ -205,33 +213,129 @@ function performFullAnalysis(
       key === 'features'
     ) {
       flatFeatures[key] = Array.isArray(featureFrames[key]) ? featureFrames[key] : [];
+    } else if (key === 'chroma' || key === 'mfcc') {
+      // Preserve array features as-is (array of arrays)
+      flatFeatures[key] = featureFrames[key];
     } else {
       flatFeatures[key] = featureFrames[key];
     }
   }
 
+  // Normalize numeric arrays, but preserve array features like chroma/mfcc
   Object.keys(flatFeatures).forEach((k) => {
     const val = flatFeatures[k];
-    if (Array.isArray(val)) {
-      flatFeatures[k] = val.map((v) => (typeof v === 'number' && isFinite(v) ? v : 0));
+    if (Array.isArray(val) && val.length > 0) {
+      // If it's an array of arrays (like chroma), preserve structure
+      if (Array.isArray(val[0])) {
+        // Keep array features as-is
+        flatFeatures[k] = val;
+      } else {
+        // Normalize numeric arrays
+        flatFeatures[k] = val.map((v) => (typeof v === 'number' && isFinite(v) ? v : 0));
+      }
     }
   });
 
   return flatFeatures as Record<string, number[] | number>;
 }
 
+function performEnhancedAnalysis(
+  fullAnalysis: Record<string, number[] | number[]>,
+  sampleRate: number,
+  analysisParams?: any
+): { time: number; intensity: number; type: string }[] {
+  console.log('🎵 Performing lightweight transient classification...');
+
+  const params = Object.assign({
+    onsetThreshold: 0.3,
+    peakWindow: 8,
+    peakMultiplier: 1.5,
+    classification: {
+      highEnergyThreshold: 0.2,
+      highZcrThreshold: 0.2,
+      snareSharpnessThreshold: 0.6,
+      kickCentroidMax: 500,
+      hatCentroidMin: 8000,
+      snareCentroidMin: 2000,
+      snareCentroidMax: 6000,
+    }
+  }, analysisParams || {});
+
+  const { frameTimes, spectralFlux, spectralCentroid, perceptualSharpness, zcr, energy } = fullAnalysis;
+
+  if (!spectralFlux || !Array.isArray(spectralFlux) || spectralFlux.length === 0) {
+    console.warn('⚠️ Cannot perform enhanced analysis: spectralFlux data is missing.');
+    return [];
+  }
+
+  const maxFlux = Math.max(1e-6, ...(spectralFlux as number[]));
+  const normFlux = (spectralFlux as number[]).map(v => v / maxFlux);
+
+  const peaks: { frameIndex: number; time: number; intensity: number }[] = [];
+  const w = Math.max(1, params.peakWindow | 0);
+  for (let i = 0; i < normFlux.length; i++) {
+    const start = Math.max(0, i - w);
+    const end = Math.min(normFlux.length, i + w + 1);
+    let sum = 0, sumSq = 0, count = 0;
+    for (let j = start; j < end; j++) { sum += normFlux[j]; sumSq += normFlux[j] * normFlux[j]; count++; }
+    const mean = sum / Math.max(1, count);
+    const std = Math.sqrt(Math.max(0, (sumSq / Math.max(1, count)) - mean * mean));
+    const threshold = mean + params.peakMultiplier * std;
+    const isLocalMax = (i === 0 || normFlux[i] > normFlux[i - 1]) && (i === normFlux.length - 1 || normFlux[i] >= normFlux[i + 1]);
+    if (isLocalMax && normFlux[i] > threshold && normFlux[i] > params.onsetThreshold) {
+      const frameTimesArray = Array.isArray(frameTimes) ? frameTimes : [];
+      peaks.push({ frameIndex: i, time: frameTimesArray[i] ?? i, intensity: normFlux[i] });
+    }
+  }
+
+  const transients: { time: number; intensity: number; type: string }[] = [];
+  const c = params.classification;
+  for (const peak of peaks) {
+    const i = peak.frameIndex;
+    const energyArray = Array.isArray(energy) ? energy : [];
+    const spectralCentroidArray = Array.isArray(spectralCentroid) ? spectralCentroid : [];
+    const perceptualSharpnessArray = Array.isArray(perceptualSharpness) ? perceptualSharpness : [];
+    const zcrArray = Array.isArray(zcr) ? zcr : [];
+    
+    const peakEnergy = energyArray[i] ?? 0;
+    const peakCentroid = spectralCentroidArray[i] ?? 0;
+    const peakSharpness = perceptualSharpnessArray[i] ?? 0;
+    const peakZcr = zcrArray[i] ?? 0;
+
+    let type = 'generic';
+    if (peakEnergy > c.highEnergyThreshold && peakCentroid < c.kickCentroidMax) {
+      type = 'kick';
+    } else if (peakCentroid > c.hatCentroidMin && peakZcr > c.highZcrThreshold) {
+      type = 'hat';
+    } else if (peakSharpness > c.snareSharpnessThreshold && peakCentroid >= c.snareCentroidMin && peakCentroid <= c.snareCentroidMax) {
+      type = 'snare';
+    }
+
+    transients.push({ time: peak.time, intensity: peak.intensity, type });
+  }
+
+  return transients;
+}
+
 self.onmessage = function (event: MessageEvent<WorkerMessage>) {
   const { type, data } = event.data as any;
   if (type === 'ANALYZE_BUFFER') {
-    const { fileId, channelData, sampleRate, duration, stemType } = data;
+    const { fileId, channelData, sampleRate, duration, stemType, enhancedAnalysis, analysisParams } = data;
     try {
       const analysis = performFullAnalysis(channelData, sampleRate, stemType, () => {});
       const waveformData = generateWaveformData(channelData, duration, 1024);
+      
+      // NEW: Run enhanced analysis for transients
+      const transients = performEnhancedAnalysis(analysis, sampleRate, analysisParams);
+
       const result = {
         id: `client_${fileId}`,
         fileMetadataId: fileId,
         stemType,
-        analysisData: analysis,
+        analysisData: {
+          ...analysis,
+          transients, // Add classified transients to the result
+        },
         waveformData,
         metadata: {
           sampleRate,
