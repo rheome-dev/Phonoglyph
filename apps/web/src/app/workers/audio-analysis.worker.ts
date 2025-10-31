@@ -240,7 +240,7 @@ function performFullAnalysis(
 }
 
 function performEnhancedAnalysis(
-  fullAnalysis: Record<string, number[] | number[]>,
+  fullAnalysis: Record<string, number[] | number>,
   sampleRate: number,
   analysisParams?: any
 ): { time: number; intensity: number; type: string }[] {
