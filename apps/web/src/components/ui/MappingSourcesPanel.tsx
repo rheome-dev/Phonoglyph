@@ -1,10 +1,12 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useDrag } from 'react-dnd';
 import { Zap, Music, Activity, BarChart2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAudioFeatures, AudioFeature } from '@/hooks/use-audio-features';
+import { Slider } from '@/components/ui/slider';
+import { Label } from '@/components/ui/label';
 
 // --- Meter Sub-Components ---
 
@@ -73,11 +75,16 @@ const FeatureNode = ({
 }) => {
   const [liveValue, setLiveValue] = useState(0);
   const [isActive, setIsActive] = useState(false);
+  const [decayTime, setDecayTime] = useState(0.5); // 500ms default decay
+  const lastTransientRef = useRef<{ time: number; intensity: number } | null>(null);
   
+  const isTransientFeature = feature.isEvent && feature.id.includes('impact');
+
   useEffect(() => {
     if (!isPlaying || !feature.stemType) {
       setLiveValue(0);
       setIsActive(false);
+      lastTransientRef.current = null; // Reset on stop/pause
       return;
     }
 
@@ -89,9 +96,57 @@ const FeatureNode = ({
     const { analysisData } = analysis;
     const time = currentTime;
     let featureValue = 0;
+    
+    // --- NEW ENVELOPE LOGIC FOR TRANSIENTS ---
+    if (isTransientFeature) {
+        const transientType = feature.id.split('-').pop();
+        const relevantTransients = analysisData.transients?.filter((t: any) =>
+            transientType === 'all' || t.type === transientType
+        );
 
-    // Time-series features (like Volume/RMS)
-    if (!feature.isEvent) {
+        // Find the most recent transient that has occurred up to the current time
+        const latestTransient = relevantTransients?.reduce((latest: any, t: any) => {
+            if (t.time <= time && (!latest || t.time > latest.time)) {
+                return t;
+            }
+            return latest;
+        }, null);
+
+        // If a new transient is found that is more recent than our last latched one, update the ref.
+        if (latestTransient && latestTransient.time > (lastTransientRef.current?.time ?? -1)) {
+            lastTransientRef.current = { time: latestTransient.time, intensity: latestTransient.intensity };
+        }
+
+        // Calculate envelope value based on the last seen transient
+        if (lastTransientRef.current) {
+            const elapsedTime = time - lastTransientRef.current.time;
+            if (elapsedTime >= 0 && elapsedTime < decayTime) {
+                // Linear decay
+                featureValue = lastTransientRef.current.intensity * (1 - (elapsedTime / decayTime));
+            } else {
+                // Decay has finished
+                featureValue = 0;
+            }
+        } else {
+            featureValue = 0;
+        }
+    }
+    // --- EXISTING LOGIC FOR PITCH ---
+    else if (feature.isEvent && feature.id.includes('pitch')) {
+      const times = analysisData.frameTimes;
+      const chromaValues = analysisData.chroma;
+      if (times && chromaValues && Array.isArray(times) && Array.isArray(chromaValues)) {
+        let lo = 0, hi = times.length - 1;
+        while (lo < hi) {
+          const mid = (lo + hi + 1) >>> 1;
+          if (times[mid] <= time) lo = mid; else hi = mid - 1;
+        }
+        const chromaValue = chromaValues[lo] ?? 0;
+        featureValue = chromaValue / 11;
+      }
+    } 
+    // --- EXISTING LOGIC FOR TIME-SERIES ---
+    else {
       const times = analysisData.frameTimes;
       const values = analysisData.volume || analysisData.rms;
       if (times && values && Array.isArray(times) && Array.isArray(values)) {
@@ -102,38 +157,12 @@ const FeatureNode = ({
         }
         featureValue = values[lo] ?? 0;
       }
-    } 
-    // Event-based features (Impact, Pitch)
-    else {
-      if (feature.id.includes('impact')) {
-        const transientType = feature.id.split('-').pop(); // 'all', 'kick', 'snare', 'hat'
-        const relevantTransients = analysisData.transients?.filter((t: any) => 
-          transientType === 'all' || t.type === transientType
-        );
-        const transient = relevantTransients?.find((t: any) => Math.abs(t.time - time) < 0.05); // 50ms window
-        featureValue = transient?.intensity ?? 0;
-      } else if (feature.id.includes('pitch')) {
-        // Chroma is a time-series array, find the closest frame
-        const times = analysisData.frameTimes;
-        const chromaValues = analysisData.chroma;
-        if (times && chromaValues && Array.isArray(times) && Array.isArray(chromaValues)) {
-          let lo = 0, hi = times.length - 1;
-          while (lo < hi) {
-            const mid = (lo + hi + 1) >>> 1;
-            if (times[mid] <= time) lo = mid; else hi = mid - 1;
-          }
-          const chromaValue = chromaValues[lo] ?? 0;
-          // Normalize pitch from 0-11 to 0-1 for the meter
-          featureValue = chromaValue / 11;
-        }
-      }
     }
-    
-    // Normalize to 0-1 range
+
     const normalizedValue = Math.max(0, Math.min(1, featureValue));
     setLiveValue(normalizedValue);
-    setIsActive(isPlaying && normalizedValue > 0.1);
-  }, [feature, currentTime, cachedAnalysis, isPlaying]);
+    setIsActive(isPlaying && normalizedValue > 0.05); // Lowered threshold for active state
+  }, [feature, currentTime, cachedAnalysis, isPlaying, decayTime]); // Add decayTime to dependencies
 
   const [{ isDragging }, dragRef] = useDrag({
     type: 'feature',
@@ -145,10 +174,9 @@ const FeatureNode = ({
   }, [dragRef]);
   
   const renderMeter = () => {
-    if (feature.name.includes('Impact')) return <ImpactMeter value={liveValue} />;
+    if (isTransientFeature) return <ImpactMeter value={liveValue} />;
     if (feature.name === 'Pitch') return <PitchMeter value={liveValue} />;
     if (feature.name === 'Volume') return <VolumeMeter value={liveValue} />;
-    // Fallback meter
     return <div className="w-full bg-gray-800 rounded-sm h-1 mb-1" />;
   };
 
@@ -171,6 +199,22 @@ const FeatureNode = ({
           <span className="truncate font-medium text-gray-300">{feature.name}</span>
         </div>
         {renderMeter()}
+        {isTransientFeature && (
+          <div className="mt-2 space-y-1">
+            <div className="flex items-center justify-between">
+              <Label className="text-[10px] text-gray-400">Decay</Label>
+              <span className="text-[10px] text-gray-300">{decayTime.toFixed(2)}s</span>
+            </div>
+            <Slider
+              value={[decayTime]}
+              onValueChange={(value) => setDecayTime(value[0])}
+              min={0.05}
+              max={2.0}
+              step={0.05}
+              className="h-2"
+            />
+          </div>
+        )}
       </div>
     </div>
   );
