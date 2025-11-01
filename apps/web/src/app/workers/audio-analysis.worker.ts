@@ -169,14 +169,18 @@ function performEnhancedAnalysis(
     peakWindow: 5,
     peakMultiplier: 1.5,
     classification: {
-      // Tuned thresholds for snippet-based analysis
-      highEnergyThreshold: 0.05,
-      highZcrThreshold: 0.2, // This is now a RATE (0-1)
-      snareSharpnessThreshold: 0.45,
-      kickCentroidMax: 500,
-      hatCentroidMin: 5000,
-      snareCentroidMin: 1500,
+      // Tuned thresholds for more accurate classification
+      kickCentroidMax: 250,   // Kicks are very low frequency
+      kickRmsMin: 0.08,         // Kicks are loud
+      
+      snareCentroidMin: 1000,
       snareCentroidMax: 6000,
+      snareSharpnessMin: 0.5,   // Snares have a sharp, noisy attack
+      snareRmsMin: 0.05,        // Snares are also loud
+
+      hatCentroidMin: 7000,     // Hats are very high frequency
+      hatZcrMin: 0.3,           // Hats have a high rate of zero-crossings
+      hatRmsMin: 0.01,          // Hats can be quieter
     }
   }, analysisParams || {});
 
@@ -207,14 +211,14 @@ function performEnhancedAnalysis(
       if (isLocalMax) {
         const frameTimesArray = Array.isArray(frameTimes) ? frameTimes : [];
         peaks.push({ frameIndex: i, time: frameTimesArray[i] ?? i * (512 / sampleRate), intensity: normFlux[i] });
-        i += w; // Skip forward
+        i += w;
       }
     }
   }
 
   const transients: { time: number; intensity: number; type: string }[] = [];
   const c = params.classification;
-  const attackSnippetSize = 1024; // Analyze a small window right on the transient
+  const attackSnippetSize = 1024;
   
   for (const peak of peaks) {
     let type = 'generic';
@@ -227,35 +231,42 @@ function performEnhancedAnalysis(
         const attackSnippet = channelData.slice(snippetStart, snippetStart + attackSnippetSize);
         
         try {
+          // *** FIX A: Pass sampleRate to the Meyda extract call ***
           const attackFeatures = (Meyda as any).extract(
             ['spectralCentroid', 'perceptualSharpness', 'zcr', 'rms'],
             attackSnippet,
-            {
-              sampleRate: sampleRate,
-              bufferSize: attackSnippetSize,
-              windowingFunction: 'hanning'
-            }
+            { sampleRate: sampleRate } // This is the critical missing piece
           );
           
           if (attackFeatures) {
             const { rms, spectralCentroid, perceptualSharpness, zcr } = attackFeatures;
-            
-            // *** FIX: Normalize ZCR to get a rate (0-1) ***
             const normalizedZcr = zcr / attackSnippetSize;
             
-            // *** FIX: Re-ordered and tuned classification logic ***
-            if (spectralCentroid > c.hatCentroidMin && normalizedZcr > c.highZcrThreshold) {
-              type = 'hat';
-            } 
-            else if (perceptualSharpness > c.snareSharpnessThreshold && spectralCentroid >= c.snareCentroidMin && spectralCentroid <= c.snareCentroidMax) {
-              type = 'snare';
-            } 
-            else if (rms > c.highEnergyThreshold && spectralCentroid < c.kickCentroidMax) {
-              type = 'kick';
+            // *** FIX B: Use a score-based system instead of if/else if ***
+            const scores = { kick: 0, snare: 0, hat: 0 };
+
+            // Score Kick
+            if (rms > c.kickRmsMin && spectralCentroid < c.kickCentroidMax) {
+              scores.kick = (rms / c.kickRmsMin) + (1 - spectralCentroid / c.kickCentroidMax);
+            }
+            // Score Snare
+            if (rms > c.snareRmsMin && spectralCentroid > c.snareCentroidMin && spectralCentroid < c.snareCentroidMax && perceptualSharpness > c.snareSharpnessMin) {
+              scores.snare = (rms / c.snareRmsMin) + (perceptualSharpness / c.snareSharpnessMin);
+            }
+            // Score Hat
+            if (rms > c.hatRmsMin && spectralCentroid > c.hatCentroidMin && normalizedZcr > c.hatZcrMin) {
+              scores.hat = (rms / c.hatRmsMin) + (normalizedZcr / c.hatZcrMin) + (spectralCentroid / c.hatCentroidMin);
+            }
+
+            // Determine the winner
+            const maxScore = Math.max(scores.kick, scores.snare, scores.hat);
+            if (maxScore > 0) {
+              if (maxScore === scores.hat) type = 'hat';
+              else if (maxScore === scores.snare) type = 'snare';
+              else if (maxScore === scores.kick) type = 'kick';
             }
             
-            // Guaranteed Logging with correct features
-            console.log(`[worker] Drum Transient at ${peak.time.toFixed(3)}s: type=${type}, rms=${rms.toFixed(3)}, centroid=${spectralCentroid.toFixed(0)}, sharpness=${perceptualSharpness.toFixed(3)}, zcr=${normalizedZcr.toFixed(3)}`);
+            console.log(`[worker] Drum Transient at ${peak.time.toFixed(3)}s: type=${type}, rms=${rms.toFixed(3)}, centroid=${spectralCentroid.toFixed(0)}, sharpness=${perceptualSharpness.toFixed(3)}, zcr=${normalizedZcr.toFixed(3)}, scores=${JSON.stringify(scores)}`);
           }
         } catch (error) {
            console.error(`[worker] Meyda snippet analysis failed at ${peak.time}s:`, error);
