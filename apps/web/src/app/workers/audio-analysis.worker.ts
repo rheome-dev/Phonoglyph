@@ -169,13 +169,15 @@ function performEnhancedAnalysis(
     peakWindow: 8,
     peakMultiplier: 1.5,
     classification: {
-      highEnergyThreshold: 0.2,
-      highZcrThreshold: 0.2,
-      snareSharpnessThreshold: 0.6,
-      kickCentroidMax: 500,
-      hatCentroidMin: 8000,
-      snareCentroidMin: 2000,
-      snareCentroidMax: 6000,
+      // Adjusted thresholds for better classification
+      // Using RMS instead of energy (RMS is normalized 0-1)
+      highEnergyThreshold: 0.05, // RMS threshold (0-1 range)
+      highZcrThreshold: 0.1, // ZCR threshold for hat detection
+      snareSharpnessThreshold: 0.4, // Perceptual sharpness threshold for snare
+      kickCentroidMax: 800, // Maximum spectral centroid for kick (Hz)
+      hatCentroidMin: 5000, // Minimum spectral centroid for hat (Hz)
+      snareCentroidMin: 1500, // Minimum spectral centroid for snare (Hz)
+      snareCentroidMax: 7000, // Maximum spectral centroid for snare (Hz)
     }
   }, analysisParams || {});
 
@@ -215,7 +217,7 @@ function performEnhancedAnalysis(
   for (const peak of peaks) {
     let type = 'generic';
     
-    // Conditional classification for drums using dedicated attack snippets
+    // Conditional classification: drums get refined classification, others are generic
     if (stemType === 'drums') {
       // Calculate sample position for the peak
       const peakSamplePosition = Math.floor(peak.time * sampleRate);
@@ -234,7 +236,7 @@ function performEnhancedAnalysis(
         // Run Meyda extraction on the attack snippet with specific features
         try {
           const attackFeatures = (Meyda as any).extract(
-            ['spectralCentroid', 'perceptualSharpness', 'zcr', 'energy'],
+            ['spectralCentroid', 'perceptualSharpness', 'zcr', 'rms', 'energy'],
             attackSnippet,
             {
               sampleRate: sampleRate,
@@ -245,18 +247,25 @@ function performEnhancedAnalysis(
           
           if (attackFeatures) {
             // Extract features from the attack snippet
-            const attackEnergy = attackFeatures.energy ?? 0;
+            // Use RMS instead of energy for classification (RMS is already normalized 0-1)
+            const attackRms = attackFeatures.rms ?? 0;
             const attackCentroid = attackFeatures.spectralCentroid ?? 0;
             const attackSharpness = attackFeatures.perceptualSharpness ?? 0;
             const attackZcr = attackFeatures.zcr ?? 0;
             
             // Apply refined classification heuristic using attack-phase features
-            if (attackEnergy > c.highEnergyThreshold && attackCentroid < c.kickCentroidMax) {
-              type = 'kick';
-            } else if (attackCentroid > c.hatCentroidMin && attackZcr > c.highZcrThreshold) {
-              type = 'hat';
-            } else if (attackSharpness > c.snareSharpnessThreshold && attackCentroid >= c.snareCentroidMin && attackCentroid <= c.snareCentroidMax) {
+            // Order matters: check most specific first, then more general
+            // Snare: sharp + mid-range centroid (most specific)
+            if (attackSharpness > c.snareSharpnessThreshold && attackCentroid >= c.snareCentroidMin && attackCentroid <= c.snareCentroidMax) {
               type = 'snare';
+            } 
+            // Hat: high centroid + high ZCR (very specific)
+            else if (attackCentroid > c.hatCentroidMin && attackZcr > c.highZcrThreshold) {
+              type = 'hat';
+            } 
+            // Kick: high RMS + low centroid (catch-all for low-frequency hits)
+            else if (attackRms > c.highEnergyThreshold && attackCentroid < c.kickCentroidMax) {
+              type = 'kick';
             }
           } else {
             throw new Error('Attack features extraction returned null');
@@ -269,17 +278,18 @@ function performEnhancedAnalysis(
           const perceptualSharpnessArray = Array.isArray(perceptualSharpness) ? perceptualSharpness : [];
           const zcrArray = Array.isArray(zcr) ? zcr : [];
           
-          const peakEnergy = energyArray[i] ?? 0;
+          const peakRms = (fullAnalysis.rms as number[] | undefined)?.[i] ?? 0;
           const peakCentroid = spectralCentroidArray[i] ?? 0;
           const peakSharpness = perceptualSharpnessArray[i] ?? 0;
           const peakZcr = zcrArray[i] ?? 0;
           
-          if (peakEnergy > c.highEnergyThreshold && peakCentroid < c.kickCentroidMax) {
-            type = 'kick';
+          // Check snare first (more specific), then hat, then kick (most common)
+          if (peakSharpness > c.snareSharpnessThreshold && peakCentroid >= c.snareCentroidMin && peakCentroid <= c.snareCentroidMax) {
+            type = 'snare';
           } else if (peakCentroid > c.hatCentroidMin && peakZcr > c.highZcrThreshold) {
             type = 'hat';
-          } else if (peakSharpness > c.snareSharpnessThreshold && peakCentroid >= c.snareCentroidMin && peakCentroid <= c.snareCentroidMax) {
-            type = 'snare';
+          } else if (peakRms > c.highEnergyThreshold && peakCentroid < c.kickCentroidMax) {
+            type = 'kick';
           }
         }
       } else {
@@ -290,17 +300,18 @@ function performEnhancedAnalysis(
         const perceptualSharpnessArray = Array.isArray(perceptualSharpness) ? perceptualSharpness : [];
         const zcrArray = Array.isArray(zcr) ? zcr : [];
         
-        const peakEnergy = energyArray[i] ?? 0;
+        const peakRms = (fullAnalysis.rms as number[] | undefined)?.[i] ?? 0;
         const peakCentroid = spectralCentroidArray[i] ?? 0;
         const peakSharpness = perceptualSharpnessArray[i] ?? 0;
         const peakZcr = zcrArray[i] ?? 0;
         
-        if (peakEnergy > c.highEnergyThreshold && peakCentroid < c.kickCentroidMax) {
-          type = 'kick';
+        // Check snare first (more specific), then hat, then kick (most common)
+        if (peakSharpness > c.snareSharpnessThreshold && peakCentroid >= c.snareCentroidMin && peakCentroid <= c.snareCentroidMax) {
+          type = 'snare';
         } else if (peakCentroid > c.hatCentroidMin && peakZcr > c.highZcrThreshold) {
           type = 'hat';
-        } else if (peakSharpness > c.snareSharpnessThreshold && peakCentroid >= c.snareCentroidMin && peakCentroid <= c.snareCentroidMax) {
-          type = 'snare';
+        } else if (peakRms > c.highEnergyThreshold && peakCentroid < c.kickCentroidMax) {
+          type = 'kick';
         }
       }
     }
