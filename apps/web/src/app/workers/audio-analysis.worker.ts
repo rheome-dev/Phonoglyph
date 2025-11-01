@@ -231,12 +231,16 @@ function performEnhancedAnalysis(
         const attackSnippet = channelData.slice(snippetStart, snippetStart + attackSnippetSize);
         
         try {
-          // *** THE CRITICAL FIX IS HERE ***
-          // We MUST request 'amplitudeSpectrum' for other spectral features to work correctly.
+          // *** THE FINAL, CRITICAL FIX ***
+          // We MUST provide bufferSize to Meyda so it uses the correct FFT size
+          // for its spectral calculations.
           const attackFeatures = (Meyda as any).extract(
             ['amplitudeSpectrum', 'spectralCentroid', 'perceptualSharpness', 'zcr', 'rms'],
             attackSnippet,
-            { sampleRate: sampleRate }
+            { 
+              sampleRate: sampleRate,
+              bufferSize: attackSnippetSize // This was the missing piece
+            }
           );
           
           if (attackFeatures) {
