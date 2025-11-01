@@ -220,6 +220,9 @@ function performEnhancedAnalysis(
   const c = params.classification;
   const attackSnippetSize = 1024;
   
+  // DEBUG: Log the sampleRate being used
+  console.log(`[worker] DEBUG: performEnhancedAnalysis called with sampleRate=${sampleRate}, channelData.length=${channelData.length}, stemType=${stemType}`);
+  
   for (const peak of peaks) {
     let type = 'generic';
     
@@ -234,6 +237,11 @@ function performEnhancedAnalysis(
           // *** THE FINAL, CRITICAL FIX ***
           // We MUST provide bufferSize to Meyda so it uses the correct FFT size
           // for its spectral calculations.
+          // DEBUG: Log the parameters being passed to Meyda
+          if (peak.frameIndex === 0 || peak.frameIndex % 10 === 0) {
+            console.log(`[worker] DEBUG: Meyda extract params - sampleRate=${sampleRate}, bufferSize=${attackSnippetSize}, snippetLength=${attackSnippet.length}`);
+          }
+          
           const attackFeatures = (Meyda as any).extract(
             ['amplitudeSpectrum', 'spectralCentroid', 'perceptualSharpness', 'zcr', 'rms'],
             attackSnippet,
@@ -244,8 +252,17 @@ function performEnhancedAnalysis(
           );
           
           if (attackFeatures) {
-            const { rms, spectralCentroid, perceptualSharpness, zcr } = attackFeatures;
+            const { rms, spectralCentroid, perceptualSharpness, zcr, amplitudeSpectrum } = attackFeatures;
             const normalizedZcr = zcr / attackSnippetSize;
+            
+            // DEBUG: Log the amplitudeSpectrum to verify it's populated
+            if (peak.frameIndex === 0 || peak.frameIndex % 10 === 0) {
+              const spectrumLength = amplitudeSpectrum?.length ?? 0;
+              const maxBin = amplitudeSpectrum ? Math.max(...amplitudeSpectrum) : 0;
+              const centroidBin = amplitudeSpectrum && spectralCentroid ? 
+                Math.floor((spectralCentroid / sampleRate) * attackSnippetSize) : -1;
+              console.log(`[worker] DEBUG: amplitudeSpectrum length=${spectrumLength}, maxBin=${maxBin.toFixed(3)}, centroidBin=${centroidBin}, rawCentroid=${spectralCentroid}`);
+            }
             
             // *** FIX B: Use a score-based system instead of if/else if ***
             const scores = { kick: 0, snare: 0, hat: 0 };
@@ -295,6 +312,10 @@ self.onmessage = function (event: MessageEvent<WorkerMessage>) {
   const { type, data } = event.data as any;
   if (type === 'ANALYZE_BUFFER') {
     const { fileId, channelData, sampleRate, duration, stemType, enhancedAnalysis, analysisParams } = data;
+    
+    // DEBUG: Log the sampleRate received from main thread
+    console.log(`[worker] DEBUG: Received ANALYZE_BUFFER - fileId=${fileId}, sampleRate=${sampleRate}, channelData.length=${channelData.length}, duration=${duration}, stemType=${stemType}`);
+    
     try {
       const analysis = performFullAnalysis(channelData, sampleRate, stemType, () => {});
       const waveformData = generateWaveformData(channelData, duration, 1024);
