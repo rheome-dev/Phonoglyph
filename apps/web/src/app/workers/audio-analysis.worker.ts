@@ -165,28 +165,27 @@ function performEnhancedAnalysis(
 ): { time: number; intensity: number; type: string }[] {
 
   const params = Object.assign({
-    onsetThreshold: 0.1,
-    peakWindow: 8,
+    onsetThreshold: 0.15, // Increased default sensitivity slightly
+    peakWindow: 5,      // Smaller window for sharper peak detection
     peakMultiplier: 1.5,
     classification: {
-      // Adjusted thresholds for better classification
-      // Using RMS instead of energy (RMS is normalized 0-1)
-      highEnergyThreshold: 0.05, // RMS threshold (0-1 range)
-      highZcrThreshold: 0.1, // ZCR threshold for hat detection
-      snareSharpnessThreshold: 0.4, // Perceptual sharpness threshold for snare
-      kickCentroidMax: 800, // Maximum spectral centroid for kick (Hz)
-      hatCentroidMin: 5000, // Minimum spectral centroid for hat (Hz)
-      snareCentroidMin: 1500, // Minimum spectral centroid for snare (Hz)
-      snareCentroidMax: 7000, // Maximum spectral centroid for snare (Hz)
+      highEnergyThreshold: 0.08, 
+      highZcrThreshold: 0.2,
+      snareSharpnessThreshold: 0.5,
+      kickCentroidMax: 400, // Stricter threshold for kicks
+      hatCentroidMin: 6000,
+      snareCentroidMin: 1800,
+      snareCentroidMax: 5500,
     }
   }, analysisParams || {});
 
-  const { frameTimes, spectralFlux, spectralCentroid, perceptualSharpness, zcr, energy } = fullAnalysis;
+  const { frameTimes, spectralFlux } = fullAnalysis;
 
   if (!spectralFlux || !Array.isArray(spectralFlux) || spectralFlux.length === 0) {
+    console.warn(`[worker] Cannot perform enhanced analysis for ${stemType}: spectralFlux data is missing.`);
     return [];
   }
-
+  
   const finiteFlux = (spectralFlux as number[]).filter(isFinite);
   if (finiteFlux.length === 0) return [];
   
@@ -195,129 +194,66 @@ function performEnhancedAnalysis(
 
   const peaks: { frameIndex: number; time: number; intensity: number }[] = [];
   const w = Math.max(1, params.peakWindow | 0);
-  for (let i = 0; i < normFlux.length; i++) {
-    const start = Math.max(0, i - w);
-    const end = Math.min(normFlux.length, i + w + 1);
-    const localSlice = normFlux.slice(start, end);
-    const mean = localSlice.reduce((a, b) => a + b, 0) / localSlice.length;
-    
-    const isLocalMax = normFlux[i] >= Math.max(...localSlice);
-
-    if (isLocalMax && normFlux[i] > (mean + params.onsetThreshold)) {
-      const frameTimesArray = Array.isArray(frameTimes) ? frameTimes : [];
-      peaks.push({ frameIndex: i, time: frameTimesArray[i] ?? i * (512 / sampleRate), intensity: normFlux[i] });
+  for (let i = w; i < normFlux.length - w; i++) {
+    const isPeak = normFlux[i] > params.onsetThreshold;
+    if (isPeak) {
+      let isLocalMax = true;
+      for (let j = -w; j <= w; j++) {
+        if (j !== 0 && normFlux[i] < normFlux[i + j]) {
+          isLocalMax = false;
+          break;
+        }
+      }
+      if (isLocalMax) {
+        const frameTimesArray = Array.isArray(frameTimes) ? frameTimes : [];
+        peaks.push({ frameIndex: i, time: frameTimesArray[i] ?? i * (512 / sampleRate), intensity: normFlux[i] });
+        i += w; // Skip forward to avoid detecting multiple peaks for the same event
+      }
     }
   }
 
   const transients: { time: number; intensity: number; type: string }[] = [];
   const c = params.classification;
-  const attackSnippetSize = 2048; // Extract 2048 samples for classification
-  const attackOffsetSamples = 256; // Start 256 samples after onset to capture attack (≈5.8ms at 44.1kHz)
   
   for (const peak of peaks) {
-    let type = 'generic';
+    let type = 'generic'; // Default to generic
     
-    // Conditional classification: drums get refined classification, others are generic
+    // Only perform refined classification on drum stems
     if (stemType === 'drums') {
-      // Calculate sample position for the peak
-      const peakSamplePosition = Math.floor(peak.time * sampleRate);
-      
-      // Extract snippet starting slightly after the onset to capture the attack
-      const snippetStart = Math.min(
-        Math.max(0, peakSamplePosition + attackOffsetSamples),
-        channelData.length - attackSnippetSize
-      );
-      
-      // Ensure we have enough samples for the snippet
-      if (snippetStart >= 0 && snippetStart + attackSnippetSize <= channelData.length) {
-        // Extract the attack snippet
-        const attackSnippet = channelData.slice(snippetStart, snippetStart + attackSnippetSize);
-        
-        // Run Meyda extraction on the attack snippet with specific features
-        try {
-          const attackFeatures = (Meyda as any).extract(
-            ['spectralCentroid', 'perceptualSharpness', 'zcr', 'rms', 'energy'],
-            attackSnippet,
-            {
-              sampleRate: sampleRate,
-              bufferSize: attackSnippetSize,
-              windowingFunction: 'hanning'
-            }
-          );
-          
-          if (attackFeatures) {
-            // Extract features from the attack snippet
-            // Use RMS instead of energy for classification (RMS is already normalized 0-1)
-            const attackRms = attackFeatures.rms ?? 0;
-            const attackCentroid = attackFeatures.spectralCentroid ?? 0;
-            const attackSharpness = attackFeatures.perceptualSharpness ?? 0;
-            const attackZcr = attackFeatures.zcr ?? 0;
-            
-            // Apply refined classification heuristic using attack-phase features
-            // Order matters: check most specific first, then more general
-            // Snare: sharp + mid-range centroid (most specific)
-            if (attackSharpness > c.snareSharpnessThreshold && attackCentroid >= c.snareCentroidMin && attackCentroid <= c.snareCentroidMax) {
-              type = 'snare';
-            } 
-            // Hat: high centroid + high ZCR (very specific)
-            else if (attackCentroid > c.hatCentroidMin && attackZcr > c.highZcrThreshold) {
-              type = 'hat';
-            } 
-            // Kick: high RMS + low centroid (catch-all for low-frequency hits)
-            else if (attackRms > c.highEnergyThreshold && attackCentroid < c.kickCentroidMax) {
-              type = 'kick';
-            }
-          } else {
-            throw new Error('Attack features extraction returned null');
-          }
-        } catch (error) {
-          // Fallback to frame-based classification if snippet extraction fails
-          const i = peak.frameIndex;
-          const energyArray = Array.isArray(energy) ? energy : [];
-          const spectralCentroidArray = Array.isArray(spectralCentroid) ? spectralCentroid : [];
-          const perceptualSharpnessArray = Array.isArray(perceptualSharpness) ? perceptualSharpness : [];
-          const zcrArray = Array.isArray(zcr) ? zcr : [];
-          
-          const peakRms = (fullAnalysis.rms as number[] | undefined)?.[i] ?? 0;
-          const peakCentroid = spectralCentroidArray[i] ?? 0;
-          const peakSharpness = perceptualSharpnessArray[i] ?? 0;
-          const peakZcr = zcrArray[i] ?? 0;
-          
-          // Check snare first (more specific), then hat, then kick (most common)
-          if (peakSharpness > c.snareSharpnessThreshold && peakCentroid >= c.snareCentroidMin && peakCentroid <= c.snareCentroidMax) {
-            type = 'snare';
-          } else if (peakCentroid > c.hatCentroidMin && peakZcr > c.highZcrThreshold) {
-            type = 'hat';
-          } else if (peakRms > c.highEnergyThreshold && peakCentroid < c.kickCentroidMax) {
-            type = 'kick';
-          }
-        }
-      } else {
-        // Fallback to frame-based classification if snippet bounds are invalid
-        const i = peak.frameIndex;
-        const energyArray = Array.isArray(energy) ? energy : [];
-        const spectralCentroidArray = Array.isArray(spectralCentroid) ? spectralCentroid : [];
-        const perceptualSharpnessArray = Array.isArray(perceptualSharpness) ? perceptualSharpness : [];
-        const zcrArray = Array.isArray(zcr) ? zcr : [];
-        
-        const peakRms = (fullAnalysis.rms as number[] | undefined)?.[i] ?? 0;
-        const peakCentroid = spectralCentroidArray[i] ?? 0;
-        const peakSharpness = perceptualSharpnessArray[i] ?? 0;
-        const peakZcr = zcrArray[i] ?? 0;
-        
-        // Check snare first (more specific), then hat, then kick (most common)
-        if (peakSharpness > c.snareSharpnessThreshold && peakCentroid >= c.snareCentroidMin && peakCentroid <= c.snareCentroidMax) {
-          type = 'snare';
-        } else if (peakCentroid > c.hatCentroidMin && peakZcr > c.highZcrThreshold) {
-          type = 'hat';
-        } else if (peakRms > c.highEnergyThreshold && peakCentroid < c.kickCentroidMax) {
-          type = 'kick';
-        }
+      const i = peak.frameIndex;
+      // Get the features from the original full analysis at the frame of the peak
+      const peakRms = (fullAnalysis.rms as number[] | undefined)?.[i] ?? 0;
+      const peakCentroid = (fullAnalysis.spectralCentroid as number[] | undefined)?.[i] ?? 0;
+      const peakSharpness = (fullAnalysis.perceptualSharpness as number[] | undefined)?.[i] ?? 0;
+      const peakZcr = (fullAnalysis.zcr as number[] | undefined)?.[i] ?? 0;
+
+      // **FIX: Re-ordered classification logic to be more specific first**
+      // 1. Check for Hat (very specific high-frequency content)
+      if (peakCentroid > c.hatCentroidMin && peakZcr > c.highZcrThreshold) {
+        type = 'hat';
+      } 
+      // 2. Check for Snare (sharp, mid-high frequency content)
+      else if (peakSharpness > c.snareSharpnessThreshold && peakCentroid >= c.snareCentroidMin && peakCentroid <= c.snareCentroidMax) {
+        type = 'snare';
+      } 
+      // 3. Check for Kick (less specific low-frequency content)
+      else if (peakRms > c.highEnergyThreshold && peakCentroid < c.kickCentroidMax) {
+        type = 'kick';
       }
+
+      // **Guaranteed Logging**
+      console.log(`[worker] Drum Transient at ${peak.time.toFixed(3)}s: type=${type}, rms=${peakRms.toFixed(3)}, centroid=${peakCentroid.toFixed(0)}, sharpness=${peakSharpness.toFixed(3)}, zcr=${peakZcr.toFixed(3)}`);
     }
     
     transients.push({ time: peak.time, intensity: peak.intensity, type });
   }
+
+  // Final log to confirm how many of each type were found
+  const summary = transients.reduce((acc, t) => {
+    acc[t.type] = (acc[t.type] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  console.log(`[worker] Finished classification for ${stemType}. Summary:`, summary);
 
   return transients;
 }
@@ -330,7 +266,7 @@ self.onmessage = function (event: MessageEvent<WorkerMessage>) {
       const analysis = performFullAnalysis(channelData, sampleRate, stemType, () => {});
       const waveformData = generateWaveformData(channelData, duration, 1024);
       
-      // Run enhanced analysis for transients with dedicated attack snippet extraction
+      // Run enhanced analysis for transients with frame-based classification
       const transients = performEnhancedAnalysis(analysis, channelData, sampleRate, stemType, analysisParams);
 
       const result = {

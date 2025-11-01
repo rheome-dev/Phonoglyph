@@ -56,7 +56,10 @@ export function useAudioFeatures(
 
     // 2. --- Generate Transient Features ---
     if (analysisData.transients && Array.isArray(analysisData.transients) && analysisData.transients.length > 0) {
-      // Always add the "Impact (All)" feature for any stem with transients
+      // Use a Set to find unique transient types present in the data
+      const foundTypes = new Set(analysisData.transients.map((t: any) => t.type));
+
+      // Always add the "Impact (All)" feature
       features.push({
         id: `${stemType}-impact-all`,
         name: 'Impact (All)',
@@ -66,8 +69,8 @@ export function useAudioFeatures(
         isEvent: true
       });
 
-      // Conditionally add specialized drum features if they exist
-      if (analysisData.transients.some((t: any) => t.type === 'kick')) {
+      // **FIX: Conditionally add features based on what was ACTUALLY found**
+      if (foundTypes.has('kick')) {
         features.push({
           id: `${stemType}-impact-kick`,
           name: 'Kick Impact',
@@ -77,7 +80,7 @@ export function useAudioFeatures(
           isEvent: true
         });
       }
-      if (analysisData.transients.some((t: any) => t.type === 'snare')) {
+      if (foundTypes.has('snare')) {
         features.push({
           id: `${stemType}-impact-snare`,
           name: 'Snare Impact',
@@ -87,11 +90,22 @@ export function useAudioFeatures(
           isEvent: true
         });
       }
-      if (analysisData.transients.some((t: any) => t.type === 'hat')) {
+      if (foundTypes.has('hat')) {
         features.push({
           id: `${stemType}-impact-hat`,
           name: 'Hat Impact',
           description: 'Intensity of detected high-frequency onsets (hats/cymbals).',
+          category: 'rhythm',
+          stemType: stemType,
+          isEvent: true
+        });
+      }
+      // **ADDITION: Add a fallback for "generic" transients**
+      if (foundTypes.has('generic')) {
+        features.push({
+          id: `${stemType}-impact-generic`,
+          name: 'Generic Impact',
+          description: 'Intensity of unclassified onsets.',
           category: 'rhythm',
           stemType: stemType,
           isEvent: true
