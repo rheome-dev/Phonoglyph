@@ -231,11 +231,12 @@ function performEnhancedAnalysis(
         const attackSnippet = channelData.slice(snippetStart, snippetStart + attackSnippetSize);
         
         try {
-          // *** FIX A: Pass sampleRate to the Meyda extract call ***
+          // *** THE CRITICAL FIX IS HERE ***
+          // We MUST request 'amplitudeSpectrum' for other spectral features to work correctly.
           const attackFeatures = (Meyda as any).extract(
-            ['spectralCentroid', 'perceptualSharpness', 'zcr', 'rms'],
+            ['amplitudeSpectrum', 'spectralCentroid', 'perceptualSharpness', 'zcr', 'rms'],
             attackSnippet,
-            { sampleRate: sampleRate } // This is the critical missing piece
+            { sampleRate: sampleRate }
           );
           
           if (attackFeatures) {
