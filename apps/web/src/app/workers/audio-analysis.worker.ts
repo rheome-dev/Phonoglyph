@@ -243,25 +243,44 @@ function performEnhancedAnalysis(
           }
           
           const attackFeatures = (Meyda as any).extract(
-            ['amplitudeSpectrum', 'spectralCentroid', 'perceptualSharpness', 'zcr', 'rms'],
+            ['amplitudeSpectrum', 'perceptualSharpness', 'zcr', 'rms'],
             attackSnippet,
             { 
               sampleRate: sampleRate,
-              bufferSize: attackSnippetSize // This was the missing piece
+              bufferSize: attackSnippetSize
             }
           );
           
           if (attackFeatures) {
-            const { rms, spectralCentroid, perceptualSharpness, zcr, amplitudeSpectrum } = attackFeatures;
+            const { rms, perceptualSharpness, zcr, amplitudeSpectrum } = attackFeatures;
             const normalizedZcr = zcr / attackSnippetSize;
             
-            // DEBUG: Log the amplitudeSpectrum to verify it's populated
-            if (peak.frameIndex === 0 || peak.frameIndex % 10 === 0) {
-              const spectrumLength = amplitudeSpectrum?.length ?? 0;
-              const maxBin = amplitudeSpectrum ? Math.max(...amplitudeSpectrum) : 0;
-              const centroidBin = amplitudeSpectrum && spectralCentroid ? 
-                Math.floor((spectralCentroid / sampleRate) * attackSnippetSize) : -1;
-              console.log(`[worker] DEBUG: amplitudeSpectrum length=${spectrumLength}, maxBin=${maxBin.toFixed(3)}, centroidBin=${centroidBin}, rawCentroid=${spectralCentroid}`);
+            // *** CRITICAL FIX: Manually calculate spectralCentroid with correct frequency mapping ***
+            // Meyda's stateless extract may not respect bufferSize, so we calculate it ourselves
+            let spectralCentroid = 0;
+            if (amplitudeSpectrum && Array.isArray(amplitudeSpectrum) && amplitudeSpectrum.length > 0) {
+              const spectrumLength = amplitudeSpectrum.length;
+              const actualFFTSize = spectrumLength * 2; // Meyda returns half the FFT size
+              const nyquist = sampleRate / 2;
+              const binWidth = nyquist / spectrumLength;
+              
+              let weightedSum = 0;
+              let magnitudeSum = 0;
+              
+              for (let i = 0; i < spectrumLength; i++) {
+                const magnitude = amplitudeSpectrum[i] || 0;
+                const frequency = i * binWidth;
+                weightedSum += frequency * magnitude;
+                magnitudeSum += magnitude;
+              }
+              
+              // Calculate centroid in Hz
+              spectralCentroid = magnitudeSum > 0 ? weightedSum / magnitudeSum : 0;
+              
+              // DEBUG: Log the manual calculation
+              if (peak.frameIndex === 0 || peak.frameIndex % 10 === 0) {
+                console.log(`[worker] DEBUG: Manual centroid calculation - spectrumLength=${spectrumLength}, actualFFTSize=${actualFFTSize}, binWidth=${binWidth.toFixed(2)}Hz, calculatedCentroid=${spectralCentroid.toFixed(0)}Hz`);
+              }
             }
             
             // *** FIX B: Use a score-based system instead of if/else if ***
