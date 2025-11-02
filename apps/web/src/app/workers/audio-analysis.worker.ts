@@ -255,6 +255,14 @@ function performEnhancedAnalysis(
             const { rms, perceptualSharpness, zcr, amplitudeSpectrum } = attackFeatures;
             const normalizedZcr = zcr / attackSnippetSize;
             
+            // DEBUG: Check what Meyda returned
+            if (peak.frameIndex === 0 || peak.frameIndex % 10 === 0) {
+              console.log(`[worker] DEBUG: Meyda returned - hasAmplitudeSpectrum=${!!amplitudeSpectrum}, type=${typeof amplitudeSpectrum}, isArray=${Array.isArray(amplitudeSpectrum)}, length=${amplitudeSpectrum?.length ?? 'N/A'}`);
+              if (amplitudeSpectrum && Array.isArray(amplitudeSpectrum) && amplitudeSpectrum.length > 0) {
+                console.log(`[worker] DEBUG: First 5 spectrum values:`, amplitudeSpectrum.slice(0, 5));
+              }
+            }
+            
             // *** CRITICAL FIX: Manually calculate spectralCentroid with correct frequency mapping ***
             // Meyda's stateless extract may not respect bufferSize, so we calculate it ourselves
             let spectralCentroid = 0;
@@ -279,7 +287,12 @@ function performEnhancedAnalysis(
               
               // DEBUG: Log the manual calculation
               if (peak.frameIndex === 0 || peak.frameIndex % 10 === 0) {
-                console.log(`[worker] DEBUG: Manual centroid calculation - spectrumLength=${spectrumLength}, actualFFTSize=${actualFFTSize}, binWidth=${binWidth.toFixed(2)}Hz, calculatedCentroid=${spectralCentroid.toFixed(0)}Hz`);
+                console.log(`[worker] DEBUG: Manual centroid calculation - spectrumLength=${spectrumLength}, actualFFTSize=${actualFFTSize}, binWidth=${binWidth.toFixed(2)}Hz, weightedSum=${weightedSum.toFixed(3)}, magnitudeSum=${magnitudeSum.toFixed(3)}, calculatedCentroid=${spectralCentroid.toFixed(0)}Hz`);
+              }
+            } else {
+              // DEBUG: Log why calculation failed
+              if (peak.frameIndex === 0 || peak.frameIndex % 10 === 0) {
+                console.log(`[worker] DEBUG: Cannot calculate centroid - amplitudeSpectrum is missing or invalid`);
               }
             }
             
