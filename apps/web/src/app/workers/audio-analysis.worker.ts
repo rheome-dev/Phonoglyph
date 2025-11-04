@@ -186,18 +186,21 @@ function performEnhancedAnalysis(
     peakWindow: 5,
     peakMultiplier: 1.5,
     classification: {
-      // Tuned thresholds for more accurate classification
-      kickCentroidMax: 250,   // Kicks are very low frequency
-      kickRmsMin: 0.08,         // Kicks are loud
+      // Tuned thresholds based on actual data analysis
+      // Kicks have low-frequency content but high-frequency attack transients
+      kickCentroidMax: 2000,   // More lenient - kicks often 500-2000Hz due to attack
+      kickRmsMin: 0.06,         // Kicks are loud, but allow some variation
       
-      snareCentroidMin: 1000,
-      snareCentroidMax: 6000,
-      snareSharpnessMin: 0.5,   // Snares have a sharp, noisy attack
-      snareRmsMin: 0.05,        // Snares are also loud
+      // Snares have mid-to-high frequency content with sharp attacks
+      snareCentroidMin: 1500,   // Lowered from 1000 - snares can start lower
+      snareCentroidMax: 8000,   // Raised from 6000 - snares can have high harmonics
+      snareSharpnessMin: 0.4,   // Lowered from 0.5 - more forgiving
+      snareRmsMin: 0.03,        // Lowered from 0.05 - more forgiving
 
-      hatCentroidMin: 7000,     // Hats are very high frequency
-      hatZcrMin: 0.3,           // Hats have a high rate of zero-crossings
-      hatRmsMin: 0.01,          // Hats can be quieter
+      // Hats are very high frequency with lots of zero-crossings
+      hatCentroidMin: 6000,     // Lowered from 7000 - more forgiving
+      hatZcrMin: 0.25,          // Lowered from 0.3 - more forgiving
+      hatRmsMin: 0.01,          // Hats can be quieter (unchanged)
     }
   }, analysisParams || {});
 
@@ -235,7 +238,13 @@ function performEnhancedAnalysis(
 
   const transients: { time: number; intensity: number; type: string }[] = [];
   const c = params.classification;
-  const attackSnippetSize = 1024;
+  // Use a longer snippet to capture both attack and body frequencies
+  // For kicks/snares: attack is high-freq, body is low-freq
+  // We need to analyze both to get accurate classification
+  const snippetSize = 2048; // Increased from 1024 to capture more of the envelope
+  const attackWindowSize = 512; // Analyze first 512 samples for attack
+  const bodyWindowStart = 512; // Analyze body starting at 512 samples (after attack)
+  const bodyWindowSize = 1024; // Analyze 1024 samples of body
   
   // DEBUG: Log the sampleRate being used
   console.log(`[worker] DEBUG: performEnhancedAnalysis called with sampleRate=${sampleRate}, channelData.length=${channelData.length}, stemType=${stemType}`);
@@ -245,32 +254,53 @@ function performEnhancedAnalysis(
     
     if (stemType === 'drums') {
       const peakSamplePosition = Math.floor(peak.time * sampleRate);
-      const snippetStart = Math.max(0, peakSamplePosition - (attackSnippetSize / 2));
+      // Center the snippet on the peak, but include more samples after (body)
+      const snippetStart = Math.max(0, peakSamplePosition - (attackWindowSize / 2));
       
-      if (snippetStart + attackSnippetSize < channelData.length) {
-        const attackSnippet = channelData.slice(snippetStart, snippetStart + attackSnippetSize);
+      if (snippetStart + snippetSize < channelData.length) {
+        const fullSnippet = channelData.slice(snippetStart, snippetStart + snippetSize);
+        const attackSnippet = fullSnippet.slice(0, attackWindowSize);
+        const bodySnippet = fullSnippet.slice(bodyWindowStart, bodyWindowStart + bodyWindowSize);
         
         try {
-          // *** THE FINAL, CRITICAL FIX ***
-          // We MUST provide bufferSize to Meyda so it uses the correct FFT size
-          // for its spectral calculations.
-          // DEBUG: Log the parameters being passed to Meyda
-          if (peak.frameIndex === 0 || peak.frameIndex % 10 === 0) {
-            console.log(`[worker] DEBUG: Meyda extract params - sampleRate=${sampleRate}, bufferSize=${attackSnippetSize}, snippetLength=${attackSnippet.length}`);
-          }
+          // *** Analyze both attack and body for accurate classification ***
+          // Attack: high-frequency transients (clicks, snaps)
+          // Body: fundamental frequencies (kick body ~60-100Hz, snare body ~1000-2000Hz)
           
+          // Analyze attack window (first 512 samples)
           const attackFeatures = (Meyda as any).extract(
             ['amplitudeSpectrum', 'perceptualSharpness', 'zcr', 'rms'],
             attackSnippet,
             { 
               sampleRate: sampleRate,
-              bufferSize: attackSnippetSize
+              bufferSize: attackWindowSize
             }
           );
           
-          if (attackFeatures) {
-            const { rms, perceptualSharpness, zcr, amplitudeSpectrum } = attackFeatures;
-            const normalizedZcr = zcr / attackSnippetSize;
+          // Analyze body window (samples 512-1536, after attack)
+          const bodyFeatures = (Meyda as any).extract(
+            ['amplitudeSpectrum', 'rms'],
+            bodySnippet,
+            { 
+              sampleRate: sampleRate,
+              bufferSize: bodyWindowSize
+            }
+          );
+          
+          // DEBUG: Log the parameters being passed to Meyda
+          if (peak.frameIndex === 0 || peak.frameIndex % 10 === 0) {
+            console.log(`[worker] DEBUG: Analyzing snippet - attackSize=${attackWindowSize}, bodySize=${bodyWindowSize}, fullSnippetSize=${fullSnippet.length}`);
+          }
+          
+          if (attackFeatures && bodyFeatures) {
+            const { rms: attackRms, perceptualSharpness, zcr } = attackFeatures;
+            const { rms: bodyRms, amplitudeSpectrum: bodySpectrum } = bodyFeatures;
+            const normalizedZcr = zcr / attackWindowSize;
+            
+            // Use body frequency for classification (more characteristic of the drum type)
+            // But keep attack features for sharpness and ZCR
+            const amplitudeSpectrum = bodySpectrum;
+            const rms = Math.max(attackRms, bodyRms); // Use the louder of the two
             
             // *** CRITICAL FIX: Manually calculate spectralCentroid with correct frequency mapping ***
             // Meyda's stateless extract may not respect bufferSize, so we calculate it ourselves
@@ -316,20 +346,56 @@ function performEnhancedAnalysis(
               }
             }
             
-            // *** FIX B: Use a score-based system instead of if/else if ***
+            // *** Score-based classification system ***
+            // Uses weighted scoring to allow partial matches
             const scores = { kick: 0, snare: 0, hat: 0 };
 
-            // Score Kick
+            // Score Kick: Low frequency + high RMS
             if (rms > c.kickRmsMin && spectralCentroid < c.kickCentroidMax) {
-              scores.kick = (rms / c.kickRmsMin) + (1 - spectralCentroid / c.kickCentroidMax);
+              const rmsScore = rms / c.kickRmsMin;
+              const freqScore = 1 - (spectralCentroid / c.kickCentroidMax); // Lower is better
+              scores.kick = rmsScore + freqScore;
             }
-            // Score Snare
-            if (rms > c.snareRmsMin && spectralCentroid > c.snareCentroidMin && spectralCentroid < c.snareCentroidMax && perceptualSharpness > c.snareSharpnessMin) {
-              scores.snare = (rms / c.snareRmsMin) + (perceptualSharpness / c.snareSharpnessMin);
+
+            // Score Snare: Mid-high frequency + sharpness + decent RMS
+            // More forgiving - allow partial matches
+            let snareMatchCount = 0;
+            let snareScoreSum = 0;
+            if (spectralCentroid > c.snareCentroidMin && spectralCentroid < c.snareCentroidMax) {
+              snareMatchCount++;
+              snareScoreSum += 1.0; // Frequency match
             }
-            // Score Hat
-            if (rms > c.hatRmsMin && spectralCentroid > c.hatCentroidMin && normalizedZcr > c.hatZcrMin) {
-              scores.hat = (rms / c.hatRmsMin) + (normalizedZcr / c.hatZcrMin) + (spectralCentroid / c.hatCentroidMin);
+            if (perceptualSharpness > c.snareSharpnessMin) {
+              snareMatchCount++;
+              snareScoreSum += perceptualSharpness / c.snareSharpnessMin;
+            }
+            if (rms > c.snareRmsMin) {
+              snareMatchCount++;
+              snareScoreSum += rms / c.snareRmsMin;
+            }
+            // Require at least 2 out of 3 criteria
+            if (snareMatchCount >= 2) {
+              scores.snare = snareScoreSum;
+            }
+
+            // Score Hat: Very high frequency + high ZCR + any RMS
+            let hatMatchCount = 0;
+            let hatScoreSum = 0;
+            if (spectralCentroid > c.hatCentroidMin) {
+              hatMatchCount++;
+              hatScoreSum += spectralCentroid / c.hatCentroidMin; // Higher is better
+            }
+            if (normalizedZcr > c.hatZcrMin) {
+              hatMatchCount++;
+              hatScoreSum += normalizedZcr / c.hatZcrMin;
+            }
+            if (rms > c.hatRmsMin) {
+              hatMatchCount++;
+              hatScoreSum += rms / c.hatRmsMin;
+            }
+            // Require at least 2 out of 3 criteria
+            if (hatMatchCount >= 2) {
+              scores.hat = hatScoreSum;
             }
 
             // Determine the winner
