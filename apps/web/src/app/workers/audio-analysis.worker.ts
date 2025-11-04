@@ -29,6 +29,23 @@ const STEM_FEATURES: Record<string, string[]> = {
   master: ['rms', 'loudness', 'spectralCentroid', 'spectralRolloff', 'spectralFlatness', 'zcr', 'perceptualSpread', 'amplitudeSpectrum', 'perceptualSharpness', 'energy', 'chroma'],
 };
 
+/**
+ * Helper function to check if a value is an array-like object (regular array or TypedArray)
+ * and convert it to a regular array for processing.
+ * Meyda returns TypedArrays (Float32Array), which need to be converted before use.
+ */
+function toArray(value: any): number[] | null {
+  if (!value) return null;
+  if (Array.isArray(value)) return value;
+  // ArrayBuffer.isView() checks for TypedArrays (Float32Array, Uint8Array, etc.)
+  if (ArrayBuffer.isView(value)) return Array.from(value as unknown as ArrayLike<number>);
+  // Fallback: check if it has length and numeric indices
+  if (typeof value === 'object' && 'length' in value && typeof value.length === 'number') {
+    return Array.from(value as unknown as ArrayLike<number>);
+  }
+  return null;
+}
+
 function generateWaveformData(channelData: Float32Array, duration: number, points = 1024) {
   const totalSamples = channelData.length;
   const samplesPerPoint = Math.max(1, Math.floor(totalSamples / points));
@@ -255,19 +272,22 @@ function performEnhancedAnalysis(
             const { rms, perceptualSharpness, zcr, amplitudeSpectrum } = attackFeatures;
             const normalizedZcr = zcr / attackSnippetSize;
             
+            // *** CRITICAL FIX: Manually calculate spectralCentroid with correct frequency mapping ***
+            // Meyda's stateless extract may not respect bufferSize, so we calculate it ourselves
+            // Meyda returns TypedArrays (Float32Array), which need to be converted to regular arrays
+            let spectralCentroid = 0;
+            const spectrumArray = toArray(amplitudeSpectrum);
+            
             // DEBUG: Check what Meyda returned
             if (peak.frameIndex === 0 || peak.frameIndex % 10 === 0) {
-              console.log(`[worker] DEBUG: Meyda returned - hasAmplitudeSpectrum=${!!amplitudeSpectrum}, type=${typeof amplitudeSpectrum}, isArray=${Array.isArray(amplitudeSpectrum)}, length=${amplitudeSpectrum?.length ?? 'N/A'}`);
-              if (amplitudeSpectrum && Array.isArray(amplitudeSpectrum) && amplitudeSpectrum.length > 0) {
-                console.log(`[worker] DEBUG: First 5 spectrum values:`, amplitudeSpectrum.slice(0, 5));
+              console.log(`[worker] DEBUG: Meyda returned - hasAmplitudeSpectrum=${!!amplitudeSpectrum}, type=${typeof amplitudeSpectrum}, isArray=${Array.isArray(amplitudeSpectrum)}, isTypedArray=${ArrayBuffer.isView(amplitudeSpectrum)}, converted=${spectrumArray !== null}, length=${amplitudeSpectrum?.length ?? 'N/A'}`);
+              if (spectrumArray && spectrumArray.length > 0) {
+                console.log(`[worker] DEBUG: First 5 spectrum values:`, spectrumArray.slice(0, 5));
               }
             }
             
-            // *** CRITICAL FIX: Manually calculate spectralCentroid with correct frequency mapping ***
-            // Meyda's stateless extract may not respect bufferSize, so we calculate it ourselves
-            let spectralCentroid = 0;
-            if (amplitudeSpectrum && Array.isArray(amplitudeSpectrum) && amplitudeSpectrum.length > 0) {
-              const spectrumLength = amplitudeSpectrum.length;
+            if (spectrumArray && spectrumArray.length > 0) {
+              const spectrumLength = spectrumArray.length;
               const actualFFTSize = spectrumLength * 2; // Meyda returns half the FFT size
               const nyquist = sampleRate / 2;
               const binWidth = nyquist / spectrumLength;
@@ -276,7 +296,7 @@ function performEnhancedAnalysis(
               let magnitudeSum = 0;
               
               for (let i = 0; i < spectrumLength; i++) {
-                const magnitude = amplitudeSpectrum[i] || 0;
+                const magnitude = spectrumArray[i] || 0;
                 const frequency = i * binWidth;
                 weightedSum += frequency * magnitude;
                 magnitudeSum += magnitude;
