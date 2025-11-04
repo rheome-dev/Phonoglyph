@@ -46,28 +46,6 @@ function toArray(value: any): number[] | null {
   return null;
 }
 
-/**
- * Calculate spectral centroid from amplitude spectrum array.
- * Returns the weighted average frequency in Hz.
- */
-function calculateCentroid(spectrum: number[], sampleRate: number): number {
-  if (!spectrum || spectrum.length === 0) return 0;
-  
-  const nyquist = sampleRate / 2;
-  const binWidth = nyquist / spectrum.length;
-  let weightedSum = 0;
-  let magnitudeSum = 0;
-  
-  for (let i = 0; i < spectrum.length; i++) {
-    const magnitude = spectrum[i] || 0;
-    const frequency = i * binWidth;
-    weightedSum += frequency * magnitude;
-    magnitudeSum += magnitude;
-  }
-  
-  return magnitudeSum > 0 ? weightedSum / magnitudeSum : 0;
-}
-
 function generateWaveformData(channelData: Float32Array, duration: number, points = 1024) {
   const totalSamples = channelData.length;
   const samplesPerPoint = Math.max(1, Math.floor(totalSamples / points));
@@ -252,136 +230,59 @@ function performEnhancedAnalysis(
     
     if (stemType === 'drums') {
       const peakSamplePosition = Math.floor(peak.time * sampleRate);
-      // Use larger snippet to capture full envelope (~93ms at 44.1kHz)
-      const snippetSize = 4096;
-      // Start slightly before peak to capture attack
+      const snippetSize = 2048; // ~46ms at 44.1kHz
       const snippetStart = Math.max(0, peakSamplePosition - 256);
       
       if (snippetStart + snippetSize < channelData.length) {
-        const fullSnippet = channelData.slice(snippetStart, snippetStart + snippetSize);
+        const snippet = channelData.slice(snippetStart, snippetStart + snippetSize);
         
         try {
-          // *** Analyze attack for sharpness/ZCR ***
-          // Attack: high-frequency transients (clicks, snaps) - first ~11ms
-          const attackWindowSize = 512;
-          const attackSnippet = fullSnippet.slice(0, attackWindowSize);
-          
-          const attackFeatures = (Meyda as any).extract(
-            ['perceptualSharpness', 'zcr', 'rms'],
-            attackSnippet,
-            { 
-              sampleRate: sampleRate,
-              bufferSize: attackWindowSize
-            }
+          const features = (Meyda as any).extract(
+            ['amplitudeSpectrum', 'rms'],
+            snippet,
+            { sampleRate, bufferSize: snippetSize }
           );
           
-          if (!attackFeatures) continue;
+          if (!features?.amplitudeSpectrum) continue;
           
-          const { perceptualSharpness, zcr, rms: attackRms } = attackFeatures;
-          const normalizedZcr = zcr / attackWindowSize;
+          const spectrum = toArray(features.amplitudeSpectrum);
+          if (!spectrum) continue;
           
-          // *** MULTI-WINDOW ANALYSIS FOR BODY FREQUENCIES ***
-          // Analyze 3 different time windows to catch the true fundamental
-          // Kicks have low-frequency body that appears later (~23-70ms after peak)
-          const bodyWindows = [
-            { start: 1024, size: 1024, label: 'early' },   // ~23ms after peak
-            { start: 2048, size: 1024, label: 'mid' },     // ~46ms after peak
-            { start: 3072, size: 512, label: 'late' }       // ~70ms after peak (smaller for tail)
-          ];
+          const rms = features.rms || 0;
+          const binWidth = (sampleRate / 2) / spectrum.length;
           
-          let minCentroid = Infinity;
-          let maxRms = attackRms || 0;
-          let bestWindow = 'none';
+          // Calculate energy in each drum's frequency band
+          let kickEnergy = 0, snareEnergy = 0, hatEnergy = 0;
           
-          for (const window of bodyWindows) {
-            if (window.start + window.size > fullSnippet.length) continue;
+          for (let i = 0; i < spectrum.length; i++) {
+            const freq = i * binWidth;
+            const power = spectrum[i] * spectrum[i];
             
-            const bodySnippet = fullSnippet.slice(window.start, window.start + window.size);
-            const bodyFeatures = (Meyda as any).extract(
-              ['amplitudeSpectrum', 'rms'],
-              bodySnippet,
-              { 
-                sampleRate: sampleRate,
-                bufferSize: window.size
-              }
-            );
-            
-            if (bodyFeatures?.amplitudeSpectrum) {
-              const spectrumArray = toArray(bodyFeatures.amplitudeSpectrum);
-              if (spectrumArray) {
-                const centroid = calculateCentroid(spectrumArray, sampleRate);
-                // Validate centroid is finite and positive before using it
-                if (centroid > 0 && isFinite(centroid) && centroid < minCentroid) {
-                  minCentroid = centroid;
-                  bestWindow = window.label;
-                }
-                if (bodyFeatures.rms > maxRms) {
-                  maxRms = bodyFeatures.rms;
-                }
-              }
-            }
+            if (freq >= 40 && freq <= 250) kickEnergy += power;
+            if (freq >= 150 && freq <= 5000) snareEnergy += power;
+            if (freq >= 6000 && freq <= 16000) hatEnergy += power;
           }
           
-          // Skip classification if no valid body window was found
-          if (minCentroid === Infinity || !isFinite(minCentroid)) {
-            if (peak.frameIndex === 0 || peak.frameIndex % 10 === 0) {
-              console.log(`[worker] Skipping drum at ${peak.time.toFixed(3)}s: no valid body window`);
-            }
-            continue; // Skip this peak
+          // Normalize by band width
+          kickEnergy /= ((250 - 40) / binWidth);
+          snareEnergy /= ((5000 - 150) / binWidth);
+          hatEnergy /= ((16000 - 6000) / binWidth);
+          
+          // Pick dominant type
+          const maxEnergy = Math.max(kickEnergy, snareEnergy, hatEnergy);
+          
+          if (kickEnergy === maxEnergy && kickEnergy > 0.0005 && rms > 0.04) {
+            type = 'kick';
+          } else if (snareEnergy === maxEnergy && snareEnergy > 0.0003 && rms > 0.03) {
+            type = 'snare';
+          } else if (hatEnergy === maxEnergy && hatEnergy > 0.0002) {
+            type = 'hat';
           }
           
-          // Use minimum centroid found (catches kick fundamentals)
-          const spectralCentroid = minCentroid;
-          const rms = maxRms;
+          console.log(`[worker] ${peak.time.toFixed(2)}s: ${type} | K:${kickEnergy.toFixed(6)} S:${snareEnergy.toFixed(6)} H:${hatEnergy.toFixed(6)} | rms:${rms.toFixed(3)}`);
           
-          // DEBUG: Log the analysis
-          if (peak.frameIndex === 0 || peak.frameIndex % 10 === 0) {
-            console.log(`[worker] DEBUG: Multi-window analysis - centroid=${spectralCentroid.toFixed(0)}Hz (${bestWindow} window), rms=${rms.toFixed(3)}, sharp=${perceptualSharpness.toFixed(2)}, zcr=${normalizedZcr.toFixed(2)}`);
-          }
-            
-          // *** REVISED CLASSIFICATION THRESHOLDS ***
-          // Based on research: Kick body 50-150Hz, Snare body 1500-4000Hz, Hat 7000-12000Hz
-          // Scores are normalized to 0-7 range for fair comparison
-          const scores = { kick: 0, snare: 0, hat: 0 };
-
-          // Kick: LOW centroid (< 1500Hz) + HIGH RMS
-          // Kicks have fundamental 50-150Hz, but processed/compressed kicks can be up to 1500Hz
-          // Emphasize low frequency content
-          if (spectralCentroid < 1500 && rms > 0.03) {
-            const freqScore = (1500 - spectralCentroid) / 1500; // 0-1, lower freq = higher score
-            const rmsScore = Math.min(rms / 0.03, 1.5); // Cap at 1.5 to avoid dominating
-            scores.kick = (freqScore * 2.0 + rmsScore) * 2; // Scale to 0-7
-          }
-
-          // Snare: MID centroid (1000-5000Hz) + HIGH sharpness
-          // Snares have dual-band energy (low body ~150-250Hz + high rattle 3-8kHz)
-          // Balanced scoring across frequency, sharpness, and loudness
-          if (spectralCentroid > 1000 && spectralCentroid < 5000 && perceptualSharpness > 0.3) {
-            const sharpScore = Math.min(perceptualSharpness / 0.5, 1.5); // 0-1.5
-            const rmsScore = Math.min(rms / 0.03, 1.0); // 0-1
-            scores.snare = (sharpScore * 2 + rmsScore) * 2; // Scale to 0-7
-          }
-
-          // Hat: HIGH centroid (> 5000Hz) + HIGH ZCR
-          // Hats are mostly high-frequency noise (6-16kHz)
-          // Emphasize high frequency and noisiness (ZCR)
-          if (spectralCentroid > 5000 && normalizedZcr > 0.2) {
-            const freqScore = Math.min(spectralCentroid / 8000, 1.5); // 0-1.5
-            const zcrScore = Math.min(normalizedZcr / 0.3, 1.5); // 0-1.5
-            scores.hat = (freqScore + zcrScore * 2) * 2; // Scale to 0-7, weight ZCR more
-          }
-
-          // Determine the winner
-          const maxScore = Math.max(scores.kick, scores.snare, scores.hat);
-          if (maxScore > 0) {
-            if (scores.kick === maxScore) type = 'kick';
-            else if (scores.snare === maxScore) type = 'snare';
-            else if (scores.hat === maxScore) type = 'hat';
-          }
-          
-          console.log(`[worker] Drum at ${peak.time.toFixed(3)}s: ${type} | centroid=${spectralCentroid.toFixed(0)}Hz (${bestWindow} window) | rms=${rms.toFixed(3)} | sharp=${perceptualSharpness.toFixed(2)} | zcr=${normalizedZcr.toFixed(2)} | scores=${JSON.stringify(scores)}`);
         } catch (error) {
-          console.error(`[worker] Meyda snippet analysis failed at ${peak.time}s:`, error);
+          console.error(`[worker] Analysis failed:`, error);
         }
       }
     }
