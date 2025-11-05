@@ -268,18 +268,27 @@ function performEnhancedAnalysis(
           snareEnergy /= ((5000 - 150) / binWidth);
           hatEnergy /= ((16000 - 6000) / binWidth);
           
-          // Pick dominant type
-          const maxEnergy = Math.max(kickEnergy, snareEnergy, hatEnergy);
-          
-          if (kickEnergy === maxEnergy && kickEnergy > 0.0005 && rms > 0.04) {
-            type = 'kick';
-          } else if (snareEnergy === maxEnergy && snareEnergy > 0.0003 && rms > 0.03) {
-            type = 'snare';
-          } else if (hatEnergy === maxEnergy && hatEnergy > 0.0002) {
-            type = 'hat';
+          // Fire multiple types if concurrent (polyphonic)
+          const firedTypes: string[] = [];
+          if (kickEnergy > 0.0005 && rms > 0.04) {
+            transients.push({ time: peak.time, intensity: peak.intensity, type: 'kick' });
+            firedTypes.push('kick');
+          }
+          if (snareEnergy > 0.0003 && rms > 0.03) {
+            transients.push({ time: peak.time, intensity: peak.intensity, type: 'snare' });
+            firedTypes.push('snare');
+          }
+          if (hatEnergy > 0.0002) {
+            transients.push({ time: peak.time, intensity: peak.intensity, type: 'hat' });
+            firedTypes.push('hat');
+          }
+
+          // If nothing passed thresholds, push generic
+          if (firedTypes.length === 0) {
+            transients.push({ time: peak.time, intensity: peak.intensity, type: 'generic' });
           }
           
-          console.log(`[worker] ${peak.time.toFixed(2)}s: ${type} | K:${kickEnergy.toFixed(6)} S:${snareEnergy.toFixed(6)} H:${hatEnergy.toFixed(6)} | rms:${rms.toFixed(3)}`);
+          console.log(`[worker] ${peak.time.toFixed(2)}s: [${firedTypes.join(',') || 'generic'}] | K:${kickEnergy.toFixed(6)} S:${snareEnergy.toFixed(6)} H:${hatEnergy.toFixed(6)} | rms:${rms.toFixed(3)}`);
           
         } catch (error) {
           console.error(`[worker] Analysis failed:`, error);
