@@ -268,27 +268,50 @@ function performEnhancedAnalysis(
           snareEnergy /= ((5000 - 150) / binWidth);
           hatEnergy /= ((16000 - 6000) / binWidth);
           
-          // Fire multiple types if concurrent (polyphonic)
-          const firedTypes: string[] = [];
-          if (kickEnergy > 0.0005 && rms > 0.04) {
-            transients.push({ time: peak.time, intensity: peak.intensity, type: 'kick' });
-            firedTypes.push('kick');
-          }
-          if (snareEnergy > 0.0003 && rms > 0.03) {
-            transients.push({ time: peak.time, intensity: peak.intensity, type: 'snare' });
-            firedTypes.push('snare');
-          }
-          if (hatEnergy > 0.0002) {
-            transients.push({ time: peak.time, intensity: peak.intensity, type: 'hat' });
-            firedTypes.push('hat');
+          // Relative dominance logic to avoid over-triggering all types
+          type DrumType = 'kick' | 'snare' | 'hat';
+          const sumEnergy = Math.max(1e-12, kickEnergy + snareEnergy + hatEnergy);
+          const nk = kickEnergy / sumEnergy;
+          const ns = snareEnergy / sumEnergy;
+          const nh = hatEnergy / sumEnergy;
+
+          const abs: Record<DrumType, number> = { kick: kickEnergy, snare: snareEnergy, hat: hatEnergy };
+          const rel: Record<DrumType, number> = { kick: nk, snare: ns, hat: nh };
+          const absThresh: Record<DrumType, number> = { kick: 0.0005, snare: 0.0003, hat: 0.0002 };
+          const topRelThresh = 0.55;   // top must carry most of the energy
+          const secondRelThresh = 0.35; // allow a second type if also strong
+
+          // Determine sorted order by relative energy
+          const order: DrumType[] = (['kick','snare','hat'] as DrumType[]).sort((a: DrumType, b: DrumType) => rel[b] - rel[a]);
+          const top = order[0];
+          const second = order[1];
+          const third = order[2];
+
+          const firedTypes: DrumType[] = [];
+          // Fire top only if it is both absolutely strong and relatively dominant
+          if (rel[top] >= topRelThresh && abs[top] >= absThresh[top]) {
+            transients.push({ time: peak.time, intensity: peak.intensity, type: top });
+            firedTypes.push(top);
+            // Optionally fire second if it is also substantial and close to top
+            const nearTop = rel[second] >= secondRelThresh && abs[second] >= absThresh[second] && rel[second] >= rel[top] * 0.7;
+            if (nearTop) {
+              transients.push({ time: peak.time, intensity: peak.intensity, type: second });
+              firedTypes.push(second);
+            }
           }
 
-          // If nothing passed thresholds, push generic
+          // If no type clearly dominates, fall back to single best by absolute energy (if above threshold)
           if (firedTypes.length === 0) {
-            transients.push({ time: peak.time, intensity: peak.intensity, type: 'generic' });
+            const best = order.find(t => abs[t] >= absThresh[t]);
+            if (best) {
+              transients.push({ time: peak.time, intensity: peak.intensity, type: best });
+              firedTypes.push(best);
+            } else {
+              transients.push({ time: peak.time, intensity: peak.intensity, type: 'generic' });
+            }
           }
-          
-          console.log(`[worker] ${peak.time.toFixed(2)}s: [${firedTypes.join(',') || 'generic'}] | K:${kickEnergy.toFixed(6)} S:${snareEnergy.toFixed(6)} H:${hatEnergy.toFixed(6)} | rms:${rms.toFixed(3)}`);
+
+          console.log(`[worker] ${peak.time.toFixed(2)}s: [${firedTypes.join(',') || 'generic'}] | K:${kickEnergy.toFixed(6)}(${nk.toFixed(2)}) S:${snareEnergy.toFixed(6)}(${ns.toFixed(2)}) H:${hatEnergy.toFixed(6)}(${nh.toFixed(2)}) | rms:${rms.toFixed(3)}`);
           
         } catch (error) {
           console.error(`[worker] Analysis failed:`, error);
