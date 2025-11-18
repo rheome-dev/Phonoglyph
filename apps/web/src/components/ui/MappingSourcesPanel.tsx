@@ -101,16 +101,16 @@ const PeaksOscilloscope = ({
   const lastCurrentTimeRef = useRef<number>(0);
   const maxBufferSize = width;
   const updateInterval = 16; // ~60fps
+  const alignmentDelayFrames =  Math.max(1, Math.round(50 / updateInterval)); // ~50ms delay
 
   useEffect(() => {
     if (!canvasRef.current) return;
     const ctx = canvasRef.current.getContext('2d');
     if (!ctx) return;
 
-    // Detect loop - if currentTime jumps backwards significantly, reset
+    // Detect loop - if currentTime jumps backwards significantly, allow new markers but keep existing ones
     if (currentTime < lastCurrentTimeRef.current - 0.5) {
       processedTransientTimesRef.current.clear();
-      transientBufferRef.current = [];
     }
     lastCurrentTimeRef.current = currentTime;
 
@@ -131,6 +131,15 @@ const PeaksOscilloscope = ({
           const basePeakIndex = transient.peakBufferIndex + 1;
           let peakIndex = basePeakIndex;
           let peakLocked = transient.peakLocked;
+
+          if (newBufferIndex < 0) {
+            return {
+              ...transient,
+              bufferIndex: newBufferIndex,
+              peakBufferIndex: peakIndex,
+              peakLocked,
+            };
+          }
 
           if (!peakLocked) {
             const searchBack = 12;
@@ -168,8 +177,8 @@ const PeaksOscilloscope = ({
           if (!processedTransientTimesRef.current.has(roundedTime) && 
               Math.abs(transient.time - currentTime) < 0.2) { // Within 200ms of current time
             transientBufferRef.current.push({
-              bufferIndex: 0,
-              peakBufferIndex: 0,
+              bufferIndex: -alignmentDelayFrames,
+              peakBufferIndex: -alignmentDelayFrames,
               intensity: transient.intensity,
               peakLocked: false,
             });
@@ -222,6 +231,10 @@ const PeaksOscilloscope = ({
     // Draw transient markers (scrolling at same rate as waveform)
     transientBufferRef.current.forEach((transient) => {
       // Use peakBufferIndex to position marker at actual peak location
+      if (transient.bufferIndex < 0 || transient.peakBufferIndex < 0) {
+        return;
+      }
+
       const x = width - transient.peakBufferIndex - 1; // Right to left, same calculation as waveform
       if (x >= 0 && x < width) {
         ctx.save();
