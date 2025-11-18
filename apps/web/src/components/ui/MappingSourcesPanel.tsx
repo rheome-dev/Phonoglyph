@@ -12,7 +12,7 @@ import { featureDecayTimesRef } from '@/hooks/use-audio-analysis';
 // --- Meter Sub-Components ---
 
 const VolumeMeter = ({ value }: { value: number }) => (
-  <div className="w-full h-4 bg-gray-800 rounded-sm overflow-hidden border border-gray-700 relative">
+  <div className="w-full h-4 bg-neutral-800 rounded-sm overflow-hidden border border-neutral-600 relative">
     <div 
       className="h-full bg-gradient-to-r from-yellow-500 to-amber-400 transition-all duration-75 ease-out" 
       style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%` }} 
@@ -29,26 +29,39 @@ const PitchMeter = ({ value }: { value: number }) => {
   const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
   const noteIndex = Math.floor(value * 12);
   const noteName = noteNames[noteIndex] || '...';
+  
+  // Piano keyboard layout: naturals (C, D, E, F, G, A, B) and accidentals (C#, D#, F#, G#, A#)
+  const isNatural = (index: number) => [0, 2, 4, 5, 7, 9, 11].includes(index); // C, D, E, F, G, A, B
+  const isAccidental = (index: number) => [1, 3, 6, 8, 10].includes(index); // C#, D#, F#, G#, A#
 
   return (
-    <div className="w-full h-4 bg-gray-900 border border-gray-700 rounded-sm relative overflow-hidden flex items-center justify-center">
-      {/* Background represents a mini-keyboard */}
+    <div className="w-full h-4 bg-neutral-900 border border-neutral-600 rounded-sm relative overflow-hidden flex items-center justify-center">
+      {/* Piano keyboard background */}
       <div className="absolute inset-0 flex">
         {[...Array(12)].map((_, i) => (
-          <div key={i} className={`flex-1 h-full ${[1,3,6,8,10].includes(i) ? 'bg-gray-700' : 'bg-gray-800'}`} />
+          <div 
+            key={i} 
+            className={cn(
+              "flex-1 h-full border-r border-neutral-700",
+              isNatural(i) ? "bg-neutral-300" : "bg-neutral-600"
+            )} 
+          />
         ))}
       </div>
+      {/* Active note indicator */}
       <div 
-        className="absolute top-0 bottom-0 w-1 bg-blue-400 transition-all duration-100 ease-out" 
-        style={{ left: `calc(${Math.max(0, Math.min(1, value)) * 100}% - 2px)` }} 
+        className="absolute top-0 bottom-0 w-[8.33%] bg-blue-400/60 transition-all duration-100 ease-out border-l border-r border-blue-300" 
+        style={{ left: `${Math.max(0, Math.min(1, value)) * 100}%` }} 
       />
-      <span className="text-[10px] font-bold text-white mix-blend-difference z-10">{noteName}</span>
+      <span className="text-[10px] font-bold text-white mix-blend-difference z-10 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+        {noteName}
+      </span>
     </div>
   );
 };
 
 const ImpactMeter = ({ value }: { value: number }) => (
-  <div className="w-full bg-gray-800 rounded-sm h-4 overflow-hidden border border-gray-700 relative">
+  <div className="w-full bg-neutral-800 rounded-sm h-4 overflow-hidden border border-neutral-600 relative">
     <div 
       className="h-full bg-gradient-to-r from-red-500 to-orange-400 transition-all duration-75 ease-out" 
       style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%` }} 
@@ -60,6 +73,113 @@ const ImpactMeter = ({ value }: { value: number }) => (
     </div>
   </div>
 );
+
+// Oscilloscope-style peaks display with left-scrolling waveform
+const PeaksOscilloscope = ({ 
+  envelopeValue, // Decayed envelope value for waveform
+  transients, 
+  currentTime,
+  width = 200,
+  height = 40
+}: { 
+  envelopeValue: number; // Decayed envelope value (for waveform display)
+  transients: Array<{ time: number; intensity: number }>;
+  currentTime: number;
+  width?: number;
+  height?: number;
+}) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const waveformBufferRef = useRef<number[]>([]);
+  const lastUpdateTimeRef = useRef<number>(0);
+  const maxBufferSize = width;
+
+  useEffect(() => {
+    if (!canvasRef.current) return;
+    const ctx = canvasRef.current.getContext('2d');
+    if (!ctx) return;
+
+    const now = performance.now();
+    // Update buffer at ~60fps
+    if (now - lastUpdateTimeRef.current > 16) {
+      // Add new envelope value to buffer (left side) - this is the decayed signal
+      waveformBufferRef.current.unshift(envelopeValue);
+      // Keep buffer size limited
+      if (waveformBufferRef.current.length > maxBufferSize) {
+        waveformBufferRef.current = waveformBufferRef.current.slice(0, maxBufferSize);
+      }
+      lastUpdateTimeRef.current = now;
+    }
+
+    // Clear canvas
+    ctx.clearRect(0, 0, width, height);
+
+    // Draw background
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(0, 0, width, height);
+
+    // Draw center line
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, height / 2);
+    ctx.lineTo(width, height / 2);
+    ctx.stroke();
+
+    // Draw waveform (left-scrolling, unipolar - shows envelope intensity from 0)
+    if (waveformBufferRef.current.length > 1) {
+      ctx.strokeStyle = '#00ffff';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      
+      const buffer = waveformBufferRef.current;
+      for (let i = 0; i < buffer.length && i < width; i++) {
+        const x = width - i - 1; // Right to left
+        // Unipolar: envelope intensity from bottom (0) to top (1)
+        const y = height - buffer[i] * height * 0.9; // Leave 10% margin at bottom
+        
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    // Draw transient markers
+    if (transients && transients.length > 0) {
+      ctx.strokeStyle = '#ff0';
+      ctx.lineWidth = 1.5;
+      
+      transients.forEach((transient) => {
+        // Calculate position based on time relative to current time
+        const timeDiff = currentTime - transient.time;
+        // Show transients within last 2 seconds
+        if (timeDiff >= 0 && timeDiff <= 2) {
+          const x = width - (timeDiff / 2) * width;
+          if (x >= 0 && x < width) {
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, height);
+            ctx.stroke();
+            
+            // Draw intensity indicator
+            const markerHeight = transient.intensity * height * 0.3;
+            ctx.fillStyle = `rgba(255, 255, 0, ${0.3 + transient.intensity * 0.5})`;
+            ctx.fillRect(x - 1, height - markerHeight, 2, markerHeight);
+          }
+        }
+      });
+    }
+  }, [envelopeValue, transients, currentTime, width, height, maxBufferSize]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      width={width}
+      height={height}
+      className="w-full h-full"
+      style={{ display: 'block' }}
+    />
+  );
+};
 
 // --- Main FeatureNode Component ---
 
@@ -74,13 +194,20 @@ const FeatureNode = ({
   cachedAnalysis: any[];
   isPlaying: boolean;
 }) => {
-  const [liveValue, setLiveValue] = useState(0);
+  const [liveValue, setLiveValue] = useState(0); // Decayed output value (for meter and oscilloscope waveform)
   const [isActive, setIsActive] = useState(false);
   // Initialize decayTime from shared ref if available, otherwise default to 0.5s
   const [decayTime, setDecayTime] = useState(featureDecayTimesRef.current[feature.id] ?? 0.5);
   const lastTransientRef = useRef<{ time: number; intensity: number } | null>(null);
   
   const isTransientFeature = feature.isEvent && feature.id.includes('peaks');
+  
+  // Get transients for oscilloscope display
+  const transients = useMemo(() => {
+    if (!isTransientFeature) return [];
+    const analysis = cachedAnalysis.find(a => a.stemType === feature.stemType);
+    return analysis?.analysisData?.transients || [];
+  }, [isTransientFeature, cachedAnalysis, feature.stemType]);
   
   // Initialize shared ref on mount
   useEffect(() => {
@@ -134,6 +261,7 @@ const FeatureNode = ({
         const activeTransient = lastTransientRef.current;
         if (activeTransient) {
             const elapsedTime = time - activeTransient.time;
+            // Calculate decayed value for output signal (used for both meter and oscilloscope waveform)
             if (elapsedTime >= 0 && elapsedTime < decayTime) {
                 featureValue = activeTransient.intensity * (1 - (elapsedTime / decayTime));
             } else {
@@ -190,18 +318,34 @@ const FeatureNode = ({
   }, [dragRef]);
   
   const renderMeter = () => {
-    if (isTransientFeature) return <ImpactMeter value={liveValue} />;
+    if (isTransientFeature) {
+      return (
+        <div className="space-y-2">
+          {/* Oscilloscope display (shows envelope waveform with transient markers) */}
+          <div className="w-full h-10 bg-neutral-900 border border-neutral-600 rounded-sm overflow-hidden">
+            <PeaksOscilloscope 
+              envelopeValue={liveValue}
+              transients={transients}
+              currentTime={currentTime}
+              width={200}
+              height={40}
+            />
+          </div>
+          {/* Output signal meter (with decay applied) */}
+          <ImpactMeter value={liveValue} />
+        </div>
+      );
+    }
     if (feature.name === 'Pitch') return <PitchMeter value={liveValue} />;
     if (feature.name === 'Volume') return <VolumeMeter value={liveValue} />;
-    return <div className="w-full bg-gray-800 rounded-sm h-1 mb-1" />;
+    return <div className="w-full bg-neutral-800 rounded-sm h-1 mb-1" />;
   };
 
   return (
-    // Main container is no longer draggable
     <div 
       className={cn(
-        "w-full px-2 py-1.5 text-xs font-medium border border-gray-700 bg-gray-900/50 rounded-md transition-all duration-200",
-        "hover:bg-gray-800",
+        "w-full px-2 py-1.5 text-xs border border-neutral-600 bg-neutral-700 rounded-md transition-all duration-200",
+        "hover:bg-neutral-600",
         isActive && "ring-1 ring-opacity-70",
         isActive && feature.category === 'rhythm' && "ring-red-400",
         isActive && feature.category === 'pitch' && "ring-blue-400", 
@@ -214,7 +358,9 @@ const FeatureNode = ({
       {/* This inner div is now the draggable handle */}
       <div ref={drag} className="cursor-grab">
         <div className="flex items-center justify-between w-full mb-1.5">
-          <span className="truncate font-medium text-gray-300">{feature.name}</span>
+          <span className="truncate font-mono text-[10px] font-bold tracking-wide text-white uppercase">
+            {feature.name}
+          </span>
         </div>
         {renderMeter()}
       </div>
@@ -222,8 +368,8 @@ const FeatureNode = ({
       {isTransientFeature && (
         <div className="mt-2 space-y-1">
           <div className="flex items-center justify-between">
-            <Label className="text-[10px] text-gray-400">Decay</Label>
-            <span className="text-[10px] text-gray-300">{decayTime.toFixed(2)}s</span>
+            <Label className="text-[10px] text-neutral-400 font-mono">Decay</Label>
+            <span className="text-[10px] text-neutral-300 font-mono">{decayTime.toFixed(2)}s</span>
           </div>
             <Slider
               value={[decayTime]}
@@ -284,13 +430,20 @@ export function MappingSourcesPanel({
     }, {} as Record<string, AudioFeature[]>);
   }, [features]);
 
+  // Capitalize stem type
+  const capitalizedStemType = selectedStemType 
+    ? selectedStemType.charAt(0).toUpperCase() + selectedStemType.slice(1)
+    : '';
+
   if (!activeTrackId || !selectedStemType) {
     return (
-      <div className={cn("bg-black border border-gray-800 rounded-lg", className)}>
-        <div className="p-3 border-b border-gray-800">
-          <h3 className="text-sm font-semibold text-gray-100 flex items-center gap-2"><Zap size={16}/> Audio Features</h3>
+      <div className={cn("bg-black border-l border-neutral-800 flex flex-col", className)}>
+        <div className="p-3 border-b border-neutral-800">
+          <h2 className="font-mono text-sm font-bold text-gray-100 uppercase tracking-wider">
+            Audio Features
+          </h2>
         </div>
-        <div className="p-4 text-center text-xs text-gray-500">
+        <div className="p-4 text-center text-xs text-neutral-500">
           Select a track in the timeline to see its available modulation sources.
         </div>
       </div>
@@ -298,21 +451,32 @@ export function MappingSourcesPanel({
   }
 
   return (
-    <div className={cn("bg-black border border-gray-800 rounded-lg flex flex-col", className)}>
-      <div className="p-3 border-b border-gray-800">
-        <h3 className="text-sm font-semibold text-gray-100 flex items-center gap-2"><Zap size={16}/> {selectedStemType} Features</h3>
-        <p className="text-xs text-gray-500 mt-1">Drag a feature onto an effect parameter to create a mapping.</p>
+    <div className={cn("bg-black border-l border-neutral-800 flex flex-col", className)}>
+      <div className="p-3 border-b border-neutral-800">
+        <h2 className="font-mono text-sm font-bold text-gray-100 uppercase tracking-wider mb-2">
+          {capitalizedStemType} Features
+        </h2>
+        <p className="text-xs text-neutral-500 font-mono">
+          Drag a feature onto an effect parameter to create a mapping.
+        </p>
       </div>
-      <div className="flex-1 overflow-y-auto p-3 space-y-4">
+      <div className="flex-1 overflow-y-auto p-3 space-y-3">
         {Object.entries(featuresByCategory).length > 0 ? (
           Object.entries(featuresByCategory).map(([category, categoryFeatures]) => {
             const Icon = categoryIcons[category];
             return (
-              <div key={category} className="space-y-2">
-                <h4 className="flex items-center gap-2 text-xs font-medium text-gray-400 uppercase tracking-wider">
-                  {Icon && <Icon size={14} />}
-                  {categoryDisplayNames[category] || category}
-                </h4>
+              <div key={category} className="space-y-1.5">
+                {/* Category Header */}
+                <div className="w-full flex items-center justify-between p-2 bg-neutral-900 border border-neutral-600">
+                  <span className="font-mono text-xs font-semibold text-neutral-300 uppercase tracking-wide flex items-center gap-2">
+                    {Icon && <Icon size={12} />}
+                    {categoryDisplayNames[category] || category}
+                  </span>
+                  <span className="text-xs text-neutral-500 font-mono">
+                    {categoryFeatures.length}
+                  </span>
+                </div>
+                {/* Category Features */}
                 <div className="space-y-1.5">
                   {categoryFeatures.map((feature) => (
                     <FeatureNode
@@ -328,7 +492,7 @@ export function MappingSourcesPanel({
             );
           })
         ) : (
-          <div className="text-xs text-gray-500 text-center py-4">
+          <div className="text-xs text-neutral-500 text-center py-4 font-mono">
             No analysis data available for this stem yet. Press play to begin analysis.
           </div>
         )}
