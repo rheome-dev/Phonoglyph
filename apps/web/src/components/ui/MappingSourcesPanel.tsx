@@ -80,7 +80,7 @@ const FeatureNode = ({
   const [decayTime, setDecayTime] = useState(featureDecayTimesRef.current[feature.id] ?? 0.5);
   const lastTransientRef = useRef<{ time: number; intensity: number } | null>(null);
   
-  const isTransientFeature = feature.isEvent && feature.id.includes('impact');
+  const isTransientFeature = feature.isEvent && feature.id.includes('peaks');
   
   // Initialize shared ref on mount
   useEffect(() => {
@@ -115,12 +115,10 @@ const FeatureNode = ({
             storedTransient = null;
         }
 
-        const transientType = feature.id.split('-').pop();
-        const relevantTransients = analysisData.transients?.filter((t: any) =>
-            transientType === 'all' || t.type === transientType
-        );
+        // All transients are generic now, no filtering needed
+        const relevantTransients = analysisData.transients || [];
 
-        const latestTransient = relevantTransients?.reduce((latest: any, t: any) => {
+        const latestTransient = relevantTransients.reduce((latest: any, t: any) => {
             if (t.time <= time && (!latest || t.time > latest.time)) {
                 return t;
             }

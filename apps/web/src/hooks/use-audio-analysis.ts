@@ -35,7 +35,7 @@ export function useAudioAnalysis(): UseAudioAnalysis {
   const workerRef = useRef<Worker | null>(null);
   const [queryState, setQueryState] = useState<{ fileIds: string[]; stemType?: string }>({ fileIds: [] });
   
-  // Track last transient for each impact feature to generate envelope signals
+  // Track last transient for each peaks feature to generate envelope signals
   const lastTransientRefs = useRef<Record<string, { time: number; intensity: number }>>({});
 
   // tRPC hooks
@@ -216,14 +216,12 @@ export function useAudioAnalysis(): UseAudioAnalysis {
     const { analysisData } = analysis;
     const featureName = featureParts.length > 1 ? featureParts.slice(1).join('-') : feature;
 
-    // --- ENVELOPE LOGIC FOR "IMPACT" FEATURES ---
-    if (featureName.startsWith('impact')) {
+    // --- ENVELOPE LOGIC FOR "PEAKS" FEATURES ---
+    if (featureName === 'peaks') {
       const decayTime = featureDecayTimesRef.current[feature] ?? 0.5;
-      const transientType = featureName.split('-').pop(); // 'all', 'kick', etc.
       
-      const relevantTransients = analysisData.transients?.filter((t: any) => 
-        transientType === 'all' || t.type === transientType
-      ) || [];
+      // All transients are generic now, no filtering needed
+      const relevantTransients = analysisData.transients || [];
       
       const envelopeKey = `${fileId}-${feature}`;
       let storedTransient: { time: number; intensity: number } | undefined = lastTransientRefs.current[envelopeKey];

@@ -10,7 +10,6 @@ export interface AnalysisParams {
 export interface TransientData {
   time: number;
   intensity: number;
-  type: 'kick' | 'snare' | 'hat' | 'generic';
 }
 
 export interface ChromaData {
