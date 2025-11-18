@@ -254,6 +254,20 @@ const PeaksOscilloscope = ({
         ctx.restore();
       }
     });
+
+      // Continue animation loop
+      animationFrameId = requestAnimationFrame(animate);
+    };
+
+    // Start animation loop
+    animationFrameId = requestAnimationFrame(animate);
+
+    // Cleanup on unmount
+    return () => {
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
+    };
   }, [envelopeValue, transients, currentTime, width, height, maxBufferSize, updateInterval]);
 
   return (
