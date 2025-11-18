@@ -90,8 +90,11 @@ const PeaksOscilloscope = ({
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const waveformBufferRef = useRef<number[]>([]);
+  const transientBufferRef = useRef<Array<{ bufferIndex: number; intensity: number }>>([]);
+  const processedTransientTimesRef = useRef<Set<number>>(new Set());
   const lastUpdateTimeRef = useRef<number>(0);
   const maxBufferSize = width;
+  const updateInterval = 16; // ~60fps
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -100,13 +103,43 @@ const PeaksOscilloscope = ({
 
     const now = performance.now();
     // Update buffer at ~60fps
-    if (now - lastUpdateTimeRef.current > 16) {
+    if (now - lastUpdateTimeRef.current > updateInterval) {
       // Add new envelope value to buffer (left side) - this is the decayed signal
       waveformBufferRef.current.unshift(envelopeValue);
       // Keep buffer size limited
       if (waveformBufferRef.current.length > maxBufferSize) {
         waveformBufferRef.current = waveformBufferRef.current.slice(0, maxBufferSize);
       }
+      
+      // Update transient buffer positions (increment indices as buffer scrolls)
+      transientBufferRef.current = transientBufferRef.current
+        .map(t => ({ ...t, bufferIndex: t.bufferIndex + 1 }))
+        .filter(t => t.bufferIndex < maxBufferSize);
+      
+      // Check for new transients and add them at buffer index 0
+      if (transients && transients.length > 0) {
+        transients.forEach((transient) => {
+          // Round time to nearest 0.01s for comparison (avoid floating point issues)
+          const roundedTime = Math.round(transient.time * 100) / 100;
+          
+          // Only add if this transient hasn't been processed yet and is close to current time
+          if (!processedTransientTimesRef.current.has(roundedTime) && 
+              Math.abs(transient.time - currentTime) < 0.15) { // Within 150ms of current time
+            transientBufferRef.current.push({
+              bufferIndex: 0,
+              intensity: transient.intensity
+            });
+            processedTransientTimesRef.current.add(roundedTime);
+            
+            // Clean up old processed times (keep only recent ones)
+            if (processedTransientTimesRef.current.size > 100) {
+              const timesArray = Array.from(processedTransientTimesRef.current);
+              processedTransientTimesRef.current = new Set(timesArray.slice(-50));
+            }
+          }
+        });
+      }
+      
       lastUpdateTimeRef.current = now;
     }
 
@@ -143,32 +176,39 @@ const PeaksOscilloscope = ({
       ctx.stroke();
     }
 
-    // Draw transient markers
-    if (transients && transients.length > 0) {
-      ctx.strokeStyle = '#ff0';
-      ctx.lineWidth = 1.5;
-      
-      transients.forEach((transient) => {
-        // Calculate position based on time relative to current time
-        const timeDiff = currentTime - transient.time;
-        // Show transients within last 2 seconds
-        if (timeDiff >= 0 && timeDiff <= 2) {
-          const x = width - (timeDiff / 2) * width;
-          if (x >= 0 && x < width) {
-            ctx.beginPath();
-            ctx.moveTo(x, 0);
-            ctx.lineTo(x, height);
-            ctx.stroke();
-            
-            // Draw intensity indicator
-            const markerHeight = transient.intensity * height * 0.3;
-            ctx.fillStyle = `rgba(255, 255, 0, ${0.3 + transient.intensity * 0.5})`;
-            ctx.fillRect(x - 1, height - markerHeight, 2, markerHeight);
-          }
-        }
-      });
-    }
-  }, [envelopeValue, transients, currentTime, width, height, maxBufferSize]);
+    // Draw transient markers (scrolling at same rate as waveform)
+    transientBufferRef.current.forEach((transient) => {
+      const x = width - transient.bufferIndex - 1; // Right to left, same calculation as waveform
+      if (x >= 0 && x < width) {
+        ctx.save();
+        
+        // Draw vertical line
+        ctx.strokeStyle = '#ff0';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+        ctx.stroke();
+        
+        // Draw downward-pointing triangle at top
+        const triangleSize = 6;
+        ctx.fillStyle = '#ff0';
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x - triangleSize / 2, triangleSize);
+        ctx.lineTo(x + triangleSize / 2, triangleSize);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Draw intensity indicator at bottom
+        const markerHeight = transient.intensity * height * 0.3;
+        ctx.fillStyle = `rgba(255, 255, 0, ${0.3 + transient.intensity * 0.5})`;
+        ctx.fillRect(x - 1, height - markerHeight, 2, markerHeight);
+        
+        ctx.restore();
+      }
+    });
+  }, [envelopeValue, transients, currentTime, width, height, maxBufferSize, updateInterval]);
 
   return (
     <canvas
