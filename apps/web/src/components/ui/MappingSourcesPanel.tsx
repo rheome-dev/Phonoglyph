@@ -124,57 +124,16 @@ const PeaksOscilloscope = ({
         waveformBufferRef.current = waveformBufferRef.current.slice(0, maxBufferSize);
       }
       
-      // Check for new transients
-      if (transients && transients.length > 0) {
-        transients.forEach((transient) => {
-          // Round time to nearest 0.01s for comparison (avoid floating point issues)
-          const roundedTime = Math.round(transient.time * 100) / 100;
-          
-          // Only add if this transient hasn't been processed yet and is close to current time
-          if (!processedTransientTimesRef.current.has(roundedTime) && 
-              Math.abs(transient.time - currentTime) < 0.1) { // Within 100ms of current time
-            // Wait a few frames to let the peak appear in the buffer before placing marker
-            // The envelope peaks immediately, but we want to find the actual peak position
-            // Delay by 2-3 frames to ensure peak is visible
-            transientBufferRef.current.push({
-              bufferIndex: -2, // Start 2 frames in the future (will be 0 after 2 updates)
-              peakBufferIndex: -2,
-              intensity: transient.intensity,
-              framesUntilVisible: 2 // Wait 2 frames before making visible
-            });
-            processedTransientTimesRef.current.add(roundedTime);
-            
-            // Clean up old processed times (keep only recent ones)
-            if (processedTransientTimesRef.current.size > 100) {
-              const timesArray = Array.from(processedTransientTimesRef.current);
-              processedTransientTimesRef.current = new Set(timesArray.slice(-50));
-            }
-          }
-        });
-      }
-      
-      // Update transient buffer positions and find peaks
+      // Update transient buffer positions (increment indices as buffer scrolls)
       transientBufferRef.current = transientBufferRef.current
         .map(transient => {
-          // Decrement framesUntilVisible if present
-          const framesUntilVisible = transient.framesUntilVisible || 0;
-          if (framesUntilVisible > 0) {
-            return {
-              ...transient,
-              framesUntilVisible: framesUntilVisible - 1,
-              bufferIndex: transient.bufferIndex + 1,
-              peakBufferIndex: transient.peakBufferIndex + 1
-            };
-          }
-          
-          // Update buffer positions (increment indices as buffer scrolls)
           const newBufferIndex = transient.bufferIndex + 1;
           
           // Find the actual peak in the buffer - look back to find where peak occurred
           // Search from current position backwards to find the maximum
-          const searchBack = 8; // Look back up to 8 samples
+          const searchBack = 10; // Look back up to 10 samples
           const startIdx = Math.max(0, newBufferIndex - searchBack);
-          const endIdx = Math.min(waveformBufferRef.current.length, newBufferIndex + 1);
+          const endIdx = Math.min(waveformBufferRef.current.length, newBufferIndex + 2);
           
           let peakIndex = newBufferIndex;
           let peakValue = waveformBufferRef.current[newBufferIndex] || 0;
@@ -193,11 +152,34 @@ const PeaksOscilloscope = ({
             peakBufferIndex: peakIndex
           };
         })
-        .filter(t => {
-          // Only show if visible and within bounds
-          const framesUntilVisible = t.framesUntilVisible || 0;
-          return framesUntilVisible === 0 && t.bufferIndex < maxBufferSize;
+        .filter(t => t.bufferIndex < maxBufferSize);
+      
+      // Check for new transients
+      if (transients && transients.length > 0) {
+        transients.forEach((transient) => {
+          // Round time to nearest 0.01s for comparison (avoid floating point issues)
+          const roundedTime = Math.round(transient.time * 100) / 100;
+          
+          // Only add if this transient hasn't been processed yet and is close to current time
+          if (!processedTransientTimesRef.current.has(roundedTime) && 
+              Math.abs(transient.time - currentTime) < 0.15) { // Within 150ms of current time
+            // Add transient marker at current buffer position (index 0)
+            // The peak detection will find the actual peak as it scrolls
+            transientBufferRef.current.push({
+              bufferIndex: 0,
+              peakBufferIndex: 0,
+              intensity: transient.intensity
+            });
+            processedTransientTimesRef.current.add(roundedTime);
+            
+            // Clean up old processed times (keep only recent ones)
+            if (processedTransientTimesRef.current.size > 100) {
+              const timesArray = Array.from(processedTransientTimesRef.current);
+              processedTransientTimesRef.current = new Set(timesArray.slice(-50));
+            }
+          }
         });
+      }
       
       lastUpdateTimeRef.current = now;
     }
@@ -247,21 +229,21 @@ const PeaksOscilloscope = ({
           ? height - waveformBufferRef.current[transient.peakBufferIndex] * height * 0.9
           : height;
         
-        // Draw vertical line from peak to bottom
+        // Draw vertical line from top to bottom
         ctx.strokeStyle = '#ff0';
         ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.moveTo(x, peakY);
+        ctx.moveTo(x, 0);
         ctx.lineTo(x, height);
         ctx.stroke();
         
-        // Draw downward-pointing triangle at top (at the peak position)
+        // Draw downward-pointing triangle at top of scope window (at y=0)
         const triangleSize = 6;
         ctx.fillStyle = '#ff0';
         ctx.beginPath();
-        ctx.moveTo(x, peakY);
-        ctx.lineTo(x - triangleSize / 2, peakY + triangleSize);
-        ctx.lineTo(x + triangleSize / 2, peakY + triangleSize);
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x - triangleSize / 2, triangleSize);
+        ctx.lineTo(x + triangleSize / 2, triangleSize);
         ctx.closePath();
         ctx.fill();
         
