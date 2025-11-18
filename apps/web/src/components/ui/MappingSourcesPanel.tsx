@@ -145,13 +145,25 @@ const PeaksOscilloscope = ({
           }
 
           if (!peakLocked) {
-            const searchBack = 12;
+            // Search both forward and backward to find the actual peak
+            const searchBack = 8;
+            const searchForward = 4;
             const startIdx = Math.max(0, newBufferIndex - searchBack);
-            const endIdx = Math.min(waveformBufferRef.current.length, newBufferIndex + 1);
+            const endIdx = Math.min(waveformBufferRef.current.length, newBufferIndex + searchForward + 1);
             let bestIndex = basePeakIndex;
             let bestValue = waveformBufferRef.current[basePeakIndex] || 0;
 
-            for (let i = endIdx - 1; i >= startIdx; i--) {
+            // Search from current position forward first (peaks might be slightly ahead)
+            for (let i = newBufferIndex; i < endIdx; i++) {
+              const value = waveformBufferRef.current[i] || 0;
+              if (value > bestValue) {
+                bestValue = value;
+                bestIndex = i;
+              }
+            }
+            
+            // Then search backward
+            for (let i = newBufferIndex - 1; i >= startIdx; i--) {
               const value = waveformBufferRef.current[i] || 0;
               if (value > bestValue) {
                 bestValue = value;
@@ -264,9 +276,9 @@ const PeaksOscilloscope = ({
         const triangleSize = 6;
         ctx.fillStyle = '#ff0';
         ctx.beginPath();
-        ctx.moveTo(x - triangleSize / 2, triangleSize);
-        ctx.lineTo(x + triangleSize / 2, triangleSize);
-        ctx.lineTo(x, 0);
+        ctx.moveTo(x - triangleSize / 2, 0);
+        ctx.lineTo(x + triangleSize / 2, 0);
+        ctx.lineTo(x, triangleSize);
         ctx.closePath();
         ctx.fill();
         
