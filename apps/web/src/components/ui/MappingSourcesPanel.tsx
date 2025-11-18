@@ -90,7 +90,12 @@ const PeaksOscilloscope = ({
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const waveformBufferRef = useRef<number[]>([]);
-  const transientBufferRef = useRef<Array<{ bufferIndex: number; intensity: number; peakBufferIndex: number }>>([]);
+  const transientBufferRef = useRef<Array<{ 
+    bufferIndex: number; 
+    intensity: number; 
+    peakBufferIndex: number;
+    framesUntilVisible?: number;
+  }>>([]);
   const processedTransientTimesRef = useRef<Set<number>>(new Set());
   const lastUpdateTimeRef = useRef<number>(0);
   const lastCurrentTimeRef = useRef<number>(0);
@@ -152,7 +157,7 @@ const PeaksOscilloscope = ({
       transientBufferRef.current = transientBufferRef.current
         .map(transient => {
           // Decrement framesUntilVisible if present
-          const framesUntilVisible = (transient as any).framesUntilVisible || 0;
+          const framesUntilVisible = transient.framesUntilVisible || 0;
           if (framesUntilVisible > 0) {
             return {
               ...transient,
@@ -190,7 +195,7 @@ const PeaksOscilloscope = ({
         })
         .filter(t => {
           // Only show if visible and within bounds
-          const framesUntilVisible = (t as any).framesUntilVisible || 0;
+          const framesUntilVisible = t.framesUntilVisible || 0;
           return framesUntilVisible === 0 && t.bufferIndex < maxBufferSize;
         });
       
