@@ -94,6 +94,7 @@ const PeaksOscilloscope = ({
     bufferIndex: number; 
     intensity: number; 
     peakBufferIndex: number;
+    peakOffset?: number;
     peakLocked?: boolean;
   }>>([]);
   const processedTransientTimesRef = useRef<Set<number>>(new Set());
@@ -101,7 +102,7 @@ const PeaksOscilloscope = ({
   const lastCurrentTimeRef = useRef<number>(0);
   const maxBufferSize = width;
   const updateInterval = 16; // ~60fps
-  const alignmentDelayFrames =  Math.max(1, Math.round(50 / updateInterval)); // ~50ms delay
+  const alignmentDelayFrames =  Math.max(2, Math.round(90 / updateInterval)); // ~90ms delay
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -131,12 +132,14 @@ const PeaksOscilloscope = ({
           const basePeakIndex = transient.peakBufferIndex + 1;
           let peakIndex = basePeakIndex;
           let peakLocked = transient.peakLocked;
+          let peakOffset = transient.peakOffset ?? 0;
 
           if (newBufferIndex < 0) {
             return {
               ...transient,
               bufferIndex: newBufferIndex,
               peakBufferIndex: peakIndex,
+              peakOffset,
               peakLocked,
             };
           }
@@ -157,6 +160,7 @@ const PeaksOscilloscope = ({
             }
 
             peakIndex = bestIndex;
+            peakOffset = peakIndex - newBufferIndex;
             peakLocked = true;
           }
 
@@ -164,6 +168,7 @@ const PeaksOscilloscope = ({
             ...transient,
             bufferIndex: newBufferIndex,
             peakBufferIndex: peakIndex,
+            peakOffset,
             peakLocked,
           };
         })
@@ -181,6 +186,7 @@ const PeaksOscilloscope = ({
               peakBufferIndex: -alignmentDelayFrames,
               intensity: transient.intensity,
               peakLocked: false,
+              peakOffset: 0,
             });
             processedTransientTimesRef.current.add(roundedTime);
             
@@ -230,35 +236,37 @@ const PeaksOscilloscope = ({
 
     // Draw transient markers (scrolling at same rate as waveform)
     transientBufferRef.current.forEach((transient) => {
-      // Use peakBufferIndex to position marker at actual peak location
-      if (transient.bufferIndex < 0 || transient.peakBufferIndex < 0) {
+      const peakOffset = transient.peakOffset ?? 0;
+      const displayIndex = transient.bufferIndex + peakOffset;
+
+      if (displayIndex < 0) {
         return;
       }
 
-      const x = width - transient.peakBufferIndex - 1; // Right to left, same calculation as waveform
+      const x = width - displayIndex - 1; // Right to left, same calculation as waveform
       if (x >= 0 && x < width) {
         ctx.save();
         
         // Find the y position of the peak in the waveform at this x position
-        const peakY = transient.peakBufferIndex < waveformBufferRef.current.length 
-          ? height - waveformBufferRef.current[transient.peakBufferIndex] * height * 0.9
+        const peakY = displayIndex < waveformBufferRef.current.length 
+          ? height - waveformBufferRef.current[displayIndex] * height * 0.9
           : height;
         
-        // Draw vertical line from peak to bottom
+        // Draw vertical line across full height
         ctx.strokeStyle = '#ff0';
         ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.moveTo(x, peakY);
+        ctx.moveTo(x, 0);
         ctx.lineTo(x, height);
         ctx.stroke();
         
-        // Draw downward-pointing triangle at the peak position
+        // Draw downward-pointing triangle at the top of the scope
         const triangleSize = 6;
         ctx.fillStyle = '#ff0';
         ctx.beginPath();
-        ctx.moveTo(x - triangleSize / 2, peakY);
-        ctx.lineTo(x + triangleSize / 2, peakY);
-        ctx.lineTo(x, peakY + triangleSize);
+        ctx.moveTo(x - triangleSize / 2, triangleSize);
+        ctx.lineTo(x + triangleSize / 2, triangleSize);
+        ctx.lineTo(x, 0);
         ctx.closePath();
         ctx.fill();
         
