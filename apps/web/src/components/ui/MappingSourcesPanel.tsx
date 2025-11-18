@@ -90,9 +90,10 @@ const PeaksOscilloscope = ({
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const waveformBufferRef = useRef<number[]>([]);
-  const transientBufferRef = useRef<Array<{ bufferIndex: number; intensity: number }>>([]);
+  const transientBufferRef = useRef<Array<{ bufferIndex: number; intensity: number; peakBufferIndex: number }>>([]);
   const processedTransientTimesRef = useRef<Set<number>>(new Set());
   const lastUpdateTimeRef = useRef<number>(0);
+  const lastCurrentTimeRef = useRef<number>(0);
   const maxBufferSize = width;
   const updateInterval = 16; // ~60fps
 
@@ -100,6 +101,13 @@ const PeaksOscilloscope = ({
     if (!canvasRef.current) return;
     const ctx = canvasRef.current.getContext('2d');
     if (!ctx) return;
+
+    // Detect loop - if currentTime jumps backwards significantly, reset
+    if (currentTime < lastCurrentTimeRef.current - 0.5) {
+      processedTransientTimesRef.current.clear();
+      transientBufferRef.current = [];
+    }
+    lastCurrentTimeRef.current = currentTime;
 
     const now = performance.now();
     // Update buffer at ~60fps
@@ -113,10 +121,10 @@ const PeaksOscilloscope = ({
       
       // Update transient buffer positions (increment indices as buffer scrolls)
       transientBufferRef.current = transientBufferRef.current
-        .map(t => ({ ...t, bufferIndex: t.bufferIndex + 1 }))
+        .map(t => ({ ...t, bufferIndex: t.bufferIndex + 1, peakBufferIndex: t.peakBufferIndex + 1 }))
         .filter(t => t.bufferIndex < maxBufferSize);
       
-      // Check for new transients and add them at buffer index 0
+      // Check for new transients
       if (transients && transients.length > 0) {
         transients.forEach((transient) => {
           // Round time to nearest 0.01s for comparison (avoid floating point issues)
@@ -124,9 +132,13 @@ const PeaksOscilloscope = ({
           
           // Only add if this transient hasn't been processed yet and is close to current time
           if (!processedTransientTimesRef.current.has(roundedTime) && 
-              Math.abs(transient.time - currentTime) < 0.15) { // Within 150ms of current time
+              Math.abs(transient.time - currentTime) < 0.1) { // Within 100ms of current time
+            // The envelope value peaks immediately when transient occurs, so the peak is at index 0
+            // But we need to wait a frame or two to ensure the peak value is in the buffer
+            // For now, place at index 0 and let it scroll - the peak detection will happen on next render
             transientBufferRef.current.push({
-              bufferIndex: 0,
+              bufferIndex: 0, // Start at current position
+              peakBufferIndex: 0,
               intensity: transient.intensity
             });
             processedTransientTimesRef.current.add(roundedTime);
@@ -139,6 +151,30 @@ const PeaksOscilloscope = ({
           }
         });
       }
+      
+      // Update peak positions for existing transients - find actual peak in buffer
+      transientBufferRef.current = transientBufferRef.current.map(transient => {
+        // Look back in the buffer to find where the peak actually is
+        // Check a window around the current buffer index
+        const searchWindow = 3;
+        const startIdx = Math.max(0, transient.bufferIndex - searchWindow);
+        const endIdx = Math.min(waveformBufferRef.current.length, transient.bufferIndex + searchWindow);
+        
+        let peakIndex = transient.bufferIndex;
+        let peakValue = waveformBufferRef.current[transient.bufferIndex] || 0;
+        
+        for (let i = startIdx; i < endIdx; i++) {
+          if (waveformBufferRef.current[i] > peakValue) {
+            peakValue = waveformBufferRef.current[i];
+            peakIndex = i;
+          }
+        }
+        
+        return {
+          ...transient,
+          peakBufferIndex: peakIndex
+        };
+      });
       
       lastUpdateTimeRef.current = now;
     }
@@ -178,32 +214,38 @@ const PeaksOscilloscope = ({
 
     // Draw transient markers (scrolling at same rate as waveform)
     transientBufferRef.current.forEach((transient) => {
-      const x = width - transient.bufferIndex - 1; // Right to left, same calculation as waveform
+      // Use peakBufferIndex to position marker at actual peak location
+      const x = width - transient.peakBufferIndex - 1; // Right to left, same calculation as waveform
       if (x >= 0 && x < width) {
         ctx.save();
         
-        // Draw vertical line
+        // Find the y position of the peak in the waveform at this x position
+        const peakY = transient.peakBufferIndex < waveformBufferRef.current.length 
+          ? height - waveformBufferRef.current[transient.peakBufferIndex] * height * 0.9
+          : height;
+        
+        // Draw vertical line from peak to bottom
         ctx.strokeStyle = '#ff0';
         ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.moveTo(x, 0);
+        ctx.moveTo(x, peakY);
         ctx.lineTo(x, height);
         ctx.stroke();
         
-        // Draw downward-pointing triangle at top
+        // Draw downward-pointing triangle at bottom (peak indicator)
         const triangleSize = 6;
         ctx.fillStyle = '#ff0';
         ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x - triangleSize / 2, triangleSize);
-        ctx.lineTo(x + triangleSize / 2, triangleSize);
+        ctx.moveTo(x, height);
+        ctx.lineTo(x - triangleSize / 2, height - triangleSize);
+        ctx.lineTo(x + triangleSize / 2, height - triangleSize);
         ctx.closePath();
         ctx.fill();
         
-        // Draw intensity indicator at bottom
-        const markerHeight = transient.intensity * height * 0.3;
+        // Draw intensity indicator at the peak position
+        const markerHeight = transient.intensity * height * 0.2;
         ctx.fillStyle = `rgba(255, 255, 0, ${0.3 + transient.intensity * 0.5})`;
-        ctx.fillRect(x - 1, height - markerHeight, 2, markerHeight);
+        ctx.fillRect(x - 1, peakY - markerHeight, 2, markerHeight);
         
         ctx.restore();
       }
