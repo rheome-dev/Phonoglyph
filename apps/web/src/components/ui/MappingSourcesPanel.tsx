@@ -74,153 +74,73 @@ const ImpactMeter = ({ value }: { value: number }) => (
   </div>
 );
 
-// Oscilloscope-style peaks display with left-scrolling waveform
+// Time-aligned oscilloscope for spectral flux + transient markers
 const PeaksOscilloscope = ({ 
-  envelopeValue, // Decayed envelope value for waveform
-  transients, 
+  analysisData,
   currentTime,
   width = 200,
-  height = 40
+  height = 40,
+  windowSec = 2.0,
 }: { 
-  envelopeValue: number; // Decayed envelope value (for waveform display)
-  transients: Array<{ time: number; intensity: number }>;
+  analysisData: any | null;
   currentTime: number;
   width?: number;
   height?: number;
+  windowSec?: number;
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const waveformBufferRef = useRef<number[]>([]);
-  const transientBufferRef = useRef<Array<{ 
-    bufferIndex: number; 
-    intensity: number; 
-    peakBufferIndex: number;
-    peakOffset?: number;
-    peakLocked?: boolean;
-  }>>([]);
-  const processedTransientTimesRef = useRef<Set<number>>(new Set());
-  const lastUpdateTimeRef = useRef<number>(0);
-  const lastCurrentTimeRef = useRef<number>(0);
-  const maxBufferSize = width;
-  const updateInterval = 16; // ~60fps
-  const alignmentDelayFrames =  Math.max(2, Math.round(90 / updateInterval)); // ~90ms delay
 
   useEffect(() => {
-    if (!canvasRef.current) return;
-    const ctx = canvasRef.current.getContext('2d');
+    const canvas = canvasRef.current;
+    if (!canvas || !analysisData) return;
+    const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Detect loop - if currentTime jumps backwards significantly, allow new markers but keep existing ones
-    if (currentTime < lastCurrentTimeRef.current - 0.5) {
-      processedTransientTimesRef.current.clear();
-    }
-    lastCurrentTimeRef.current = currentTime;
+    const frameTimes = (analysisData.frameTimes as number[]) || [];
+    const spectralFlux = (analysisData.spectralFlux as number[]) || [];
+    const volume = (analysisData.volume as number[]) || [];
+    const values = spectralFlux.length === frameTimes.length ? spectralFlux : volume;
+    const transients = (analysisData.transients as Array<{ time: number; intensity: number }>) || [];
 
-    const now = performance.now();
-    // Update buffer at ~60fps
-    if (now - lastUpdateTimeRef.current > updateInterval) {
-      // Add new envelope value to buffer (left side) - this is the decayed signal
-      waveformBufferRef.current.unshift(envelopeValue);
-      // Keep buffer size limited
-      if (waveformBufferRef.current.length > maxBufferSize) {
-        waveformBufferRef.current = waveformBufferRef.current.slice(0, maxBufferSize);
-      }
-      
-      // Update transient buffer positions and lock peaks once detected
-      transientBufferRef.current = transientBufferRef.current
-        .map(transient => {
-          const newBufferIndex = transient.bufferIndex + 1;
-          const basePeakIndex = transient.peakBufferIndex + 1;
-          let peakIndex = basePeakIndex;
-          let peakLocked = transient.peakLocked;
-          let peakOffset = transient.peakOffset ?? 0;
-
-          if (newBufferIndex < 0) {
-            return {
-              ...transient,
-              bufferIndex: newBufferIndex,
-              peakBufferIndex: peakIndex,
-              peakOffset,
-              peakLocked,
-            };
-          }
-
-          if (!peakLocked) {
-            // Search both forward and backward to find the actual peak
-            const searchBack = 8;
-            const searchForward = 4;
-            const startIdx = Math.max(0, newBufferIndex - searchBack);
-            const endIdx = Math.min(waveformBufferRef.current.length, newBufferIndex + searchForward + 1);
-            let bestIndex = basePeakIndex;
-            let bestValue = waveformBufferRef.current[basePeakIndex] || 0;
-
-            // Search from current position forward first (peaks might be slightly ahead)
-            for (let i = newBufferIndex; i < endIdx; i++) {
-              const value = waveformBufferRef.current[i] || 0;
-              if (value > bestValue) {
-                bestValue = value;
-                bestIndex = i;
-              }
-            }
-            
-            // Then search backward
-            for (let i = newBufferIndex - 1; i >= startIdx; i--) {
-              const value = waveformBufferRef.current[i] || 0;
-              if (value > bestValue) {
-                bestValue = value;
-                bestIndex = i;
-              }
-            }
-
-            peakIndex = bestIndex;
-            peakOffset = peakIndex - newBufferIndex;
-            peakLocked = true;
-          }
-
-          return {
-            ...transient,
-            bufferIndex: newBufferIndex,
-            peakBufferIndex: peakIndex,
-            peakOffset,
-            peakLocked,
-          };
-        })
-        .filter(t => t.bufferIndex < maxBufferSize);
-
-      // Check for new transients
-      if (transients && transients.length > 0) {
-        transients.forEach((transient) => {
-          const roundedTime = Math.round(transient.time * 100) / 100;
-          
-          if (!processedTransientTimesRef.current.has(roundedTime) && 
-              Math.abs(transient.time - currentTime) < 0.2) { // Within 200ms of current time
-            transientBufferRef.current.push({
-              bufferIndex: -alignmentDelayFrames,
-              peakBufferIndex: -alignmentDelayFrames,
-              intensity: transient.intensity,
-              peakLocked: false,
-              peakOffset: 0,
-            });
-            processedTransientTimesRef.current.add(roundedTime);
-            
-            if (processedTransientTimesRef.current.size > 150) {
-              const timesArray = Array.from(processedTransientTimesRef.current);
-              processedTransientTimesRef.current = new Set(timesArray.slice(-75));
-            }
-          }
-        });
-      }
-      
-      lastUpdateTimeRef.current = now;
+    if (!frameTimes.length || !values.length) {
+      ctx.clearRect(0, 0, width, height);
+      return;
     }
 
-    // Clear canvas
+    const duration = frameTimes[frameTimes.length - 1] ?? 0;
+    const clampedCurrent = Math.max(0, Math.min(currentTime, duration));
+    const halfWindow = windowSec;
+    const tEnd = clampedCurrent;
+    const tStart = Math.max(0, tEnd - halfWindow);
+    const windowDuration = tEnd - tStart || 1e-3;
+
+    const sampleAtTime = (t: number): number => {
+      let lo = 0;
+      let hi = frameTimes.length - 1;
+      while (lo < hi) {
+        const mid = (lo + hi + 1) >>> 1;
+        if (frameTimes[mid] <= t) lo = mid;
+        else hi = mid - 1;
+      }
+      return values[lo] ?? 0;
+    };
+
+    const waveform: number[] = [];
+    let maxVal = 0;
+    for (let x = 0; x < width; x++) {
+      const t = tStart + (x / Math.max(1, width - 1)) * windowDuration;
+      const v = sampleAtTime(t);
+      waveform[x] = v;
+      if (v > maxVal) maxVal = v;
+    }
+
     ctx.clearRect(0, 0, width, height);
 
-    // Draw background
+    // Background
     ctx.fillStyle = '#1a1a1a';
     ctx.fillRect(0, 0, width, height);
 
-    // Draw center line
+    // Center line
     ctx.strokeStyle = '#333';
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -228,69 +148,48 @@ const PeaksOscilloscope = ({
     ctx.lineTo(width, height / 2);
     ctx.stroke();
 
-    // Draw waveform (left-scrolling, unipolar - shows envelope intensity from 0)
-    if (waveformBufferRef.current.length > 1) {
+    // Draw waveform (normalized spectral flux / volume)
+    if (maxVal > 0) {
+      const midY = height / 2;
+      const scale = (height * 0.4) / maxVal;
       ctx.strokeStyle = '#00ffff';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      
-      const buffer = waveformBufferRef.current;
-      for (let i = 0; i < buffer.length && i < width; i++) {
-        const x = width - i - 1; // Right to left
-        // Unipolar: envelope intensity from bottom (0) to top (1)
-        const y = height - buffer[i] * height * 0.9; // Leave 10% margin at bottom
-        
-        if (i === 0) ctx.moveTo(x, y);
+      for (let x = 0; x < width; x++) {
+        const v = waveform[x] * scale;
+        const y = midY - v;
+        if (x === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
       ctx.stroke();
     }
 
-    // Draw transient markers (scrolling at same rate as waveform)
-    transientBufferRef.current.forEach((transient) => {
-      const peakOffset = transient.peakOffset ?? 0;
-      const displayIndex = transient.bufferIndex + peakOffset;
+    // Draw transient markers aligned in time
+    ctx.strokeStyle = '#ff0';
+    ctx.fillStyle = '#ff0';
+    ctx.lineWidth = 1.5;
+    const triangleSize = 6;
 
-      if (displayIndex < 0) {
-        return;
-      }
+    transients.forEach(tr => {
+      if (tr.time < tStart || tr.time > tEnd) return;
+      const pos = (tr.time - tStart) / windowDuration;
+      const x = Math.max(0, Math.min(width - 1, pos * width));
 
-      const x = width - displayIndex - 1; // Right to left, same calculation as waveform
-      if (x >= 0 && x < width) {
-        ctx.save();
-        
-        // Find the y position of the peak in the waveform at this x position
-        const peakY = displayIndex < waveformBufferRef.current.length 
-          ? height - waveformBufferRef.current[displayIndex] * height * 0.9
-          : height;
-        
-        // Draw vertical line across full height
-        ctx.strokeStyle = '#ff0';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, height);
-        ctx.stroke();
-        
-        // Draw downward-pointing triangle at the top of the scope
-        const triangleSize = 6;
-        ctx.fillStyle = '#ff0';
-        ctx.beginPath();
-        ctx.moveTo(x - triangleSize / 2, 0);
-        ctx.lineTo(x + triangleSize / 2, 0);
-        ctx.lineTo(x, triangleSize);
-        ctx.closePath();
-        ctx.fill();
-        
-        // Draw intensity indicator at the peak position
-        const markerHeight = transient.intensity * height * 0.2;
-        ctx.fillStyle = `rgba(255, 255, 0, ${0.3 + transient.intensity * 0.5})`;
-        ctx.fillRect(x - 1, peakY - markerHeight, 2, markerHeight);
-        
-        ctx.restore();
-      }
+      // Full-height line
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, height);
+      ctx.stroke();
+
+      // Downward-pointing triangle at top
+      ctx.beginPath();
+      ctx.moveTo(x - triangleSize / 2, 0);
+      ctx.lineTo(x + triangleSize / 2, 0);
+      ctx.lineTo(x, triangleSize);
+      ctx.closePath();
+      ctx.fill();
     });
-  }, [envelopeValue, transients, currentTime, width, height, maxBufferSize, updateInterval]);
+  }, [analysisData, currentTime, width, height, windowSec]);
 
   return (
     <canvas
@@ -325,10 +224,10 @@ const FeatureNode = ({
   const isTransientFeature = feature.isEvent && feature.id.includes('peaks');
   
   // Get transients for oscilloscope display
-  const transients = useMemo(() => {
-    if (!isTransientFeature) return [];
+  const peaksAnalysisData = useMemo(() => {
+    if (!isTransientFeature) return null;
     const analysis = cachedAnalysis.find(a => a.stemType === feature.stemType);
-    return analysis?.analysisData?.transients || [];
+    return analysis?.analysisData ?? null;
   }, [isTransientFeature, cachedAnalysis, feature.stemType]);
   
   // Initialize shared ref on mount
@@ -443,11 +342,10 @@ const FeatureNode = ({
     if (isTransientFeature) {
       return (
         <div className="space-y-2">
-          {/* Oscilloscope display (shows envelope waveform with transient markers) */}
+          {/* Oscilloscope display (time-aligned spectral flux + transient markers) */}
           <div className="w-full h-10 bg-neutral-900 border border-neutral-600 rounded-sm overflow-hidden">
             <PeaksOscilloscope 
-              envelopeValue={liveValue}
-              transients={transients}
+              analysisData={peaksAnalysisData}
               currentTime={currentTime}
               width={200}
               height={40}
