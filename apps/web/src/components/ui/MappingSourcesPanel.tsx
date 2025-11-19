@@ -74,13 +74,35 @@ const ImpactMeter = ({ value }: { value: number }) => (
   </div>
 );
 
+// Helper to filter transients by sensitivity (1 = keep all, 0 = keep only strongest)
+function filterTransientsBySensitivity(
+  transients: Array<{ time: number; intensity: number }>,
+  sensitivity: number
+): Array<{ time: number; intensity: number }> {
+  if (!transients.length) return transients;
+  const clamped = Math.max(0, Math.min(1, sensitivity));
+  if (clamped >= 0.999) return transients;
+
+  const intensities = transients
+    .map(t => t.intensity)
+    .filter(v => Number.isFinite(v))
+    .sort((a, b) => a - b);
+
+  if (!intensities.length) return transients;
+
+  const index = Math.floor((1 - clamped) * (intensities.length - 1));
+  const threshold = intensities[index];
+
+  return transients.filter(t => (Number.isFinite(t.intensity) ? t.intensity : 0) >= threshold);
+}
+
 // Time-aligned oscilloscope for spectral flux + transient markers
 const PeaksOscilloscope = ({ 
   analysisData,
   currentTime,
   width = 200,
   height = 40,
-  windowSec = 2.0,
+  windowSec = 4.0,
 }: { 
   analysisData: any | null;
   currentTime: number;
@@ -125,13 +147,17 @@ const PeaksOscilloscope = ({
       return values[lo] ?? 0;
     };
 
+    // Use global max for stable height across time
+    const globalMax = values.reduce((m: number, v: number) => {
+      if (!isFinite(v)) return m;
+      return v > m ? v : m;
+    }, 1e-6);
+
     const waveform: number[] = [];
-    let maxVal = 0;
     for (let x = 0; x < width; x++) {
       const t = tStart + (x / Math.max(1, width - 1)) * windowDuration;
       const v = sampleAtTime(t);
       waveform[x] = v;
-      if (v > maxVal) maxVal = v;
     }
 
     ctx.clearRect(0, 0, width, height);
@@ -149,9 +175,9 @@ const PeaksOscilloscope = ({
     ctx.stroke();
 
     // Draw waveform (normalized spectral flux / volume)
-    if (maxVal > 0) {
+    if (globalMax > 0) {
       const midY = height / 2;
-      const scale = (height * 0.4) / maxVal;
+      const scale = (height * 0.4) / globalMax;
       ctx.strokeStyle = '#00ffff';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
@@ -216,6 +242,7 @@ const FeatureNode = ({
   isPlaying: boolean;
 }) => {
   const [liveValue, setLiveValue] = useState(0); // Decayed output value (for meter and oscilloscope waveform)
+  const [sensitivity, setSensitivity] = useState(0.5); // 0..1, 0.5 = 50% default (keep moderate to strong transients)
   const [isActive, setIsActive] = useState(false);
   // Initialize decayTime from shared ref if available, otherwise default to 0.5s
   const [decayTime, setDecayTime] = useState(featureDecayTimesRef.current[feature.id] ?? 0.5);
@@ -227,8 +254,15 @@ const FeatureNode = ({
   const peaksAnalysisData = useMemo(() => {
     if (!isTransientFeature) return null;
     const analysis = cachedAnalysis.find(a => a.stemType === feature.stemType);
-    return analysis?.analysisData ?? null;
-  }, [isTransientFeature, cachedAnalysis, feature.stemType]);
+    if (!analysis?.analysisData) return null;
+    const data = analysis.analysisData;
+    const allTransients = (data.transients as Array<{ time: number; intensity: number }> | undefined) || [];
+    const filtered = filterTransientsBySensitivity(allTransients, sensitivity);
+    return {
+      ...data,
+      transients: filtered,
+    };
+  }, [isTransientFeature, cachedAnalysis, feature.stemType, sensitivity]);
   
   // Initialize shared ref on mount
   useEffect(() => {
@@ -263,8 +297,9 @@ const FeatureNode = ({
             storedTransient = null;
         }
 
-        // All transients are generic now, no filtering needed
-        const relevantTransients = analysisData.transients || [];
+        // Filter transients based on sensitivity for envelope generation
+        const allTransients = (analysisData.transients as Array<{ time: number; intensity: number }> | undefined) || [];
+        const relevantTransients = filterTransientsBySensitivity(allTransients, sensitivity);
 
         const latestTransient = relevantTransients.reduce((latest: any, t: any) => {
             if (t.time <= time && (!latest || t.time > latest.time)) {
@@ -349,6 +384,26 @@ const FeatureNode = ({
               currentTime={currentTime}
               width={200}
               height={40}
+            />
+          </div>
+          {/* Sensitivity slider */}
+          <div className="mt-1 space-y-1">
+            <div className="flex items-center justify-between">
+              <Label className="text-[10px] text-neutral-400 font-mono">Sensitivity</Label>
+              <span className="text-[10px] text-neutral-300 font-mono">
+                {(sensitivity * 100).toFixed(0)}%
+              </span>
+            </div>
+            <Slider
+              value={[sensitivity]}
+              onValueChange={(value) => {
+                const next = Math.max(0, Math.min(1, value[0] ?? 0));
+                setSensitivity(next);
+              }}
+              min={0}
+              max={1}
+              step={0.05}
+              className="h-2"
             />
           </div>
           {/* Output signal meter (with decay applied) */}
