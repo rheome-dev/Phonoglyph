@@ -181,38 +181,102 @@ function performEnhancedAnalysis(
 ): { time: number; intensity: number }[] {
 
   const params = Object.assign({
-    onsetThreshold: 0.15,
-    peakWindow: 5,
-    peakMultiplier: 1.5,
+    onsetThreshold: 0.08,   // base normalized threshold (more sensitive)
+    peakWindow: 4,          // frames on each side for local max
+    peakMultiplier: 1.25,   // how much above local mean a peak must be
   }, analysisParams || {});
 
-  const { frameTimes, spectralFlux } = fullAnalysis;
+  const { frameTimes, spectralFlux, volume, rms } = fullAnalysis as any;
 
   if (!spectralFlux || !Array.isArray(spectralFlux) || spectralFlux.length === 0) {
     return [];
   }
 
-  const finiteFlux = (spectralFlux as number[]).filter(isFinite);
+  const rawFlux = (spectralFlux as number[]).map(v => (isFinite(v) && v > 0 ? v : 0));
+  const finiteFlux = rawFlux.filter(isFinite);
   if (finiteFlux.length === 0) return [];
-  
+
+  // Use overall max for stable normalization
   const maxFlux = Math.max(1e-6, ...finiteFlux);
-  const normFlux = (spectralFlux as number[]).map(v => isFinite(v) ? v / maxFlux : 0);
+  const normFlux = rawFlux.map(v => v / maxFlux);
+
+  // Lightweight smoothing to reduce spurious tiny peaks (especially hi-hats)
+  const smoothFlux: number[] = new Array(normFlux.length);
+  const smoothRadius = 1;
+  for (let i = 0; i < normFlux.length; i++) {
+    let sum = 0;
+    let count = 0;
+    for (let k = -smoothRadius; k <= smoothRadius; k++) {
+      const idx = i + k;
+      if (idx >= 0 && idx < normFlux.length) {
+        sum += normFlux[idx];
+        count++;
+      }
+    }
+    smoothFlux[i] = count > 0 ? sum / count : normFlux[i];
+  }
+
+  // Volume gating and weighting to better capture low/mid-frequency hits
+  const volArray: number[] = Array.isArray(volume)
+    ? (volume as number[]).map(v => (isFinite(v) && v > 0 ? v : 0))
+    : Array.isArray(rms)
+      ? (rms as number[]).map((v: number) => (isFinite(v) && v > 0 ? v : 0))
+      : [];
+  const volFinite = volArray.filter(isFinite);
+  const avgVolume = volFinite.length ? volFinite.reduce((a, b) => a + b, 0) / volFinite.length : 0;
+  const volumeGate = avgVolume * 0.15; // require at least 15% of average loudness (more forgiving)
+
+  // Normalize volume to blend with spectral flux
+  const volMax = volFinite.length ? Math.max(1e-6, ...volFinite) : 1e-6;
+  const normVol: number[] = volArray.map(v => v / volMax);
+
+  // Combined onset strength: spectral flux (captures HF detail) + volume (captures LF/mid hits)
+  const combinedFlux: number[] = smoothFlux.map((f, i) => {
+    const nv = normVol[i] ?? 0;
+    // Slightly favor spectral flux but still give volume strong influence
+    return f * 0.7 + nv * 0.4;
+  });
 
   const peaks: { frameIndex: number; time: number; intensity: number }[] = [];
   const w = Math.max(1, params.peakWindow | 0);
-  for (let i = w; i < normFlux.length - w; i++) {
-    const isPeak = normFlux[i] > params.onsetThreshold;
+  for (let i = w; i < combinedFlux.length - w; i++) {
+    const f = combinedFlux[i];
+    if (f < params.onsetThreshold) continue;
+
+    // Local mean around i
+    let localSum = 0;
+    let localCount = 0;
+    for (let j = -w; j <= w; j++) {
+      const idx = i + j;
+      if (idx >= 0 && idx < combinedFlux.length) {
+        localSum += combinedFlux[idx];
+        localCount++;
+      }
+    }
+    const localMean = localCount > 0 ? localSum / localCount : 0;
+    if (f < localMean * params.peakMultiplier) continue;
+
+    // Basic volume gate (ignore very quiet events)
+    if (volArray.length && (volArray[i] ?? 0) < volumeGate) continue;
+
+    let isPeak = true;
     if (isPeak) {
       let isLocalMax = true;
       for (let j = -w; j <= w; j++) {
-        if (j !== 0 && normFlux[i] < normFlux[i + j]) {
+        const idx = i + j;
+        if (idx === i || idx < 0 || idx >= combinedFlux.length) continue;
+        if (combinedFlux[i] < combinedFlux[idx]) {
           isLocalMax = false;
           break;
         }
       }
       if (isLocalMax) {
         const frameTimesArray = Array.isArray(frameTimes) ? frameTimes : [];
-        peaks.push({ frameIndex: i, time: frameTimesArray[i] ?? i * (512 / sampleRate), intensity: normFlux[i] });
+        peaks.push({
+          frameIndex: i,
+          time: frameTimesArray[i] ?? i * (512 / sampleRate),
+          intensity: f
+        });
         i += w;
       }
     }

@@ -121,7 +121,11 @@ const PeaksOscilloscope = ({
     const frameTimes = (analysisData.frameTimes as number[]) || [];
     const spectralFlux = (analysisData.spectralFlux as number[]) || [];
     const volume = (analysisData.volume as number[]) || [];
-    const values = spectralFlux.length === frameTimes.length ? spectralFlux : volume;
+    // Use volume (RMS) for visual waveform when available, fall back to spectral flux
+    const values =
+      volume.length === frameTimes.length && volume.length > 0
+        ? volume
+        : spectralFlux;
     const transients = (analysisData.transients as Array<{ time: number; intensity: number }>) || [];
 
     if (!frameTimes.length || !values.length) {
@@ -149,8 +153,9 @@ const PeaksOscilloscope = ({
 
     // Use global max for stable height across time
     const globalMax = values.reduce((m: number, v: number) => {
-      if (!isFinite(v)) return m;
-      return v > m ? v : m;
+      const av = Math.abs(v);
+      if (!isFinite(av)) return m;
+      return av > m ? av : m;
     }, 1e-6);
 
     const waveform: number[] = [];
@@ -174,16 +179,17 @@ const PeaksOscilloscope = ({
     ctx.lineTo(width, height / 2);
     ctx.stroke();
 
-    // Draw waveform (normalized spectral flux / volume)
+    // Draw waveform (normalized volume / spectral flux)
     if (globalMax > 0) {
-      const midY = height / 2;
-      const scale = (height * 0.4) / globalMax;
+      // Unipolar envelope from near bottom to near top of scope
+      const baselineY = height * 0.9; // 10% padding at bottom
+      const scale = (height * 0.8) / globalMax; // leave ~10% headroom at top
       ctx.strokeStyle = '#00ffff';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       for (let x = 0; x < width; x++) {
-        const v = waveform[x] * scale;
-        const y = midY - v;
+        const v = Math.abs(waveform[x]) * scale;
+        const y = baselineY - v;
         if (x === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
@@ -386,26 +392,6 @@ const FeatureNode = ({
               height={40}
             />
           </div>
-          {/* Sensitivity slider */}
-          <div className="mt-1 space-y-1">
-            <div className="flex items-center justify-between">
-              <Label className="text-[10px] text-neutral-400 font-mono">Sensitivity</Label>
-              <span className="text-[10px] text-neutral-300 font-mono">
-                {(sensitivity * 100).toFixed(0)}%
-              </span>
-            </div>
-            <Slider
-              value={[sensitivity]}
-              onValueChange={(value) => {
-                const next = Math.max(0, Math.min(1, value[0] ?? 0));
-                setSensitivity(next);
-              }}
-              min={0}
-              max={1}
-              step={0.05}
-              className="h-2"
-            />
-          </div>
           {/* Output signal meter (with decay applied) */}
           <ImpactMeter value={liveValue} />
         </div>
@@ -439,26 +425,49 @@ const FeatureNode = ({
         </div>
         {renderMeter()}
       </div>
-      {/* Slider is now outside the draggable handle */}
+      {/* Controls outside the draggable handle */}
       {isTransientFeature && (
-        <div className="mt-2 space-y-1">
-          <div className="flex items-center justify-between">
-            <Label className="text-[10px] text-neutral-400 font-mono">Decay</Label>
-            <span className="text-[10px] text-neutral-300 font-mono">{decayTime.toFixed(2)}s</span>
-          </div>
+        <div className="mt-2 space-y-2">
+          {/* Sensitivity slider (below HIT meter, above Decay) */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <Label className="text-[10px] text-neutral-400 font-mono">Sensitivity</Label>
+              <span className="text-[10px] text-neutral-300 font-mono">
+                {(sensitivity * 100).toFixed(0)}%
+              </span>
+            </div>
             <Slider
-              value={[decayTime]}
+              value={[sensitivity]}
               onValueChange={(value) => {
-                const newDecayTime = value[0];
-                setDecayTime(newDecayTime);
-                // Update shared ref so getFeatureValue uses this decayTime for envelope generation
-                featureDecayTimesRef.current[feature.id] = newDecayTime;
+                const next = Math.max(0, Math.min(1, value[0] ?? 0));
+                setSensitivity(next);
               }}
-              min={0.05}
-              max={2.0}
+              min={0}
+              max={1}
               step={0.05}
               className="h-2"
             />
+          </div>
+          {/* Decay slider */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <Label className="text-[10px] text-neutral-400 font-mono">Decay</Label>
+              <span className="text-[10px] text-neutral-300 font-mono">{decayTime.toFixed(2)}s</span>
+            </div>
+              <Slider
+                value={[decayTime]}
+                onValueChange={(value) => {
+                  const newDecayTime = value[0];
+                  setDecayTime(newDecayTime);
+                  // Update shared ref so getFeatureValue uses this decayTime for envelope generation
+                  featureDecayTimesRef.current[feature.id] = newDecayTime;
+                }}
+                min={0.05}
+                max={2.0}
+                step={0.05}
+                className="h-2"
+              />
+          </div>
         </div>
       )}
     </div>
