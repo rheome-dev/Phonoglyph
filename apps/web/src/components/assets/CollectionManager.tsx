@@ -15,10 +15,10 @@ interface AssetCollection {
   type?: string;
 }
 
-  interface CollectionManagerProps {
+interface CollectionManagerProps {
     projectId: string;
     availableFiles: any[]; // Files from projectFiles query
-    onSelectCollection: (imageUrls: string[]) => void;
+  onSelectCollection: (imageUrls: string[], collectionId: string) => void;
     selectedCollectionId?: string;
   }
   
@@ -168,7 +168,7 @@ interface AssetCollection {
         }
       }
 
-      onSelectCollection(urls);
+      onSelectCollection(urls, collectionId);
       toast({ title: "Collection Selected", description: `Loaded ${urls.length} images for slideshow.` });
 
     } catch (error) {

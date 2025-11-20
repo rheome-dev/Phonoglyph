@@ -276,6 +276,7 @@ function CreativeVisualizerPage() {
   const [mappings, setMappings] = useState<Record<string, FeatureMapping>>({});
   const [featureNames, setFeatureNames] = useState<Record<string, string>>({});
   const [activeTrackId, setActiveTrackId] = useState<string | null>(null);
+  const [activeCollectionId, setActiveCollectionId] = useState<string | undefined>();
   // Base (user-set) parameter values and last modulated values for visualization
   const [baseParameterValues, setBaseParameterValues] = useState<Record<string, number>>({});
   const [modulatedParameterValues, setModulatedParameterValues] = useState<Record<string, number>>({});
@@ -1191,12 +1192,11 @@ function CreativeVisualizerPage() {
             <CollectionManager
               projectId={currentProjectId || ''}
               availableFiles={projectFiles?.files || []}
-              onSelectCollection={(imageUrls) => {
+              onSelectCollection={(imageUrls, collectionId) => {
                 handleParameterChange(effectId, 'images', imageUrls);
-                // Also set default trigger mapping if not set?
-                // handleMapFeature(`${effectId}-triggerValue`, 'drums-impact'); 
+                setActiveCollectionId(collectionId);
               }}
-              selectedCollectionId={undefined} // We don't persistently track collection ID in effect params yet, just images
+              selectedCollectionId={activeCollectionId}
             />
             <div className="mt-4 pt-4 border-t border-white/10">
                 <Label className="text-xs uppercase text-stone-400 mb-2 block">Playback Settings</Label>

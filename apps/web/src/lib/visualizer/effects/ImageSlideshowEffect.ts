@@ -26,6 +26,7 @@ export class ImageSlideshowEffect implements VisualEffect {
   private wasTriggered: boolean = false;
   private textureLoader = new THREE.TextureLoader();
   private aspectRatio: number = 1;
+  private failureCount = 0;
 
   constructor(config?: any) {
     this.id = config?.id || `imageSlideshow_${Math.random().toString(36).substr(2, 9)}`;
@@ -40,6 +41,8 @@ export class ImageSlideshowEffect implements VisualEffect {
       scale: 1.0,
       ...config
     };
+
+    this.textureLoader.setCrossOrigin('anonymous');
 
     this.scene = new THREE.Scene();
     
@@ -68,7 +71,6 @@ export class ImageSlideshowEffect implements VisualEffect {
   init(renderer: THREE.WebGLRenderer): void {
       debugLog.log('🖼️ Initializing ImageSlideshowEffect');
       if (this.parameters.images.length > 0) {
-          // Use unified slide logic so caching and fitting stay consistent
           this.advanceSlide();
       }
   }
@@ -79,6 +81,17 @@ export class ImageSlideshowEffect implements VisualEffect {
       // If images were added after init, load the first one immediately
       if (this.currentImageIndex === -1 && this.parameters.images.length > 0) {
           this.advanceSlide();
+      }
+
+      if (
+        !this.material.map &&
+        this.parameters.images.length > 0 &&
+        this.failureCount < this.parameters.images.length * 2
+      ) {
+        const targetUrl = this.parameters.images[(this.currentImageIndex + 1) % this.parameters.images.length];
+        if (!this.loadingImages.has(targetUrl)) {
+          this.advanceSlide();
+        }
       }
 
       // Check trigger
@@ -130,11 +143,13 @@ export class ImageSlideshowEffect implements VisualEffect {
       let texture = this.textureCache.get(imageUrl);
       
       if (!texture) {
-          // Not in cache, try to load immediately
           try {
             texture = await this.loadTexture(imageUrl);
+            this.failureCount = 0;
           } catch(e) {
               debugLog.error("Failed to load image for slideshow", imageUrl, e);
+              this.currentImageIndex = nextIndex;
+              this.failureCount++;
               return;
           }
       }
@@ -191,6 +206,9 @@ export class ImageSlideshowEffect implements VisualEffect {
   }
 
   private loadTexture(url: string): Promise<THREE.Texture> {
+      if (this.loadingImages.has(url)) {
+        return Promise.reject('Already loading');
+      }
       this.loadingImages.add(url);
       return new Promise((resolve, reject) => {
           this.textureLoader.load(url, (texture) => {
