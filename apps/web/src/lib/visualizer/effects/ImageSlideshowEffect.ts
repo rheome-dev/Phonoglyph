@@ -53,6 +53,7 @@ export class ImageSlideshowEffect implements VisualEffect {
     this.camera.position.z = 1;
 
     this.material = new THREE.MeshBasicMaterial({ 
+        color: 0x000000, // Prevent bright white flash before textures load
         transparent: true, 
         opacity: this.parameters.opacity,
         side: THREE.DoubleSide,
@@ -66,23 +67,19 @@ export class ImageSlideshowEffect implements VisualEffect {
 
   init(renderer: THREE.WebGLRenderer): void {
       debugLog.log('🖼️ Initializing ImageSlideshowEffect');
-      // Initial load
       if (this.parameters.images.length > 0) {
-          this.loadNextTextures(0);
-          // Load first image immediately
-          this.loadTexture(this.parameters.images[0]).then(texture => {
-              this.material.map = texture;
-              this.material.needsUpdate = true;
-              this.currentImageIndex = 0;
-              this.fitTextureToScreen(texture);
-          }).catch(err => {
-              debugLog.error('Failed to load first image for slideshow', err);
-          });
+          // Use unified slide logic so caching and fitting stay consistent
+          this.advanceSlide();
       }
   }
 
   update(deltaTime: number, audioData: AudioAnalysisData, midiData: LiveMIDIData): void {
       if (!this.enabled) return;
+
+      // If images were added after init, load the first one immediately
+      if (this.currentImageIndex === -1 && this.parameters.images.length > 0) {
+          this.advanceSlide();
+      }
 
       // Check trigger
       const isTriggered = this.parameters.triggerValue > this.parameters.threshold;
@@ -145,6 +142,7 @@ export class ImageSlideshowEffect implements VisualEffect {
       if (texture) {
           this.currentImageIndex = nextIndex;
           this.material.map = texture;
+          this.material.color.setHex(0xffffff); // Reset tint so texture displays normally
           this.material.needsUpdate = true;
           
           this.fitTextureToScreen(texture);
