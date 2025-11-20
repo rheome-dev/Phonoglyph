@@ -282,10 +282,11 @@ function performEnhancedAnalysis(
     }
   }
 
-  // Convert peaks to transients (no type classification)
-  const transients: { time: number; intensity: number }[] = peaks.map(peak => ({
+  // Convert peaks to transients (default to 'generic' type since we don't classify)
+  const transients: { time: number; intensity: number; type: string }[] = peaks.map(peak => ({
     time: peak.time,
-    intensity: peak.intensity
+    intensity: peak.intensity,
+    type: 'generic' // Default type since we don't perform drum classification
   }));
 
   return transients;

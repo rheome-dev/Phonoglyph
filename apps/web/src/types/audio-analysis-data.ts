@@ -1,6 +1,7 @@
 export interface TransientData {
   time: number;
   intensity: number;
+  type?: string; // 'kick', 'snare', 'hat', 'generic', etc. - always provided by worker as 'generic' for now
   frequency?: number;
 }
 
