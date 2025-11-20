@@ -38,6 +38,7 @@ import { HudOverlayProvider, useHudOverlayContext } from '@/components/hud/HudOv
 import { AspectRatioSelector } from '@/components/ui/aspect-ratio-selector';
 import { getAspectRatioConfig } from '@/lib/visualizer/aspect-ratios';
 import { useProjectSettingsStore } from '@/stores/projectSettingsStore';
+import { CollectionManager } from '@/components/assets/CollectionManager';
 
 // Derived boolean: are stem URLs ready?
 // const stemUrlsReady = Object.keys(asyncStemUrlMap).length > 0; // This line was moved
@@ -652,6 +653,21 @@ function CreativeVisualizerPage() {
       image: '/effects/generative/particles.png',
       parameters: {} // Empty - modal is handled by ThreeVisualizer
     },
+    { 
+      id: 'imageSlideshow', 
+      name: 'Image Slideshow', 
+      description: 'Rhythmic image slideshow triggered by audio transients',
+      category: 'Generative',
+      rarity: 'Common',
+      image: '/effects/generative/slideshow.png',
+      parameters: {
+         triggerValue: 0,
+         threshold: 0.5,
+         scale: 1.0,
+         opacity: 1.0,
+         images: [] 
+      }
+    },
     // HUD Overlay Effects
     { 
       id: 'waveform', 
@@ -1131,14 +1147,94 @@ function CreativeVisualizerPage() {
     // Slider sets the base value regardless of mapping
     setBaseParameterValues(prev => ({ ...prev, [paramKey]: value }));
     setActiveSliderValues(prev => ({ ...prev, [paramKey]: value }));
-    // In a real application, you would update the effect's parameters here
-    // For now, we'll just update the state to reflect the current value in the modal
+    
+    // Update the effect instance directly
+    if (visualizerRef.current) {
+        visualizerRef.current.updateEffectParameter(effectId, paramName, value);
+    }
   };
 
   const effectModals = Object.entries(openEffectModals).map(([effectId, isOpen], index) => {
     if (!isOpen) return null;
     const effectInstance = effects.find(e => e.id === effectId);
     if (!effectInstance) return null;
+
+    // Special case for Image Slideshow to show Collection Manager
+    if (effectId === 'imageSlideshow') {
+      const initialPos = { x: 100 + (index * 50), y: 100 + (index * 50) };
+      // Find currently selected collection ID if we stored it, or derived from parameters
+      // For now we just rely on the images array.
+      return (
+        <PortalModal
+          key={effectId}
+          title="Slideshow Collections"
+          isOpen={isOpen}
+          onClose={() => handleCloseEffectModal(effectId)}
+          initialPosition={initialPos}
+          bounds="#editor-bounds"
+        >
+          <div className="max-w-md w-80">
+            <CollectionManager
+              projectId={currentProjectId || ''}
+              availableFiles={projectFiles?.files || []}
+              onSelectCollection={(imageUrls) => {
+                handleParameterChange(effectId, 'images', imageUrls);
+                // Also set default trigger mapping if not set?
+                // handleMapFeature(`${effectId}-triggerValue`, 'drums-impact'); 
+              }}
+              selectedCollectionId={undefined} // We don't persistently track collection ID in effect params yet, just images
+            />
+            <div className="mt-4 pt-4 border-t border-white/10">
+                <Label className="text-xs uppercase text-stone-400 mb-2 block">Playback Settings</Label>
+                
+                <div className="space-y-4">
+                  <DroppableParameter
+                    parameterId={`${effectId}-triggerValue`}
+                    label="Advance Trigger"
+                    mappedFeatureId={mappings[`${effectId}-triggerValue`]?.featureId}
+                    mappedFeatureName={mappings[`${effectId}-triggerValue`]?.featureId ? featureNames[mappings[`${effectId}-triggerValue`]?.featureId!] : undefined}
+                    modulationAmount={mappings[`${effectId}-triggerValue`]?.modulationAmount ?? 0.5}
+                    baseValue={baseParameterValues[`${effectId}-triggerValue`] ?? 0}
+                    modulatedValue={modulatedParameterValues[`${effectId}-triggerValue`] ?? 0}
+                    sliderMax={1}
+                    onFeatureDrop={handleMapFeature}
+                    onFeatureUnmap={handleUnmapFeature}
+                    onModulationAmountChange={handleModulationAmountChange}
+                    dropZoneStyle="inlayed"
+                  >
+                     <div className="h-2 bg-stone-800 rounded overflow-hidden mt-1">
+                        <div 
+                            className="h-full bg-blue-500 transition-all duration-75"
+                            style={{ width: `${(modulatedParameterValues[`${effectId}-triggerValue`] || 0) * 100}%` }}
+                        />
+                     </div>
+                     <div className="text-[10px] text-stone-500 mt-1">
+                        {mappings[`${effectId}-triggerValue`]?.featureId 
+                            ? "Mapped to audio analysis" 
+                            : "Drag 'Transients' here to trigger slides"}
+                     </div>
+                  </DroppableParameter>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs">Scale</Label>
+                    <Slider
+                        value={[activeSliderValues[`${effectId}-scale`] ?? 1.0]}
+                        onValueChange={([val]) => {
+                            setActiveSliderValues(prev => ({ ...prev, [`${effectId}-scale`]: val }));
+                            handleParameterChange(effectId, 'scale', val);
+                        }}
+                        min={0.1}
+                        max={3.0}
+                        step={0.1}
+                    />
+                  </div>
+                </div>
+            </div>
+          </div>
+        </PortalModal>
+      );
+    }
+
     const sortedParams = Object.entries(effectInstance.parameters || {}).sort(([, a], [, b]) => {
       if (typeof a === 'boolean' && typeof b !== 'boolean') return -1;
       if (typeof a !== 'boolean' && typeof b === 'boolean') return 1;
