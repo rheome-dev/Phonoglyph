@@ -1053,6 +1053,37 @@ function CreativeVisualizerPage() {
           }
         }
       }
+      
+      // Handle timeline-specific audio triggers (e.g., Image Slideshow trigger)
+      if (layers.length > 0 && audioAnalysis.cachedAnalysis.length > 0) {
+        layers.forEach(layer => {
+          if (layer.settings && layer.settings.triggerSourceId) {
+            const featureId = layer.settings.triggerSourceId;
+            const featureStemType = getStemTypeFromFeatureId(featureId);
+            
+            if (featureStemType) {
+              const stemAnalysis = audioAnalysis.cachedAnalysis?.find(
+                a => a.stemType === featureStemType
+              );
+              
+              if (stemAnalysis) {
+                const rawValue = audioAnalysis.getFeatureValue(
+                  stemAnalysis.fileMetadataId,
+                  featureId,
+                  syncTime,
+                  featureStemType
+                );
+                
+                // Push trigger value to the effect instance via updateEffectParameter
+                // The ImageSlideshowEffect expects 'triggerValue' to be updated
+                if (rawValue !== undefined) {
+                  visualizerRef.current.updateEffectParameter(layer.id, 'triggerValue', rawValue);
+                }
+              }
+            }
+          }
+        });
+      }
 
 
       animationFrameId.current = requestAnimationFrame(animationLoop);
