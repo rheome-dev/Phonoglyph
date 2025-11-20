@@ -129,7 +129,18 @@ export class ImageSlideshowEffect implements VisualEffect {
       // Check trigger
       const isTriggered = this.parameters.triggerValue > this.parameters.threshold;
       
+      // Debug log trigger state occasionally
+      if (Math.floor(Date.now() / 1000) % 2 === 0 && this.parameters.triggerValue > 0) {
+        slideshowLog.log('Trigger check:', {
+          triggerValue: this.parameters.triggerValue.toFixed(3),
+          threshold: this.parameters.threshold.toFixed(3),
+          isTriggered,
+          wasTriggered: this.wasTriggered
+        });
+      }
+      
       if (isTriggered && !this.wasTriggered) {
+          slideshowLog.log('🎯 TRIGGER FIRED! Advancing slide');
           this.advanceSlide();
       }
       this.wasTriggered = isTriggered;

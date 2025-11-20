@@ -805,11 +805,12 @@ function CreativeVisualizerPage() {
 
   // Feature mapping handlers
   const handleMapFeature = (parameterId: string, featureId: string) => {
+    const [layerOrEffectId, paramName] = parameterId.split('-');
     debugLog.log('🎛️ Creating mapping:', {
       parameterId,
       featureId,
-      parameterName: parameterId.split('-')[1],
-      effectId: parameterId.split('-')[0]
+      parameterName: paramName,
+      layerOrEffectId
     });
     
     setMappings(prev => ({ 
@@ -819,6 +820,21 @@ function CreativeVisualizerPage() {
         modulationAmount: 0.5 // Default to 50% (noon)
       } 
     }));
+    
+    // Special handling for ImageSlideshow triggerValue: also save to layer.settings.triggerSourceId
+    if (paramName === 'triggerValue') {
+      const slideshowLayer = layers.find(l => l.id === layerOrEffectId && l.type === 'effect' && l.effectType === 'imageSlideshow');
+      if (slideshowLayer) {
+        console.log('🖼️ Saving triggerSourceId to layer settings:', layerOrEffectId, featureId);
+        updateLayer(slideshowLayer.id, {
+          ...slideshowLayer,
+          settings: {
+            ...slideshowLayer.settings,
+            triggerSourceId: featureId
+          }
+        });
+      }
+    }
     
     // Store feature name for display
     const featureName = featureId.split('-').map(word => 
@@ -830,6 +846,7 @@ function CreativeVisualizerPage() {
   };
 
   const handleUnmapFeature = (parameterId: string) => {
+    const [layerOrEffectId, paramName] = parameterId.split('-');
     debugLog.log('🎛️ Removing mapping:', {
       parameterId,
       currentMapping: mappings[parameterId]
@@ -842,6 +859,21 @@ function CreativeVisualizerPage() {
         modulationAmount: 0.5 
       } 
     }));
+    
+    // Special handling for ImageSlideshow triggerValue: also remove from layer.settings.triggerSourceId
+    if (paramName === 'triggerValue') {
+      const slideshowLayer = layers.find(l => l.id === layerOrEffectId && l.type === 'effect' && l.effectType === 'imageSlideshow');
+      if (slideshowLayer) {
+        console.log('🖼️ Removing triggerSourceId from layer settings:', layerOrEffectId);
+        updateLayer(slideshowLayer.id, {
+          ...slideshowLayer,
+          settings: {
+            ...slideshowLayer.settings,
+            triggerSourceId: undefined
+          }
+        });
+      }
+    }
     
     debugLog.log('🎛️ Mapping removed successfully');
   };
@@ -1107,8 +1139,21 @@ function CreativeVisualizerPage() {
                 // The ImageSlideshowEffect expects 'triggerValue' to be updated
                 if (rawValue !== undefined) {
                   visualizerRef.current.updateEffectParameter(layer.id, 'triggerValue', rawValue);
+                  // Debug log every 60 frames (roughly once per second at 60fps)
+                  if (Math.floor(syncTime * 60) % 60 === 0) {
+                    console.log('🖼️ Updating triggerValue:', { layerId: layer.id, featureId, rawValue, syncTime });
+                  }
                 }
+              } else {
+                console.warn('🖼️ No stem analysis found for feature:', featureId, 'stemType:', featureStemType);
               }
+            } else {
+              console.warn('🖼️ Could not determine stem type for feature:', featureId);
+            }
+          } else if (layer.effectType === 'imageSlideshow') {
+            // Debug: log when triggerSourceId is missing
+            if (Math.floor(syncTime * 60) % 300 === 0) { // Every 5 seconds
+              console.warn('🖼️ ImageSlideshow layer has no triggerSourceId:', layer.id, layer.settings);
             }
           }
         });
@@ -1207,13 +1252,13 @@ function CreativeVisualizerPage() {
                 
                 <div className="space-y-4">
                   <DroppableParameter
-                    parameterId={`${effectId}-triggerValue`}
+                    parameterId={`${layerId}-triggerValue`}
                     label="Advance Trigger"
-                    mappedFeatureId={mappings[`${effectId}-triggerValue`]?.featureId}
-                    mappedFeatureName={mappings[`${effectId}-triggerValue`]?.featureId ? featureNames[mappings[`${effectId}-triggerValue`]?.featureId!] : undefined}
-                    modulationAmount={mappings[`${effectId}-triggerValue`]?.modulationAmount ?? 0.5}
-                    baseValue={baseParameterValues[`${effectId}-triggerValue`] ?? 0}
-                    modulatedValue={modulatedParameterValues[`${effectId}-triggerValue`] ?? 0}
+                    mappedFeatureId={slideshowLayer?.settings?.triggerSourceId || mappings[`${layerId}-triggerValue`]?.featureId}
+                    mappedFeatureName={slideshowLayer?.settings?.triggerSourceId ? featureNames[slideshowLayer.settings.triggerSourceId] : (mappings[`${layerId}-triggerValue`]?.featureId ? featureNames[mappings[`${layerId}-triggerValue`]?.featureId!] : undefined)}
+                    modulationAmount={mappings[`${layerId}-triggerValue`]?.modulationAmount ?? 0.5}
+                    baseValue={baseParameterValues[`${layerId}-triggerValue`] ?? 0}
+                    modulatedValue={modulatedParameterValues[`${layerId}-triggerValue`] ?? 0}
                     sliderMax={1}
                     onFeatureDrop={handleMapFeature}
                     onFeatureUnmap={handleUnmapFeature}
@@ -1223,23 +1268,40 @@ function CreativeVisualizerPage() {
                      <div className="h-2 bg-stone-800 rounded overflow-hidden mt-1">
                         <div 
                             className="h-full bg-blue-500 transition-all duration-75"
-                            style={{ width: `${(modulatedParameterValues[`${effectId}-triggerValue`] || 0) * 100}%` }}
+                            style={{ width: `${(modulatedParameterValues[`${layerId}-triggerValue`] || 0) * 100}%` }}
                         />
                      </div>
                      <div className="text-[10px] text-stone-500 mt-1">
-                        {mappings[`${effectId}-triggerValue`]?.featureId 
+                        {(slideshowLayer?.settings?.triggerSourceId || mappings[`${layerId}-triggerValue`]?.featureId)
                             ? "Mapped to audio analysis" 
                             : "Drag 'Transients' here to trigger slides"}
                      </div>
                   </DroppableParameter>
 
                   <div className="space-y-1">
+                    <Label className="text-xs">Threshold</Label>
+                    <Slider
+                        value={[activeSliderValues[`${layerId}-threshold`] ?? 0.5]}
+                        onValueChange={([val]) => {
+                            setActiveSliderValues(prev => ({ ...prev, [`${layerId}-threshold`]: val }));
+                            handleParameterChange(layerId, 'threshold', val);
+                        }}
+                        min={0}
+                        max={1.0}
+                        step={0.01}
+                    />
+                    <div className="text-[10px] text-stone-500 mt-1">
+                      Trigger fires when value exceeds threshold (current: {(activeSliderValues[`${layerId}-threshold`] ?? 0.5).toFixed(2)})
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
                     <Label className="text-xs">Scale</Label>
                     <Slider
-                        value={[activeSliderValues[`${effectId}-scale`] ?? 1.0]}
+                        value={[activeSliderValues[`${layerId}-scale`] ?? 1.0]}
                         onValueChange={([val]) => {
-                            setActiveSliderValues(prev => ({ ...prev, [`${effectId}-scale`]: val }));
-                            handleParameterChange(effectId, 'scale', val);
+                            setActiveSliderValues(prev => ({ ...prev, [`${layerId}-scale`]: val }));
+                            handleParameterChange(layerId, 'scale', val);
                         }}
                         min={0.1}
                         max={3.0}
