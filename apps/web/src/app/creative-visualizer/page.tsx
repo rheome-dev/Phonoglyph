@@ -1175,8 +1175,10 @@ function CreativeVisualizerPage() {
     // Special case for Image Slideshow to show Collection Manager
     if (effectId === 'imageSlideshow') {
       const initialPos = { x: 100 + (index * 50), y: 100 + (index * 50) };
-      // Find currently selected collection ID if we stored it, or derived from parameters
-      // For now we just rely on the images array.
+      // Find the layer with this effect type - the effect instance uses the layer ID, not the effect type ID
+      const slideshowLayer = layers.find(l => l.type === 'effect' && l.effectType === 'imageSlideshow');
+      const layerId = slideshowLayer?.id || effectId; // Fallback to effectId if no layer found
+      
       return (
         <PortalModal
           key={effectId}
@@ -1193,7 +1195,9 @@ function CreativeVisualizerPage() {
               projectId={currentProjectId || ''}
               availableFiles={projectFiles?.files || []}
               onSelectCollection={(imageUrls, collectionId) => {
-                handleParameterChange(effectId, 'images', imageUrls);
+                // Use layerId instead of effectId - the effect instance is keyed by layer ID
+                console.log('🖼️ Collection selected, updating effect with layerId:', layerId, 'imageUrls count:', imageUrls.length);
+                handleParameterChange(layerId, 'images', imageUrls);
                 setActiveCollectionId(collectionId);
               }}
               selectedCollectionId={activeCollectionId}
