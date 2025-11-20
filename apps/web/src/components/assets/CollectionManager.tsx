@@ -8,6 +8,13 @@ import { Check, Plus, Image as ImageIcon, Loader2, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
+interface AssetCollection {
+  id: string;
+  name: string;
+  created_at: string;
+  type?: string;
+}
+
 interface CollectionManagerProps {
   projectId: string;
   availableFiles: any[]; // Files from projectFiles query
@@ -221,7 +228,7 @@ export function CollectionManager({
                 No collections yet. Create one to start your slideshow!
               </div>
             ) : (
-              collections?.map(collection => (
+              collections?.map((collection: AssetCollection) => (
                 <Card 
                   key={collection.id}
                   className={cn(
