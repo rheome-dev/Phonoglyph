@@ -114,6 +114,68 @@ export class ImageSlideshowEffect implements VisualEffect {
       }
   }
 
+  updateParameter(paramName: string, value: any): void {
+    // Handle images array updates - this is called when a collection is selected
+    if (paramName === 'images' && Array.isArray(value)) {
+      // Filter out empty or invalid URLs
+      const validUrls = value.filter((url: any) => 
+        typeof url === 'string' && url.trim().length > 0 && url.startsWith('http')
+      );
+      
+      const oldLength = this.parameters.images.length;
+      const newLength = validUrls.length;
+      const imagesChanged = oldLength !== newLength || 
+        JSON.stringify(this.parameters.images) !== JSON.stringify(validUrls);
+      
+      if (imagesChanged) {
+        debugLog.log('🖼️ Images array updated:', { 
+          oldCount: oldLength, 
+          newCount: newLength,
+          validUrls: validUrls.length,
+          invalidUrls: value.length - validUrls.length,
+          sampleUrls: validUrls.slice(0, 3).map((url: string) => url.substring(0, 50) + '...')
+        });
+        
+        if (validUrls.length === 0) {
+          debugLog.warn('🖼️ No valid image URLs provided');
+          return;
+        }
+        
+        // Update the parameter with only valid URLs
+        this.parameters.images = validUrls;
+        
+        // Reset state for new collection
+        this.currentImageIndex = -1;
+        this.failureCount = 0;
+        
+        // Clear texture cache since URLs may have changed
+        this.textureCache.forEach(t => t.dispose());
+        this.textureCache.clear();
+        this.loadingImages.clear();
+        
+        // Clear current texture
+        if (this.material.map) {
+          this.material.map = null;
+          this.material.color.setHex(0x000000); // Back to black
+          this.material.needsUpdate = true;
+        }
+        
+        // Load first image immediately
+        debugLog.log('🖼️ Loading first image from new collection');
+        this.advanceSlide();
+      }
+    } else if (paramName === 'opacity') {
+      this.parameters.opacity = value;
+      this.material.opacity = value;
+    } else if (paramName === 'scale') {
+      this.parameters.scale = value;
+    } else if (paramName === 'threshold') {
+      this.parameters.threshold = value;
+    } else if (paramName === 'triggerValue') {
+      this.parameters.triggerValue = value;
+    }
+  }
+
   resize(width: number, height: number) {
       this.aspectRatio = width / height;
       
@@ -134,10 +196,19 @@ export class ImageSlideshowEffect implements VisualEffect {
   }
 
   private async advanceSlide() {
-      if (this.parameters.images.length === 0) return;
+      if (this.parameters.images.length === 0) {
+        debugLog.warn('🖼️ advanceSlide called but images array is empty');
+        return;
+      }
 
       const nextIndex = (this.currentImageIndex + 1) % this.parameters.images.length;
       const imageUrl = this.parameters.images[nextIndex];
+      
+      debugLog.log('🖼️ Advancing slide:', { 
+        currentIndex: this.currentImageIndex, 
+        nextIndex, 
+        url: imageUrl.substring(0, 60) 
+      });
 
       // Try to get from cache
       let texture = this.textureCache.get(imageUrl);
@@ -147,7 +218,7 @@ export class ImageSlideshowEffect implements VisualEffect {
             texture = await this.loadTexture(imageUrl);
             this.failureCount = 0;
           } catch(e) {
-              debugLog.error("Failed to load image for slideshow", imageUrl, e);
+              debugLog.error("🖼️ Failed to load image for slideshow", imageUrl.substring(0, 60), e);
               this.currentImageIndex = nextIndex;
               this.failureCount++;
               return;
@@ -160,11 +231,19 @@ export class ImageSlideshowEffect implements VisualEffect {
           this.material.color.setHex(0xffffff); // Reset tint so texture displays normally
           this.material.needsUpdate = true;
           
+          debugLog.log('🖼️ Slide advanced successfully:', {
+            index: nextIndex,
+            hasTexture: !!texture,
+            textureSize: texture.image ? `${texture.image.width}x${texture.image.height}` : 'unknown'
+          });
+          
           this.fitTextureToScreen(texture);
 
           // Preload next images & cleanup
           this.cleanupCache();
           this.loadNextTextures(nextIndex);
+      } else {
+        debugLog.error('🖼️ advanceSlide: texture is null after load attempt');
       }
   }
 
@@ -207,21 +286,34 @@ export class ImageSlideshowEffect implements VisualEffect {
 
   private loadTexture(url: string): Promise<THREE.Texture> {
       if (this.loadingImages.has(url)) {
+        debugLog.warn('🖼️ Already loading texture:', url.substring(0, 50));
         return Promise.reject('Already loading');
       }
       this.loadingImages.add(url);
+      debugLog.log('🖼️ Loading texture:', url.substring(0, 80));
       return new Promise((resolve, reject) => {
-          this.textureLoader.load(url, (texture) => {
-              this.textureCache.set(url, texture);
-              this.loadingImages.delete(url);
-              // Ensure texture works with resizing
-              texture.minFilter = THREE.LinearFilter;
-              texture.magFilter = THREE.LinearFilter;
-              resolve(texture);
-          }, undefined, (err) => {
-              this.loadingImages.delete(url);
-              reject(err);
-          });
+          this.textureLoader.load(
+            url, 
+            (texture) => {
+                this.textureCache.set(url, texture);
+                this.loadingImages.delete(url);
+                // Ensure texture works with resizing
+                texture.minFilter = THREE.LinearFilter;
+                texture.magFilter = THREE.LinearFilter;
+                debugLog.log('🖼️ Texture loaded successfully:', {
+                  url: url.substring(0, 50),
+                  width: texture.image?.width,
+                  height: texture.image?.height
+                });
+                resolve(texture);
+            }, 
+            undefined, 
+            (err) => {
+                this.loadingImages.delete(url);
+                debugLog.error('🖼️ Texture load failed:', url.substring(0, 80), err);
+                reject(err);
+            }
+          );
       });
   }
 
