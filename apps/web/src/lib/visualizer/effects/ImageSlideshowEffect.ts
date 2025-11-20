@@ -69,9 +69,16 @@ export class ImageSlideshowEffect implements VisualEffect {
   }
 
   init(renderer: THREE.WebGLRenderer): void {
-      debugLog.log('🖼️ Initializing ImageSlideshowEffect');
+      debugLog.log('🖼️ Initializing ImageSlideshowEffect', {
+        effectId: this.id,
+        imagesCount: this.parameters.images.length,
+        sampleUrls: this.parameters.images.slice(0, 2).map(url => url.substring(0, 60) + '...')
+      });
       if (this.parameters.images.length > 0) {
+          debugLog.log('🖼️ Images available at init, calling advanceSlide()');
           this.advanceSlide();
+      } else {
+          debugLog.warn('🖼️ No images available at init time');
       }
   }
 
@@ -80,18 +87,36 @@ export class ImageSlideshowEffect implements VisualEffect {
 
       // If images were added after init, load the first one immediately
       if (this.currentImageIndex === -1 && this.parameters.images.length > 0) {
+          debugLog.log('🖼️ Update: currentImageIndex is -1, images available, calling advanceSlide()');
           this.advanceSlide();
       }
 
+      // Retry loading if no texture is displayed but images are available
       if (
         !this.material.map &&
         this.parameters.images.length > 0 &&
         this.failureCount < this.parameters.images.length * 2
       ) {
-        const targetUrl = this.parameters.images[(this.currentImageIndex + 1) % this.parameters.images.length];
+        const nextIndex = (this.currentImageIndex + 1) % this.parameters.images.length;
+        const targetUrl = this.parameters.images[nextIndex];
         if (!this.loadingImages.has(targetUrl)) {
+          debugLog.log('🖼️ Update: No texture map, attempting to load:', {
+            currentIndex: this.currentImageIndex,
+            nextIndex,
+            url: targetUrl.substring(0, 60),
+            failureCount: this.failureCount
+          });
           this.advanceSlide();
+        } else {
+          debugLog.log('🖼️ Update: Image already loading, skipping');
         }
+      } else if (!this.material.map && this.parameters.images.length === 0) {
+        debugLog.warn('🖼️ Update: No texture map and no images available');
+      } else if (!this.material.map && this.failureCount >= this.parameters.images.length * 2) {
+        debugLog.error('🖼️ Update: Too many failures, giving up:', {
+          failureCount: this.failureCount,
+          imageCount: this.parameters.images.length
+        });
       }
 
       // Check trigger
@@ -117,27 +142,48 @@ export class ImageSlideshowEffect implements VisualEffect {
   updateParameter(paramName: string, value: any): void {
     // Handle images array updates - this is called when a collection is selected
     if (paramName === 'images' && Array.isArray(value)) {
-      // Filter out empty or invalid URLs
-      const validUrls = value.filter((url: any) => 
-        typeof url === 'string' && url.trim().length > 0 && url.startsWith('http')
-      );
+      debugLog.log('🖼️ updateParameter called with images:', { 
+        valueLength: value.length,
+        valueSample: value.slice(0, 2).map((url: any) => typeof url === 'string' ? url.substring(0, 80) : String(url))
+      });
+      
+      // Filter out empty or invalid URLs - accept any non-empty string that looks like a URL
+      const validUrls = value.filter((url: any) => {
+        if (typeof url !== 'string') {
+          debugLog.warn('🖼️ Invalid URL type:', typeof url, url);
+          return false;
+        }
+        const trimmed = url.trim();
+        if (trimmed.length === 0) {
+          debugLog.warn('🖼️ Empty URL string');
+          return false;
+        }
+        // Accept http/https URLs or data URLs
+        const isValid = trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('data:');
+        if (!isValid) {
+          debugLog.warn('🖼️ URL does not start with http/https/data:', trimmed.substring(0, 50));
+        }
+        return isValid;
+      });
       
       const oldLength = this.parameters.images.length;
       const newLength = validUrls.length;
       const imagesChanged = oldLength !== newLength || 
         JSON.stringify(this.parameters.images) !== JSON.stringify(validUrls);
       
+      debugLog.log('🖼️ Images validation result:', { 
+        oldCount: oldLength, 
+        newCount: newLength,
+        validUrls: validUrls.length,
+        invalidUrls: value.length - validUrls.length,
+        imagesChanged,
+        sampleUrls: validUrls.slice(0, 3).map((url: string) => url.substring(0, 60) + '...')
+      });
+      
       if (imagesChanged) {
-        debugLog.log('🖼️ Images array updated:', { 
-          oldCount: oldLength, 
-          newCount: newLength,
-          validUrls: validUrls.length,
-          invalidUrls: value.length - validUrls.length,
-          sampleUrls: validUrls.slice(0, 3).map((url: string) => url.substring(0, 50) + '...')
-        });
-        
         if (validUrls.length === 0) {
-          debugLog.warn('🖼️ No valid image URLs provided');
+          debugLog.warn('🖼️ No valid image URLs provided after filtering');
+          debugLog.warn('🖼️ Original value:', value);
           return;
         }
         
@@ -161,8 +207,10 @@ export class ImageSlideshowEffect implements VisualEffect {
         }
         
         // Load first image immediately
-        debugLog.log('🖼️ Loading first image from new collection');
+        debugLog.log('🖼️ Loading first image from new collection, calling advanceSlide()');
         this.advanceSlide();
+      } else {
+        debugLog.log('🖼️ Images array unchanged, skipping update');
       }
     } else if (paramName === 'opacity') {
       this.parameters.opacity = value;
