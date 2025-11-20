@@ -9,6 +9,7 @@ import { midiRouter } from './midi';
 import { stemRouter } from './stem';
 import { autoSaveRouter } from './auto-save';
 import { audioAnalysisSandboxRouter } from './audio-analysis-sandbox';
+import { assetRouter } from './asset';
 
 export const appRouter = router({
   health: healthRouter,
@@ -17,6 +18,7 @@ export const appRouter = router({
   guest: guestRouter,
   project: projectRouter,
   file: fileRouter,
+  asset: assetRouter,
   midi: midiRouter,
   stem: stemRouter,
   autoSave: autoSaveRouter,

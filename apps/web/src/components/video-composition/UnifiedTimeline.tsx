@@ -408,11 +408,12 @@ const LayerClip: React.FC<{
   postDropTransform?: { id: string; x: number; y: number } | null;
   destinationAnimateId?: string | null;
 }> = ({ layer, index, onAssetDrop, activeDragLayerId, postDropTransform, destinationAnimateId }) => {
-  const { zoom, selectLayer, selectedLayerId } = useTimelineStore();
+  const { zoom, selectLayer, selectedLayerId, updateLayer } = useTimelineStore();
 
   const isSelected = selectedLayerId === layer.id;
   const isEffect = layer.type === 'effect';
   const isEmpty = !isEffect && !layer.src;
+  const isSlideshow = layer.effectType === 'imageSlideshow';
 
   // --- Draggable Hooks ---
   // 1. For the main body of the clip
@@ -433,18 +434,59 @@ const LayerClip: React.FC<{
     disabled: isEmpty,
   });
 
-  // --- react-dnd hook for dropping new assets onto empty lanes ---
+  // --- react-dnd hook for dropping new assets onto empty lanes OR slideshow layers ---
   const [{ isOver, canDrop }, drop] = useDrop({
-    accept: ['VIDEO_FILE', 'IMAGE_FILE', 'EFFECT_CARD'],
-    drop: (item: any) => { if (isEmpty) onAssetDrop(item, layer.id); },
-    canDrop: () => isEmpty,
+    accept: ['VIDEO_FILE', 'IMAGE_FILE', 'EFFECT_CARD', 'feature', 'AUDIO_STEM'],
+    drop: (item: any) => { 
+      if (isEmpty) {
+        onAssetDrop(item, layer.id);
+      } else if (isSlideshow) {
+        if (item.type === 'IMAGE_FILE') {
+           // Append image to slideshow
+           const currentImages = layer.settings?.images || [];
+           // Avoid duplicates if desired, or allow
+           if (!currentImages.includes(item.src)) {
+             updateLayer(layer.id, {
+               settings: {
+                 ...layer.settings,
+                 images: [...currentImages, item.src]
+               }
+             });
+             debugLog.log('Added image to slideshow:', item.src);
+           }
+        } else if (item.type === 'feature' || item.type === 'AUDIO_STEM') {
+           // Link trigger
+           const sourceId = item.id;
+           // If it's a stem, we might default to a feature like 'impact' or volume
+           // If it's a feature, it has a specific type.
+           const triggerName = item.stemType || item.name || 'impact'; // Fallback
+           
+           updateLayer(layer.id, {
+             settings: {
+               ...layer.settings,
+               triggerSourceId: sourceId,
+               triggerSourceName: triggerName
+               // We rely on VisualizerManager to map this sourceId to triggerValue
+             }
+           });
+           debugLog.log('Linked trigger to slideshow:', sourceId, triggerName);
+        }
+      }
+    },
+    canDrop: (item: any) => {
+      if (isEmpty) return true;
+      if (isSlideshow) {
+        return item.type === 'IMAGE_FILE' || item.type === 'feature' || item.type === 'AUDIO_STEM';
+      }
+      return false;
+    },
     collect: (monitor) => ({ isOver: monitor.isOver(), canDrop: monitor.canDrop() }),
   });
 
   // Combine refs for dnd-kit dragging and react-dnd dropping
   const combinedRef = (node: HTMLDivElement | null) => {
     setBodyRef(node);
-    if (isEmpty) drop(node as any);
+    drop(node as any);
   };
 
   const PIXELS_PER_SECOND = 100;
