@@ -93,7 +93,7 @@ class StemProcessor {
             };
         }
         catch (error) {
-            console.error('Stem separation failed:', error);
+            logger_1.logger.error('Stem separation failed:', error);
             // Update record with error
             await supabase
                 .from('stem_separations')
@@ -131,7 +131,7 @@ class StemProcessor {
             });
             spleeter.stderr.on('data', (data) => {
                 errorOutput += data.toString();
-                console.error(`Spleeter error: ${data}`);
+                logger_1.logger.error(`Spleeter error: ${data}`);
             });
             spleeter.on('close', (code) => {
                 if (code === 0) {
@@ -152,7 +152,7 @@ class StemProcessor {
                 return await this.uploadStem(processingDir, `${type}.wav`, userId, originalFile.project_id);
             }
             catch (error) {
-                console.warn(`Could not process stem type ${type}:`, error);
+                logger_1.logger.warn(`Could not process stem type ${type}:`, error);
                 return undefined;
             }
         };

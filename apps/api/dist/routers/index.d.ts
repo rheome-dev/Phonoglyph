@@ -172,12 +172,12 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
                 isGuest: boolean;
             };
             _input_in: {
-                name?: string | undefined;
                 avatar_url?: string | undefined;
+                name?: string | undefined;
             };
             _input_out: {
-                name?: string | undefined;
                 avatar_url?: string | undefined;
+                name?: string | undefined;
             };
             _output_in: typeof import("@trpc/server").unsetMarker;
             _output_out: typeof import("@trpc/server").unsetMarker;
@@ -565,13 +565,13 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
                 limit?: number | undefined;
                 offset?: number | undefined;
                 privacy_setting?: "public" | "private" | "unlisted" | undefined;
-                sort_by?: "created_at" | "name" | "updated_at" | undefined;
+                sort_by?: "name" | "created_at" | "updated_at" | undefined;
                 sort_order?: "asc" | "desc" | undefined;
             };
             _input_out: {
                 limit: number;
                 offset: number;
-                sort_by: "created_at" | "name" | "updated_at";
+                sort_by: "name" | "created_at" | "updated_at";
                 sort_order: "asc" | "desc";
                 query?: string | undefined;
                 privacy_setting?: "public" | "private" | "unlisted" | undefined;
@@ -846,13 +846,13 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             };
             _input_in: {
                 fileName: string;
-                fileSize: number;
                 mimeType: string;
+                fileSize: number;
             };
             _input_out: {
                 fileName: string;
-                fileSize: number;
                 mimeType: string;
+                fileSize: number;
             };
             _output_in: typeof import("@trpc/server").unsetMarker;
             _output_out: typeof import("@trpc/server").unsetMarker;
@@ -889,23 +889,23 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             };
             _input_in: {
                 fileName: string;
-                fileSize: number;
-                mimeType: string;
                 fileType: "midi" | "audio" | "video" | "image";
+                mimeType: string;
+                fileSize: number;
                 fileData: string;
-                stemType?: string | undefined;
                 projectId?: string | undefined;
                 isMaster?: boolean | undefined;
+                stemType?: string | undefined;
             };
             _input_out: {
                 fileName: string;
-                fileSize: number;
-                mimeType: string;
                 fileType: "midi" | "audio" | "video" | "image";
+                mimeType: string;
+                fileSize: number;
                 fileData: string;
-                stemType?: string | undefined;
                 projectId?: string | undefined;
                 isMaster?: boolean | undefined;
+                stemType?: string | undefined;
             };
             _output_in: typeof import("@trpc/server").unsetMarker;
             _output_out: typeof import("@trpc/server").unsetMarker;
@@ -943,8 +943,8 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
                 success?: boolean | undefined;
             };
             _input_out: {
-                fileId: string;
                 success: boolean;
+                fileId: string;
             };
             _output_in: typeof import("@trpc/server").unsetMarker;
             _output_out: typeof import("@trpc/server").unsetMarker;
@@ -1009,8 +1009,8 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             _input_in: {
                 limit?: number | undefined;
                 offset?: number | undefined;
-                fileType?: "midi" | "audio" | "video" | "image" | "all" | undefined;
                 projectId?: string | undefined;
+                fileType?: "midi" | "audio" | "video" | "image" | "all" | undefined;
             };
             _input_out: {
                 limit: number;
@@ -1180,7 +1180,7 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
                 offset?: number | undefined;
                 search?: string | undefined;
                 assetType?: "midi" | "audio" | "video" | "image" | "all" | undefined;
-                usageStatus?: "all" | "active" | "referenced" | "unused" | undefined;
+                usageStatus?: "active" | "referenced" | "unused" | "all" | undefined;
                 folderId?: string | undefined;
                 tagIds?: string[] | undefined;
             };
@@ -1189,7 +1189,7 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
                 offset: number;
                 projectId: string;
                 assetType: "midi" | "audio" | "video" | "image" | "all";
-                usageStatus: "all" | "active" | "referenced" | "unused";
+                usageStatus: "active" | "referenced" | "unused" | "all";
                 search?: string | undefined;
                 folderId?: string | undefined;
                 tagIds?: string[] | undefined;
@@ -1221,14 +1221,14 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
                 isGuest: boolean;
             };
             _input_in: {
-                fileId: string;
                 projectId: string;
+                fileId: string;
                 usageType: "visualizer" | "composition" | "export";
                 usageContext?: Record<string, any> | undefined;
             };
             _input_out: {
-                fileId: string;
                 projectId: string;
+                fileId: string;
                 usageType: "visualizer" | "composition" | "export";
                 usageContext?: Record<string, any> | undefined;
             };
@@ -1680,13 +1680,13 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
                 isGuest: boolean;
             };
             _input_in: {
-                status?: "all" | "completed" | "pending" | "failed" | undefined;
+                status?: "completed" | "failed" | "all" | "pending" | undefined;
                 limit?: number | undefined;
                 offset?: number | undefined;
                 projectId?: string | undefined;
             };
             _input_out: {
-                status: "all" | "completed" | "pending" | "failed";
+                status: "completed" | "failed" | "all" | "pending";
                 limit: number;
                 offset: number;
                 projectId?: string | undefined;
@@ -1865,13 +1865,13 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
                     bufferSize: number;
                     featuresExtracted: string[];
                 };
-                fileMetadataId: string;
                 stemType: string;
                 analysisData: Record<string, number[]>;
+                fileMetadataId: string;
                 waveformData: {
+                    points: number[];
                     sampleRate: number;
                     duration: number;
-                    points: number[];
                     markers: {
                         type: "beat" | "onset" | "peak" | "drop";
                         time: number;
@@ -1887,13 +1887,13 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
                     bufferSize: number;
                     featuresExtracted: string[];
                 };
-                fileMetadataId: string;
                 stemType: string;
                 analysisData: Record<string, number[]>;
+                fileMetadataId: string;
                 waveformData: {
+                    points: number[];
                     sampleRate: number;
                     duration: number;
-                    points: number[];
                     markers: {
                         type: "beat" | "onset" | "peak" | "drop";
                         time: number;
@@ -2201,6 +2201,7 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
                 isGuest: boolean;
             };
             _input_in: {
+                id: string;
                 metadata: {
                     sampleRate: number;
                     duration: number;
@@ -2208,10 +2209,18 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
                     featuresExtracted: string[];
                     analysisDuration: number;
                 };
-                id: string;
-                fileMetadataId: string;
                 stemType: string;
                 analysisData: {
+                    metadata: {
+                        sampleRate: number;
+                        duration: number;
+                        bufferSize: number;
+                        analysisParams?: any;
+                    };
+                    rms: {
+                        value: number;
+                        time: number;
+                    }[];
                     transients: {
                         time: number;
                         intensity: number;
@@ -2223,26 +2232,18 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
                         confidence: number;
                         note: string;
                     }[];
-                    rms: {
-                        value: number;
-                        time: number;
-                    }[];
                     waveform: number[];
-                    metadata: {
-                        sampleRate: number;
-                        duration: number;
-                        bufferSize: number;
-                        analysisParams?: any;
-                    };
                 };
+                fileMetadataId: string;
                 waveformData: {
+                    points: number[];
                     sampleRate: number;
                     duration: number;
-                    points: number[];
                     markers: any[];
                 };
             };
             _input_out: {
+                id: string;
                 metadata: {
                     sampleRate: number;
                     duration: number;
@@ -2250,10 +2251,18 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
                     featuresExtracted: string[];
                     analysisDuration: number;
                 };
-                id: string;
-                fileMetadataId: string;
                 stemType: string;
                 analysisData: {
+                    metadata: {
+                        sampleRate: number;
+                        duration: number;
+                        bufferSize: number;
+                        analysisParams?: any;
+                    };
+                    rms: {
+                        value: number;
+                        time: number;
+                    }[];
                     transients: {
                         time: number;
                         intensity: number;
@@ -2265,22 +2274,13 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
                         confidence: number;
                         note: string;
                     }[];
-                    rms: {
-                        value: number;
-                        time: number;
-                    }[];
                     waveform: number[];
-                    metadata: {
-                        sampleRate: number;
-                        duration: number;
-                        bufferSize: number;
-                        analysisParams?: any;
-                    };
                 };
+                fileMetadataId: string;
                 waveformData: {
+                    points: number[];
                     sampleRate: number;
                     duration: number;
-                    points: number[];
                     markers: any[];
                 };
             };

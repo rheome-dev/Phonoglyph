@@ -4,6 +4,7 @@ exports.audioAnalysisSandboxRouter = void 0;
 const zod_1 = require("zod");
 const trpc_1 = require("../trpc");
 const server_1 = require("@trpc/server");
+const logger_1 = require("../lib/logger");
 // Schema for sandbox analysis data
 const SandboxAnalysisSchema = zod_1.z.object({
     transients: zod_1.z.array(zod_1.z.object({
@@ -100,7 +101,7 @@ exports.audioAnalysisSandboxRouter = (0, trpc_1.router)({
                 analysis_duration: input.metadata.analysisDuration,
             });
             if (saveError) {
-                console.error('Failed to save sandbox analysis:', saveError);
+                logger_1.logger.error('Failed to save sandbox analysis:', saveError);
                 throw new server_1.TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: `Failed to save sandbox analysis: ${saveError.message}`,
@@ -114,7 +115,7 @@ exports.audioAnalysisSandboxRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error saving sandbox analysis:', error);
+            logger_1.logger.error('Error saving sandbox analysis:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to save sandbox analysis',
@@ -160,7 +161,7 @@ exports.audioAnalysisSandboxRouter = (0, trpc_1.router)({
             };
         }
         catch (error) {
-            console.error('Error getting sandbox analysis:', error);
+            logger_1.logger.error('Error getting sandbox analysis:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to get sandbox analysis',
@@ -224,7 +225,7 @@ exports.audioAnalysisSandboxRouter = (0, trpc_1.router)({
             return comparison;
         }
         catch (error) {
-            console.error('Error comparing analysis:', error);
+            logger_1.logger.error('Error comparing analysis:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to compare analysis',
@@ -264,7 +265,7 @@ exports.audioAnalysisSandboxRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error getting sandbox analyses:', error);
+            logger_1.logger.error('Error getting sandbox analyses:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to get sandbox analyses',
@@ -313,7 +314,7 @@ exports.audioAnalysisSandboxRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error deleting sandbox analysis:', error);
+            logger_1.logger.error('Error deleting sandbox analysis:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to delete sandbox analysis',

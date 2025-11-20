@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 "use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const logger_1 = require("../lib/logger");
 const { spawn } = require('child_process');
 const path = require('path');
 // Set the path to the .env file in the root directory
@@ -19,17 +21,17 @@ const migrationProcess = spawn('npx', [
     }
 });
 migrationProcess.on('close', (code) => {
-    console.log(`Migration process exited with code ${code}`);
+    logger_1.logger.log(`Migration process exited with code ${code}`);
     if (code !== 0) {
-        console.error('Migration failed. Please check the output above.');
+        logger_1.logger.error('Migration failed. Please check the output above.');
         process.exit(1);
     }
     else {
-        console.log('Migration completed successfully.');
+        logger_1.logger.log('Migration completed successfully.');
     }
 });
 migrationProcess.on('error', (err) => {
-    console.error('Failed to start migration process:', err);
+    logger_1.logger.error('Failed to start migration process:', err);
     process.exit(1);
 });
 //# sourceMappingURL=run-migrations.js.map

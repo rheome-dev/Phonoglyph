@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.validateMidiBuffer = exports.parseMidiFile = void 0;
 const midi_parser_js_1 = __importDefault(require("midi-parser-js"));
 const crypto_1 = require("crypto");
+const logger_1 = require("../lib/logger");
 // Color palette for track visualization
 const TRACK_COLORS = [
     '#84a98c', // sage
@@ -159,7 +160,7 @@ async function parseMidiFile(buffer, filename) {
         };
     }
     catch (error) {
-        console.error('MIDI parsing error:', error);
+        logger_1.logger.error('MIDI parsing error:', error);
         return {
             success: false,
             error: `Failed to parse MIDI file: ${error instanceof Error ? error.message : 'Unknown error'}`

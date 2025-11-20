@@ -4,6 +4,7 @@ exports.validateS3Config = exports.testS3Connection = exports.initializeS3 = exp
 const client_s3_1 = require("@aws-sdk/client-s3");
 const s3_request_presigner_1 = require("@aws-sdk/s3-request-presigner");
 const client_s3_2 = require("@aws-sdk/client-s3");
+const logger_1 = require("../lib/logger");
 // Cloudflare R2 Configuration (S3-Compatible)
 const r2Config = {
     region: 'auto', // R2 uses 'auto' region
@@ -33,21 +34,21 @@ async function createBucketIfNotExists() {
     try {
         // Check if bucket exists
         await exports.r2Client.send(new client_s3_1.HeadBucketCommand({ Bucket: exports.BUCKET_NAME }));
-        console.log(`✅ R2 bucket '${exports.BUCKET_NAME}' already exists`);
+        logger_1.logger.log(`✅ R2 bucket '${exports.BUCKET_NAME}' already exists`);
     }
     catch (error) {
         if (error.name === 'NotFound') {
             try {
                 await exports.r2Client.send(new client_s3_1.CreateBucketCommand({ Bucket: exports.BUCKET_NAME }));
-                console.log(`✅ Created R2 bucket '${exports.BUCKET_NAME}'`);
+                logger_1.logger.log(`✅ Created R2 bucket '${exports.BUCKET_NAME}'`);
             }
             catch (createError) {
-                console.error('❌ Failed to create R2 bucket:', createError);
+                logger_1.logger.error('❌ Failed to create R2 bucket:', createError);
                 throw createError;
             }
         }
         else {
-            console.error('❌ Error checking R2 bucket:', error);
+            logger_1.logger.error('❌ Error checking R2 bucket:', error);
             throw error;
         }
     }
@@ -83,10 +84,10 @@ async function configureBucketCors() {
             Bucket: exports.BUCKET_NAME,
             CORSConfiguration: corsConfiguration,
         }));
-        console.log(`✅ Configured CORS for R2 bucket '${exports.BUCKET_NAME}'`);
+        logger_1.logger.log(`✅ Configured CORS for R2 bucket '${exports.BUCKET_NAME}'`);
     }
     catch (error) {
-        console.error('❌ Failed to configure CORS:', error);
+        logger_1.logger.error('❌ Failed to configure CORS:', error);
         throw error;
     }
 }
@@ -103,7 +104,7 @@ async function generateUploadUrl(key, contentType, expiresIn = 3600) {
         return url;
     }
     catch (error) {
-        console.error('❌ Failed to generate upload URL:', error);
+        logger_1.logger.error('❌ Failed to generate upload URL:', error);
         throw error;
     }
 }
@@ -119,7 +120,7 @@ async function generateDownloadUrl(key, expiresIn = 3600) {
         return url;
     }
     catch (error) {
-        console.error('❌ Failed to generate download URL:', error);
+        logger_1.logger.error('❌ Failed to generate download URL:', error);
         throw error;
     }
 }
@@ -147,7 +148,7 @@ async function getFileBuffer(key) {
         return Buffer.concat(chunks);
     }
     catch (error) {
-        console.error(`❌ Failed to get file buffer for ${key}:`, error);
+        logger_1.logger.error(`❌ Failed to get file buffer for ${key}:`, error);
         throw error;
     }
 }
@@ -160,10 +161,10 @@ async function deleteFile(key) {
     });
     try {
         await exports.r2Client.send(command);
-        console.log(`✅ Deleted file: ${key}`);
+        logger_1.logger.log(`✅ Deleted file: ${key}`);
     }
     catch (error) {
-        console.error(`❌ Failed to delete file ${key}:`, error);
+        logger_1.logger.error(`❌ Failed to delete file ${key}:`, error);
         throw error;
     }
 }
@@ -196,7 +197,7 @@ async function uploadThumbnail(thumbnailKey, thumbnailBuffer) {
         return thumbnailKey;
     }
     catch (error) {
-        console.error('❌ Failed to upload thumbnail:', error);
+        logger_1.logger.error('❌ Failed to upload thumbnail:', error);
         throw error;
     }
 }
@@ -208,14 +209,14 @@ async function generateThumbnailUrl(thumbnailKey, expiresIn = 3600) {
         return url;
     }
     catch (error) {
-        console.error('❌ Failed to generate thumbnail URL:', error);
+        logger_1.logger.error('❌ Failed to generate thumbnail URL:', error);
         throw error;
     }
 }
 exports.generateThumbnailUrl = generateThumbnailUrl;
 // Initialize R2 service
 async function initializeR2() {
-    console.log('🚀 Initializing Cloudflare R2 service...');
+    logger_1.logger.log('🚀 Initializing Cloudflare R2 service...');
     try {
         validateR2Config();
         await createBucketIfNotExists();
@@ -225,16 +226,16 @@ async function initializeR2() {
         }
         catch (corsError) {
             if (corsError.Code === 'AccessDenied') {
-                console.log('⚠️  CORS configuration skipped (insufficient permissions - this is OK for development)');
+                logger_1.logger.log('⚠️  CORS configuration skipped (insufficient permissions - this is OK for development)');
             }
             else {
                 throw corsError;
             }
         }
-        console.log('✅ R2 service initialized successfully');
+        logger_1.logger.log('✅ R2 service initialized successfully');
     }
     catch (error) {
-        console.error('❌ Failed to initialize R2 service:', error);
+        logger_1.logger.error('❌ Failed to initialize R2 service:', error);
         throw error;
     }
 }
@@ -247,7 +248,7 @@ async function testR2Connection() {
         return true;
     }
     catch (error) {
-        console.error('❌ R2 connection test failed:', error);
+        logger_1.logger.error('❌ R2 connection test failed:', error);
         return false;
     }
 }

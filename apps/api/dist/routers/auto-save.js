@@ -4,6 +4,7 @@ exports.autoSaveRouter = void 0;
 const zod_1 = require("zod");
 const trpc_1 = require("../trpc");
 const server_1 = require("@trpc/server");
+const logger_1 = require("../lib/logger");
 // Validation schemas
 const saveStateSchema = zod_1.z.object({
     projectId: zod_1.z.string().min(1, 'Project ID is required'),
@@ -62,7 +63,7 @@ exports.autoSaveRouter = (0, trpc_1.router)({
                 .select()
                 .single();
             if (error) {
-                console.error('Database error saving edit state:', error);
+                logger_1.logger.error('Database error saving edit state:', error);
                 throw new server_1.TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to save edit state',
@@ -81,7 +82,7 @@ exports.autoSaveRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error saving edit state:', error);
+            logger_1.logger.error('Error saving edit state:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to save edit state',
@@ -105,7 +106,7 @@ exports.autoSaveRouter = (0, trpc_1.router)({
                     // No current state found, return null
                     return null;
                 }
-                console.error('Database error fetching current state:', error);
+                logger_1.logger.error('Database error fetching current state:', error);
                 throw new server_1.TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to fetch current state',
@@ -116,7 +117,7 @@ exports.autoSaveRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error fetching current state:', error);
+            logger_1.logger.error('Error fetching current state:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to fetch current state',
@@ -142,7 +143,7 @@ exports.autoSaveRouter = (0, trpc_1.router)({
                         message: 'Edit state not found or access denied',
                     });
                 }
-                console.error('Database error fetching edit state:', fetchError);
+                logger_1.logger.error('Database error fetching edit state:', fetchError);
                 throw new server_1.TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to fetch edit state',
@@ -167,7 +168,7 @@ exports.autoSaveRouter = (0, trpc_1.router)({
                 .select()
                 .single();
             if (createError) {
-                console.error('Database error creating restored state:', createError);
+                logger_1.logger.error('Database error creating restored state:', createError);
                 throw new server_1.TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to restore edit state',
@@ -190,7 +191,7 @@ exports.autoSaveRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error restoring edit state:', error);
+            logger_1.logger.error('Error restoring edit state:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to restore edit state',
@@ -210,7 +211,7 @@ exports.autoSaveRouter = (0, trpc_1.router)({
                 .order('timestamp', { ascending: false })
                 .range(input.offset, input.offset + input.limit - 1);
             if (error) {
-                console.error('Database error fetching project states:', error);
+                logger_1.logger.error('Database error fetching project states:', error);
                 throw new server_1.TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to fetch project states',
@@ -221,7 +222,7 @@ exports.autoSaveRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error fetching project states:', error);
+            logger_1.logger.error('Error fetching project states:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to fetch project states',
@@ -247,7 +248,7 @@ exports.autoSaveRouter = (0, trpc_1.router)({
                         message: 'Edit state not found or access denied',
                     });
                 }
-                console.error('Database error fetching edit state:', fetchError);
+                logger_1.logger.error('Database error fetching edit state:', fetchError);
                 throw new server_1.TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to fetch edit state',
@@ -260,7 +261,7 @@ exports.autoSaveRouter = (0, trpc_1.router)({
                 .eq('id', input.stateId)
                 .eq('user_id', ctx.user.id);
             if (deleteError) {
-                console.error('Database error deleting edit state:', deleteError);
+                logger_1.logger.error('Database error deleting edit state:', deleteError);
                 throw new server_1.TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to delete edit state',
@@ -299,7 +300,7 @@ exports.autoSaveRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error deleting edit state:', error);
+            logger_1.logger.error('Error deleting edit state:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to delete edit state',
@@ -318,7 +319,7 @@ exports.autoSaveRouter = (0, trpc_1.router)({
                 .eq('project_id', input.projectId)
                 .eq('user_id', ctx.user.id);
             if (error) {
-                console.error('Database error clearing project history:', error);
+                logger_1.logger.error('Database error clearing project history:', error);
                 throw new server_1.TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to clear project history',
@@ -337,7 +338,7 @@ exports.autoSaveRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error clearing project history:', error);
+            logger_1.logger.error('Error clearing project history:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to clear project history',

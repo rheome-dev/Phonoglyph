@@ -4,6 +4,7 @@ exports.userRouter = void 0;
 const zod_1 = require("zod");
 const trpc_1 = require("../trpc");
 const server_1 = require("@trpc/server");
+const logger_1 = require("../lib/logger");
 const updateProfileSchema = zod_1.z.object({
     display_name: zod_1.z.string().min(1, 'Display name is required').max(100, 'Display name too long').optional(),
     avatar_url: zod_1.z.string().url('Invalid avatar URL').optional(),
@@ -61,7 +62,7 @@ exports.userRouter = (0, trpc_1.router)({
             // Delete user from Supabase auth (this will cascade delete all related data)
             const { error } = await ctx.supabase.auth.admin.deleteUser(ctx.user.id);
             if (error) {
-                console.error('Database error deleting user account:', error);
+                logger_1.logger.error('Database error deleting user account:', error);
                 throw new server_1.TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to delete user account',
@@ -72,7 +73,7 @@ exports.userRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error deleting user account:', error);
+            logger_1.logger.error('Error deleting user account:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to delete user account',
@@ -94,7 +95,7 @@ exports.userRouter = (0, trpc_1.router)({
                 .order('created_at', { ascending: false })
                 .range(input.offset, input.offset + input.limit - 1);
             if (error) {
-                console.error('Database error fetching audit logs:', error);
+                logger_1.logger.error('Database error fetching audit logs:', error);
                 throw new server_1.TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to fetch audit logs',
@@ -105,7 +106,7 @@ exports.userRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error fetching audit logs:', error);
+            logger_1.logger.error('Error fetching audit logs:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to fetch audit logs',

@@ -5,6 +5,7 @@ const zod_1 = require("zod");
 const trpc_1 = require("../trpc");
 const server_1 = require("@trpc/server");
 const phonoglyph_types_1 = require("phonoglyph-types");
+const logger_1 = require("../lib/logger");
 // Additional validation schemas for new endpoints
 const projectIdSchema = zod_1.z.object({
     id: zod_1.z.string().min(1, 'Project ID is required'),
@@ -52,7 +53,7 @@ exports.projectRouter = (0, trpc_1.router)({
                 .select('*')
                 .order('created_at', { ascending: false });
             if (error) {
-                console.error('Database error fetching projects:', error);
+                logger_1.logger.error('Database error fetching projects:', error);
                 throw new server_1.TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to fetch projects',
@@ -68,7 +69,7 @@ exports.projectRouter = (0, trpc_1.router)({
             return projects;
         }
         catch (error) {
-            console.error('Error fetching projects:', error);
+            logger_1.logger.error('Error fetching projects:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to fetch projects',
@@ -93,7 +94,7 @@ exports.projectRouter = (0, trpc_1.router)({
                         message: 'Project not found or access denied',
                     });
                 }
-                console.error('Database error fetching project:', error);
+                logger_1.logger.error('Database error fetching project:', error);
                 throw new server_1.TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to fetch project',
@@ -111,7 +112,7 @@ exports.projectRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error fetching project:', error);
+            logger_1.logger.error('Error fetching project:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to fetch project',
@@ -123,11 +124,11 @@ exports.projectRouter = (0, trpc_1.router)({
         .input(phonoglyph_types_1.createProjectSchema)
         .mutation(async ({ input, ctx }) => {
         try {
-            console.log('=== API DEBUG PROJECT CREATION ===');
-            console.log('Raw input received:', JSON.stringify(input, null, 2));
-            console.log('input.name:', input.name);
-            console.log('input.name type:', typeof input.name);
-            console.log('=== END API DEBUG ===');
+            logger_1.logger.log('=== API DEBUG PROJECT CREATION ===');
+            logger_1.logger.log('Raw input received:', JSON.stringify(input, null, 2));
+            logger_1.logger.log('input.name:', input.name);
+            logger_1.logger.log('input.name type:', typeof input.name);
+            logger_1.logger.log('=== END API DEBUG ===');
             const projectId = `proj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
             const { data: project, error } = await ctx.supabase
                 .from('projects')
@@ -145,7 +146,7 @@ exports.projectRouter = (0, trpc_1.router)({
                 .select()
                 .single();
             if (error) {
-                console.error('Database error creating project:', error);
+                logger_1.logger.error('Database error creating project:', error);
                 throw new server_1.TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to create project',
@@ -164,7 +165,7 @@ exports.projectRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error creating project:', error);
+            logger_1.logger.error('Error creating project:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to create project',
@@ -190,7 +191,7 @@ exports.projectRouter = (0, trpc_1.router)({
                         message: 'Project not found or access denied',
                     });
                 }
-                console.error('Database error updating project:', error);
+                logger_1.logger.error('Database error updating project:', error);
                 throw new server_1.TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to update project',
@@ -209,7 +210,7 @@ exports.projectRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error updating project:', error);
+            logger_1.logger.error('Error updating project:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to update project',
@@ -227,7 +228,7 @@ exports.projectRouter = (0, trpc_1.router)({
                 .select('id, s3_key')
                 .eq('project_id', input.id);
             if (filesError) {
-                console.error('Database error fetching project files:', filesError);
+                logger_1.logger.error('Database error fetching project files:', filesError);
                 throw new server_1.TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to fetch project files for deletion.',
@@ -241,7 +242,7 @@ exports.projectRouter = (0, trpc_1.router)({
                         .from('assets')
                         .remove(filePaths);
                     if (storageError) {
-                        console.error('Storage error deleting project files:', storageError);
+                        logger_1.logger.error('Storage error deleting project files:', storageError);
                         throw new server_1.TRPCError({
                             code: 'INTERNAL_SERVER_ERROR',
                             message: 'Failed to delete project assets from storage.',
@@ -255,7 +256,7 @@ exports.projectRouter = (0, trpc_1.router)({
                     .delete()
                     .in('id', fileIds);
                 if (deleteMetaError) {
-                    console.error('Database error deleting file metadata:', deleteMetaError);
+                    logger_1.logger.error('Database error deleting file metadata:', deleteMetaError);
                     // Note: at this point, files might be deleted from storage but not DB.
                     // This is a situation that may require a cleanup job.
                     throw new server_1.TRPCError({
@@ -278,7 +279,7 @@ exports.projectRouter = (0, trpc_1.router)({
                         message: 'Project not found or access denied',
                     });
                 }
-                console.error('Database error deleting project:', error);
+                logger_1.logger.error('Database error deleting project:', error);
                 throw new server_1.TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to delete project',
@@ -297,7 +298,7 @@ exports.projectRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error deleting project:', error);
+            logger_1.logger.error('Error deleting project:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to delete project',
@@ -332,7 +333,7 @@ exports.projectRouter = (0, trpc_1.router)({
             query = query.range(input.offset, input.offset + input.limit - 1);
             const { data: projects, error } = await query;
             if (error) {
-                console.error('Database error searching projects:', error);
+                logger_1.logger.error('Database error searching projects:', error);
                 throw new server_1.TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to search projects',
@@ -349,7 +350,7 @@ exports.projectRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error searching projects:', error);
+            logger_1.logger.error('Error searching projects:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to search projects',
@@ -392,7 +393,7 @@ exports.projectRouter = (0, trpc_1.router)({
                 .select()
                 .single();
             if (createError) {
-                console.error('Database error duplicating project:', createError);
+                logger_1.logger.error('Database error duplicating project:', createError);
                 throw new server_1.TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to duplicate project',
@@ -411,7 +412,7 @@ exports.projectRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error duplicating project:', error);
+            logger_1.logger.error('Error duplicating project:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to duplicate project',
@@ -449,7 +450,7 @@ exports.projectRouter = (0, trpc_1.router)({
                 .select()
                 .single();
             if (createError) {
-                console.error('Database error creating project share:', createError);
+                logger_1.logger.error('Database error creating project share:', createError);
                 throw new server_1.TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to create project share',
@@ -468,7 +469,7 @@ exports.projectRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error creating project share:', error);
+            logger_1.logger.error('Error creating project share:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to create project share',
@@ -518,7 +519,7 @@ exports.projectRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error fetching shared project:', error);
+            logger_1.logger.error('Error fetching shared project:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to fetch shared project',
@@ -558,7 +559,7 @@ exports.projectRouter = (0, trpc_1.router)({
                         message: 'User is already a collaborator on this project',
                     });
                 }
-                console.error('Database error adding collaborator:', error);
+                logger_1.logger.error('Database error adding collaborator:', error);
                 throw new server_1.TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to add collaborator',
@@ -577,7 +578,7 @@ exports.projectRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error adding collaborator:', error);
+            logger_1.logger.error('Error adding collaborator:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to add collaborator',
@@ -603,7 +604,7 @@ exports.projectRouter = (0, trpc_1.router)({
                         message: 'Collaborator not found or access denied',
                     });
                 }
-                console.error('Database error updating collaborator:', error);
+                logger_1.logger.error('Database error updating collaborator:', error);
                 throw new server_1.TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to update collaborator',
@@ -622,7 +623,7 @@ exports.projectRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error updating collaborator:', error);
+            logger_1.logger.error('Error updating collaborator:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to update collaborator',
@@ -651,7 +652,7 @@ exports.projectRouter = (0, trpc_1.router)({
                         message: 'Collaborator not found or access denied',
                     });
                 }
-                console.error('Database error removing collaborator:', error);
+                logger_1.logger.error('Database error removing collaborator:', error);
                 throw new server_1.TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to remove collaborator',
@@ -670,7 +671,7 @@ exports.projectRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error removing collaborator:', error);
+            logger_1.logger.error('Error removing collaborator:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to remove collaborator',
@@ -698,7 +699,7 @@ exports.projectRouter = (0, trpc_1.router)({
             }
             const { data: logs, error } = await query;
             if (error) {
-                console.error('Database error fetching audit logs:', error);
+                logger_1.logger.error('Database error fetching audit logs:', error);
                 throw new server_1.TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to fetch audit logs',
@@ -709,7 +710,7 @@ exports.projectRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error fetching audit logs:', error);
+            logger_1.logger.error('Error fetching audit logs:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to fetch audit logs',

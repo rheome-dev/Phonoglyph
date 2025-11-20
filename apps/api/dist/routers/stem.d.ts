@@ -169,8 +169,8 @@ export declare const stemRouter: import("@trpc/server").CreateRouterInner<import
             analysisData: Record<string, number[]>;
             fileMetadataId: string;
             waveformData: {
-                sampleRate: number;
                 points: number[];
+                sampleRate: number;
                 duration: number;
                 markers: {
                     type: "beat" | "onset" | "peak" | "drop";
@@ -191,8 +191,8 @@ export declare const stemRouter: import("@trpc/server").CreateRouterInner<import
             analysisData: Record<string, number[]>;
             fileMetadataId: string;
             waveformData: {
-                sampleRate: number;
                 points: number[];
+                sampleRate: number;
                 duration: number;
                 markers: {
                     type: "beat" | "onset" | "peak" | "drop";

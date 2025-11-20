@@ -1184,8 +1184,10 @@ function CreativeVisualizerPage() {
           onClose={() => handleCloseEffectModal(effectId)}
           initialPosition={initialPos}
           bounds="#editor-bounds"
+          modalWidth={520}
+          className="w-[520px]"
         >
-          <div className="max-w-md w-80">
+          <div className="max-w-full">
             <CollectionManager
               projectId={currentProjectId || ''}
               availableFiles={projectFiles?.files || []}

@@ -8,6 +8,7 @@ const pg_1 = require("pg");
 const dotenv_1 = __importDefault(require("dotenv"));
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
+const logger_1 = require("../lib/logger");
 dotenv_1.default.config();
 let caCert;
 try {
@@ -15,22 +16,22 @@ try {
     const certPath = path_1.default.join(process.cwd(), 'apps/api/src/db/prod-ca-2021.crt');
     if (fs_1.default.existsSync(certPath)) {
         caCert = fs_1.default.readFileSync(certPath).toString();
-        console.log('✅ Successfully loaded Supabase CA certificate from file.');
+        logger_1.logger.log('✅ Successfully loaded Supabase CA certificate from file.');
     }
     else {
         // Fallback for different execution contexts, like tests.
         const fallbackPath = path_1.default.join(__dirname, 'prod-ca-2021.crt');
         if (fs_1.default.existsSync(fallbackPath)) {
             caCert = fs_1.default.readFileSync(fallbackPath).toString();
-            console.log('✅ Successfully loaded Supabase CA certificate from fallback path.');
+            logger_1.logger.log('✅ Successfully loaded Supabase CA certificate from fallback path.');
         }
         else {
-            console.warn(`⚠️ CA certificate file not found. Looked in:\n1. ${certPath}\n2. ${fallbackPath}`);
+            logger_1.logger.warn(`⚠️ CA certificate file not found. Looked in:\n1. ${certPath}\n2. ${fallbackPath}`);
         }
     }
 }
 catch (error) {
-    console.error('❌ Error reading CA certificate file:', error);
+    logger_1.logger.error('❌ Error reading CA certificate file:', error);
     caCert = undefined;
 }
 const connectionString = process.env.DATABASE_URL;
@@ -69,18 +70,18 @@ async function testConnection() {
         const client = await exports.pool.connect();
         const result = await client.query('SELECT NOW()');
         client.release();
-        console.log('✅ Database connected successfully:', result.rows[0]);
+        logger_1.logger.log('✅ Database connected successfully:', result.rows[0]);
         return true;
     }
     catch (err) {
-        console.error('❌ Database connection failed:', err);
+        logger_1.logger.error('❌ Database connection failed:', err);
         return false;
     }
 }
 exports.testConnection = testConnection;
 // Graceful shutdown
 process.on('SIGINT', () => {
-    console.log('📡 Closing database pool...');
+    logger_1.logger.log('📡 Closing database pool...');
     exports.pool.end();
     process.exit(0);
 });

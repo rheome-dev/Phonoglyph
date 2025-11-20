@@ -98,8 +98,8 @@ class AudioAnalyzer {
                 query = query.eq('stem_type', stemType);
             }
             const { data, error } = await query;
-            console.log('getCachedAnalysis query:', { fileMetadataId, userId, stemType });
-            console.log('getCachedAnalysis result:', data);
+            logger_1.logger.log('getCachedAnalysis query:', { fileMetadataId, userId, stemType });
+            logger_1.logger.log('getCachedAnalysis result:', data);
             if (error) {
                 throw new Error(`Failed to retrieve cached analysis: ${error.message}`);
             }
@@ -170,7 +170,7 @@ class AudioAnalyzer {
             }));
         }
         catch (error) {
-            console.error('getBatchCachedAnalysis error:', error);
+            logger_1.logger.error('getBatchCachedAnalysis error:', error);
             throw error;
         }
     }
@@ -627,7 +627,7 @@ class AudioAnalyzer {
         if (N % 2 !== 0) {
             // For non-power-of-2, you'd need a more complex FFT or padding.
             // For simplicity, we'll just return magnitudes of 0.
-            console.warn(`FFT size is not a power of 2 (${N}), which is not optimal. Padding or a different FFT algorithm should be used.`);
+            logger_1.logger.warn(`FFT size is not a power of 2 (${N}), which is not optimal. Padding or a different FFT algorithm should be used.`);
             return new Float32Array(N / 2);
         }
         const even = this.simpleFFT(samples.filter((_, i) => i % 2 === 0));

@@ -194,12 +194,12 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
             limit?: number | undefined;
             offset?: number | undefined;
             projectId?: string | undefined;
-            fileType?: "all" | "midi" | "audio" | "video" | "image" | undefined;
+            fileType?: "midi" | "audio" | "video" | "image" | "all" | undefined;
         };
         _input_out: {
             limit: number;
             offset: number;
-            fileType: "all" | "midi" | "audio" | "video" | "image";
+            fileType: "midi" | "audio" | "video" | "image" | "all";
             projectId?: string | undefined;
         };
         _output_in: typeof import("@trpc/server").unsetMarker;
@@ -360,11 +360,11 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         };
         _input_in: {
             projectId: string;
-            search?: string | undefined;
             limit?: number | undefined;
             offset?: number | undefined;
-            assetType?: "all" | "midi" | "audio" | "video" | "image" | undefined;
-            usageStatus?: "all" | "active" | "referenced" | "unused" | undefined;
+            search?: string | undefined;
+            assetType?: "midi" | "audio" | "video" | "image" | "all" | undefined;
+            usageStatus?: "active" | "referenced" | "unused" | "all" | undefined;
             folderId?: string | undefined;
             tagIds?: string[] | undefined;
         };
@@ -372,8 +372,8 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
             limit: number;
             offset: number;
             projectId: string;
-            assetType: "all" | "midi" | "audio" | "video" | "image";
-            usageStatus: "all" | "active" | "referenced" | "unused";
+            assetType: "midi" | "audio" | "video" | "image" | "all";
+            usageStatus: "active" | "referenced" | "unused" | "all";
             search?: string | undefined;
             folderId?: string | undefined;
             tagIds?: string[] | undefined;
@@ -405,14 +405,14 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
             isGuest: boolean;
         };
         _input_in: {
-            fileId: string;
             projectId: string;
+            fileId: string;
             usageType: "visualizer" | "composition" | "export";
             usageContext?: Record<string, any> | undefined;
         };
         _input_out: {
-            fileId: string;
             projectId: string;
+            fileId: string;
             usageType: "visualizer" | "composition" | "export";
             usageContext?: Record<string, any> | undefined;
         };

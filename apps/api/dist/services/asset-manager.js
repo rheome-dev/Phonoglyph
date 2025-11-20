@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AssetManager = void 0;
 const server_1 = require("@trpc/server");
+const logger_1 = require("../lib/logger");
 class AssetManager {
     constructor(supabase) {
         this.supabase = supabase;
@@ -20,7 +21,7 @@ class AssetManager {
             .select('id')
             .single();
         if (error) {
-            console.error('Error starting usage tracking:', error);
+            logger_1.logger.error('Error starting usage tracking:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to start usage tracking'
@@ -38,7 +39,7 @@ class AssetManager {
         })
             .eq('id', usageId);
         if (error) {
-            console.error('Error ending usage tracking:', error);
+            logger_1.logger.error('Error ending usage tracking:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to end usage tracking'
@@ -54,7 +55,7 @@ class AssetManager {
         })
             .eq('id', fileId);
         if (error) {
-            console.error('Error updating file usage status:', error);
+            logger_1.logger.error('Error updating file usage status:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to update file usage status'
@@ -69,7 +70,7 @@ class AssetManager {
             .eq('project_id', projectId)
             .order('started_at', { ascending: false });
         if (error) {
-            console.error('Error fetching asset usage:', error);
+            logger_1.logger.error('Error fetching asset usage:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to fetch asset usage'
@@ -85,7 +86,7 @@ class AssetManager {
             .eq('project_id', projectId)
             .single();
         if (error) {
-            console.error('Error fetching storage quota:', error);
+            logger_1.logger.error('Error fetching storage quota:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to fetch storage quota'
@@ -139,7 +140,7 @@ class AssetManager {
             per_file_size_limit: limits.perFileSizeLimit
         });
         if (error) {
-            console.error('Error updating subscription tier:', error);
+            logger_1.logger.error('Error updating subscription tier:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to update subscription tier'
@@ -189,7 +190,7 @@ class AssetManager {
             .select('*')
             .single();
         if (error) {
-            console.error('Error creating folder:', error);
+            logger_1.logger.error('Error creating folder:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to create folder'
@@ -212,7 +213,7 @@ class AssetManager {
             .eq('project_id', projectId)
             .order('name');
         if (error) {
-            console.error('Error fetching folders:', error);
+            logger_1.logger.error('Error fetching folders:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to fetch folders'
@@ -239,7 +240,7 @@ class AssetManager {
             .select('*')
             .single();
         if (error) {
-            console.error('Error creating tag:', error);
+            logger_1.logger.error('Error creating tag:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to create tag'
@@ -260,7 +261,7 @@ class AssetManager {
             .eq('project_id', projectId)
             .order('name');
         if (error) {
-            console.error('Error fetching tags:', error);
+            logger_1.logger.error('Error fetching tags:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to fetch tags'
@@ -282,7 +283,7 @@ class AssetManager {
             tag_id: tagId
         });
         if (error) {
-            console.error('Error adding tag to file:', error);
+            logger_1.logger.error('Error adding tag to file:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to add tag to file'
@@ -296,7 +297,7 @@ class AssetManager {
             .eq('file_id', fileId)
             .eq('tag_id', tagId);
         if (error) {
-            console.error('Error removing tag from file:', error);
+            logger_1.logger.error('Error removing tag from file:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to remove tag from file'
@@ -310,7 +311,7 @@ class AssetManager {
             .select('tag_id')
             .eq('file_id', fileId);
         if (relError) {
-            console.error('Error fetching file tag relationships:', relError);
+            logger_1.logger.error('Error fetching file tag relationships:', relError);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to fetch file tag relationships'
@@ -327,7 +328,7 @@ class AssetManager {
             .in('id', tagIds)
             .order('name');
         if (tagError) {
-            console.error('Error fetching file tags:', tagError);
+            logger_1.logger.error('Error fetching file tags:', tagError);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to fetch file tags'
@@ -386,7 +387,7 @@ class AssetManager {
             .update(updateData)
             .eq('id', newFileId);
         if (updateError) {
-            console.error('Error updating replacement file:', updateError);
+            logger_1.logger.error('Error updating replacement file:', updateError);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to update replacement file'
@@ -406,7 +407,7 @@ class AssetManager {
         })
             .eq('id', oldFileId);
         if (markError) {
-            console.error('Error marking old file as replaced:', markError);
+            logger_1.logger.error('Error marking old file as replaced:', markError);
             // Don't throw error here as the main operation succeeded
         }
     }

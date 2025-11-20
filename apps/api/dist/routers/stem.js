@@ -32,6 +32,7 @@ const r2_storage_1 = require("../services/r2-storage");
 const path_1 = require("path");
 const fs_1 = require("fs");
 const os_1 = require("os");
+const logger_1 = require("../lib/logger");
 exports.stemRouter = (0, trpc_1.router)({
     // Create a new stem separation job
     createSeparationJob: trpc_1.protectedProcedure
@@ -113,7 +114,7 @@ exports.stemRouter = (0, trpc_1.router)({
                         .select('id')
                         .single();
                     if (stemFileError) {
-                        console.error(`Failed to create file metadata for ${stemName} stem:`, stemFileError);
+                        logger_1.logger.error(`Failed to create file metadata for ${stemName} stem:`, stemFileError);
                         return { [stemName]: stemKey };
                     }
                     // Analyze the stem and cache the results
@@ -122,10 +123,10 @@ exports.stemRouter = (0, trpc_1.router)({
                         const audioAnalyzer = new AudioAnalyzer();
                         await audioAnalyzer.analyzeAndCache(stemFileData.id, // Use the new stem file metadata ID
                         userId, stemName, stemBuffer);
-                        console.log(`✅ Analyzed and cached ${stemName} stem`);
+                        logger_1.logger.log(`✅ Analyzed and cached ${stemName} stem`);
                     }
                     catch (analysisError) {
-                        console.error(`❌ Failed to analyze ${stemName} stem:`, analysisError);
+                        logger_1.logger.error(`❌ Failed to analyze ${stemName} stem:`, analysisError);
                         // Continue with other stems even if analysis fails
                     }
                     return { [stemName]: stemKey };
@@ -146,7 +147,7 @@ exports.stemRouter = (0, trpc_1.router)({
                 await fs_1.promises.rm(outputDir, { recursive: true, force: true });
             })
                 .catch(async (error) => {
-                console.error('Stem separation failed:', error);
+                logger_1.logger.error('Stem separation failed:', error);
                 // Update job status to failed
                 await ctx.supabase
                     .from('stem_separation_jobs')
@@ -160,13 +161,13 @@ exports.stemRouter = (0, trpc_1.router)({
                     await fs_1.promises.rm(outputDir, { recursive: true, force: true });
                 }
                 catch (cleanupError) {
-                    console.error('Failed to cleanup temporary files:', cleanupError);
+                    logger_1.logger.error('Failed to cleanup temporary files:', cleanupError);
                 }
             });
             return { jobId: initialJob.id };
         }
         catch (error) {
-            console.error('Failed to create stem separation job:', error);
+            logger_1.logger.error('Failed to create stem separation job:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: error instanceof Error ? error.message : 'Unknown error',
@@ -203,7 +204,7 @@ exports.stemRouter = (0, trpc_1.router)({
             };
         }
         catch (error) {
-            console.error('Failed to get job status:', error);
+            logger_1.logger.error('Failed to get job status:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: error instanceof Error ? error.message : 'Unknown error',
@@ -224,7 +225,7 @@ exports.stemRouter = (0, trpc_1.router)({
             return await audioAnalyzer.getBatchCachedAnalysis(input.fileIds, userId, input.stemType);
         }
         catch (error) {
-            console.error('Failed to get batch cached analysis:', error);
+            logger_1.logger.error('Failed to get batch cached analysis:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: error instanceof Error ? error.message : 'Unknown error',
@@ -270,7 +271,7 @@ exports.stemRouter = (0, trpc_1.router)({
                 throw new server_1.TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `Error checking for existing analysis: ${existingError.message}` });
             }
             if (existing) {
-                console.log(`Analysis for file ${fileMetadataId} and stem ${stemType} already exists. Skipping cache.`);
+                logger_1.logger.log(`Analysis for file ${fileMetadataId} and stem ${stemType} already exists. Skipping cache.`);
                 return { success: true, cached: false, message: "Analysis already cached." };
             }
             const { data: cachedAnalysis, error } = await ctx.supabase
@@ -298,7 +299,7 @@ exports.stemRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Failed to cache client-side analysis:', error);
+            logger_1.logger.error('Failed to cache client-side analysis:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: error instanceof Error ? error.message : 'Unknown error',
@@ -329,7 +330,7 @@ exports.stemRouter = (0, trpc_1.router)({
             return jobs || [];
         }
         catch (error) {
-            console.error('Failed to list jobs:', error);
+            logger_1.logger.error('Failed to list jobs:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: error instanceof Error ? error.message : 'Unknown error',

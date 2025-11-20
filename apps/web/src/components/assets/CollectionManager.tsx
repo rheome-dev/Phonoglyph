@@ -15,27 +15,27 @@ interface AssetCollection {
   type?: string;
 }
 
-interface CollectionManagerProps {
-  projectId: string;
-  availableFiles: any[]; // Files from projectFiles query
-  onSelectCollection: (imageUrls: string[]) => void;
-  selectedCollectionId?: string;
-}
-
-export function CollectionManager({ 
-  projectId, 
-  availableFiles, 
-  onSelectCollection,
-  selectedCollectionId 
-}: CollectionManagerProps) {
-  const { toast } = useToast();
-  const [isCreating, setIsCreating] = useState(false);
-  const [newCollectionName, setNewCollectionName] = useState('');
-  const [selectedFilesForNew, setSelectedFilesForNew] = useState<Set<string>>(new Set());
-  const [viewingCollectionId, setViewingCollectionId] = useState<string | null>(null);
-
-  // TRPC Hooks
-  const utils = trpc.useUtils();
+  interface CollectionManagerProps {
+    projectId: string;
+    availableFiles: any[]; // Files from projectFiles query
+    onSelectCollection: (imageUrls: string[]) => void;
+    selectedCollectionId?: string;
+  }
+  
+  export function CollectionManager({ 
+    projectId, 
+    availableFiles, 
+    onSelectCollection,
+    selectedCollectionId 
+  }: CollectionManagerProps) {
+    const { toast } = useToast();
+    const [isCreating, setIsCreating] = useState(false);
+    const [newCollectionName, setNewCollectionName] = useState('');
+    const [selectedFilesForNew, setSelectedFilesForNew] = useState<Set<string>>(new Set());
+    const [viewingCollectionId, setViewingCollectionId] = useState<string | null>(null);
+  
+    // TRPC Hooks
+    const utils = trpc.useUtils();
   
   const { data: collections, isLoading } = trpc.asset.getProjectCollections.useQuery(
     { projectId },
@@ -60,13 +60,21 @@ export function CollectionManager({
   );
 
   const handleCreateCollection = async () => {
-    if (!newCollectionName.trim()) return;
+    if (selectedFilesForNew.size === 0) {
+      toast({ title: "No images selected", description: "Select at least one image to create a collection.", variant: "destructive" });
+      return;
+    }
 
     try {
+      // Fallback to an auto-generated name if user left it blank
+      const baseName = newCollectionName.trim() || 'Slideshow Collection';
+      const suffix = collections && collections.length > 0 ? ` #${collections.length + 1}` : '';
+      const finalName = `${baseName}${suffix}`;
+
       // 1. Create Collection
       const collection = await createCollectionMutation.mutateAsync({
         projectId,
-        name: newCollectionName,
+        name: finalName,
         type: 'image_slideshow'
       });
 
@@ -80,7 +88,7 @@ export function CollectionManager({
         });
       }
 
-      toast({ title: "Collection Created", description: `"${newCollectionName}" created with ${fileIds.length} images.` });
+      toast({ title: "Collection Created", description: `"${finalName}" created with ${fileIds.length} images.` });
       
       // Reset
       setNewCollectionName('');
@@ -171,11 +179,17 @@ export function CollectionManager({
                         : "border-transparent opacity-60 hover:opacity-80"
                     )}
                   >
-                    {/* Since we don't have thumbnails readily available in this context without resolving URLs, 
-                        we'll use a placeholder or name. 
-                        Ideally we'd resolve thumbnails here too but let's keep it simple for MVP. */}
+                    {/* Thumbnail or Placeholder */}
                     <div className="absolute inset-0 bg-stone-800 flex items-center justify-center">
-                       <ImageIcon className="w-6 h-6 text-stone-400" />
+                       {file.thumbnail_url ? (
+                         <img 
+                           src={file.thumbnail_url} 
+                           alt={file.file_name} 
+                           className="w-full h-full object-cover"
+                         />
+                       ) : (
+                         <ImageIcon className="w-6 h-6 text-stone-400" />
+                       )}
                     </div>
                     <div className="absolute bottom-0 left-0 right-0 bg-black/60 p-1">
                         <p className="text-[10px] truncate text-white">{file.file_name}</p>
@@ -197,7 +211,7 @@ export function CollectionManager({
             size="sm" 
             className="flex-1" 
             onClick={handleCreateCollection}
-            disabled={createCollectionMutation.isLoading || !newCollectionName}
+            disabled={createCollectionMutation.isLoading || selectedFilesForNew.size === 0}
           >
             {createCollectionMutation.isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : "Create"}
           </Button>

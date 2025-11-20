@@ -4,6 +4,7 @@ exports.AudioAnalysisProcessor = void 0;
 const supabase_js_1 = require("@supabase/supabase-js");
 const audio_analyzer_1 = require("./audio-analyzer");
 const r2_storage_1 = require("./r2-storage");
+const logger_1 = require("../lib/logger");
 const supabase = (0, supabase_js_1.createClient)(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 class AudioAnalysisProcessor {
     static async processJob(job) {
@@ -24,7 +25,7 @@ class AudioAnalysisProcessor {
             await this.updateJobStatus(job.id, 'completed');
         }
         catch (error) {
-            console.error(`Error processing audio analysis job ${job.id}:`, error);
+            logger_1.logger.error(`Error processing audio analysis job ${job.id}:`, error);
             await this.updateJobStatus(job.id, 'failed', error.message);
         }
     }
@@ -34,7 +35,7 @@ class AudioAnalysisProcessor {
             .update({ status, error: error, updated_at: new Date().toISOString() })
             .eq('id', jobId);
         if (updateError) {
-            console.error(`Failed to update status for audio analysis job ${jobId}:`, updateError);
+            logger_1.logger.error(`Failed to update status for audio analysis job ${jobId}:`, updateError);
         }
     }
 }

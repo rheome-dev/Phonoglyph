@@ -13,6 +13,7 @@ interface PortalModalProps {
   className?: string;
   bounds?: string;
   portalContainerId?: string;
+  modalWidth?: number;
 }
 
 export function PortalModal({
@@ -24,6 +25,7 @@ export function PortalModal({
   className,
   bounds = '#editor-bounds',
   portalContainerId = 'modal-portal-root',
+  modalWidth = 288, // default width in px (was Tailwind w-72)
 }: PortalModalProps) {
   const nodeRef = useRef<HTMLDivElement>(null);
   const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null);
@@ -37,7 +39,6 @@ export function PortalModal({
     if (!boundsEl) return;
 
     const boundsRect = boundsEl.getBoundingClientRect();
-    const modalWidth = 288; // w-72 = 18rem = 288px
     const modalHeight = nodeRef.current?.offsetHeight || 400; // Fallback height
 
     setBoundingBox({
@@ -46,7 +47,7 @@ export function PortalModal({
       right: Math.floor(boundsRect.right - modalWidth),
       bottom: Math.floor(boundsRect.bottom - modalHeight)
     });
-  }, [bounds]);
+  }, [bounds, modalWidth]);
 
   // Set up bounds calculation and window resize handler
   useEffect(() => {
@@ -125,11 +126,12 @@ export function PortalModal({
         <div 
           ref={nodeRef} 
           className={cn(
-            "absolute top-0 left-0 w-72 rounded-lg shadow-2xl",
+            "absolute top-0 left-0 rounded-lg shadow-2xl",
             "bg-white/10 backdrop-blur-xl border border-white/20",
             className
           )}
           style={{
+            width: modalWidth,
             background: 'linear-gradient(to bottom, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05))'
           }}
         >

@@ -55,6 +55,7 @@ export declare const audioAnalysisSandboxRouter: import("@trpc/server").CreateRo
             isGuest: boolean;
         };
         _input_in: {
+            id: string;
             metadata: {
                 sampleRate: number;
                 duration: number;
@@ -62,10 +63,18 @@ export declare const audioAnalysisSandboxRouter: import("@trpc/server").CreateRo
                 featuresExtracted: string[];
                 analysisDuration: number;
             };
-            id: string;
-            fileMetadataId: string;
             stemType: string;
             analysisData: {
+                metadata: {
+                    sampleRate: number;
+                    duration: number;
+                    bufferSize: number;
+                    analysisParams?: any;
+                };
+                rms: {
+                    value: number;
+                    time: number;
+                }[];
                 transients: {
                     time: number;
                     intensity: number;
@@ -77,26 +86,18 @@ export declare const audioAnalysisSandboxRouter: import("@trpc/server").CreateRo
                     confidence: number;
                     note: string;
                 }[];
-                rms: {
-                    value: number;
-                    time: number;
-                }[];
                 waveform: number[];
-                metadata: {
-                    sampleRate: number;
-                    duration: number;
-                    bufferSize: number;
-                    analysisParams?: any;
-                };
             };
+            fileMetadataId: string;
             waveformData: {
+                points: number[];
                 sampleRate: number;
                 duration: number;
-                points: number[];
                 markers: any[];
             };
         };
         _input_out: {
+            id: string;
             metadata: {
                 sampleRate: number;
                 duration: number;
@@ -104,10 +105,18 @@ export declare const audioAnalysisSandboxRouter: import("@trpc/server").CreateRo
                 featuresExtracted: string[];
                 analysisDuration: number;
             };
-            id: string;
-            fileMetadataId: string;
             stemType: string;
             analysisData: {
+                metadata: {
+                    sampleRate: number;
+                    duration: number;
+                    bufferSize: number;
+                    analysisParams?: any;
+                };
+                rms: {
+                    value: number;
+                    time: number;
+                }[];
                 transients: {
                     time: number;
                     intensity: number;
@@ -119,22 +128,13 @@ export declare const audioAnalysisSandboxRouter: import("@trpc/server").CreateRo
                     confidence: number;
                     note: string;
                 }[];
-                rms: {
-                    value: number;
-                    time: number;
-                }[];
                 waveform: number[];
-                metadata: {
-                    sampleRate: number;
-                    duration: number;
-                    bufferSize: number;
-                    analysisParams?: any;
-                };
             };
+            fileMetadataId: string;
             waveformData: {
+                points: number[];
                 sampleRate: number;
                 duration: number;
-                points: number[];
                 markers: any[];
             };
         };

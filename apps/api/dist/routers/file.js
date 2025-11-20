@@ -9,6 +9,7 @@ const client_s3_1 = require("@aws-sdk/client-s3");
 const file_validation_1 = require("../lib/file-validation");
 const media_processor_1 = require("../services/media-processor");
 const asset_manager_1 = require("../services/asset-manager");
+const logger_1 = require("../lib/logger");
 // Create rate limiter instance
 const uploadRateLimit = (0, file_validation_1.createUploadRateLimit)();
 // File metadata schema for database storage - EXTENDED
@@ -72,7 +73,7 @@ exports.fileRouter = (0, trpc_1.router)({
                 processing_status: media_processor_1.MediaProcessor.requiresProcessing(validation.fileType) ? 'pending' : 'completed',
             });
             if (dbError) {
-                console.error('Database error creating file metadata:', dbError);
+                logger_1.logger.error('Database error creating file metadata:', dbError);
                 throw new server_1.TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to create file record',
@@ -93,7 +94,7 @@ exports.fileRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error generating upload URL:', error);
+            logger_1.logger.error('Error generating upload URL:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to generate upload URL',
@@ -174,7 +175,7 @@ exports.fileRouter = (0, trpc_1.router)({
                 .select('id')
                 .single();
             if (dbError) {
-                console.error('Database error creating file metadata:', dbError);
+                logger_1.logger.error('Database error creating file metadata:', dbError);
                 throw new server_1.TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to create file record',
@@ -192,10 +193,10 @@ exports.fileRouter = (0, trpc_1.router)({
                 });
                 if (jobError) {
                     // Log the error but don't block the upload from completing
-                    console.error(`❌ Failed to create audio analysis job for file ${sanitizedFileName}:`, jobError);
+                    logger_1.logger.error(`❌ Failed to create audio analysis job for file ${sanitizedFileName}:`, jobError);
                 }
                 else {
-                    console.log(`✅ Audio analysis job queued for file ${sanitizedFileName}`);
+                    logger_1.logger.log(`✅ Audio analysis job queued for file ${sanitizedFileName}`);
                 }
             }
             // Process video/image files for metadata and thumbnails
@@ -215,12 +216,12 @@ exports.fileRouter = (0, trpc_1.router)({
                     })
                         .eq('id', data.id);
                     if (updateError) {
-                        console.error('Failed to update file metadata:', updateError);
+                        logger_1.logger.error('Failed to update file metadata:', updateError);
                         // Don't throw error here - file upload was successful
                     }
                 }
                 catch (processingError) {
-                    console.error('Media processing failed:', processingError);
+                    logger_1.logger.error('Media processing failed:', processingError);
                     // Update status to failed but don't throw error
                     await ctx.supabase
                         .from('file_metadata')
@@ -241,7 +242,7 @@ exports.fileRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error uploading file:', error);
+            logger_1.logger.error('Error uploading file:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to upload file',
@@ -281,7 +282,7 @@ exports.fileRouter = (0, trpc_1.router)({
                 .eq('id', input.fileId)
                 .eq('user_id', userId);
             if (updateError) {
-                console.error('Database error updating file status:', updateError);
+                logger_1.logger.error('Database error updating file status:', updateError);
                 throw new server_1.TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to update file status',
@@ -293,7 +294,7 @@ exports.fileRouter = (0, trpc_1.router)({
                     await (0, r2_storage_1.deleteFile)(fileData.s3_key);
                 }
                 catch (cleanupError) {
-                    console.error('Failed to cleanup failed upload:', cleanupError);
+                    logger_1.logger.error('Failed to cleanup failed upload:', cleanupError);
                     // Don't throw - the database update was successful
                 }
             }
@@ -306,7 +307,7 @@ exports.fileRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error confirming upload:', error);
+            logger_1.logger.error('Error confirming upload:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to confirm upload',
@@ -361,7 +362,7 @@ exports.fileRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error saving audio analysis:', error);
+            logger_1.logger.error('Error saving audio analysis:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'An unexpected error occurred while saving the analysis.',
@@ -394,7 +395,7 @@ exports.fileRouter = (0, trpc_1.router)({
             }
             const { data: files, error } = await query;
             if (error) {
-                console.error('Database error fetching user files:', error);
+                logger_1.logger.error('Database error fetching user files:', error);
                 throw new server_1.TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to fetch files',
@@ -408,7 +409,7 @@ exports.fileRouter = (0, trpc_1.router)({
                         return { ...file, thumbnail_url: thumbnailUrl };
                     }
                     catch (error) {
-                        console.error('Failed to generate thumbnail URL:', error);
+                        logger_1.logger.error('Failed to generate thumbnail URL:', error);
                         return file;
                     }
                 }
@@ -422,7 +423,7 @@ exports.fileRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error fetching user files:', error);
+            logger_1.logger.error('Error fetching user files:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to fetch files',
@@ -462,7 +463,7 @@ exports.fileRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error generating download URL:', error);
+            logger_1.logger.error('Error generating download URL:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to generate download URL',
@@ -497,7 +498,7 @@ exports.fileRouter = (0, trpc_1.router)({
                 .eq('id', input.fileId)
                 .eq('user_id', userId);
             if (deleteError) {
-                console.error('Database error deleting file:', deleteError);
+                logger_1.logger.error('Database error deleting file:', deleteError);
                 throw new server_1.TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to delete file record',
@@ -511,7 +512,7 @@ exports.fileRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error deleting file:', error);
+            logger_1.logger.error('Error deleting file:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to delete file',
@@ -557,7 +558,7 @@ exports.fileRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error fetching processing status:', error);
+            logger_1.logger.error('Error fetching processing status:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to fetch processing status',
@@ -609,7 +610,7 @@ exports.fileRouter = (0, trpc_1.router)({
             }
             const { data: files, error } = await query;
             if (error) {
-                console.error('Database error fetching project assets:', error);
+                logger_1.logger.error('Database error fetching project assets:', error);
                 throw new server_1.TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to fetch project assets',
@@ -631,7 +632,7 @@ exports.fileRouter = (0, trpc_1.router)({
                         return { ...file, thumbnail_url: thumbnailUrl };
                     }
                     catch (error) {
-                        console.error('Failed to generate thumbnail URL:', error);
+                        logger_1.logger.error('Failed to generate thumbnail URL:', error);
                         return file;
                     }
                 }
@@ -645,7 +646,7 @@ exports.fileRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error fetching project assets:', error);
+            logger_1.logger.error('Error fetching project assets:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to fetch project assets',
@@ -684,7 +685,7 @@ exports.fileRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error starting asset usage tracking:', error);
+            logger_1.logger.error('Error starting asset usage tracking:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to start usage tracking',
@@ -722,7 +723,7 @@ exports.fileRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error ending asset usage tracking:', error);
+            logger_1.logger.error('Error ending asset usage tracking:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to end usage tracking',
@@ -757,7 +758,7 @@ exports.fileRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error fetching storage quota:', error);
+            logger_1.logger.error('Error fetching storage quota:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to fetch storage quota',
@@ -795,7 +796,7 @@ exports.fileRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error creating asset folder:', error);
+            logger_1.logger.error('Error creating asset folder:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to create asset folder',
@@ -830,7 +831,7 @@ exports.fileRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error fetching asset folders:', error);
+            logger_1.logger.error('Error fetching asset folders:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to fetch asset folders',
@@ -867,7 +868,7 @@ exports.fileRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error creating asset tag:', error);
+            logger_1.logger.error('Error creating asset tag:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to create asset tag',
@@ -902,7 +903,7 @@ exports.fileRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error fetching asset tags:', error);
+            logger_1.logger.error('Error fetching asset tags:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to fetch asset tags',
@@ -938,7 +939,7 @@ exports.fileRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error adding tag to file:', error);
+            logger_1.logger.error('Error adding tag to file:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to add tag to file',
@@ -974,7 +975,7 @@ exports.fileRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error removing tag from file:', error);
+            logger_1.logger.error('Error removing tag from file:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to remove tag from file',
@@ -1010,7 +1011,7 @@ exports.fileRouter = (0, trpc_1.router)({
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            console.error('Error replacing asset:', error);
+            logger_1.logger.error('Error replacing asset:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to replace asset',

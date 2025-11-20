@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MediaProcessor = void 0;
+const logger_1 = require("../lib/logger");
 class MediaProcessor {
     /**
      * Extract video metadata from buffer
@@ -20,8 +21,7 @@ class MediaProcessor {
             bitrate: 5000, // 5 Mbps
             aspectRatio: '16:9'
         };
-        // TODO: Replace with actual ffprobe implementation
-        // const metadata = await this.runFFProbe(buffer);
+        // Note: Using mock metadata for development - replace with actual ffprobe implementation in production
         return mockMetadata;
     }
     /**
@@ -48,7 +48,7 @@ class MediaProcessor {
             0x03, 0x01, 0x00, 0x02, 0x11, 0x03, 0x11, 0x00, 0x3f, 0x00, 0xb2, 0xc0,
             0x07, 0xff, 0xd9
         ]);
-        // TODO: Replace with actual ffmpeg thumbnail generation
+        // Note: Using mock thumbnail for development - replace with actual ffmpeg implementation in production
         // const thumbnail = await this.runFFMpeg(buffer, timestampSec);
         return placeholderJpeg;
     }
@@ -67,7 +67,7 @@ class MediaProcessor {
             hasAlpha: extension === 'png' || extension === 'gif' || extension === 'webp',
             fileFormat: extension?.toUpperCase() || 'JPEG'
         };
-        // TODO: Replace with actual sharp implementation
+        // Note: Using mock image processing for development - replace with actual sharp implementation in production
         // const metadata = await sharp(buffer).metadata();
         return mockMetadata;
     }
@@ -94,7 +94,7 @@ class MediaProcessor {
             0x03, 0x01, 0x00, 0x02, 0x11, 0x03, 0x11, 0x00, 0x3f, 0x00, 0xb2, 0xc0,
             0x07, 0xff, 0xd9
         ]);
-        // TODO: Replace with actual sharp thumbnail generation
+        // Note: Using mock thumbnail for development - replace with actual sharp implementation in production
         // const thumbnail = await sharp(buffer)
         //   .resize(maxWidth, maxHeight, { fit: 'inside', withoutEnlargement: true })
         //   .jpeg({ quality: 80 })
@@ -127,7 +127,7 @@ class MediaProcessor {
             };
         }
         catch (error) {
-            console.error('Error processing media file:', error);
+            logger_1.logger.error('Error processing media file:', error);
             throw error;
         }
     }
