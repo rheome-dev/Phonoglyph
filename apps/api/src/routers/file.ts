@@ -434,7 +434,7 @@ export const fileRouter = router({
   getUserFiles: protectedProcedure
     .input(z.object({
       fileType: z.enum(['midi', 'audio', 'video', 'image', 'all']).optional().default('all'), // EXTENDED
-      limit: z.number().min(1).max(50).optional().default(20),
+      limit: z.number().min(1).max(1000).optional().default(50),
       offset: z.number().min(0).optional().default(0),
       projectId: z.string().optional(), // NEW: Filter by project
     }))

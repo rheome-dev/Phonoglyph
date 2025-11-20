@@ -349,14 +349,26 @@ function CreativeVisualizerPage() {
     { enabled: !!currentProjectId }
   );
 
-  // Fetch project files to get available stems
+  // Fetch project files for general asset management / UI
   const { 
     data: projectFiles, 
     isLoading: projectFilesLoading 
   } = trpc.file.getUserFiles.useQuery(
     { 
-      limit: 20, 
+      limit: 200, 
       fileType: 'all',
+      projectId: currentProjectId || undefined
+    },
+    { enabled: !!currentProjectId }
+  );
+
+  // Dedicated query for audio files so they can never be paged out
+  const { 
+    data: projectAudioFiles 
+  } = trpc.file.getUserFiles.useQuery(
+    {
+      limit: 1000,
+      fileType: 'audio',
       projectId: currentProjectId || undefined
     },
     { enabled: !!currentProjectId }
@@ -411,10 +423,10 @@ function CreativeVisualizerPage() {
     });
   }
 
-  // Load stems when project files are available
+  // Load stems when project audio files are available
   useEffect(() => {
     // This effect now correctly handles both initial load and changes to project files
-    if (projectFiles?.files && currentProjectId && isInitialized && !audioAnalysis.isLoading) {
+    if (projectAudioFiles?.files && currentProjectId && isInitialized && !audioAnalysis.isLoading) {
       let cancelled = false;
       
       const loadStemsWithUrls = async () => {
@@ -423,7 +435,7 @@ function CreativeVisualizerPage() {
         isLoadingStemsRef.current = true;
 
         try {
-          const audioFiles = projectFiles.files.filter(file => 
+          const audioFiles = projectAudioFiles.files.filter(file => 
             file.file_type === 'audio' && file.upload_status === 'completed'
           );
 
@@ -525,11 +537,11 @@ function CreativeVisualizerPage() {
         isLoadingStemsRef.current = false;
       };
     }
-  }, [projectFiles?.files, currentProjectId, isInitialized, audioAnalysis.isLoading]); // Removed audioAnalysis.cachedAnalysis from dependencies
+  }, [projectAudioFiles?.files, currentProjectId, isInitialized, audioAnalysis.isLoading]); // Removed audioAnalysis.cachedAnalysis from dependencies
 
   
 
-  const availableStems = projectFiles?.files?.filter(file => 
+  const availableStems = projectAudioFiles?.files?.filter(file => 
     file.file_type === 'audio' && file.upload_status === 'completed'
   ) || [];
 
@@ -1417,21 +1429,21 @@ function CreativeVisualizerPage() {
   // In the render, use the sorted stems
   const sortedAvailableStems = sortStemsWithMasterLast(availableStems);
 
-  // Log projectFiles.files before building stemUrlMap
+  // Log audio files before building stemUrlMap
   useEffect(() => {
-    debugLog.log('[CreativeVisualizerPage] projectFiles.files:', projectFiles?.files);
-  }, [projectFiles?.files]);
+    debugLog.log('[CreativeVisualizerPage] projectAudioFiles.files:', projectAudioFiles?.files);
+  }, [projectAudioFiles?.files]);
 
   // State for asynchronously built stemUrlMap
   const [asyncStemUrlMap, setAsyncStemUrlMap] = useState<Record<string, string>>({});
 
   useEffect(() => {
     async function fetchUrls() {
-      if (!projectFiles?.files) return;
-      const audioFiles = projectFiles.files.filter(f => f.file_type === 'audio' && f.upload_status === 'completed');
+      if (!projectAudioFiles?.files) return;
+      const audioFiles = projectAudioFiles.files.filter(f => f.file_type === 'audio' && f.upload_status === 'completed');
       
       // Debug: Log file structure
-      debugLog.log('fetchUrls - projectFiles.files:', projectFiles.files);
+      debugLog.log('fetchUrls - projectAudioFiles.files:', projectAudioFiles.files);
       debugLog.log('fetchUrls - audioFiles:', audioFiles);
       
       const entries = await Promise.all(audioFiles.map(async f => {
@@ -1462,7 +1474,7 @@ function CreativeVisualizerPage() {
       }
     }
     fetchUrls();
-  }, [projectFiles?.files]);
+  }, [projectAudioFiles?.files]);
 
   const stemUrlsReady = Object.keys(asyncStemUrlMap).length > 0;
 
@@ -1620,7 +1632,7 @@ function CreativeVisualizerPage() {
                 {/* BPM on the left, FPS on the right */}
                 <div className="text-xs font-mono uppercase tracking-wider px-2 py-1 rounded text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
                   BPM: <span className="font-creative-mono">{(() => {
-                    const masterId = projectFiles?.files?.find(f => f.is_master)?.id;
+                    const masterId = projectAudioFiles?.files?.find(f => f.is_master)?.id;
                     const ca = audioAnalysis.cachedAnalysis || [];
                     const master = masterId ? ca.find((a: any) => a.fileMetadataId === masterId) : null;
                     const candidate: any = master ?? ca[0];
@@ -1751,7 +1763,7 @@ function CreativeVisualizerPage() {
                 <div className="flex-shrink-0 mb-4">
                   <UnifiedTimeline
                     stems={sortedAvailableStems}
-                    masterStemId={projectFiles?.files?.find(f => f.is_master)?.id ?? null}
+                    masterStemId={projectAudioFiles?.files?.find(f => f.is_master)?.id ?? null}
                     onStemSelect={handleStemSelect}
                     activeTrackId={activeTrackId}
                     soloedStems={stemAudio.soloedStems}

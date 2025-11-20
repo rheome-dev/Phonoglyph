@@ -67,7 +67,7 @@ export function FileSelector({
     error: filesError,
     refetch: refetchFiles
   } = trpc.file.getUserFiles.useQuery({
-    limit: 20,
+    limit: 100,
     fileType: 'all', // Show all file types, not just MIDI
     projectId: projectId
   });
