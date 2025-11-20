@@ -157,16 +157,20 @@ interface CollectionManagerProps {
         return;
       }
 
-      // Resolve URLs
-      const urls: string[] = [];
-      for (const item of data.items) {
-        if (item.file) {
-            // If downloadUrl is already present and valid (it might be old/expired)
-            // Safer to refresh it
-            const res = await getDownloadUrlMutation.mutateAsync({ fileId: item.file.id });
-            if (res.downloadUrl) urls.push(res.downloadUrl);
-        }
-      }
+      // Resolve URLs in parallel for faster loading
+      const urlPromises = data.items
+        .filter((item: any) => item.file)
+        .map((item: any) => 
+          getDownloadUrlMutation.mutateAsync({ fileId: item.file!.id })
+            .then(res => res.downloadUrl)
+            .catch(err => {
+              console.error('Failed to get download URL for file:', item.file!.id, err);
+              return null;
+            })
+        );
+      
+      const downloadUrls = await Promise.all(urlPromises);
+      const urls = downloadUrls.filter((url): url is string => url !== null);
 
       onSelectCollection(urls, collectionId);
       toast({ title: "Collection Selected", description: `Loaded ${urls.length} images for slideshow.` });

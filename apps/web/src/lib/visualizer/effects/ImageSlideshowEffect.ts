@@ -2,6 +2,13 @@ import * as THREE from 'three';
 import { VisualEffect, AudioAnalysisData, LiveMIDIData } from '@/types/visualizer';
 import { debugLog } from '@/lib/utils';
 
+// Always log ImageSlideshowEffect logs for debugging (bypass debugLog conditional)
+const slideshowLog = {
+  log: (...args: any[]) => console.log('🖼️', ...args),
+  warn: (...args: any[]) => console.warn('🖼️', ...args),
+  error: (...args: any[]) => console.error('🖼️', ...args),
+};
+
 export class ImageSlideshowEffect implements VisualEffect {
   id: string;
   name: string;
@@ -69,16 +76,16 @@ export class ImageSlideshowEffect implements VisualEffect {
   }
 
   init(renderer: THREE.WebGLRenderer): void {
-      debugLog.log('🖼️ Initializing ImageSlideshowEffect', {
+      slideshowLog.log('Initializing ImageSlideshowEffect', {
         effectId: this.id,
         imagesCount: this.parameters.images.length,
         sampleUrls: this.parameters.images.slice(0, 2).map(url => url.substring(0, 60) + '...')
       });
       if (this.parameters.images.length > 0) {
-          debugLog.log('🖼️ Images available at init, calling advanceSlide()');
+          slideshowLog.log('Images available at init, calling advanceSlide()');
           this.advanceSlide();
       } else {
-          debugLog.warn('🖼️ No images available at init time');
+          slideshowLog.warn('No images available at init time');
       }
   }
 
@@ -87,7 +94,7 @@ export class ImageSlideshowEffect implements VisualEffect {
 
       // If images were added after init, load the first one immediately
       if (this.currentImageIndex === -1 && this.parameters.images.length > 0) {
-          debugLog.log('🖼️ Update: currentImageIndex is -1, images available, calling advanceSlide()');
+          slideshowLog.log('Update: currentImageIndex is -1, images available, calling advanceSlide()');
           this.advanceSlide();
       }
 
@@ -100,7 +107,7 @@ export class ImageSlideshowEffect implements VisualEffect {
         const nextIndex = (this.currentImageIndex + 1) % this.parameters.images.length;
         const targetUrl = this.parameters.images[nextIndex];
         if (!this.loadingImages.has(targetUrl)) {
-          debugLog.log('🖼️ Update: No texture map, attempting to load:', {
+          slideshowLog.log('Update: No texture map, attempting to load:', {
             currentIndex: this.currentImageIndex,
             nextIndex,
             url: targetUrl.substring(0, 60),
@@ -108,12 +115,12 @@ export class ImageSlideshowEffect implements VisualEffect {
           });
           this.advanceSlide();
         } else {
-          debugLog.log('🖼️ Update: Image already loading, skipping');
+          slideshowLog.log('Update: Image already loading, skipping');
         }
       } else if (!this.material.map && this.parameters.images.length === 0) {
-        debugLog.warn('🖼️ Update: No texture map and no images available');
+        slideshowLog.warn('Update: No texture map and no images available');
       } else if (!this.material.map && this.failureCount >= this.parameters.images.length * 2) {
-        debugLog.error('🖼️ Update: Too many failures, giving up:', {
+        slideshowLog.error('Update: Too many failures, giving up:', {
           failureCount: this.failureCount,
           imageCount: this.parameters.images.length
         });
@@ -142,7 +149,7 @@ export class ImageSlideshowEffect implements VisualEffect {
   updateParameter(paramName: string, value: any): void {
     // Handle images array updates - this is called when a collection is selected
     if (paramName === 'images' && Array.isArray(value)) {
-      debugLog.log('🖼️ updateParameter called with images:', { 
+      slideshowLog.log('updateParameter called with images:', { 
         valueLength: value.length,
         valueSample: value.slice(0, 2).map((url: any) => typeof url === 'string' ? url.substring(0, 80) : String(url))
       });
@@ -150,18 +157,18 @@ export class ImageSlideshowEffect implements VisualEffect {
       // Filter out empty or invalid URLs - accept any non-empty string that looks like a URL
       const validUrls = value.filter((url: any) => {
         if (typeof url !== 'string') {
-          debugLog.warn('🖼️ Invalid URL type:', typeof url, url);
+          slideshowLog.warn('Invalid URL type:', typeof url, url);
           return false;
         }
         const trimmed = url.trim();
         if (trimmed.length === 0) {
-          debugLog.warn('🖼️ Empty URL string');
+          slideshowLog.warn('Empty URL string');
           return false;
         }
         // Accept http/https URLs or data URLs
         const isValid = trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('data:');
         if (!isValid) {
-          debugLog.warn('🖼️ URL does not start with http/https/data:', trimmed.substring(0, 50));
+          slideshowLog.warn('URL does not start with http/https/data:', trimmed.substring(0, 50));
         }
         return isValid;
       });
@@ -171,7 +178,7 @@ export class ImageSlideshowEffect implements VisualEffect {
       const imagesChanged = oldLength !== newLength || 
         JSON.stringify(this.parameters.images) !== JSON.stringify(validUrls);
       
-      debugLog.log('🖼️ Images validation result:', { 
+      slideshowLog.log('Images validation result:', { 
         oldCount: oldLength, 
         newCount: newLength,
         validUrls: validUrls.length,
@@ -182,8 +189,8 @@ export class ImageSlideshowEffect implements VisualEffect {
       
       if (imagesChanged) {
         if (validUrls.length === 0) {
-          debugLog.warn('🖼️ No valid image URLs provided after filtering');
-          debugLog.warn('🖼️ Original value:', value);
+          slideshowLog.warn('No valid image URLs provided after filtering');
+          slideshowLog.warn('Original value:', value);
           return;
         }
         
@@ -207,10 +214,10 @@ export class ImageSlideshowEffect implements VisualEffect {
         }
         
         // Load first image immediately
-        debugLog.log('🖼️ Loading first image from new collection, calling advanceSlide()');
+        slideshowLog.log('Loading first image from new collection, calling advanceSlide()');
         this.advanceSlide();
       } else {
-        debugLog.log('🖼️ Images array unchanged, skipping update');
+        slideshowLog.log('Images array unchanged, skipping update');
       }
     } else if (paramName === 'opacity') {
       this.parameters.opacity = value;
@@ -245,14 +252,14 @@ export class ImageSlideshowEffect implements VisualEffect {
 
   private async advanceSlide() {
       if (this.parameters.images.length === 0) {
-        debugLog.warn('🖼️ advanceSlide called but images array is empty');
+        slideshowLog.warn('advanceSlide called but images array is empty');
         return;
       }
 
       const nextIndex = (this.currentImageIndex + 1) % this.parameters.images.length;
       const imageUrl = this.parameters.images[nextIndex];
       
-      debugLog.log('🖼️ Advancing slide:', { 
+      slideshowLog.log('Advancing slide:', { 
         currentIndex: this.currentImageIndex, 
         nextIndex, 
         url: imageUrl.substring(0, 60) 
@@ -266,7 +273,7 @@ export class ImageSlideshowEffect implements VisualEffect {
             texture = await this.loadTexture(imageUrl);
             this.failureCount = 0;
           } catch(e) {
-              debugLog.error("🖼️ Failed to load image for slideshow", imageUrl.substring(0, 60), e);
+              slideshowLog.error("Failed to load image for slideshow", imageUrl.substring(0, 60), e);
               this.currentImageIndex = nextIndex;
               this.failureCount++;
               return;
@@ -279,7 +286,7 @@ export class ImageSlideshowEffect implements VisualEffect {
           this.material.color.setHex(0xffffff); // Reset tint so texture displays normally
           this.material.needsUpdate = true;
           
-          debugLog.log('🖼️ Slide advanced successfully:', {
+          slideshowLog.log('Slide advanced successfully:', {
             index: nextIndex,
             hasTexture: !!texture,
             textureSize: texture.image ? `${texture.image.width}x${texture.image.height}` : 'unknown'
@@ -291,7 +298,7 @@ export class ImageSlideshowEffect implements VisualEffect {
           this.cleanupCache();
           this.loadNextTextures(nextIndex);
       } else {
-        debugLog.error('🖼️ advanceSlide: texture is null after load attempt');
+        slideshowLog.error('advanceSlide: texture is null after load attempt');
       }
   }
 
@@ -327,18 +334,18 @@ export class ImageSlideshowEffect implements VisualEffect {
           const idx = (currentIndex + i) % this.parameters.images.length;
           const url = this.parameters.images[idx];
           if (!this.textureCache.has(url) && !this.loadingImages.has(url)) {
-              this.loadTexture(url).catch(e => debugLog.error("Preload failed", e));
+              this.loadTexture(url).catch(e => slideshowLog.error("Preload failed", e));
           }
       }
   }
 
   private loadTexture(url: string): Promise<THREE.Texture> {
       if (this.loadingImages.has(url)) {
-        debugLog.warn('🖼️ Already loading texture:', url.substring(0, 50));
+        slideshowLog.warn('Already loading texture:', url.substring(0, 50));
         return Promise.reject('Already loading');
       }
       this.loadingImages.add(url);
-      debugLog.log('🖼️ Loading texture:', url.substring(0, 80));
+      slideshowLog.log('Loading texture:', url.substring(0, 80));
       return new Promise((resolve, reject) => {
           this.textureLoader.load(
             url, 
@@ -348,7 +355,7 @@ export class ImageSlideshowEffect implements VisualEffect {
                 // Ensure texture works with resizing
                 texture.minFilter = THREE.LinearFilter;
                 texture.magFilter = THREE.LinearFilter;
-                debugLog.log('🖼️ Texture loaded successfully:', {
+                slideshowLog.log('Texture loaded successfully:', {
                   url: url.substring(0, 50),
                   width: texture.image?.width,
                   height: texture.image?.height
@@ -358,7 +365,7 @@ export class ImageSlideshowEffect implements VisualEffect {
             undefined, 
             (err) => {
                 this.loadingImages.delete(url);
-                debugLog.error('🖼️ Texture load failed:', url.substring(0, 80), err);
+                slideshowLog.error('Texture load failed:', url.substring(0, 80), err);
                 reject(err);
             }
           );
