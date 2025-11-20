@@ -246,7 +246,7 @@ export const stemRouter = router({
         z.array(z.object({ // Transients array
           time: z.number(),
           intensity: z.number(),
-          type: z.string(), // 'kick', 'snare', 'hat', 'generic', etc.
+          type: z.string().optional(), // 'kick', 'snare', 'hat', 'generic', etc. - optional since client-side analysis doesn't classify
         }))
       ])),
       waveformData: z.object({
