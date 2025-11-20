@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Check, Plus, Image as ImageIcon, Loader2, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -147,7 +146,7 @@ export function CollectionManager({
         
         <div className="space-y-2">
           <Label>Select Images ({selectedFilesForNew.size})</Label>
-          <ScrollArea className="h-48 border border-stone-800 rounded-md bg-stone-950 p-2">
+          <div className="h-48 border border-stone-800 rounded-md bg-stone-950 p-2 overflow-y-auto">
             <div className="grid grid-cols-3 gap-2">
               {imageFiles.length === 0 ? (
                 <div className="col-span-3 text-center text-xs text-stone-500 py-4">
@@ -183,7 +182,7 @@ export function CollectionManager({
                 ))
               )}
             </div>
-          </ScrollArea>
+          </div>
         </div>
 
         <div className="flex gap-2">
@@ -215,7 +214,7 @@ export function CollectionManager({
       {isLoading ? (
         <div className="flex justify-center py-4"><Loader2 className="w-4 h-4 animate-spin" /></div>
       ) : (
-        <ScrollArea className="h-48">
+        <div className="h-48 overflow-y-auto pr-1">
           <div className="space-y-2 pr-2">
             {collections?.length === 0 ? (
               <div className="text-center text-xs text-stone-500 py-4">
@@ -245,7 +244,7 @@ export function CollectionManager({
               ))
             )}
           </div>
-        </ScrollArea>
+        </div>
       )}
     </div>
   );
