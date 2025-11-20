@@ -31,7 +31,8 @@ interface AssetCollection {
     const { toast } = useToast();
     const [isCreating, setIsCreating] = useState(false);
     const [newCollectionName, setNewCollectionName] = useState('');
-    const [selectedFilesForNew, setSelectedFilesForNew] = useState<Set<string>>(new Set());
+  const [selectedFilesForNew, setSelectedFilesForNew] = useState<Set<string>>(new Set());
+  const [lastSelectedId, setLastSelectedId] = useState<string | null>(null);
     const [viewingCollectionId, setViewingCollectionId] = useState<string | null>(null);
   
     // TRPC Hooks
@@ -101,11 +102,41 @@ interface AssetCollection {
     }
   };
 
+  const selectRange = (startId: string, endId: string) => {
+    const startIndex = imageFiles.findIndex(file => file.id === startId);
+    const endIndex = imageFiles.findIndex(file => file.id === endId);
+    if (startIndex === -1 || endIndex === -1) return;
+    const [from, to] = startIndex < endIndex ? [startIndex, endIndex] : [endIndex, startIndex];
+    const next = new Set(selectedFilesForNew);
+    for (let i = from; i <= to; i++) {
+      next.add(imageFiles[i].id);
+    }
+    setSelectedFilesForNew(next);
+  };
+
   const toggleFileSelection = (fileId: string) => {
     const next = new Set(selectedFilesForNew);
     if (next.has(fileId)) next.delete(fileId);
     else next.add(fileId);
     setSelectedFilesForNew(next);
+    setLastSelectedId(fileId);
+  };
+
+  const handleFileClick = (event: React.MouseEvent<HTMLDivElement>, fileId: string) => {
+    if (event.shiftKey && lastSelectedId && lastSelectedId !== fileId) {
+      selectRange(lastSelectedId, fileId);
+      setLastSelectedId(fileId);
+      return;
+    }
+    toggleFileSelection(fileId);
+  };
+
+  const handleSelectAll = () => {
+    if (selectedFilesForNew.size === imageFiles.length) {
+      setSelectedFilesForNew(new Set());
+      return;
+    }
+    setSelectedFilesForNew(new Set(imageFiles.map(file => file.id)));
   };
 
   const handleSelectCollectionForUse = async (collectionId: string) => {
@@ -160,7 +191,17 @@ interface AssetCollection {
         </div>
         
         <div className="space-y-2">
-          <Label>Select Images ({selectedFilesForNew.size})</Label>
+          <div className="flex items-center justify-between gap-2">
+            <Label>Select Images ({selectedFilesForNew.size})</Label>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleSelectAll}
+              className="uppercase tracking-wide text-[10px] px-2"
+            >
+              {selectedFilesForNew.size === imageFiles.length ? 'Clear' : 'Select All'}
+            </Button>
+          </div>
           <div className="h-48 border border-stone-800 rounded-md bg-stone-950 p-2 overflow-y-auto">
             <div className="grid grid-cols-3 gap-2">
               {imageFiles.length === 0 ? (
@@ -171,7 +212,7 @@ interface AssetCollection {
                 imageFiles.map(file => (
                   <div 
                     key={file.id}
-                    onClick={() => toggleFileSelection(file.id)}
+                    onClick={(event) => handleFileClick(event, file.id)}
                     className={cn(
                       "relative aspect-square cursor-pointer rounded-md overflow-hidden border-2 transition-all",
                       selectedFilesForNew.has(file.id) 
