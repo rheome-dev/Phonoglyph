@@ -1012,6 +1012,20 @@ function CreativeVisualizerPage() {
     }
   }, [visualizerRef.current, selectedEffects]);
 
+  // Refs to access latest state in animation loop without restarting it
+  const layersRef = useRef(layers);
+  const mappingsRef = useRef(mappings);
+  const baseParameterValuesRef = useRef(baseParameterValues);
+  const activeSliderValuesRef = useRef(activeSliderValues);
+  const cachedAnalysisRef = useRef(audioAnalysis.cachedAnalysis);
+
+  // Keep refs synced with state changes
+  useEffect(() => { layersRef.current = layers; }, [layers]);
+  useEffect(() => { mappingsRef.current = mappings; }, [mappings]);
+  useEffect(() => { baseParameterValuesRef.current = baseParameterValues; }, [baseParameterValues]);
+  useEffect(() => { activeSliderValuesRef.current = activeSliderValues; }, [activeSliderValues]);
+  useEffect(() => { cachedAnalysisRef.current = audioAnalysis.cachedAnalysis; }, [audioAnalysis.cachedAnalysis]);
+
   // Real-time feature mapping and visualizer update loop
   useEffect(() => {
     let cachedMappings: [string, string][] = [];
@@ -1037,49 +1051,52 @@ function CreativeVisualizerPage() {
       lastUpdateTime = now;
       frameCount++;
       
+      // Use Refs to get latest state without closure staleness
+      const currentLayers = layersRef.current;
+      const currentMappings = mappingsRef.current;
+      const currentBaseValues = baseParameterValuesRef.current;
+      const currentActiveSliderValues = activeSliderValuesRef.current;
+      const currentCachedAnalysis = cachedAnalysisRef.current;
+
       // Get current audio time
       const time = stemAudio.currentTime;
       setCurrentTime(time);
       
-      // Sync calculation (keep your existing code)
+      // Sync calculation
       const audioContextTime = stemAudio.getAudioContextTime?.() || 0;
       const scheduledStartTime = stemAudio.scheduledStartTimeRef?.current || 0;
       const measuredLatency = stemAudio.getAudioLatency?.() || 0;
       const audioPlaybackTime = Math.max(0, audioContextTime - scheduledStartTime);
       let syncTime = Math.max(0, audioPlaybackTime - measuredLatency + (syncOffsetMs / 1000));
       
-      // 🔥 FIX: Handle audio looping by wrapping syncTime to analysis duration
-      if (audioAnalysis.cachedAnalysis.length > 0) {
-        const analysisDuration = audioAnalysis.cachedAnalysis[0]?.metadata?.duration || 1;
+      // Handle audio looping by wrapping syncTime to analysis duration
+      if (currentCachedAnalysis.length > 0) {
+        const analysisDuration = currentCachedAnalysis[0]?.metadata?.duration || 1;
         if (analysisDuration > 0) {
-          syncTime = syncTime % analysisDuration; // Wrap time to loop within analysis duration
+          syncTime = syncTime % analysisDuration;
         }
       }
 
       // Cache mappings
-      if (cachedMappings.length !== Object.keys(mappings).length) {
-        cachedMappings = Object.entries(mappings)
+      if (cachedMappings.length !== Object.keys(currentMappings).length) {
+        cachedMappings = Object.entries(currentMappings)
           .filter(([, mapping]) => mapping.featureId !== null)
           .map(([paramKey, mapping]) => [paramKey, mapping.featureId!]) as [string, string][];
       }
 
-      // 🔥 THE FIX: Use enhancedAudioAnalysis instead of cachedStemAnalysis
-      if (audioAnalysis.cachedAnalysis && audioAnalysis.cachedAnalysis.length > 0) {
+      // General Audio Feature Mapping
+      if (currentCachedAnalysis && currentCachedAnalysis.length > 0) {
         for (const [paramKey, featureId] of cachedMappings) {
           if (!featureId) continue;
 
-          // Parse feature ID: "drums-rms"
           const featureStemType = getStemTypeFromFeatureId(featureId);
           if (!featureStemType) continue;
 
-          // 🔥 CHANGED: Use audioAnalysis.getFeatureValue from consolidated hook
-          // Find the analysis for this stem type to get its file ID
-          const stemAnalysis = audioAnalysis.cachedAnalysis?.find(
+          const stemAnalysis = currentCachedAnalysis?.find(
             a => a.stemType === featureStemType
           );
           if (!stemAnalysis) continue;
 
-          // Use the hook's getFeatureValue which properly handles both Float32Arrays and time-indexed arrays
           const rawValue = audioAnalysis.getFeatureValue(
             stemAnalysis.fileMetadataId,
             featureId,
@@ -1089,26 +1106,20 @@ function CreativeVisualizerPage() {
 
           if (rawValue === null || rawValue === undefined) continue;
 
-          // Parse parameter key: "metaballs-glowIntensity"
           const [effectId, ...paramParts] = paramKey.split('-');
           const paramName = paramParts.join('-');
           
           if (!effectId || !paramName) continue;
 
-          // Scale to parameter range with modulation amount attenuation
           const maxValue = getSliderMax(paramName);
-          // Bipolar attenuverter: mapping.modulationAmount in [0..1] maps to [-1..+1] around noon
-          // Range clamp to ±0.5 (±50%) so modulation isn't too extreme
-          const knobFull = (mappings[paramKey]?.modulationAmount ?? 0.5) * 2 - 1; // -1..+1
+          const knobFull = (currentMappings[paramKey]?.modulationAmount ?? 0.5) * 2 - 1; 
           const knob = Math.max(-0.5, Math.min(0.5, knobFull));
-          const baseValue = baseParameterValues[paramKey] ?? (activeSliderValues[paramKey] ?? 0);
-          const delta = rawValue * knob * maxValue; // modulation contribution
+          const baseValue = currentBaseValues[paramKey] ?? (currentActiveSliderValues[paramKey] ?? 0);
+          const delta = rawValue * knob * maxValue;
           const scaledValue = Math.max(0, Math.min(maxValue, baseValue + delta));
 
-          // Update visualizer
           visualizerRef.current.updateEffectParameter(effectId, paramName, scaledValue);
           
-          // Update React state occasionally
           if (frameCount % 10 === 0) {
             setModulatedParameterValues(prev => ({ ...prev, [paramKey]: scaledValue }));
           }
@@ -1116,14 +1127,14 @@ function CreativeVisualizerPage() {
       }
       
       // Handle timeline-specific audio triggers (e.g., Image Slideshow trigger)
-      if (layers.length > 0 && audioAnalysis.cachedAnalysis.length > 0) {
-        layers.forEach(layer => {
+      if (currentLayers.length > 0 && currentCachedAnalysis.length > 0) {
+        currentLayers.forEach(layer => {
           if (layer.settings && layer.settings.triggerSourceId) {
             const featureId = layer.settings.triggerSourceId;
             const featureStemType = getStemTypeFromFeatureId(featureId);
             
             if (featureStemType) {
-              const stemAnalysis = audioAnalysis.cachedAnalysis?.find(
+              const stemAnalysis = currentCachedAnalysis?.find(
                 a => a.stemType === featureStemType
               );
               
@@ -1135,30 +1146,14 @@ function CreativeVisualizerPage() {
                   featureStemType
                 );
                 
-                // Push trigger value to the effect instance via updateEffectParameter
-                // The ImageSlideshowEffect expects 'triggerValue' to be updated
                 if (rawValue !== undefined) {
                   visualizerRef.current.updateEffectParameter(layer.id, 'triggerValue', rawValue);
-                  // Debug log every 60 frames (roughly once per second at 60fps)
-                  if (Math.floor(syncTime * 60) % 60 === 0) {
-                    console.log('🖼️ Updating triggerValue:', { layerId: layer.id, featureId, rawValue, syncTime });
-                  }
                 }
-              } else {
-                console.warn('🖼️ No stem analysis found for feature:', featureId, 'stemType:', featureStemType);
               }
-            } else {
-              console.warn('🖼️ Could not determine stem type for feature:', featureId);
-            }
-          } else if (layer.effectType === 'imageSlideshow') {
-            // Debug: log when triggerSourceId is missing
-            if (Math.floor(syncTime * 60) % 300 === 0) { // Every 5 seconds
-              console.warn('🖼️ ImageSlideshow layer has no triggerSourceId:', layer.id, layer.settings);
             }
           }
         });
       }
-
 
       animationFrameId.current = requestAnimationFrame(animationLoop);
     };
@@ -1172,10 +1167,10 @@ function CreativeVisualizerPage() {
     };
   }, [
     isPlaying, 
-    mappings, 
-    audioAnalysis.cachedAnalysis,
     stemAudio, 
     syncOffsetMs
+    // Removed 'layers', 'mappings', etc. from deps to prevent loop restarts.
+    // They are accessed via refs inside the loop.
   ]);
   
   const getSliderMax = (paramName: string) => {
