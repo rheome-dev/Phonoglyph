@@ -55,16 +55,16 @@ export class ImageSlideshowEffect implements VisualEffect {
     this.scene = new THREE.Scene();
     
     // Use Orthographic camera to easily fill the screen
-    this.aspectRatio = window.innerWidth / window.innerHeight;
+    this.aspectRatio = typeof window !== 'undefined' ? window.innerWidth / window.innerHeight : 1;
     this.camera = new THREE.OrthographicCamera(
       -this.aspectRatio, this.aspectRatio, 
       1, -1, 
       0.1, 100
     );
-    this.camera.position.z = 1;
+    this.camera.position.z = 10; // Move camera back to ensure plane is clearly visible
 
     this.material = new THREE.MeshBasicMaterial({ 
-        color: 0x000000, // Prevent bright white flash before textures load
+        color: 0xffffff, // Base white to multiply correctly with texture
         transparent: true, 
         opacity: this.parameters.opacity,
         side: THREE.DoubleSide,
@@ -73,6 +73,8 @@ export class ImageSlideshowEffect implements VisualEffect {
     
     // Create plane that fills the view (2x2 in orthographic space with height 1)
     this.plane = new THREE.Mesh(new THREE.PlaneGeometry(2 * this.aspectRatio, 2), this.material);
+    this.plane.frustumCulled = false; // Disable culling to prevent disappearance
+    this.plane.visible = false; // Start hidden until texture loads
     this.scene.add(this.plane);
   }
 
@@ -291,8 +293,9 @@ export class ImageSlideshowEffect implements VisualEffect {
       if (texture) {
           this.currentImageIndex = nextIndex;
           this.material.map = texture;
-          this.material.color.setHex(0xffffff); // Reset tint so texture displays normally
+          this.material.color.setHex(0xffffff); 
           this.material.needsUpdate = true;
+          this.plane.visible = true; // Make sure plane is visible now
           
           slideshowLog.log('Slide advanced successfully:', {
             index: nextIndex,
@@ -353,12 +356,14 @@ export class ImageSlideshowEffect implements VisualEffect {
             (texture) => {
                 this.textureCache.set(url, texture);
                 this.loadingImages.delete(url);
-                // Ensure texture works with resizing
-                // Fix: Set correct color space for modern Three.js pipelines
+                
+                // Ensure correct color space and filtering
                 texture.colorSpace = THREE.SRGBColorSpace;
                 texture.minFilter = THREE.LinearFilter;
                 texture.magFilter = THREE.LinearFilter;
                 texture.generateMipmaps = false;
+                texture.matrixAutoUpdate = true; // Fix for fitTextureToScreen
+                
                 slideshowLog.log('Texture loaded successfully:', {
                   url: url.substring(0, 50),
                   width: texture.image?.width,
