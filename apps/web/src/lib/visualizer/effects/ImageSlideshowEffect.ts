@@ -115,20 +115,10 @@ export class ImageSlideshowEffect implements VisualEffect {
             failureCount: this.failureCount
           });
           this.advanceSlide();
-        } else {
-          slideshowLog.log('Update: Image already loading, skipping');
         }
-      } else if (!this.material.map && this.parameters.images.length === 0) {
-        slideshowLog.warn('Update: No texture map and no images available');
-      } else if (!this.material.map && this.failureCount >= this.parameters.images.length * 2) {
-        slideshowLog.error('Update: Too many failures, giving up:', {
-          failureCount: this.failureCount,
-          imageCount: this.parameters.images.length
-        });
       }
 
       // Edge detection: trigger on rising edge (when value crosses threshold going UP)
-      // This prevents multiple triggers from the same transient's decaying envelope
       const currentValue = this.parameters.triggerValue;
       const threshold = this.parameters.threshold;
       
@@ -161,17 +151,7 @@ export class ImageSlideshowEffect implements VisualEffect {
       
       // Update previous value for next frame
       this.previousTriggerValue = currentValue;
-
-      // Update visual params
       this.material.opacity = this.parameters.opacity;
-      
-      // Handle manual scale changes if needed, though usually we want to fill screen
-      // If scale parameter is meant to zoom the image:
-      if (this.parameters.scale !== 1.0) {
-          // We could apply scale to the plane
-           // this.plane.scale.setScalar(this.parameters.scale);
-           // But fitTextureToScreen handles basic fit.
-      }
   }
 
   updateParameter(paramName: string, value: any): void {
@@ -254,11 +234,9 @@ export class ImageSlideshowEffect implements VisualEffect {
       this.parameters.scale = value;
     } else if (paramName === 'threshold') {
       this.parameters.threshold = value;
-      // Reset trigger state when threshold changes to avoid false triggers
       this.previousTriggerValue = this.parameters.triggerValue;
       this.wasTriggered = false;
     } else if (paramName === 'triggerValue') {
-      // Don't update previousTriggerValue here - it's managed in update()
       this.parameters.triggerValue = value;
     }
   }
@@ -272,11 +250,9 @@ export class ImageSlideshowEffect implements VisualEffect {
       this.camera.bottom = -1;
       this.camera.updateProjectionMatrix();
       
-      // Resize plane geometry to match new aspect ratio
       this.plane.geometry.dispose();
       this.plane.geometry = new THREE.PlaneGeometry(2 * this.aspectRatio, 2);
       
-      // Re-fit current texture if exists
       if (this.material.map) {
           this.fitTextureToScreen(this.material.map);
       }
@@ -337,36 +313,29 @@ export class ImageSlideshowEffect implements VisualEffect {
   private fitTextureToScreen(texture: THREE.Texture) {
      if (!texture.image) return;
      
-     // "Cover" style fitting:
-     // We want the image to cover the 2*aspect x 2 plane.
-     // The plane UVs are 0..1.
-     // We need to transform UVs to crop the image.
-     
      const imageAspect = texture.image.width / texture.image.height;
-     const screenAspect = this.aspectRatio; // width / height (camera space width is 2*aspect, height is 2)
+     const screenAspect = this.aspectRatio;
      
-     texture.matrixAutoUpdate = false;
+     // Fix: Allow auto update for repeat/center/offset to work
+     texture.matrixAutoUpdate = true; 
      texture.center.set(0.5, 0.5);
      
      if (imageAspect > screenAspect) {
-         // Image is wider than screen (relative to height)
-         // We need to scale UVs horizontally (x)
-         // scale = imageAspect / screenAspect
+         // Image is wider than screen
          texture.repeat.set(screenAspect / imageAspect, 1);
      } else {
-         // Image is taller than screen (relative to width)
-         // We need to scale UVs vertically (y)
+         // Image is taller than screen
          texture.repeat.set(1, imageAspect / screenAspect);
      }
   }
 
   private loadNextTextures(currentIndex: number) {
-      // Load next 2 images
+      // Preload next 2 images
       for (let i = 1; i <= 2; i++) {
           const idx = (currentIndex + i) % this.parameters.images.length;
           const url = this.parameters.images[idx];
           if (!this.textureCache.has(url) && !this.loadingImages.has(url)) {
-              this.loadTexture(url).catch(e => slideshowLog.error("Preload failed", e));
+              this.loadTexture(url).catch(() => {});
           }
       }
   }
@@ -385,8 +354,11 @@ export class ImageSlideshowEffect implements VisualEffect {
                 this.textureCache.set(url, texture);
                 this.loadingImages.delete(url);
                 // Ensure texture works with resizing
+                // Fix: Set correct color space for modern Three.js pipelines
+                texture.colorSpace = THREE.SRGBColorSpace;
                 texture.minFilter = THREE.LinearFilter;
                 texture.magFilter = THREE.LinearFilter;
+                texture.generateMipmaps = false;
                 slideshowLog.log('Texture loaded successfully:', {
                   url: url.substring(0, 50),
                   width: texture.image?.width,
@@ -411,12 +383,16 @@ export class ImageSlideshowEffect implements VisualEffect {
       keepIndices.add((this.currentImageIndex + 1) % this.parameters.images.length);
       keepIndices.add((this.currentImageIndex + 2) % this.parameters.images.length);
 
-      // Map URLs to keep
       const keepUrls = new Set<string>();
-      keepIndices.forEach(idx => keepUrls.add(this.parameters.images[idx]));
+      keepIndices.forEach(idx => {
+          if (this.parameters.images[idx]) keepUrls.add(this.parameters.images[idx]);
+      });
+
+      // Don't dispose the texture currently in use by the material
+      const currentMap = this.material.map;
 
       for (const [url, texture] of this.textureCache) {
-          if (!keepUrls.has(url)) {
+          if (!keepUrls.has(url) && texture !== currentMap) {
               texture.dispose();
               this.textureCache.delete(url);
           }
@@ -425,11 +401,12 @@ export class ImageSlideshowEffect implements VisualEffect {
 
   getScene(): THREE.Scene { return this.scene; }
   getCamera(): THREE.Camera { return this.camera; }
+  
   destroy(): void {
       this.plane.geometry.dispose();
       this.material.dispose();
       this.textureCache.forEach(t => t.dispose());
       this.textureCache.clear();
+      this.loadingImages.clear();
   }
 }
-
