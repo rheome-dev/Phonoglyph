@@ -31,6 +31,7 @@ export class ImageSlideshowEffect implements VisualEffect {
   private textureCache: Map<string, THREE.Texture> = new Map();
   private loadingImages: Set<string> = new Set();
   private wasTriggered: boolean = false;
+  private previousTriggerValue: number = 0; // Track previous value for edge detection
   private textureLoader = new THREE.TextureLoader();
   private aspectRatio: number = 1;
   private failureCount = 0;
@@ -42,7 +43,7 @@ export class ImageSlideshowEffect implements VisualEffect {
     this.enabled = true;
     this.parameters = {
       triggerValue: 0,
-      threshold: 0.5,
+      threshold: 0.1, // Lower default threshold to catch more transients
       images: config?.images || [],
       opacity: 1.0,
       scale: 1.0,
@@ -126,24 +127,40 @@ export class ImageSlideshowEffect implements VisualEffect {
         });
       }
 
-      // Check trigger
-      const isTriggered = this.parameters.triggerValue > this.parameters.threshold;
+      // Edge detection: trigger on rising edge (when value crosses threshold going UP)
+      // This prevents multiple triggers from the same transient's decaying envelope
+      const currentValue = this.parameters.triggerValue;
+      const threshold = this.parameters.threshold;
+      
+      // Detect rising edge: previous value was below threshold, current is above
+      const isRisingEdge = this.previousTriggerValue <= threshold && currentValue > threshold;
       
       // Debug log trigger state occasionally
-      if (Math.floor(Date.now() / 1000) % 2 === 0 && this.parameters.triggerValue > 0) {
+      if (Math.floor(Date.now() / 1000) % 2 === 0 && currentValue > 0) {
         slideshowLog.log('Trigger check:', {
-          triggerValue: this.parameters.triggerValue.toFixed(3),
-          threshold: this.parameters.threshold.toFixed(3),
-          isTriggered,
+          triggerValue: currentValue.toFixed(3),
+          previousValue: this.previousTriggerValue.toFixed(3),
+          threshold: threshold.toFixed(3),
+          isRisingEdge,
           wasTriggered: this.wasTriggered
         });
       }
       
-      if (isTriggered && !this.wasTriggered) {
-          slideshowLog.log('🎯 TRIGGER FIRED! Advancing slide');
+      if (isRisingEdge) {
+          slideshowLog.log('🎯 TRIGGER FIRED! Advancing slide', {
+            previousValue: this.previousTriggerValue.toFixed(3),
+            currentValue: currentValue.toFixed(3),
+            threshold: threshold.toFixed(3)
+          });
           this.advanceSlide();
+          this.wasTriggered = true;
+      } else if (currentValue <= threshold) {
+          // Reset trigger state when value drops below threshold
+          this.wasTriggered = false;
       }
-      this.wasTriggered = isTriggered;
+      
+      // Update previous value for next frame
+      this.previousTriggerValue = currentValue;
 
       // Update visual params
       this.material.opacity = this.parameters.opacity;
@@ -237,7 +254,11 @@ export class ImageSlideshowEffect implements VisualEffect {
       this.parameters.scale = value;
     } else if (paramName === 'threshold') {
       this.parameters.threshold = value;
+      // Reset trigger state when threshold changes to avoid false triggers
+      this.previousTriggerValue = this.parameters.triggerValue;
+      this.wasTriggered = false;
     } else if (paramName === 'triggerValue') {
+      // Don't update previousTriggerValue here - it's managed in update()
       this.parameters.triggerValue = value;
     }
   }
