@@ -35,6 +35,7 @@ export class ImageSlideshowEffect implements VisualEffect {
   private textureLoader = new THREE.TextureLoader();
   private aspectRatio: number = 1;
   private failureCount = 0;
+  private isAdvancing: boolean = false; // Prevent concurrent advanceSlide calls
   private pendingTextureResolvers: Map<string, ((texture: THREE.Texture) => void)[]> = new Map();
 
   constructor(config?: any) {
@@ -273,50 +274,71 @@ export class ImageSlideshowEffect implements VisualEffect {
         return;
       }
 
-      const nextIndex = (this.currentImageIndex + 1) % this.parameters.images.length;
-      const imageUrl = this.parameters.images[nextIndex];
-      
-      slideshowLog.log('Advancing slide:', { 
-        currentIndex: this.currentImageIndex, 
-        nextIndex, 
-        url: imageUrl.substring(0, 60) 
-      });
-
-      // Try to get from cache
-      let texture = this.textureCache.get(imageUrl);
-      
-      if (!texture) {
-          try {
-            texture = await this.loadTexture(imageUrl);
-            this.failureCount = 0;
-          } catch(e) {
-              slideshowLog.error("Failed to load image for slideshow", imageUrl.substring(0, 60), e);
-              this.currentImageIndex = nextIndex;
-              this.failureCount++;
-              return;
-          }
+      // Prevent concurrent calls - if already advancing, skip
+      if (this.isAdvancing) {
+        slideshowLog.log('advanceSlide already in progress, skipping duplicate call');
+        return;
       }
 
-      if (texture) {
-          this.currentImageIndex = nextIndex;
-          this.material.map = texture;
-          this.material.color.setHex(0xffffff); 
-          this.material.needsUpdate = true;
-          this.plane.visible = true; // Make sure plane is visible now
-          
-          slideshowLog.log('Slide advanced successfully:', {
-            index: nextIndex,
-            hasTexture: !!texture,
-            textureSize: texture.image ? `${texture.image.width}x${texture.image.height}` : 'unknown'
-          });
-          
-          this.fitTextureToScreen(texture);
+      this.isAdvancing = true;
 
-          // Preload next images & cleanup
-          this.cleanupCache();
-          this.loadNextTextures(nextIndex);
-      } else {
-        slideshowLog.error('advanceSlide: texture is null after load attempt');
+      try {
+        const nextIndex = (this.currentImageIndex + 1) % this.parameters.images.length;
+        
+        // If we're already on this index (shouldn't happen, but guard against it)
+        if (nextIndex === this.currentImageIndex && this.currentImageIndex !== -1) {
+          slideshowLog.log('Already on target index, skipping advance');
+          this.isAdvancing = false;
+          return;
+        }
+
+        const imageUrl = this.parameters.images[nextIndex];
+        
+        slideshowLog.log('Advancing slide:', { 
+          currentIndex: this.currentImageIndex, 
+          nextIndex, 
+          url: imageUrl.substring(0, 60) 
+        });
+
+        // Try to get from cache
+        let texture = this.textureCache.get(imageUrl);
+        
+        if (!texture) {
+            try {
+              texture = await this.loadTexture(imageUrl);
+              this.failureCount = 0;
+            } catch(e) {
+                slideshowLog.error("Failed to load image for slideshow", imageUrl.substring(0, 60), e);
+                this.currentImageIndex = nextIndex;
+                this.failureCount++;
+                this.isAdvancing = false;
+                return;
+            }
+        }
+
+        if (texture) {
+            this.currentImageIndex = nextIndex;
+            this.material.map = texture;
+            this.material.color.setHex(0xffffff); 
+            this.material.needsUpdate = true;
+            this.plane.visible = true; // Make sure plane is visible now
+            
+            slideshowLog.log('Slide advanced successfully:', {
+              index: nextIndex,
+              hasTexture: !!texture,
+              textureSize: texture.image ? `${texture.image.width}x${texture.image.height}` : 'unknown'
+            });
+            
+            this.fitTextureToScreen(texture);
+
+            // Preload next images & cleanup
+            this.cleanupCache();
+            this.loadNextTextures(nextIndex);
+        } else {
+          slideshowLog.error('advanceSlide: texture is null after load attempt');
+        }
+      } finally {
+        this.isAdvancing = false;
       }
   }
 
