@@ -35,6 +35,7 @@ export class ImageSlideshowEffect implements VisualEffect {
   private textureLoader = new THREE.TextureLoader();
   private aspectRatio: number = 1;
   private failureCount = 0;
+  private pendingTextureResolvers: Map<string, ((texture: THREE.Texture) => void)[]> = new Map();
 
   constructor(config?: any) {
     this.id = config?.id || `imageSlideshow_${Math.random().toString(36).substr(2, 9)}`;
@@ -350,10 +351,22 @@ export class ImageSlideshowEffect implements VisualEffect {
   }
 
   private loadTexture(url: string): Promise<THREE.Texture> {
-      if (this.loadingImages.has(url)) {
-        slideshowLog.warn('Already loading texture:', url.substring(0, 50));
-        return Promise.reject('Already loading');
+      // If we already have this texture cached, return it immediately
+      const cached = this.textureCache.get(url);
+      if (cached) {
+        return Promise.resolve(cached);
       }
+
+      // If a load is already in progress for this URL, attach to the same result
+      if (this.loadingImages.has(url)) {
+        slideshowLog.log('Texture already loading, attaching listener:', url.substring(0, 80));
+        return new Promise((resolve) => {
+          const existing = this.pendingTextureResolvers.get(url) || [];
+          existing.push(resolve);
+          this.pendingTextureResolvers.set(url, existing);
+        });
+      }
+
       this.loadingImages.add(url);
       slideshowLog.log('Loading texture:', url.substring(0, 80));
       return new Promise((resolve, reject) => {
@@ -375,11 +388,27 @@ export class ImageSlideshowEffect implements VisualEffect {
                   width: texture.image?.width,
                   height: texture.image?.height
                 });
+
+                // Resolve primary caller
                 resolve(texture);
+
+                // Resolve any queued callers waiting on this URL
+                const pending = this.pendingTextureResolvers.get(url);
+                if (pending && pending.length > 0) {
+                  pending.forEach(fn => {
+                    try {
+                      fn(texture);
+                    } catch (e) {
+                      slideshowLog.error('Error resolving pending texture listener:', e);
+                    }
+                  });
+                  this.pendingTextureResolvers.delete(url);
+                }
             }, 
             undefined, 
             (err) => {
                 this.loadingImages.delete(url);
+                this.pendingTextureResolvers.delete(url);
                 slideshowLog.error('Texture load failed:', url.substring(0, 80), err);
                 reject(err);
             }
