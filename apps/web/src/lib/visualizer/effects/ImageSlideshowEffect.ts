@@ -154,6 +154,12 @@ export class ImageSlideshowEffect implements VisualEffect {
       // Update previous value for next frame
       this.previousTriggerValue = currentValue;
       this.material.opacity = this.parameters.opacity;
+
+      // Safety: if a texture is present but the plane is somehow hidden, force it visible
+      if (this.material.map && !this.plane.visible) {
+        this.plane.visible = true;
+        slideshowLog.log('Plane visibility auto-enabled in update because a texture is present');
+      }
   }
 
   updateParameter(paramName: string, value: any): void {
