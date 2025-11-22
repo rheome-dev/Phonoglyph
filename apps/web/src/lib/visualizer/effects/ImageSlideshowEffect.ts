@@ -133,31 +133,7 @@ export class ImageSlideshowEffect implements VisualEffect {
       // For transient detection, we want to trigger on rapid increases, not just crossing a static threshold
       const isRisingEdge = valueDelta > threshold && !this.wasTriggered;
       
-      // Enhanced debug logging for trigger detection
-      // Log every frame when triggerValue is non-zero, or when it changes significantly
-      const valueChanged = Math.abs(valueDelta) > 0.01;
-      if (currentValue > 0 || valueChanged || isRisingEdge) {
-        slideshowLog.log('🔍 Trigger state:', {
-          triggerValue: currentValue.toFixed(4),
-          previousValue: this.previousTriggerValue.toFixed(4),
-          valueDelta: valueDelta.toFixed(4),
-          threshold: threshold.toFixed(4),
-          isRisingEdge,
-          wasTriggered: this.wasTriggered,
-          currentImageIndex: this.currentImageIndex,
-          hasTexture: !!this.material.map
-        });
-      }
-      
       if (isRisingEdge) {
-          slideshowLog.log('🎯 TRIGGER FIRED! Advancing slide', {
-            previousValue: this.previousTriggerValue.toFixed(4),
-            currentValue: currentValue.toFixed(4),
-            valueDelta: valueDelta.toFixed(4),
-            threshold: threshold.toFixed(4),
-            currentImageIndex: this.currentImageIndex,
-            nextIndex: (this.currentImageIndex + 1) % this.parameters.images.length
-          });
           this.advanceSlide();
           this.wasTriggered = true;
       } else if (valueDelta <= 0 || currentValue <= threshold) {
@@ -260,17 +236,8 @@ export class ImageSlideshowEffect implements VisualEffect {
       this.previousTriggerValue = this.parameters.triggerValue;
       this.wasTriggered = false;
     } else if (paramName === 'triggerValue') {
-      const oldValue = this.parameters.triggerValue;
       const newValue = typeof value === 'number' ? value : parseFloat(value);
       this.parameters.triggerValue = newValue;
-      const difference = newValue - oldValue;
-      slideshowLog.log('📊 triggerValue updated:', {
-        oldValue: oldValue.toFixed(4),
-        newValue: newValue.toFixed(4),
-        threshold: this.parameters.threshold.toFixed(4),
-        difference: difference.toFixed(4),
-        isNumber: typeof newValue === 'number'
-      });
     }
   }
 
@@ -292,10 +259,6 @@ export class ImageSlideshowEffect implements VisualEffect {
   }
 
   private async advanceSlide() {
-      // Log call stack to see where advanceSlide is being called from
-      const callSource = new Error().stack?.split('\n')[2]?.trim() || 'unknown';
-      slideshowLog.log('📞 advanceSlide() called from:', callSource);
-      
       if (this.parameters.images.length === 0) {
         slideshowLog.warn('advanceSlide called but images array is empty');
         return;
@@ -303,7 +266,6 @@ export class ImageSlideshowEffect implements VisualEffect {
 
       // Prevent concurrent calls - if already advancing, skip
       if (this.isAdvancing) {
-        slideshowLog.log('⏸️ advanceSlide already in progress, skipping duplicate call');
         return;
       }
 
