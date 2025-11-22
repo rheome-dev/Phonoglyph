@@ -351,14 +351,46 @@ export class ImageSlideshowEffect implements VisualEffect {
   }
 
   private loadNextTextures(currentIndex: number) {
-      // Preload next 2 images
-      for (let i = 1; i <= 2; i++) {
+      // Preload next 5 images for better responsiveness
+      for (let i = 1; i <= 5; i++) {
           const idx = (currentIndex + i) % this.parameters.images.length;
           const url = this.parameters.images[idx];
           if (!this.textureCache.has(url) && !this.loadingImages.has(url)) {
               this.loadTexture(url).catch(() => {});
           }
       }
+  }
+
+  /**
+   * Resize image if it exceeds max dimension (for performance with high-res images)
+   */
+  private async resizeImageIfNeeded(imageBitmap: ImageBitmap, maxDimension: number = 2048): Promise<{ bitmap: ImageBitmap; wasResized: boolean; originalWidth: number; originalHeight: number }> {
+      const originalWidth = imageBitmap.width;
+      const originalHeight = imageBitmap.height;
+      
+      if (imageBitmap.width <= maxDimension && imageBitmap.height <= maxDimension) {
+          return { bitmap: imageBitmap, wasResized: false, originalWidth, originalHeight };
+      }
+      
+      const scale = Math.min(maxDimension / imageBitmap.width, maxDimension / imageBitmap.height);
+      const width = Math.floor(imageBitmap.width * scale);
+      const height = Math.floor(imageBitmap.height * scale);
+      
+      const canvas = new OffscreenCanvas(width, height);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+          slideshowLog.warn('Could not get 2d context for resizing, using original');
+          return { bitmap: imageBitmap, wasResized: false, originalWidth, originalHeight };
+      }
+      
+      ctx.drawImage(imageBitmap, 0, 0, width, height);
+      const resizedBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.92 });
+      const resizedBitmap = await createImageBitmap(resizedBlob);
+      
+      // Close original to free memory
+      imageBitmap.close();
+      
+      return { bitmap: resizedBitmap, wasResized: true, originalWidth, originalHeight };
   }
 
   private loadTexture(url: string): Promise<THREE.Texture> {
@@ -380,59 +412,74 @@ export class ImageSlideshowEffect implements VisualEffect {
 
       this.loadingImages.add(url);
       slideshowLog.log('Loading texture:', url.substring(0, 80));
-      return new Promise((resolve, reject) => {
-          this.textureLoader.load(
-            url, 
-            (texture) => {
-                this.textureCache.set(url, texture);
-                this.loadingImages.delete(url);
-                
-                // Ensure correct color space and filtering
-                texture.colorSpace = THREE.SRGBColorSpace;
-                texture.minFilter = THREE.LinearFilter;
-                texture.magFilter = THREE.LinearFilter;
-                texture.generateMipmaps = false;
-                texture.matrixAutoUpdate = true; // Fix for fitTextureToScreen
-                
-                slideshowLog.log('Texture loaded successfully:', {
-                  url: url.substring(0, 50),
-                  width: texture.image?.width,
-                  height: texture.image?.height
+      
+      return new Promise(async (resolve, reject) => {
+          try {
+              // Fetch image data
+              const response = await fetch(url);
+              if (!response.ok) {
+                  throw new Error(`Failed to fetch image: ${response.statusText}`);
+              }
+              
+              const blob = await response.blob();
+              
+              // Decode using ImageBitmap API (faster, off main thread)
+              const imageBitmap = await createImageBitmap(blob);
+              
+              // Resize if needed (max 2048px for performance)
+              const { bitmap: resizedBitmap, wasResized, originalWidth, originalHeight } = await this.resizeImageIfNeeded(imageBitmap, 2048);
+              
+              // Create texture from ImageBitmap
+              const texture = new THREE.CanvasTexture(resizedBitmap);
+              texture.colorSpace = THREE.SRGBColorSpace;
+              texture.minFilter = THREE.LinearFilter;
+              texture.magFilter = THREE.LinearFilter;
+              texture.generateMipmaps = false;
+              texture.matrixAutoUpdate = true;
+              
+              this.textureCache.set(url, texture);
+              this.loadingImages.delete(url);
+              
+              slideshowLog.log('Texture loaded successfully:', {
+                url: url.substring(0, 50),
+                width: resizedBitmap.width,
+                height: resizedBitmap.height,
+                originalWidth,
+                originalHeight,
+                wasResized
+              });
+
+              // Resolve primary caller
+              resolve(texture);
+
+              // Resolve any queued callers waiting on this URL
+              const pending = this.pendingTextureResolvers.get(url);
+              if (pending && pending.length > 0) {
+                pending.forEach(fn => {
+                  try {
+                    fn(texture);
+                  } catch (e) {
+                    slideshowLog.error('Error resolving pending texture listener:', e);
+                  }
                 });
-
-                // Resolve primary caller
-                resolve(texture);
-
-                // Resolve any queued callers waiting on this URL
-                const pending = this.pendingTextureResolvers.get(url);
-                if (pending && pending.length > 0) {
-                  pending.forEach(fn => {
-                    try {
-                      fn(texture);
-                    } catch (e) {
-                      slideshowLog.error('Error resolving pending texture listener:', e);
-                    }
-                  });
-                  this.pendingTextureResolvers.delete(url);
-                }
-            }, 
-            undefined, 
-            (err) => {
-                this.loadingImages.delete(url);
                 this.pendingTextureResolvers.delete(url);
-                slideshowLog.error('Texture load failed:', url.substring(0, 80), err);
-                reject(err);
-            }
-          );
+              }
+          } catch (err) {
+              this.loadingImages.delete(url);
+              this.pendingTextureResolvers.delete(url);
+              slideshowLog.error('Texture load failed:', url.substring(0, 80), err);
+              reject(err);
+          }
       });
   }
 
   private cleanupCache() {
-      // Keep current and next 2 images
+      // Keep current and next 5 images (matching preload count)
       const keepIndices = new Set<number>();
       keepIndices.add(this.currentImageIndex);
-      keepIndices.add((this.currentImageIndex + 1) % this.parameters.images.length);
-      keepIndices.add((this.currentImageIndex + 2) % this.parameters.images.length);
+      for (let i = 1; i <= 5; i++) {
+          keepIndices.add((this.currentImageIndex + i) % this.parameters.images.length);
+      }
 
       const keepUrls = new Set<string>();
       keepIndices.forEach(idx => {
