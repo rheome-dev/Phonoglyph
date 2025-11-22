@@ -804,13 +804,21 @@ function CreativeVisualizerPage() {
 
 
   // Feature mapping handlers
-  const handleMapFeature = (parameterId: string, featureId: string) => {
+  const handleMapFeature = (parameterId: string, featureId: string, stemType?: string) => {
+    console.log('🎛️ [page.tsx] handleMapFeature called:', {
+      parameterId,
+      featureId,
+      stemType,
+      timestamp: Date.now()
+    });
+    
     const [layerOrEffectId, paramName] = parameterId.split('-');
-    debugLog.log('🎛️ Creating mapping:', {
+    console.log('🎛️ [page.tsx] Creating mapping:', {
       parameterId,
       featureId,
       parameterName: paramName,
-      layerOrEffectId
+      layerOrEffectId,
+      parsedCorrectly: layerOrEffectId && paramName
     });
     
     setMappings(prev => ({ 

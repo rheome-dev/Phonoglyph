@@ -57,7 +57,18 @@ export const DroppableParameter: React.FC<DroppableParameterProps> = ({
     const dropResult = useDrop({
       accept: 'feature',
       drop: (item: DraggableFeatureItem) => {
-        onFeatureDrop(parameterId, item.id, item.stemType);
+        console.log('🎯 [DroppableParameter] Drop event fired:', {
+          parameterId,
+          featureId: item.id,
+          stemType: item.stemType,
+          item
+        });
+        try {
+          onFeatureDrop(parameterId, item.id, item.stemType);
+          console.log('✅ [DroppableParameter] onFeatureDrop called successfully');
+        } catch (error) {
+          console.error('❌ [DroppableParameter] Error calling onFeatureDrop:', error);
+        }
       },
       canDrop: () => true,
       collect: (monitor) => ({
