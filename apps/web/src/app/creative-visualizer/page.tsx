@@ -825,13 +825,23 @@ function CreativeVisualizerPage() {
     if (paramName === 'triggerValue') {
       const slideshowLayer = layers.find(l => l.id === layerOrEffectId && l.type === 'effect' && l.effectType === 'imageSlideshow');
       if (slideshowLayer) {
-        console.log('🖼️ Saving triggerSourceId to layer settings:', layerOrEffectId, featureId);
+        console.log('🖼️ [page.tsx] Saving triggerSourceId to layer settings:', {
+          layerId: layerOrEffectId,
+          featureId,
+          currentSettings: slideshowLayer.settings
+        });
         updateLayer(slideshowLayer.id, {
           ...slideshowLayer,
           settings: {
             ...slideshowLayer.settings,
             triggerSourceId: featureId
           }
+        });
+        console.log('🖼️ [page.tsx] Layer updated, new settings should include triggerSourceId:', featureId);
+      } else {
+        console.warn('🖼️ [page.tsx] Could not find slideshow layer for triggerValue mapping:', {
+          layerOrEffectId,
+          availableLayers: layers.filter(l => l.type === 'effect').map(l => ({ id: l.id, effectType: l.effectType }))
         });
       }
     }
@@ -1147,9 +1157,39 @@ function CreativeVisualizerPage() {
                 );
                 
                 if (rawValue !== undefined) {
-                  visualizerRef.current.updateEffectParameter(layer.id, 'triggerValue', rawValue);
+                  // Debug log every 30 frames (roughly twice per second at 60fps)
+                  if (frameCount % 30 === 0) {
+                    console.log('🖼️ [page.tsx] Updating triggerValue:', {
+                      layerId: layer.id,
+                      featureId,
+                      rawValue: rawValue.toFixed(4),
+                      syncTime: syncTime.toFixed(2),
+                      hasVisualizer: !!visualizerRef.current
+                    });
+                  }
+                  visualizerRef.current?.updateEffectParameter(layer.id, 'triggerValue', rawValue);
+                } else {
+                  if (frameCount % 60 === 0) {
+                    console.warn('🖼️ [page.tsx] rawValue is undefined for trigger:', { layerId: layer.id, featureId });
+                  }
+                }
+              } else {
+                if (frameCount % 60 === 0) {
+                  console.warn('🖼️ [page.tsx] No stemAnalysis found for trigger:', { layerId: layer.id, featureId, featureStemType });
                 }
               }
+            } else {
+              if (frameCount % 60 === 0) {
+                console.warn('🖼️ [page.tsx] No featureStemType for trigger:', { layerId: layer.id, featureId });
+              }
+            }
+          } else {
+            // Log once per second if we have slideshow layers without triggerSourceId
+            if (frameCount % 60 === 0 && layer.type === 'effect' && layer.effectType === 'imageSlideshow') {
+              console.log('🖼️ [page.tsx] Slideshow layer has no triggerSourceId:', {
+                layerId: layer.id,
+                settings: layer.settings
+              });
             }
           }
         });
