@@ -812,7 +812,17 @@ function CreativeVisualizerPage() {
       timestamp: Date.now()
     });
     
-    const [layerOrEffectId, paramName] = parameterId.split('-');
+    // Fix: parameterId format is "{layerId}-{paramName}" where layerId may contain hyphens
+    // Split from the end to get the last segment as paramName
+    const lastDashIndex = parameterId.lastIndexOf('-');
+    if (lastDashIndex === -1) {
+      console.error('❌ [page.tsx] Invalid parameterId format (no dash found):', parameterId);
+      return;
+    }
+    
+    const layerOrEffectId = parameterId.substring(0, lastDashIndex);
+    const paramName = parameterId.substring(lastDashIndex + 1);
+    
     console.log('🎛️ [page.tsx] Creating mapping:', {
       parameterId,
       featureId,
@@ -864,7 +874,16 @@ function CreativeVisualizerPage() {
   };
 
   const handleUnmapFeature = (parameterId: string) => {
-    const [layerOrEffectId, paramName] = parameterId.split('-');
+    // Fix: parameterId format is "{layerId}-{paramName}" where layerId may contain hyphens
+    // Split from the end to get the last segment as paramName
+    const lastDashIndex = parameterId.lastIndexOf('-');
+    if (lastDashIndex === -1) {
+      console.error('❌ [page.tsx] Invalid parameterId format (no dash found) in handleUnmapFeature:', parameterId);
+      return;
+    }
+    
+    const layerOrEffectId = parameterId.substring(0, lastDashIndex);
+    const paramName = parameterId.substring(lastDashIndex + 1);
     debugLog.log('🎛️ Removing mapping:', {
       parameterId,
       currentMapping: mappings[parameterId]
