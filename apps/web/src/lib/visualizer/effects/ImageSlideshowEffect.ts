@@ -122,20 +122,25 @@ export class ImageSlideshowEffect implements VisualEffect {
         }
       }
 
-      // Edge detection: trigger on rising edge (when value crosses threshold going UP)
+      // Edge detection: trigger on significant positive change (transient/peak detection)
       const currentValue = this.parameters.triggerValue;
       const threshold = this.parameters.threshold;
       
-      // Detect rising edge: previous value was below threshold, current is above
-      const isRisingEdge = this.previousTriggerValue <= threshold && currentValue > threshold;
+      // Calculate the change in value
+      const valueDelta = currentValue - this.previousTriggerValue;
+      
+      // Detect rising edge: value increased significantly (positive delta above threshold)
+      // For transient detection, we want to trigger on rapid increases, not just crossing a static threshold
+      const isRisingEdge = valueDelta > threshold && !this.wasTriggered;
       
       // Enhanced debug logging for trigger detection
       // Log every frame when triggerValue is non-zero, or when it changes significantly
-      const valueChanged = Math.abs(currentValue - this.previousTriggerValue) > 0.01;
+      const valueChanged = Math.abs(valueDelta) > 0.01;
       if (currentValue > 0 || valueChanged || isRisingEdge) {
         slideshowLog.log('🔍 Trigger state:', {
           triggerValue: currentValue.toFixed(4),
           previousValue: this.previousTriggerValue.toFixed(4),
+          valueDelta: valueDelta.toFixed(4),
           threshold: threshold.toFixed(4),
           isRisingEdge,
           wasTriggered: this.wasTriggered,
@@ -148,14 +153,16 @@ export class ImageSlideshowEffect implements VisualEffect {
           slideshowLog.log('🎯 TRIGGER FIRED! Advancing slide', {
             previousValue: this.previousTriggerValue.toFixed(4),
             currentValue: currentValue.toFixed(4),
+            valueDelta: valueDelta.toFixed(4),
             threshold: threshold.toFixed(4),
             currentImageIndex: this.currentImageIndex,
             nextIndex: (this.currentImageIndex + 1) % this.parameters.images.length
           });
           this.advanceSlide();
           this.wasTriggered = true;
-      } else if (currentValue <= threshold) {
-          // Reset trigger state when value drops below threshold
+      } else if (valueDelta <= 0 || currentValue <= threshold) {
+          // Reset trigger state when value stops increasing or drops below threshold
+          // This allows the next increase to trigger again
           this.wasTriggered = false;
       }
       
@@ -254,12 +261,15 @@ export class ImageSlideshowEffect implements VisualEffect {
       this.wasTriggered = false;
     } else if (paramName === 'triggerValue') {
       const oldValue = this.parameters.triggerValue;
-      this.parameters.triggerValue = value;
+      const newValue = typeof value === 'number' ? value : parseFloat(value);
+      this.parameters.triggerValue = newValue;
+      const difference = newValue - oldValue;
       slideshowLog.log('📊 triggerValue updated:', {
         oldValue: oldValue.toFixed(4),
-        newValue: value.toFixed(4),
+        newValue: newValue.toFixed(4),
         threshold: this.parameters.threshold.toFixed(4),
-        difference: (value - oldValue).toFixed(4)
+        difference: difference.toFixed(4),
+        isNumber: typeof newValue === 'number'
       });
     }
   }
