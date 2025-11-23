@@ -19,12 +19,13 @@ export class ImageSlideshowEffect implements VisualEffect {
     threshold: number;
     images: string[]; // List of image URLs
     opacity: number;
-    scale: number;
+    position: { x: number; y: number }; // Normalized position (0-1), 0,0 = top-left
+    size: { width: number; height: number }; // Normalized size (0-1), fraction of screen
   };
 
   private scene: THREE.Scene;
   private camera: THREE.OrthographicCamera;
-  private plane: THREE.Mesh;
+  private plane!: THREE.Mesh; // Initialized in updatePlaneGeometryAndPosition
   private material: THREE.MeshBasicMaterial;
   
   private currentImageIndex: number = -1;
@@ -48,7 +49,8 @@ export class ImageSlideshowEffect implements VisualEffect {
       threshold: 0.1, // Lower default threshold to catch more transients
       images: config?.images || [],
       opacity: 1.0,
-      scale: 1.0,
+      position: config?.position || { x: 0.5, y: 0.5 }, // Center by default
+      size: config?.size || { width: 1.0, height: 1.0 }, // Full screen by default
       ...config
     };
 
@@ -73,11 +75,25 @@ export class ImageSlideshowEffect implements VisualEffect {
         map: null
     });
     
-    // Create plane that fills the view (2x2 in orthographic space with height 1)
-    this.plane = new THREE.Mesh(new THREE.PlaneGeometry(2 * this.aspectRatio, 2), this.material);
+    // Create plane - will be positioned and sized based on parameters
+    this.createPlane();
     this.plane.frustumCulled = false; // Disable culling to prevent disappearance
     this.plane.visible = false; // Start hidden until texture loads
     this.scene.add(this.plane);
+  }
+  
+  /**
+   * Create the plane mesh with initial geometry
+   */
+  private createPlane() {
+    // Convert normalized position (0-1) to Three.js world coordinates
+    const worldX = (this.parameters.position.x * 2 - 1) * this.aspectRatio;
+    const worldY = 1 - this.parameters.position.y * 2;
+    const worldWidth = this.parameters.size.width * 2 * this.aspectRatio;
+    const worldHeight = this.parameters.size.height * 2;
+    
+    this.plane = new THREE.Mesh(new THREE.PlaneGeometry(worldWidth, worldHeight), this.material);
+    this.plane.position.set(worldX, worldY, 0);
   }
 
   init(renderer: THREE.WebGLRenderer): void {
@@ -145,12 +161,43 @@ export class ImageSlideshowEffect implements VisualEffect {
       // Update previous value for next frame
       this.previousTriggerValue = currentValue;
       this.material.opacity = this.parameters.opacity;
+      
+      // Update plane position and size if parameters changed
+      this.updatePlaneGeometryAndPosition();
 
       // Safety: if a texture is present but the plane is somehow hidden, force it visible
       if (this.material.map && !this.plane.visible) {
         this.plane.visible = true;
         slideshowLog.log('Plane visibility auto-enabled in update because a texture is present');
       }
+  }
+  
+  /**
+   * Update plane geometry and position based on position/size parameters
+   * Position and size are normalized (0-1), converted to Three.js world coordinates
+   */
+  private updatePlaneGeometryAndPosition() {
+    // Convert normalized position (0-1) to Three.js world coordinates
+    // X: 0 = left edge (-aspectRatio), 1 = right edge (aspectRatio)
+    const worldX = (this.parameters.position.x * 2 - 1) * this.aspectRatio;
+    // Y: 0 = top edge (1), 1 = bottom edge (-1) - flip Y for Three.js
+    const worldY = 1 - this.parameters.position.y * 2;
+    
+    // Convert normalized size (0-1) to Three.js world size
+    const worldWidth = this.parameters.size.width * 2 * this.aspectRatio;
+    const worldHeight = this.parameters.size.height * 2;
+    
+    // Update plane position
+    this.plane.position.set(worldX, worldY, 0);
+    
+    // Update plane geometry if size changed
+    const currentWidth = (this.plane.geometry as THREE.PlaneGeometry).parameters.width;
+    const currentHeight = (this.plane.geometry as THREE.PlaneGeometry).parameters.height;
+    
+    if (Math.abs(currentWidth - worldWidth) > 0.001 || Math.abs(currentHeight - worldHeight) > 0.001) {
+      this.plane.geometry.dispose();
+      this.plane.geometry = new THREE.PlaneGeometry(worldWidth, worldHeight);
+    }
   }
 
   updateParameter(paramName: string, value: any): void {
@@ -227,10 +274,26 @@ export class ImageSlideshowEffect implements VisualEffect {
         slideshowLog.log('Images array unchanged, skipping update');
       }
     } else if (paramName === 'opacity') {
-      this.parameters.opacity = value;
-      this.material.opacity = value;
-    } else if (paramName === 'scale') {
-      this.parameters.scale = value;
+      this.parameters.opacity = typeof value === 'number' ? value : parseFloat(value);
+      this.material.opacity = this.parameters.opacity;
+      // Ensure material updates for immediate visual feedback (like MetaballsEffect)
+      this.material.needsUpdate = true;
+    } else if (paramName === 'position') {
+      if (value && typeof value === 'object' && 'x' in value && 'y' in value) {
+        this.parameters.position = {
+          x: typeof value.x === 'number' ? value.x : parseFloat(value.x),
+          y: typeof value.y === 'number' ? value.y : parseFloat(value.y)
+        };
+        this.updatePlaneGeometryAndPosition();
+      }
+    } else if (paramName === 'size') {
+      if (value && typeof value === 'object' && 'width' in value && 'height' in value) {
+        this.parameters.size = {
+          width: typeof value.width === 'number' ? value.width : parseFloat(value.width),
+          height: typeof value.height === 'number' ? value.height : parseFloat(value.height)
+        };
+        this.updatePlaneGeometryAndPosition();
+      }
     } else if (paramName === 'threshold') {
       this.parameters.threshold = value;
       this.previousTriggerValue = this.parameters.triggerValue;
@@ -250,8 +313,8 @@ export class ImageSlideshowEffect implements VisualEffect {
       this.camera.bottom = -1;
       this.camera.updateProjectionMatrix();
       
-      this.plane.geometry.dispose();
-      this.plane.geometry = new THREE.PlaneGeometry(2 * this.aspectRatio, 2);
+      // Update plane geometry and position based on new aspect ratio
+      this.updatePlaneGeometryAndPosition();
       
       if (this.material.map) {
           this.fitTextureToScreen(this.material.map);
@@ -363,15 +426,21 @@ export class ImageSlideshowEffect implements VisualEffect {
 
   /**
    * Resize image if it exceeds max dimension (for performance with high-res images)
+   * Also flips the image to match Three.js coordinate system
    */
   private async resizeImageIfNeeded(imageBitmap: ImageBitmap, maxDimension: number = 2048): Promise<{ bitmap: ImageBitmap; wasResized: boolean; originalWidth: number; originalHeight: number }> {
       const originalWidth = imageBitmap.width;
       const originalHeight = imageBitmap.height;
       
-      if (imageBitmap.width <= maxDimension && imageBitmap.height <= maxDimension) {
+      // Check if resizing is needed
+      const needsResize = imageBitmap.width > maxDimension || imageBitmap.height > maxDimension;
+      
+      if (!needsResize) {
+          // No resize needed, return original
           return { bitmap: imageBitmap, wasResized: false, originalWidth, originalHeight };
       }
       
+      // Resize only
       const scale = Math.min(maxDimension / imageBitmap.width, maxDimension / imageBitmap.height);
       const width = Math.floor(imageBitmap.width * scale);
       const height = Math.floor(imageBitmap.height * scale);
@@ -383,7 +452,9 @@ export class ImageSlideshowEffect implements VisualEffect {
           return { bitmap: imageBitmap, wasResized: false, originalWidth, originalHeight };
       }
       
+      // Draw without flipping - we'll use texture.flipY instead
       ctx.drawImage(imageBitmap, 0, 0, width, height);
+      
       const resizedBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.92 });
       const resizedBitmap = await createImageBitmap(resizedBlob);
       
@@ -430,13 +501,14 @@ export class ImageSlideshowEffect implements VisualEffect {
               const { bitmap: resizedBitmap, wasResized, originalWidth, originalHeight } = await this.resizeImageIfNeeded(imageBitmap, 2048);
               
               // Create texture from ImageBitmap
+              // Use flipY to correct coordinate system difference
               const texture = new THREE.CanvasTexture(resizedBitmap);
               texture.colorSpace = THREE.SRGBColorSpace;
               texture.minFilter = THREE.LinearFilter;
               texture.magFilter = THREE.LinearFilter;
               texture.generateMipmaps = false;
               texture.matrixAutoUpdate = true;
-              texture.flipY = true; // Fix: ImageBitmap coordinate system is flipped
+              texture.flipY = true; // Fix coordinate system for ImageBitmap/CanvasTexture
               
               this.textureCache.set(url, texture);
               this.loadingImages.delete(url);
