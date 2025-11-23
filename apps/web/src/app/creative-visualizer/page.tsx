@@ -1386,12 +1386,17 @@ function CreativeVisualizerPage() {
                     </div>
                   </div>
 
-                  <DroppableParameter
-                    parameterId={`${layerId}-opacity`}
-                    label="Opacity"
-                    mappedFeatureId={mappings[`${layerId}-opacity`]?.featureId || null}
-                    mappedFeatureName={mappings[`${layerId}-opacity`]?.featureId ? featureNames[mappings[`${layerId}-opacity`]!.featureId] : undefined}
-                    modulationAmount={mappings[`${layerId}-opacity`]?.modulationAmount ?? 0.5}
+                  {(() => {
+                    const opacityMapping = mappings[`${layerId}-opacity`];
+                    const mappedFeatureId = opacityMapping?.featureId || null;
+                    const mappedFeatureName = mappedFeatureId ? featureNames[mappedFeatureId] : undefined;
+                    return (
+                      <DroppableParameter
+                        parameterId={`${layerId}-opacity`}
+                        label="Opacity"
+                        mappedFeatureId={mappedFeatureId}
+                        mappedFeatureName={mappedFeatureName}
+                        modulationAmount={opacityMapping?.modulationAmount ?? 0.5}
                     baseValue={baseParameterValues[`${layerId}-opacity`] ?? (activeSliderValues[`${layerId}-opacity`] ?? (slideshowLayer?.settings?.opacity ?? 1.0))}
                     modulatedValue={modulatedParameterValues[`${layerId}-opacity`] ?? (activeSliderValues[`${layerId}-opacity`] ?? (slideshowLayer?.settings?.opacity ?? 1.0))}
                     sliderMax={1.0}
@@ -1412,9 +1417,11 @@ function CreativeVisualizerPage() {
                         max={1.0}
                         step={0.01}
                         className="w-full"
-                        disabled={!!mappings[`${layerId}-opacity`]?.featureId}
+                        disabled={!!mappedFeatureId}
                     />
-                  </DroppableParameter>
+                      </DroppableParameter>
+                    );
+                  })()}
                 </div>
             </div>
             
