@@ -10,6 +10,8 @@ export interface AsciiFilterConfig {
   opacity: number; // 0.0 to 1.0 - overall effect opacity (audio reactive)
   contrast: number; // 0.0 to 2.0 - contrast boost (audio reactive)
   invert: number; // 0.0 or 1.0 - invert luminance (audio reactive)
+  fontSize: number; // 0.5 to 1.5 - relative font size multiplier
+  color: [number, number, number]; // RGB color for ASCII characters (0-1 range)
   sourceTexture?: THREE.Texture; // Optional source texture to filter (deprecated - uses compositor)
 }
 
@@ -48,6 +50,8 @@ export class AsciiFilterEffect implements VisualEffect {
       opacity: 0.87,
       contrast: 1.4,
       invert: 0.0,
+      fontSize: 1.0,
+      color: [1.0, 1.0, 1.0] as [number, number, number], // White by default
       sourceTexture: config?.sourceTexture,
       ...paramsWithoutId
     };
@@ -73,8 +77,9 @@ export class AsciiFilterEffect implements VisualEffect {
 
   private generateFontSprite(): { texture: THREE.Texture; cols: number; rows: number } {
     const canvas = document.createElement('canvas');
-    const GLYPH_HEIGHT = 64; // Increased resolution for crispness
-    const GLYPH_WIDTH = 32;  // Aspect ratio ~0.5
+    const BASE_GLYPH_HEIGHT = 64; // Base resolution for crispness
+    const GLYPH_HEIGHT = Math.round(BASE_GLYPH_HEIGHT * this.parameters.fontSize);
+    const GLYPH_WIDTH = Math.round(GLYPH_HEIGHT * 0.5);  // Aspect ratio ~0.5 for monospace
     const CHARS_PER_ROW = 16;
     const NUM_CHARS = 95; // ASCII 32-126
     const NUM_ROWS = Math.ceil(NUM_CHARS / CHARS_PER_ROW);
@@ -91,9 +96,20 @@ export class AsciiFilterEffect implements VisualEffect {
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    // 2. Draw Characters (White)
+    // 2. Draw Characters with proper monospace code font
+    // Try to use system monospace fonts that are ASCII-friendly
+    const fontFamilies = [
+      'Consolas',      // Windows
+      'Monaco',        // macOS
+      'Menlo',         // macOS
+      'Courier New',   // Fallback
+      'monospace'      // Generic fallback
+    ];
+    
     ctx.fillStyle = '#FFFFFF';
-    ctx.font = `bold ${GLYPH_HEIGHT * 0.75}px monospace`; // Bold for better readability
+    // Use a proper monospace code font - try system fonts first
+    const fontSize = Math.round(GLYPH_HEIGHT * 0.75);
+    ctx.font = `bold ${fontSize}px ${fontFamilies.join(', ')}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
@@ -103,7 +119,6 @@ export class AsciiFilterEffect implements VisualEffect {
       const col = i % CHARS_PER_ROW;
       
       const x = col * GLYPH_WIDTH + GLYPH_WIDTH / 2;
-      // Adjust Y slightly if font baseline feels off
       const y = row * GLYPH_HEIGHT + GLYPH_HEIGHT / 2; 
       
       ctx.fillText(char, x, y);
@@ -132,6 +147,7 @@ export class AsciiFilterEffect implements VisualEffect {
       uOpacity: { value: this.parameters.opacity },
       uContrast: { value: this.parameters.contrast },
       uInvert: { value: this.parameters.invert },
+      uColor: { value: new THREE.Vector3(...this.parameters.color) },
     };
   }
 
@@ -157,6 +173,7 @@ export class AsciiFilterEffect implements VisualEffect {
       uniform float uOpacity;
       uniform float uContrast;
       uniform float uInvert;
+      uniform vec3 uColor;
 
       varying vec2 vUv;
 
@@ -177,8 +194,15 @@ export class AsciiFilterEffect implements VisualEffect {
         vec2 gridUV = floor(uv * cellCount) / cellCount; // The UV of the cell's top-left
         vec2 centerUV = gridUV + (0.5 / cellCount);      // The UV of the cell's center
         
-        // 3. Sample Luminance
+        // 3. Sample Luminance (only from non-transparent pixels)
         vec4 color = texture2D(uTexture, centerUV);
+        
+        // Early exit if pixel is transparent - don't apply ASCII filter to transparent areas
+        if (color.a < 0.01) {
+          gl_FragColor = color;
+          return;
+        }
+        
         float gray = dot(color.rgb, vec3(0.299, 0.587, 0.114)); // Standard Luma weights
         
         // Apply Invert and Contrast
@@ -213,16 +237,18 @@ export class AsciiFilterEffect implements VisualEffect {
         // 7. Sample Sprite
         vec4 charColor = texture2D(uSprite, spriteUV);
 
-        // 8. Composite
-        // If it's black background, we just want the white text color
-        vec3 finalColor = mix(color.rgb, vec3(1.0), charColor.r);
+        // 8. Composite with color parameter
+        // Use the character mask (charColor.r) to blend between original color and ASCII color
+        vec3 asciiColor = uColor;
+        vec3 finalColor = mix(color.rgb, asciiColor, charColor.r);
         
-        // Alternatively, if you want colored text on black bg:
-        // vec3 finalColor = color.rgb * charColor.r;
+        // Preserve original alpha from source texture
+        float finalAlpha = color.a;
 
-        // Output with opacity
+        // Output with opacity - only apply to non-transparent pixels
         vec4 bg = texture2D(uTexture, uv);
-        gl_FragColor = mix(bg, vec4(finalColor, 1.0), uOpacity);
+        vec4 asciiResult = vec4(finalColor, finalAlpha);
+        gl_FragColor = mix(bg, asciiResult, uOpacity * step(0.01, bg.a));
       }
     `;
 
@@ -277,6 +303,8 @@ export class AsciiFilterEffect implements VisualEffect {
         ctx.fillRect(0, 0, 1, 1);
       }
       this.fontSpriteTexture = new THREE.CanvasTexture(canvas);
+      this.fontSpriteTexture.minFilter = THREE.NearestFilter;
+      this.fontSpriteTexture.magFilter = THREE.NearestFilter;
       this.spriteCols = 16;
       this.spriteRows = 6;
     }
@@ -370,44 +398,61 @@ export class AsciiFilterEffect implements VisualEffect {
   }
 
   updateParameter(paramName: string, value: any): void {
+    // Immediately update uniforms when parameters change (like MetaballsEffect)
     if (!this.uniforms) return;
 
     switch (paramName) {
       case 'gridSize':
         this.parameters.gridSize = typeof value === 'number' ? Math.max(0.005, Math.min(0.05, value)) : this.parameters.gridSize;
-        if (this.uniforms.uGridSize) {
-          this.uniforms.uGridSize.value = this.parameters.gridSize;
-        }
+        this.uniforms.uGridSize.value = this.parameters.gridSize;
         break;
       case 'gamma':
         this.parameters.gamma = typeof value === 'number' ? Math.max(0.2, Math.min(2.2, value)) : this.parameters.gamma;
-        if (this.uniforms.uGamma) {
-          this.uniforms.uGamma.value = this.parameters.gamma;
-        }
+        this.uniforms.uGamma.value = this.parameters.gamma;
         break;
       case 'opacity':
         this.parameters.opacity = typeof value === 'number' ? Math.max(0.0, Math.min(1.0, value)) : this.parameters.opacity;
-        if (this.uniforms.uOpacity) {
-          this.uniforms.uOpacity.value = this.parameters.opacity;
-        }
+        this.uniforms.uOpacity.value = this.parameters.opacity;
         break;
       case 'contrast':
         this.parameters.contrast = typeof value === 'number' ? Math.max(0.0, Math.min(2.0, value)) : this.parameters.contrast;
-        if (this.uniforms.uContrast) {
-          this.uniforms.uContrast.value = this.parameters.contrast;
-        }
+        this.uniforms.uContrast.value = this.parameters.contrast;
         break;
       case 'invert':
         this.parameters.invert = typeof value === 'number' ? (value > 0.5 ? 1.0 : 0.0) : this.parameters.invert;
-        if (this.uniforms.uInvert) {
-          this.uniforms.uInvert.value = this.parameters.invert;
+        this.uniforms.uInvert.value = this.parameters.invert;
+        break;
+      case 'fontSize':
+        const oldFontSize = this.parameters.fontSize;
+        this.parameters.fontSize = typeof value === 'number' ? Math.max(0.5, Math.min(1.5, value)) : this.parameters.fontSize;
+        // Regenerate font sprite if fontSize changed
+        if (Math.abs(oldFontSize - this.parameters.fontSize) > 0.01 && this.renderer) {
+          try {
+            const spriteData = this.generateFontSprite();
+            this.fontSpriteTexture.dispose();
+            this.fontSpriteTexture = spriteData.texture;
+            this.spriteCols = spriteData.cols;
+            this.spriteRows = spriteData.rows;
+            this.uniforms.uSprite.value = this.fontSpriteTexture;
+            this.uniforms.uSpriteGrid.value.set(this.spriteCols, this.spriteRows);
+          } catch (error) {
+            debugLog.error('Failed to regenerate font sprite:', error);
+          }
+        }
+        break;
+      case 'color':
+        if (Array.isArray(value) && value.length === 3) {
+          this.parameters.color = [
+            Math.max(0, Math.min(1, value[0])),
+            Math.max(0, Math.min(1, value[1])),
+            Math.max(0, Math.min(1, value[2]))
+          ] as [number, number, number];
+          this.uniforms.uColor.value.set(...this.parameters.color);
         }
         break;
       case 'sourceTexture':
         this.parameters.sourceTexture = value;
-        if (this.uniforms.uTexture) {
-          this.uniforms.uTexture.value = value || null;
-        }
+        this.uniforms.uTexture.value = value || null;
         break;
     }
   }

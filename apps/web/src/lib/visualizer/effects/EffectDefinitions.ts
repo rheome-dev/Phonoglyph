@@ -54,7 +54,9 @@ EffectRegistry.register({
     gamma: 1.2,
     opacity: 0.87,
     contrast: 1.4,
-    invert: 0.0
+    invert: 0.0,
+    fontSize: 1.0,
+    color: [1.0, 1.0, 1.0] // White by default
   }
 });
 
