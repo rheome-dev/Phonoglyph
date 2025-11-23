@@ -1390,6 +1390,7 @@ function CreativeVisualizerPage() {
                     const opacityMapping = mappings[`${layerId}-opacity`];
                     const mappedFeatureId = opacityMapping?.featureId || null;
                     const mappedFeatureName = mappedFeatureId ? featureNames[mappedFeatureId] : undefined;
+                    const isMapped = !!mappedFeatureId;
                     return (
                       <DroppableParameter
                         parameterId={`${layerId}-opacity`}
@@ -1397,28 +1398,28 @@ function CreativeVisualizerPage() {
                         mappedFeatureId={mappedFeatureId}
                         mappedFeatureName={mappedFeatureName}
                         modulationAmount={opacityMapping?.modulationAmount ?? 0.5}
-                    baseValue={baseParameterValues[`${layerId}-opacity`] ?? (activeSliderValues[`${layerId}-opacity`] ?? (slideshowLayer?.settings?.opacity ?? 1.0))}
-                    modulatedValue={modulatedParameterValues[`${layerId}-opacity`] ?? (activeSliderValues[`${layerId}-opacity`] ?? (slideshowLayer?.settings?.opacity ?? 1.0))}
-                    sliderMax={1.0}
-                    onFeatureDrop={handleMapFeature}
-                    onFeatureUnmap={handleUnmapFeature}
-                    onModulationAmountChange={handleModulationAmountChange}
-                    className="mb-2"
-                    dropZoneStyle="inlayed"
-                    showTagOnHover
-                  >
-                    <Slider
-                        value={[activeSliderValues[`${layerId}-opacity`] ?? (slideshowLayer?.settings?.opacity ?? 1.0)]}
-                        onValueChange={([val]) => {
+                        baseValue={baseParameterValues[`${layerId}-opacity`] ?? (activeSliderValues[`${layerId}-opacity`] ?? (slideshowLayer?.settings?.opacity ?? 1.0))}
+                        modulatedValue={modulatedParameterValues[`${layerId}-opacity`] ?? (activeSliderValues[`${layerId}-opacity`] ?? (slideshowLayer?.settings?.opacity ?? 1.0))}
+                        sliderMax={1.0}
+                        onFeatureDrop={handleMapFeature}
+                        onFeatureUnmap={handleUnmapFeature}
+                        onModulationAmountChange={handleModulationAmountChange}
+                        className="mb-2"
+                        dropZoneStyle="inlayed"
+                        showTagOnHover
+                      >
+                        <Slider
+                          value={[activeSliderValues[`${layerId}-opacity`] ?? (slideshowLayer?.settings?.opacity ?? 1.0)]}
+                          onValueChange={([val]) => {
                             setActiveSliderValues(prev => ({ ...prev, [`${layerId}-opacity`]: val }));
                             handleParameterChange(layerId, 'opacity', val);
-                        }}
-                        min={0}
-                        max={1.0}
-                        step={0.01}
-                        className="w-full"
-                        disabled={!!mappedFeatureId}
-                    />
+                          }}
+                          min={0}
+                          max={1.0}
+                          step={0.01}
+                          className="w-full"
+                          disabled={isMapped}
+                        />
                       </DroppableParameter>
                     );
                   })()}
