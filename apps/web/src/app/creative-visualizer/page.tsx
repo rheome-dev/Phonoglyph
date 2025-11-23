@@ -1408,18 +1408,20 @@ function CreativeVisualizerPage() {
                         dropZoneStyle="inlayed"
                         showTagOnHover
                       >
-                        <Slider
-                          value={[activeSliderValues[`${layerId}-opacity`] ?? (slideshowLayer?.settings?.opacity ?? 1.0)]}
-                          onValueChange={([val]) => {
-                            setActiveSliderValues(prev => ({ ...prev, [`${layerId}-opacity`]: val }));
-                            handleParameterChange(layerId, 'opacity', val);
-                          }}
-                          min={0}
-                          max={1.0}
-                          step={0.01}
-                          className="w-full"
-                          disabled={isMapped}
-                        />
+                        <div className="relative z-20">
+                          <Slider
+                            value={[activeSliderValues[`${layerId}-opacity`] ?? (slideshowLayer?.settings?.opacity ?? 1.0)]}
+                            onValueChange={([val]) => {
+                              setActiveSliderValues(prev => ({ ...prev, [`${layerId}-opacity`]: val }));
+                              handleParameterChange(layerId, 'opacity', val);
+                            }}
+                            min={0}
+                            max={1.0}
+                            step={0.01}
+                            className="w-full"
+                            disabled={isMapped}
+                          />
+                        </div>
                       </DroppableParameter>
                     );
                   })()}
