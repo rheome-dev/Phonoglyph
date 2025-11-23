@@ -4,6 +4,7 @@ import { debugLog } from '@/lib/utils';
 import { MultiLayerCompositor } from '../core/MultiLayerCompositor';
 
 export interface AsciiFilterConfig {
+  id?: string; // Optional effect ID
   gridSize: number; // 0.005 to 0.05 - controls character size (audio reactive)
   gamma: number; // 0.2 to 2.2 - controls font weight selection (audio reactive)
   opacity: number; // 0.0 to 1.0 - overall effect opacity (audio reactive)
@@ -35,6 +36,9 @@ export class AsciiFilterEffect implements VisualEffect {
     this.name = 'ASCII Filter';
     this.description = 'Converts input to ASCII art with audio-reactive parameters';
     this.enabled = true;
+    
+    // Extract id from config to avoid including it in parameters
+    const { id, ...paramsWithoutId } = config;
     this.parameters = {
       gridSize: 0.05,
       gamma: 1.2,
@@ -42,7 +46,7 @@ export class AsciiFilterEffect implements VisualEffect {
       contrast: 1.4,
       invert: 0.0,
       sourceTexture: config?.sourceTexture,
-      ...config
+      ...paramsWithoutId
     };
 
     this.scene = new THREE.Scene();
