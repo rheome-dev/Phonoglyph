@@ -1146,7 +1146,7 @@ function CreativeVisualizerPage() {
         });
       
       if (mappingsChanged) {
-        const oldMappings = new Map(cachedMappings);
+        const oldMappings = new Map<string, string>(cachedMappings);
         cachedMappings = newCachedMappings;
         
         // Log when mappings are created or updated (only once)
