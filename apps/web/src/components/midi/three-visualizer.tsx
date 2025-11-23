@@ -370,6 +370,12 @@ export function ThreeVisualizer({
           // Use getEffectByType to find the first instance of this effect type
           const effectInstance = internalVisualizerRef.current?.getEffectByType(effectId);
           if (!effectInstance) return null;
+          
+          // Ensure opacity is always included for imageSlideshow effects
+          if (effectId === 'imageSlideshow' && typeof effectInstance.parameters.opacity === 'undefined') {
+            effectInstance.parameters.opacity = 1.0;
+          }
+          
           const sortedParams = Object.entries(effectInstance.parameters).sort(([, a], [, b]) => {
             if (typeof a === 'boolean' && typeof b !== 'boolean') return -1;
             if (typeof a !== 'boolean' && typeof b === 'boolean') return 1;
