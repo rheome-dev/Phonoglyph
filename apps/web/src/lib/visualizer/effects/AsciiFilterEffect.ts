@@ -326,11 +326,13 @@ export class AsciiFilterEffect implements VisualEffect {
     }
 
     // Sync parameters to uniforms (these can be audio-modulated externally)
+    // Direct uniform updates like MetaballsEffect for immediate visual feedback
     this.uniforms.uGridSize.value = this.parameters.gridSize;
     this.uniforms.uGamma.value = this.parameters.gamma;
     this.uniforms.uOpacity.value = this.parameters.opacity;
     this.uniforms.uContrast.value = this.parameters.contrast;
     this.uniforms.uInvert.value = this.parameters.invert;
+    this.uniforms.uColor.value.set(...this.parameters.color);
     
     // Update sprite grid dimensions
     if (this.uniforms.uSpriteGrid) {
