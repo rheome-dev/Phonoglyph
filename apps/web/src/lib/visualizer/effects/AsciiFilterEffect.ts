@@ -30,6 +30,7 @@ export class AsciiFilterEffect implements VisualEffect {
   private sourceTexture?: THREE.Texture;
   private compositor?: MultiLayerCompositor;
   private layerId?: string;
+  private logFrameCount: number = 0;
 
   constructor(config: Partial<AsciiFilterConfig> = {}) {
     this.id = config?.id || `asciiFilter_${Math.random().toString(36).substr(2, 9)}`;
@@ -59,6 +60,11 @@ export class AsciiFilterEffect implements VisualEffect {
    * Set the compositor and layer ID to pull texture from layers beneath
    */
   public setCompositor(compositor: MultiLayerCompositor, layerId: string): void {
+    debugLog.log('🔗 [ASCII Filter] setCompositor called:', {
+      effectId: this.id,
+      layerId: layerId,
+      hasCompositor: !!compositor
+    });
     this.compositor = compositor;
     this.layerId = layerId;
   }
@@ -305,22 +311,61 @@ export class AsciiFilterEffect implements VisualEffect {
 
     // Get source texture from compositor (layers beneath) or fallback to parameter
     let sourceTexture: THREE.Texture | null = null;
+    
+    // Logging (throttled to every 60 frames ~1 second at 60fps)
+    this.logFrameCount++;
+    const shouldLog = this.logFrameCount % 60 === 0;
+    
+    if (shouldLog) {
+      debugLog.log('🔍 [ASCII Filter] Texture check:', {
+        hasCompositor: !!this.compositor,
+        hasLayerId: !!this.layerId,
+        layerId: this.layerId,
+        hasParameterTexture: !!this.parameters.sourceTexture,
+        currentUniformTexture: !!this.uniforms.uTexture.value
+      });
+    }
+    
     if (this.compositor && this.layerId) {
       // Get accumulated texture from layers beneath this one
       sourceTexture = this.compositor.getAccumulatedTextureBeforeLayer(this.layerId);
+      
+      if (shouldLog) {
+        debugLog.log('🔍 [ASCII Filter] Compositor texture result:', {
+          textureReceived: !!sourceTexture,
+          textureType: sourceTexture ? sourceTexture.constructor.name : 'null',
+          textureSize: sourceTexture ? `${sourceTexture.image?.width || 'N/A'}x${sourceTexture.image?.height || 'N/A'}` : 'N/A'
+        });
+      }
+    } else {
+      if (shouldLog) {
+        debugLog.warn('⚠️ [ASCII Filter] Missing compositor or layerId:', {
+          compositor: !!this.compositor,
+          layerId: this.layerId
+        });
+      }
     }
     
     // Fallback to parameter source texture if compositor doesn't provide one
     if (!sourceTexture && this.parameters.sourceTexture) {
       sourceTexture = this.parameters.sourceTexture;
+      if (shouldLog) {
+        debugLog.log('🔍 [ASCII Filter] Using fallback parameter texture');
+      }
     }
 
     // Update source texture if it changed
     if (sourceTexture && this.uniforms.uTexture.value !== sourceTexture) {
       this.uniforms.uTexture.value = sourceTexture;
+      if (shouldLog) {
+        debugLog.log('✅ [ASCII Filter] Texture updated in uniform');
+      }
     } else if (!sourceTexture && this.uniforms.uTexture.value) {
       // Clear texture if no source available
       this.uniforms.uTexture.value = null;
+      if (shouldLog) {
+        debugLog.warn('⚠️ [ASCII Filter] No source texture available, cleared uniform');
+      }
     }
   }
 

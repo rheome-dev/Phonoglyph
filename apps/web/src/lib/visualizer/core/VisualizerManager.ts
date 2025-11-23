@@ -259,7 +259,9 @@ export class VisualizerManager {
       effect.init(this.renderer);
       
       // If this is an ASCII filter effect, set the compositor reference
-      if (effect.id === 'asciiFilter' && 'setCompositor' in effect) {
+      // Check by class name or if setCompositor method exists
+      if ('setCompositor' in effect && typeof (effect as any).setCompositor === 'function') {
+        debugLog.log(`🔗 [VisualizerManager] Setting compositor for effect: ${effect.name} (${effect.id})`);
         (effect as any).setCompositor(this.multiLayerCompositor, layerId);
       }
       

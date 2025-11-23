@@ -1260,6 +1260,7 @@ function CreativeVisualizerPage() {
     if (paramName === 'animation-speed') return 2.0;
     if (paramName === 'glow-intensity') return 3.0;
     if (paramName === 'hud-opacity') return 1.0;
+    if (paramName === 'opacity') return 1.0; // For image slideshow and other effects
     if (paramName === 'max-particles') return 200;
     if (paramName === 'connection-distance') return 5.0;
     if (paramName === 'particle-size') return 50;
@@ -1271,6 +1272,7 @@ function CreativeVisualizerPage() {
     if (paramName === 'animation-speed') return 0.1;
     if (paramName === 'glow-intensity') return 0.1;
     if (paramName === 'hud-opacity') return 0.1;
+    if (paramName === 'opacity') return 0.01; // Fine-grained control for opacity
     if (paramName === 'max-particles') return 10;
     if (paramName === 'connection-distance') return 0.1;
     if (paramName === 'particle-size') return 5;
