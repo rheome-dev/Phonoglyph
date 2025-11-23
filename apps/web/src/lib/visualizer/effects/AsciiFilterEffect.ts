@@ -17,7 +17,7 @@ export interface AsciiFilterConfig {
 }
 
 export class AsciiFilterEffect implements VisualEffect {
-  id: string;
+  id = 'asciiFilter';
   name: string;
   description: string;
   enabled: boolean;
@@ -38,7 +38,6 @@ export class AsciiFilterEffect implements VisualEffect {
   private spriteRows: number = 6;
 
   constructor(config: Partial<AsciiFilterConfig> = {}) {
-    this.id = config?.id || `asciiFilter_${Math.random().toString(36).substr(2, 9)}`;
     this.name = 'ASCII Filter';
     this.description = 'Converts input to ASCII art with audio-reactive parameters';
     this.enabled = true;
