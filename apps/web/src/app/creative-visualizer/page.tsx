@@ -1131,9 +1131,21 @@ function CreativeVisualizerPage() {
 
       // Cache mappings
       if (cachedMappings.length !== Object.keys(currentMappings).length) {
+        const oldMappings = new Set(cachedMappings.map(([key]) => key));
         cachedMappings = Object.entries(currentMappings)
           .filter(([, mapping]) => mapping.featureId !== null)
           .map(([paramKey, mapping]) => [paramKey, mapping.featureId!]) as [string, string][];
+        
+        // Log when mappings are created or updated
+        const newMappings = cachedMappings.filter(([key]) => !oldMappings.has(key));
+        const opacityMappings = cachedMappings.filter(([key]) => key.includes('-opacity'));
+        if (newMappings.length > 0 || opacityMappings.length > 0) {
+          console.log('🎯 Mappings updated:', {
+            totalMappings: cachedMappings.length,
+            newMappings: newMappings.map(([key, featureId]) => ({ paramKey: key, featureId })),
+            opacityMappings: opacityMappings.map(([key, featureId]) => ({ paramKey: key, featureId }))
+          });
+        }
       }
 
       // General Audio Feature Mapping
@@ -1169,6 +1181,23 @@ function CreativeVisualizerPage() {
           const baseValue = currentBaseValues[paramKey] ?? (currentActiveSliderValues[paramKey] ?? 0);
           const delta = rawValue * knob * maxValue;
           const scaledValue = Math.max(0, Math.min(maxValue, baseValue + delta));
+
+          // Log opacity mapping updates every 30 frames (~0.5 seconds at 60fps)
+          if (paramName === 'opacity' && frameCount % 30 === 0) {
+            console.log('🎚️ Audio mapping calculating opacity:', {
+              paramKey,
+              effectId,
+              paramName,
+              featureId,
+              rawValue,
+              baseValue,
+              knob,
+              delta,
+              scaledValue,
+              maxValue,
+              syncTime: syncTime.toFixed(3)
+            });
+          }
 
           visualizerRef.current.updateEffectParameter(effectId, paramName, scaledValue);
           
@@ -1264,6 +1293,13 @@ function CreativeVisualizerPage() {
     if (paramName === 'max-particles') return 200;
     if (paramName === 'connection-distance') return 5.0;
     if (paramName === 'particle-size') return 50;
+    // ASCII Filter parameters
+    if (paramName === 'textSize') return 1.0;
+    if (paramName === 'gridSize') return 0.05;
+    if (paramName === 'gamma') return 2.2;
+    if (paramName === 'contrast') return 2.0;
+    if (paramName === 'invert') return 1.0;
+    if (paramName === 'fontSize') return 1.5;
     return 100; // Default max for other numeric parameters
   };
 
@@ -1276,6 +1312,13 @@ function CreativeVisualizerPage() {
     if (paramName === 'max-particles') return 10;
     if (paramName === 'connection-distance') return 0.1;
     if (paramName === 'particle-size') return 5;
+    // ASCII Filter parameters
+    if (paramName === 'textSize') return 0.01;
+    if (paramName === 'gridSize') return 0.001;
+    if (paramName === 'gamma') return 0.01;
+    if (paramName === 'contrast') return 0.01;
+    if (paramName === 'invert') return 1.0; // Binary toggle
+    if (paramName === 'fontSize') return 0.01;
     return 1; // Default step for other numeric parameters
   };
 
