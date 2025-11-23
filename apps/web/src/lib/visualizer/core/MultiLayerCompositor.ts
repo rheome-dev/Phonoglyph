@@ -500,6 +500,41 @@ export class MultiLayerCompositor {
   public getLayerIds(): string[] {
     return [...this.layerOrder];
   }
+
+  /**
+   * Get the accumulated texture from all layers before a specific layer
+   * This composites all layers up to (but not including) the target layer
+   */
+  public getAccumulatedTextureBeforeLayer(layerId: string): THREE.Texture | null {
+    const targetIndex = this.layerOrder.indexOf(layerId);
+    if (targetIndex === -1 || targetIndex === 0) {
+      // Layer not found or it's the first layer, return null (no previous layers)
+      return null;
+    }
+
+    // Save current render target
+    const previousRenderTarget = this.renderer.getRenderTarget();
+    const autoClear = this.renderer.autoClear;
+    this.renderer.autoClear = false;
+
+    // Use temp render target to accumulate layers before the target
+    this.renderer.setRenderTarget(this.tempRenderTarget);
+    this.renderer.clear(true, true, true);
+
+    // Composite layers up to (but not including) the target layer
+    for (let i = 0; i < targetIndex; i++) {
+      const layerId = this.layerOrder[i];
+      const layer = this.layers.get(layerId);
+      if (!layer || !layer.enabled) continue;
+      this.renderLayerWithBlending(layer);
+    }
+
+    // Restore previous render target
+    this.renderer.setRenderTarget(previousRenderTarget);
+    this.renderer.autoClear = autoClear;
+
+    return this.tempRenderTarget.texture;
+  }
   
   /**
    * Resize render targets

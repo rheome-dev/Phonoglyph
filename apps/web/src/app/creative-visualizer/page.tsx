@@ -676,9 +676,24 @@ function CreativeVisualizerPage() {
       parameters: {
          triggerValue: 0,
          threshold: 0.5,
-         scale: 1.0,
          opacity: 1.0,
+         position: { x: 0.5, y: 0.5 },
+         size: { width: 1.0, height: 1.0 },
          images: [] 
+      }
+    },
+    { 
+      id: 'asciiFilter', 
+      name: 'ASCII Filter', 
+      description: 'Converts layers beneath to ASCII art with audio-reactive parameters',
+      category: 'Post-Processing',
+      rarity: 'Rare',
+      parameters: {
+        gridSize: 0.05,
+        gamma: 1.2,
+        opacity: 0.87,
+        contrast: 1.4,
+        invert: 0.0
       }
     },
     // HUD Overlay Effects
@@ -1272,6 +1287,18 @@ function CreativeVisualizerPage() {
     if (visualizerRef.current) {
         visualizerRef.current.updateEffectParameter(effectId, paramName, value);
     }
+    
+    // Also update layer settings for persistence (especially for slideshow position/size/opacity)
+    const layer = layers.find(l => l.id === effectId && l.type === 'effect');
+    if (layer) {
+      updateLayer(layer.id, {
+        ...layer,
+        settings: {
+          ...layer.settings,
+          [paramName]: value
+        }
+      });
+    }
   };
 
   const effectModals = Object.entries(openEffectModals).map(([effectId, isOpen], index) => {
@@ -1358,17 +1385,102 @@ function CreativeVisualizerPage() {
                   </div>
 
                   <div className="space-y-1">
-                    <Label className="text-xs">Scale</Label>
+                    <Label className="text-xs">Opacity</Label>
                     <Slider
-                        value={[activeSliderValues[`${layerId}-scale`] ?? 1.0]}
+                        value={[activeSliderValues[`${layerId}-opacity`] ?? (slideshowLayer?.settings?.opacity ?? 1.0)]}
                         onValueChange={([val]) => {
-                            setActiveSliderValues(prev => ({ ...prev, [`${layerId}-scale`]: val }));
-                            handleParameterChange(layerId, 'scale', val);
+                            setActiveSliderValues(prev => ({ ...prev, [`${layerId}-opacity`]: val }));
+                            handleParameterChange(layerId, 'opacity', val);
                         }}
-                        min={0.1}
-                        max={3.0}
-                        step={0.1}
+                        min={0}
+                        max={1.0}
+                        step={0.01}
                     />
+                    <div className="text-[10px] text-stone-500 mt-1">
+                      {(activeSliderValues[`${layerId}-opacity`] ?? (slideshowLayer?.settings?.opacity ?? 1.0)).toFixed(2)}
+                    </div>
+                  </div>
+                </div>
+            </div>
+            
+            <div className="mt-4 pt-4 border-t border-white/10">
+                <Label className="text-xs uppercase text-stone-400 mb-2 block">Position & Size</Label>
+                
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Position X</Label>
+                      <Slider
+                          value={[activeSliderValues[`${layerId}-positionX`] ?? (slideshowLayer?.settings?.position?.x ?? 0.5)]}
+                          onValueChange={([val]) => {
+                              setActiveSliderValues(prev => ({ ...prev, [`${layerId}-positionX`]: val }));
+                              const currentPos = slideshowLayer?.settings?.position || { x: 0.5, y: 0.5 };
+                              handleParameterChange(layerId, 'position', { ...currentPos, x: val });
+                          }}
+                          min={0}
+                          max={1.0}
+                          step={0.01}
+                      />
+                      <div className="text-[10px] text-stone-500 mt-1">
+                        {(activeSliderValues[`${layerId}-positionX`] ?? (slideshowLayer?.settings?.position?.x ?? 0.5)).toFixed(2)}
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <Label className="text-xs">Position Y</Label>
+                      <Slider
+                          value={[activeSliderValues[`${layerId}-positionY`] ?? (slideshowLayer?.settings?.position?.y ?? 0.5)]}
+                          onValueChange={([val]) => {
+                              setActiveSliderValues(prev => ({ ...prev, [`${layerId}-positionY`]: val }));
+                              const currentPos = slideshowLayer?.settings?.position || { x: 0.5, y: 0.5 };
+                              handleParameterChange(layerId, 'position', { ...currentPos, y: val });
+                          }}
+                          min={0}
+                          max={1.0}
+                          step={0.01}
+                      />
+                      <div className="text-[10px] text-stone-500 mt-1">
+                        {(activeSliderValues[`${layerId}-positionY`] ?? (slideshowLayer?.settings?.position?.y ?? 0.5)).toFixed(2)}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Width</Label>
+                      <Slider
+                          value={[activeSliderValues[`${layerId}-sizeWidth`] ?? (slideshowLayer?.settings?.size?.width ?? 1.0)]}
+                          onValueChange={([val]) => {
+                              setActiveSliderValues(prev => ({ ...prev, [`${layerId}-sizeWidth`]: val }));
+                              const currentSize = slideshowLayer?.settings?.size || { width: 1.0, height: 1.0 };
+                              handleParameterChange(layerId, 'size', { ...currentSize, width: val });
+                          }}
+                          min={0.1}
+                          max={1.0}
+                          step={0.01}
+                      />
+                      <div className="text-[10px] text-stone-500 mt-1">
+                        {(activeSliderValues[`${layerId}-sizeWidth`] ?? (slideshowLayer?.settings?.size?.width ?? 1.0)).toFixed(2)}
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <Label className="text-xs">Height</Label>
+                      <Slider
+                          value={[activeSliderValues[`${layerId}-sizeHeight`] ?? (slideshowLayer?.settings?.size?.height ?? 1.0)]}
+                          onValueChange={([val]) => {
+                              setActiveSliderValues(prev => ({ ...prev, [`${layerId}-sizeHeight`]: val }));
+                              const currentSize = slideshowLayer?.settings?.size || { width: 1.0, height: 1.0 };
+                              handleParameterChange(layerId, 'size', { ...currentSize, height: val });
+                          }}
+                          min={0.1}
+                          max={1.0}
+                          step={0.01}
+                      />
+                      <div className="text-[10px] text-stone-500 mt-1">
+                        {(activeSliderValues[`${layerId}-sizeHeight`] ?? (slideshowLayer?.settings?.size?.height ?? 1.0)).toFixed(2)}
+                      </div>
+                    </div>
                   </div>
                 </div>
             </div>

@@ -2,6 +2,7 @@ import { EffectRegistry } from './EffectRegistry';
 import { MetaballsEffect } from './MetaballsEffect';
 import { ParticleNetworkEffect } from './ParticleNetworkEffect';
 import { ImageSlideshowEffect } from './ImageSlideshowEffect';
+import { AsciiFilterEffect } from './AsciiFilterEffect';
 
 // Register built-in effects at module import time
 EffectRegistry.register({
@@ -36,7 +37,24 @@ EffectRegistry.register({
     threshold: 0.5,
     images: [],
     opacity: 1.0,
-    scale: 1.0
+    position: { x: 0.5, y: 0.5 },
+    size: { width: 1.0, height: 1.0 }
+  }
+});
+
+EffectRegistry.register({
+  id: 'asciiFilter',
+  name: 'ASCII Filter',
+  description: 'Converts input to ASCII art with audio-reactive parameters',
+  category: 'filter',
+  version: '1.0.0',
+  constructor: AsciiFilterEffect,
+  defaultConfig: {
+    gridSize: 0.05,
+    gamma: 1.2,
+    opacity: 0.87,
+    contrast: 1.4,
+    invert: 0.0
   }
 });
 

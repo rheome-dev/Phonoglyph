@@ -257,6 +257,12 @@ export class VisualizerManager {
     try {
       debugLog.log(`🎨 Adding effect: ${effect.name} (for layer ${layerId})`);
       effect.init(this.renderer);
+      
+      // If this is an ASCII filter effect, set the compositor reference
+      if (effect.id === 'asciiFilter' && 'setCompositor' in effect) {
+        (effect as any).setCompositor(this.multiLayerCompositor, layerId);
+      }
+      
       this.effects.set(layerId, effect);
       // Register a layer for this effect using the unique layerId
       this.multiLayerCompositor.createLayer(layerId, effect.getScene(), effect.getCamera(), {
