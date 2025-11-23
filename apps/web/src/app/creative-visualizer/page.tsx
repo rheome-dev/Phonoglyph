@@ -1131,9 +1131,9 @@ function CreativeVisualizerPage() {
 
       // Cache mappings - only update when mappings actually change
       const newCachedMappings = Object.entries(currentMappings)
-        .filter(([, mapping]) => mapping.featureId !== null)
-        .map(([paramKey, mapping]) => [paramKey, mapping.featureId!]) as [string, string][];
-      
+          .filter(([, mapping]) => mapping.featureId !== null)
+          .map(([paramKey, mapping]) => [paramKey, mapping.featureId!]) as [string, string][];
+        
       // Check if mappings actually changed by comparing keys and values
       const mappingsChanged = cachedMappings.length !== newCachedMappings.length ||
         cachedMappings.some(([key, val], idx) => {
@@ -1146,7 +1146,10 @@ function CreativeVisualizerPage() {
         });
       
       if (mappingsChanged) {
-        const oldMappings = new Map<string, string>(cachedMappings);
+        const oldMappings = new Map<string, string>();
+        cachedMappings.forEach(([key, value]) => {
+          oldMappings.set(key, value);
+        });
         cachedMappings = newCachedMappings;
         
         // Log when mappings are created or updated (only once)
@@ -1620,7 +1623,7 @@ function CreativeVisualizerPage() {
 
     // All other effects are handled by three-visualizer.tsx
     // Return null to prevent duplicate modals
-    return null;
+            return null;
   });
 
   // Helper to infer stem type from file name
