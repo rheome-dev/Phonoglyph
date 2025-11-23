@@ -144,7 +144,7 @@ export class AsciiFilterEffect implements VisualEffect {
     texture.minFilter = THREE.NearestFilter;
     texture.magFilter = THREE.NearestFilter;
     texture.generateMipmaps = false;
-    texture.flipY = false;
+    texture.flipY = true; // Flip to match GL texture coordinate system
     
     return { texture, cols: CHARS_PER_ROW, rows: NUM_ROWS };
   }
@@ -242,10 +242,8 @@ export class AsciiFilterEffect implements VisualEffect {
         // Get UV (0-1) inside the current single cell
         vec2 localUV = fract(uv * cellCount);
 
-        // Since canvas writes top-down but GL texture reads bottom-up (usually),
-        // we might need to flip the row index. 
-        // If your characters look upside down, remove the "uSpriteGrid.y - 1.0 -" part.
-        float spriteY = (uSpriteGrid.y - 1.0 - rowIndex + localUV.y) / uSpriteGrid.y;
+        // Calculate sprite UV coordinates
+        float spriteY = (rowIndex + localUV.y) / uSpriteGrid.y;
         float spriteX = (colIndex + localUV.x) / uSpriteGrid.x;
 
         vec2 spriteUV = vec2(spriteX, spriteY);

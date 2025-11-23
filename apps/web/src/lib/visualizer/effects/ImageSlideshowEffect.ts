@@ -38,6 +38,7 @@ export class ImageSlideshowEffect implements VisualEffect {
   private failureCount = 0;
   private isAdvancing: boolean = false; // Prevent concurrent advanceSlide calls
   private pendingTextureResolvers: Map<string, ((texture: THREE.Texture) => void)[]> = new Map();
+  private frameCounter: number = 0; // For periodic debug logging
 
   constructor(config?: any) {
     this.id = config?.id || `imageSlideshow_${Math.random().toString(36).substr(2, 9)}`;
@@ -112,6 +113,20 @@ export class ImageSlideshowEffect implements VisualEffect {
 
   update(deltaTime: number, audioData: AudioAnalysisData, midiData: LiveMIDIData): void {
       if (!this.enabled) return;
+
+      this.frameCounter++;
+      
+      // Debug opacity state every 60 frames (~1 second at 60fps)
+      if (this.frameCounter % 60 === 0) {
+        slideshowLog.log('📊 Opacity state check:', {
+          effectId: this.id,
+          parametersOpacity: this.parameters.opacity,
+          materialOpacity: this.material.opacity,
+          materialTransparent: this.material.transparent,
+          hasMap: !!this.material.map,
+          frameCounter: this.frameCounter
+        });
+      }
 
       // If images were added after init, load the first one immediately
       if (this.currentImageIndex === -1 && this.parameters.images.length > 0) {
@@ -273,8 +288,17 @@ export class ImageSlideshowEffect implements VisualEffect {
         slideshowLog.log('Images array unchanged, skipping update');
       }
     } else if (paramName === 'opacity') {
+      const oldOpacity = this.parameters.opacity;
       this.parameters.opacity = typeof value === 'number' ? value : parseFloat(value);
       this.material.opacity = this.parameters.opacity;
+      slideshowLog.log('🔄 Opacity updated via updateParameter:', {
+        effectId: this.id,
+        oldValue: oldOpacity,
+        newValue: this.parameters.opacity,
+        materialOpacity: this.material.opacity,
+        valueType: typeof value,
+        rawValue: value
+      });
     } else if (paramName === 'position') {
       if (value && typeof value === 'object' && 'x' in value && 'y' in value) {
         this.parameters.position = {
@@ -498,14 +522,13 @@ export class ImageSlideshowEffect implements VisualEffect {
               const { bitmap: resizedBitmap, wasResized, originalWidth, originalHeight } = await this.resizeImageIfNeeded(imageBitmap, 2048);
               
               // Create texture from ImageBitmap
-              // Use flipY to correct coordinate system difference
               const texture = new THREE.CanvasTexture(resizedBitmap);
               texture.colorSpace = THREE.SRGBColorSpace;
               texture.minFilter = THREE.LinearFilter;
               texture.magFilter = THREE.LinearFilter;
               texture.generateMipmaps = false;
               texture.matrixAutoUpdate = true;
-              texture.flipY = true; // Fix coordinate system for ImageBitmap/CanvasTexture
+              texture.flipY = false; // CanvasTexture is already in correct orientation
               
               this.textureCache.set(url, texture);
               this.loadingImages.delete(url);
