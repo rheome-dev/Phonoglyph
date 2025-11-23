@@ -276,8 +276,6 @@ export class ImageSlideshowEffect implements VisualEffect {
     } else if (paramName === 'opacity') {
       this.parameters.opacity = typeof value === 'number' ? value : parseFloat(value);
       this.material.opacity = this.parameters.opacity;
-      // Ensure material updates for immediate visual feedback (like MetaballsEffect)
-      this.material.needsUpdate = true;
     } else if (paramName === 'position') {
       if (value && typeof value === 'object' && 'x' in value && 'y' in value) {
         this.parameters.position = {
