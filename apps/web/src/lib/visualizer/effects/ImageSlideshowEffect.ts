@@ -160,7 +160,6 @@ export class ImageSlideshowEffect implements VisualEffect {
       
       // Update previous value for next frame
       this.previousTriggerValue = currentValue;
-      this.material.opacity = this.parameters.opacity;
       
       // Update plane position and size if parameters changed
       this.updatePlaneGeometryAndPosition();
