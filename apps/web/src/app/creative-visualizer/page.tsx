@@ -1390,7 +1390,7 @@ function CreativeVisualizerPage() {
                     parameterId={`${layerId}-opacity`}
                     label="Opacity"
                     mappedFeatureId={mappings[`${layerId}-opacity`]?.featureId || null}
-                    mappedFeatureName={mappings[`${layerId}-opacity`]?.featureId ? featureNames[mappings[`${layerId}-opacity`]?.featureId] : undefined}
+                    mappedFeatureName={mappings[`${layerId}-opacity`]?.featureId ? featureNames[mappings[`${layerId}-opacity`]!.featureId] : undefined}
                     modulationAmount={mappings[`${layerId}-opacity`]?.modulationAmount ?? 0.5}
                     baseValue={baseParameterValues[`${layerId}-opacity`] ?? (activeSliderValues[`${layerId}-opacity`] ?? (slideshowLayer?.settings?.opacity ?? 1.0))}
                     modulatedValue={modulatedParameterValues[`${layerId}-opacity`] ?? (activeSliderValues[`${layerId}-opacity`] ?? (slideshowLayer?.settings?.opacity ?? 1.0))}
