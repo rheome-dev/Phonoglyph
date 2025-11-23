@@ -672,7 +672,7 @@ function CreativeVisualizerPage() {
       description: 'Rhythmic image slideshow triggered by audio transients',
       category: 'Generative',
       rarity: 'Common',
-      image: '/effects/generative/slideshow.png',
+      image: '/effects/generative/imageSlideshow.png',
       parameters: {
          triggerValue: 0,
          threshold: 0.5,

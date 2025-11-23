@@ -421,9 +421,11 @@ export class ImageSlideshowEffect implements VisualEffect {
      const imageAspect = texture.image.width / texture.image.height;
      const screenAspect = this.aspectRatio;
      
-     // Fix: Allow auto update for repeat/center/offset to work
-     texture.matrixAutoUpdate = true; 
+     // Reset texture matrix to identity before applying transformations
+     texture.matrixAutoUpdate = true;
+     texture.matrix.identity();
      texture.center.set(0.5, 0.5);
+     texture.offset.set(0, 0);
      
      if (imageAspect > screenAspect) {
          // Image is wider than screen
@@ -528,7 +530,7 @@ export class ImageSlideshowEffect implements VisualEffect {
               texture.magFilter = THREE.LinearFilter;
               texture.generateMipmaps = false;
               texture.matrixAutoUpdate = true;
-              texture.flipY = false; // CanvasTexture is already in correct orientation
+              texture.flipY = true; // Flip Y to match OpenGL texture coordinate system (bottom-left origin)
               
               this.textureCache.set(url, texture);
               this.loadingImages.delete(url);
