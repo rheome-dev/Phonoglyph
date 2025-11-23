@@ -436,6 +436,7 @@ export class ImageSlideshowEffect implements VisualEffect {
               texture.magFilter = THREE.LinearFilter;
               texture.generateMipmaps = false;
               texture.matrixAutoUpdate = true;
+              texture.flipY = true; // Fix: ImageBitmap coordinate system is flipped
               
               this.textureCache.set(url, texture);
               this.loadingImages.delete(url);
