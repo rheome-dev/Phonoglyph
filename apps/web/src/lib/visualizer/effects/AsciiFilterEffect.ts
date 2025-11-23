@@ -31,6 +31,8 @@ export class AsciiFilterEffect implements VisualEffect {
   private compositor?: MultiLayerCompositor;
   private layerId?: string;
   private logFrameCount: number = 0;
+  private spriteCols: number = 16;
+  private spriteRows: number = 6;
 
   constructor(config: Partial<AsciiFilterConfig> = {}) {
     this.id = config?.id || `asciiFilter_${Math.random().toString(36).substr(2, 9)}`;
@@ -69,13 +71,12 @@ export class AsciiFilterEffect implements VisualEffect {
     this.layerId = layerId;
   }
 
-  private generateFontSprite(): THREE.Texture {
-    // Create a canvas to generate ASCII font sprite
+  private generateFontSprite(): { texture: THREE.Texture; cols: number; rows: number } {
     const canvas = document.createElement('canvas');
-    const GLYPH_HEIGHT = 40;
-    const GLYPH_WIDTH = 24; // Monospace width
-    const CHARS_PER_ROW = 16; // 16 characters per row
-    const NUM_CHARS = 95; // ASCII 32-126 (printable characters)
+    const GLYPH_HEIGHT = 64; // Increased resolution for crispness
+    const GLYPH_WIDTH = 32;  // Aspect ratio ~0.5
+    const CHARS_PER_ROW = 16;
+    const NUM_CHARS = 95; // ASCII 32-126
     const NUM_ROWS = Math.ceil(NUM_CHARS / CHARS_PER_ROW);
     
     canvas.width = CHARS_PER_ROW * GLYPH_WIDTH;
@@ -86,37 +87,36 @@ export class AsciiFilterEffect implements VisualEffect {
       throw new Error('Could not get 2d context for font sprite generation');
     }
 
-    // White background
+    // 1. Fill Background (Black)
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    // White text
+    // 2. Draw Characters (White)
     ctx.fillStyle = '#FFFFFF';
-    ctx.font = `${GLYPH_HEIGHT * 0.8}px monospace`;
+    ctx.font = `bold ${GLYPH_HEIGHT * 0.75}px monospace`; // Bold for better readability
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    // Generate ASCII characters from space (32) to ~ (126)
     for (let i = 0; i < NUM_CHARS; i++) {
-      const charCode = 32 + i;
-      const char = String.fromCharCode(charCode);
+      const char = String.fromCharCode(32 + i);
       const row = Math.floor(i / CHARS_PER_ROW);
       const col = i % CHARS_PER_ROW;
       
       const x = col * GLYPH_WIDTH + GLYPH_WIDTH / 2;
-      const y = row * GLYPH_HEIGHT + GLYPH_HEIGHT / 2;
+      // Adjust Y slightly if font baseline feels off
+      const y = row * GLYPH_HEIGHT + GLYPH_HEIGHT / 2; 
       
       ctx.fillText(char, x, y);
     }
 
-    // Create texture from canvas
     const texture = new THREE.CanvasTexture(canvas);
-    texture.minFilter = THREE.LinearFilter;
-    texture.magFilter = THREE.LinearFilter;
+    // CRITICAL: Use NearestFilter for pixel-perfect ASCII edges
+    texture.minFilter = THREE.NearestFilter;
+    texture.magFilter = THREE.NearestFilter;
     texture.generateMipmaps = false;
     texture.flipY = false;
     
-    return texture;
+    return { texture, cols: CHARS_PER_ROW, rows: NUM_ROWS };
   }
 
   private setupUniforms() {
@@ -125,6 +125,7 @@ export class AsciiFilterEffect implements VisualEffect {
     this.uniforms = {
       uTexture: { value: this.sourceTexture || null },
       uSprite: { value: this.fontSpriteTexture },
+      uSpriteGrid: { value: new THREE.Vector2(this.spriteCols, this.spriteRows) }, // Pass dimensions to shader
       uResolution: { value: new THREE.Vector2(size.x, size.y) },
       uGridSize: { value: this.parameters.gridSize },
       uGamma: { value: this.parameters.gamma },
@@ -150,6 +151,7 @@ export class AsciiFilterEffect implements VisualEffect {
       uniform sampler2D uTexture;
       uniform sampler2D uSprite;
       uniform vec2 uResolution;
+      uniform vec2 uSpriteGrid; // x = cols, y = rows
       uniform float uGridSize;
       uniform float uGamma;
       uniform float uOpacity;
@@ -158,82 +160,69 @@ export class AsciiFilterEffect implements VisualEffect {
 
       varying vec2 vUv;
 
-      const float GLYPH_HEIGHT = 40.0;
-
       void main() {
         vec2 uv = vUv;
         
-        // Calculate aspect ratio to keep grid cells square
+        // 1. Aspect Ratio Correction
         float aspectRatio = uResolution.x / uResolution.y;
-        float aspectCorrection = mix(aspectRatio, 1.0 / aspectRatio, 0.5);
         
-        // Grid setup - audio reactive via uGridSize
-        float baseGrid = 1.0 / uGridSize;
-        vec2 cellSize = vec2(1.0 / (baseGrid * aspectRatio), 1.0 / baseGrid) * aspectCorrection;
+        // Define the number of characters across the screen
+        // uGridSize = 0.02 means ~50 characters wide
+        float charsAcross = 1.0 / uGridSize;
+        float charsDown = charsAcross / aspectRatio * 0.5; // 0.5 accounts for char aspect ratio (width/height)
+
+        vec2 cellCount = vec2(charsAcross, charsDown);
         
-        // Calculate which grid cell we are currently in
-        vec2 cell = floor(uv / cellSize);
-        vec2 cellCenter = (cell + 0.5) * cellSize;
-        vec2 pixelatedCoord = cellCenter;
+        // 2. Grid Calculation
+        vec2 gridUV = floor(uv * cellCount) / cellCount; // The UV of the cell's top-left
+        vec2 centerUV = gridUV + (0.5 / cellCount);      // The UV of the cell's center
         
-        // Sample the original texture
+        // 3. Sample Luminance
+        vec4 color = texture2D(uTexture, centerUV);
+        float gray = dot(color.rgb, vec3(0.299, 0.587, 0.114)); // Standard Luma weights
+        
+        // Apply Invert and Contrast
+        gray = mix(gray, 1.0 - gray, uInvert);
+        gray = pow(gray, uGamma); // Gamma corrects distribution
+        gray = clamp((gray - 0.5) * uContrast + 0.5, 0.0, 1.0);
+
+        // 4. Map Luminance to Character Index
+        // Total characters in sprite sheet
+        float totalChars = uSpriteGrid.x * uSpriteGrid.y; 
+        
+        // Map 0.0-1.0 to 0-(totalChars-1)
+        // We subtract 1.0 so white doesn't overflow the array
+        float charIndex = floor(gray * (totalChars - 1.0));
+
+        // 5. Calculate 2D Sprite Coordinates (Row/Col)
+        float colIndex = mod(charIndex, uSpriteGrid.x);
+        float rowIndex = floor(charIndex / uSpriteGrid.x);
+
+        // 6. Map Local UV to Sprite Sheet UV
+        // Get UV (0-1) inside the current single cell
+        vec2 localUV = fract(uv * cellCount);
+
+        // Since canvas writes top-down but GL texture reads bottom-up (usually),
+        // we might need to flip the row index. 
+        // If your characters look upside down, remove the "uSpriteGrid.y - 1.0 -" part.
+        float spriteY = (uSpriteGrid.y - 1.0 - rowIndex + localUV.y) / uSpriteGrid.y;
+        float spriteX = (colIndex + localUV.x) / uSpriteGrid.x;
+
+        vec2 spriteUV = vec2(spriteX, spriteY);
+
+        // 7. Sample Sprite
+        vec4 charColor = texture2D(uSprite, spriteUV);
+
+        // 8. Composite
+        // If it's black background, we just want the white text color
+        vec3 finalColor = mix(color.rgb, vec3(1.0), charColor.r);
+        
+        // Alternatively, if you want colored text on black bg:
+        // vec3 finalColor = color.rgb * charColor.r;
+
+        // Output with opacity
         vec4 bg = texture2D(uTexture, uv);
-        vec4 color = texture2D(uTexture, pixelatedCoord);
-        
-        // Calculate Luminance (Brightness) of the pixelated cell
-        float luminance = dot(color.rgb, vec3(0.2126, 0.7152, 0.0722));
-        luminance = mix(luminance, 1.0 - luminance, uInvert);
-        
-        // Gamma correction for better font weight selection - audio reactive
-        float gammaCorrected = pow(clamp(luminance, 0.0, 1.0), uGamma);
-        
-        // Texture sizes
-        ivec2 spriteTextureSize = textureSize(uSprite, 0);
-        
-        // Determine which glyph to use based on luminance
-        float numSprites = max(1.0, float(spriteTextureSize.x) / GLYPH_HEIGHT);
-        float numGlyphRows = 1.0;
-        
-        float spriteIndexWithGamma = clamp(floor(gammaCorrected * numSprites), 0.0, numSprites - 1.0);
-        float glyphIndex = 0.0;
-        
-        // Calculate UVs within the Sprite Sheet
-        float normalizedSpriteSizeX = 1.0 / numSprites;
-        float normalizedSpriteSizeY = 1.0 / numGlyphRows;
-        float spriteX = spriteIndexWithGamma * normalizedSpriteSizeX;
-        
-        vec2 spriteSheetUV = vec2(spriteX, glyphIndex / numGlyphRows);
-        float scaleFactor = uGridSize / GLYPH_HEIGHT;
-        vec2 spriteSize = vec2(GLYPH_HEIGHT / aspectRatio, GLYPH_HEIGHT) * scaleFactor * aspectCorrection;
-        
-        // Map local UVs inside the grid cell to the sprite character
-        vec2 localOffset = mod(uv, cellSize) / cellSize;
-        
-        // Add a small inset to prevent bleeding between characters
-        float inset = 0.5 / GLYPH_HEIGHT;
-        localOffset = clamp(localOffset, inset, 1.0 - inset);
-        
-        spriteSheetUV += vec2(
-          localOffset.x * normalizedSpriteSizeX, 
-          localOffset.y * normalizedSpriteSizeY
-        );
-        
-        // Sample the Sprite Sheet
-        vec4 spriteColor = texture2D(uSprite, spriteSheetUV);
-        
-        // Use the red channel of the sprite as the alpha mask for the character
-        float alpha = smoothstep(0.0, 1.0, spriteColor.r);
-        
-        // Coloring Logic - audio reactive contrast
-        vec3 cc = (color.rgb - spriteIndexWithGamma * 0.04) * uContrast;
-        
-        // Final Mix: Background vs Dithered Character
-        vec3 dithered = cc;
-        
-        // Final blend with original background - audio reactive opacity
-        color.rgb = mix(bg.rgb, dithered, alpha * uOpacity);
-        
-        gl_FragColor = color;
+        gl_FragColor = mix(bg, vec4(finalColor, 1.0), uOpacity);
       }
     `;
 
@@ -271,7 +260,11 @@ export class AsciiFilterEffect implements VisualEffect {
     
     // Generate font sprite texture
     try {
-      this.fontSpriteTexture = this.generateFontSprite();
+      // Destructure the result
+      const spriteData = this.generateFontSprite();
+      this.fontSpriteTexture = spriteData.texture;
+      this.spriteCols = spriteData.cols;
+      this.spriteRows = spriteData.rows;
     } catch (error) {
       debugLog.error('Failed to generate font sprite:', error);
       // Create a fallback white texture
@@ -284,6 +277,8 @@ export class AsciiFilterEffect implements VisualEffect {
         ctx.fillRect(0, 0, 1, 1);
       }
       this.fontSpriteTexture = new THREE.CanvasTexture(canvas);
+      this.spriteCols = 16;
+      this.spriteRows = 6;
     }
 
     this.setupUniforms();
@@ -308,6 +303,11 @@ export class AsciiFilterEffect implements VisualEffect {
     this.uniforms.uOpacity.value = this.parameters.opacity;
     this.uniforms.uContrast.value = this.parameters.contrast;
     this.uniforms.uInvert.value = this.parameters.invert;
+    
+    // Update sprite grid dimensions
+    if (this.uniforms.uSpriteGrid) {
+      this.uniforms.uSpriteGrid.value.set(this.spriteCols, this.spriteRows);
+    }
 
     // Get source texture from compositor (layers beneath) or fallback to parameter
     let sourceTexture: THREE.Texture | null = null;
