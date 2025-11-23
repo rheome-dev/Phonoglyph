@@ -1387,19 +1387,21 @@ function CreativeVisualizerPage() {
                   </div>
 
                   {(() => {
-                    const opacityMapping = mappings[`${layerId}-opacity`];
+                    const paramKey = `${layerId}-opacity`;
+                    const opacityMapping = mappings[paramKey];
                     const mappedFeatureId = opacityMapping?.featureId || null;
                     const mappedFeatureName = mappedFeatureId ? featureNames[mappedFeatureId] : undefined;
-                    const isMapped = !!mappedFeatureId;
+                    const baseVal = baseParameterValues[paramKey] ?? (activeSliderValues[paramKey] ?? (slideshowLayer?.settings?.opacity ?? 1.0));
+                    const modulatedVal = modulatedParameterValues[paramKey] ?? baseVal;
                     return (
                       <DroppableParameter
-                        parameterId={`${layerId}-opacity`}
+                        parameterId={paramKey}
                         label="Opacity"
                         mappedFeatureId={mappedFeatureId}
                         mappedFeatureName={mappedFeatureName}
                         modulationAmount={opacityMapping?.modulationAmount ?? 0.5}
-                        baseValue={baseParameterValues[`${layerId}-opacity`] ?? (activeSliderValues[`${layerId}-opacity`] ?? (slideshowLayer?.settings?.opacity ?? 1.0))}
-                        modulatedValue={modulatedParameterValues[`${layerId}-opacity`] ?? (activeSliderValues[`${layerId}-opacity`] ?? (slideshowLayer?.settings?.opacity ?? 1.0))}
+                        baseValue={baseVal}
+                        modulatedValue={modulatedVal}
                         sliderMax={1.0}
                         onFeatureDrop={handleMapFeature}
                         onFeatureUnmap={handleUnmapFeature}
@@ -1410,16 +1412,17 @@ function CreativeVisualizerPage() {
                       >
                         <div className="relative z-20">
                           <Slider
-                            value={[activeSliderValues[`${layerId}-opacity`] ?? (slideshowLayer?.settings?.opacity ?? 1.0)]}
+                            value={[baseVal]}
                             onValueChange={([val]) => {
-                              setActiveSliderValues(prev => ({ ...prev, [`${layerId}-opacity`]: val }));
+                              // Update base value (not the modulated value)
+                              setBaseParameterValues(prev => ({ ...prev, [paramKey]: val }));
+                              setActiveSliderValues(prev => ({ ...prev, [paramKey]: val }));
                               handleParameterChange(layerId, 'opacity', val);
                             }}
                             min={0}
                             max={1.0}
                             step={0.01}
                             className="w-full"
-                            disabled={isMapped}
                           />
                         </div>
                       </DroppableParameter>
@@ -1572,8 +1575,10 @@ function CreativeVisualizerPage() {
                   showTagOnHover
                 >
                                             <Slider
-                            value={[activeSliderValues[paramKey] ?? value]}
+                            value={[baseParameterValues[paramKey] ?? (activeSliderValues[paramKey] ?? value)]}
                             onValueChange={([val]) => {
+                              // Update base value (not the modulated value)
+                              setBaseParameterValues(prev => ({ ...prev, [paramKey]: val }));
                               setActiveSliderValues(prev => ({ ...prev, [paramKey]: val }));
                               handleParameterChange(effectId, paramName, val);
                             }}
@@ -1581,7 +1586,6 @@ function CreativeVisualizerPage() {
                             max={getSliderMax(paramName)}
                             step={getSliderStep(paramName)}
                             className="w-full"
-                            disabled={!!mappedFeatureId} // Disable manual control when mapped
                           />
                 </DroppableParameter>
               );
