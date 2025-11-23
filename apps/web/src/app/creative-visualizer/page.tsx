@@ -7,7 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Play, Pause, RotateCcw, Zap, Palette, Settings2, Eye, EyeOff, Info, Map } from 'lucide-react';
+import { Play, Pause, RotateCcw, Zap, Palette, Settings2, Eye, EyeOff, Info, Map as MapIcon } from 'lucide-react';
 import { ThreeVisualizer } from '@/components/midi/three-visualizer';
 import { EffectsLibrarySidebar, EffectUIData } from '@/components/ui/EffectsLibrarySidebar';
 import { CollapsibleEffectsSidebar } from '@/components/layout/collapsible-effects-sidebar';
@@ -1146,10 +1146,7 @@ function CreativeVisualizerPage() {
         });
       
       if (mappingsChanged) {
-        const oldMappings = new Map<string, string>();
-        cachedMappings.forEach(([key, value]) => {
-          oldMappings.set(key, value);
-        });
+        const oldMappings = new Map(cachedMappings);
         cachedMappings = newCachedMappings;
         
         // Log when mappings are created or updated (only once)
