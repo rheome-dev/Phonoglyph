@@ -1129,17 +1129,33 @@ function CreativeVisualizerPage() {
         }
       }
 
-      // Cache mappings
-      if (cachedMappings.length !== Object.keys(currentMappings).length) {
-        const oldMappings = new Set(cachedMappings.map(([key]) => key));
-        cachedMappings = Object.entries(currentMappings)
-          .filter(([, mapping]) => mapping.featureId !== null)
-          .map(([paramKey, mapping]) => [paramKey, mapping.featureId!]) as [string, string][];
+      // Cache mappings - only update when mappings actually change
+      const newCachedMappings = Object.entries(currentMappings)
+        .filter(([, mapping]) => mapping.featureId !== null)
+        .map(([paramKey, mapping]) => [paramKey, mapping.featureId!]) as [string, string][];
+      
+      // Check if mappings actually changed by comparing keys and values
+      const mappingsChanged = cachedMappings.length !== newCachedMappings.length ||
+        cachedMappings.some(([key, val], idx) => {
+          const newMapping = newCachedMappings[idx];
+          return !newMapping || newMapping[0] !== key || newMapping[1] !== val;
+        }) ||
+        newCachedMappings.some(([key, val], idx) => {
+          const oldMapping = cachedMappings[idx];
+          return !oldMapping || oldMapping[0] !== key || oldMapping[1] !== val;
+        });
+      
+      if (mappingsChanged) {
+        const oldMappings = new Map(cachedMappings);
+        cachedMappings = newCachedMappings;
         
-        // Log when mappings are created or updated
-        const newMappings = cachedMappings.filter(([key]) => !oldMappings.has(key));
+        // Log when mappings are created or updated (only once)
+        const newMappings = cachedMappings.filter(([key, featureId]) => 
+          !oldMappings.has(key) || oldMappings.get(key) !== featureId
+        );
         const opacityMappings = cachedMappings.filter(([key]) => key.includes('-opacity'));
-        if (newMappings.length > 0 || opacityMappings.length > 0) {
+        
+        if (newMappings.length > 0) {
           console.log('🎯 Mappings updated:', {
             totalMappings: cachedMappings.length,
             newMappings: newMappings.map(([key, featureId]) => ({ paramKey: key, featureId })),
@@ -1150,16 +1166,38 @@ function CreativeVisualizerPage() {
 
       // General Audio Feature Mapping
       if (currentCachedAnalysis && currentCachedAnalysis.length > 0) {
+        // Debug: log once per second if we have opacity mappings
+        const hasOpacityMapping = cachedMappings.some(([key]) => key.includes('-opacity'));
+        if (hasOpacityMapping && frameCount % 60 === 0) {
+          console.log('🎚️ Audio mapping loop active:', {
+            cachedMappingsCount: cachedMappings.length,
+            opacityMappings: cachedMappings.filter(([key]) => key.includes('-opacity')).map(([key, id]) => ({ key, id })),
+            cachedAnalysisCount: currentCachedAnalysis.length,
+            syncTime: syncTime.toFixed(3),
+            isPlaying
+          });
+        }
+        
         for (const [paramKey, featureId] of cachedMappings) {
           if (!featureId) continue;
 
           const featureStemType = getStemTypeFromFeatureId(featureId);
-          if (!featureStemType) continue;
+          if (!featureStemType) {
+            if (paramKey.includes('-opacity') && frameCount % 60 === 0) {
+              console.warn('⚠️ Could not get stem type from featureId:', { paramKey, featureId });
+            }
+            continue;
+          }
 
           const stemAnalysis = currentCachedAnalysis?.find(
             a => a.stemType === featureStemType
           );
-          if (!stemAnalysis) continue;
+          if (!stemAnalysis) {
+            if (paramKey.includes('-opacity') && frameCount % 60 === 0) {
+              console.warn('⚠️ Stem analysis not found:', { paramKey, featureId, featureStemType, availableStems: currentCachedAnalysis.map(a => a.stemType) });
+            }
+            continue;
+          }
 
           const rawValue = audioAnalysis.getFeatureValue(
             stemAnalysis.fileMetadataId,
@@ -1168,12 +1206,22 @@ function CreativeVisualizerPage() {
             featureStemType
           );
 
-          if (rawValue === null || rawValue === undefined) continue;
+          if (rawValue === null || rawValue === undefined) {
+            if (paramKey.includes('-opacity') && frameCount % 60 === 0) {
+              console.warn('⚠️ Raw value is null/undefined:', { paramKey, featureId, syncTime: syncTime.toFixed(3) });
+            }
+            continue;
+          }
 
           const [effectId, ...paramParts] = paramKey.split('-');
           const paramName = paramParts.join('-');
           
-          if (!effectId || !paramName) continue;
+          if (!effectId || !paramName) {
+            if (paramKey.includes('-opacity') && frameCount % 60 === 0) {
+              console.warn('⚠️ Could not parse paramKey:', { paramKey, effectId, paramName });
+            }
+            continue;
+          }
 
           const maxValue = getSliderMax(paramName);
           const knobFull = (currentMappings[paramKey]?.modulationAmount ?? 0.5) * 2 - 1; 
@@ -1204,6 +1252,16 @@ function CreativeVisualizerPage() {
           if (frameCount % 10 === 0) {
             setModulatedParameterValues(prev => ({ ...prev, [paramKey]: scaledValue }));
           }
+        }
+      } else {
+        // Log when audio mapping loop doesn't run
+        if (cachedMappings.length > 0 && frameCount % 120 === 0) {
+          console.warn('⚠️ Audio mapping loop not running:', {
+            cachedMappingsCount: cachedMappings.length,
+            hasCachedAnalysis: !!currentCachedAnalysis,
+            cachedAnalysisLength: currentCachedAnalysis?.length || 0,
+            isPlaying
+          });
         }
       }
       
@@ -1560,124 +1618,9 @@ function CreativeVisualizerPage() {
       );
     }
 
-    const sortedParams = Object.entries(effectInstance.parameters || {}).sort(([, a], [, b]) => {
-      if (typeof a === 'boolean' && typeof b !== 'boolean') return -1;
-      if (typeof a !== 'boolean' && typeof b === 'boolean') return 1;
-      return 0;
-    });
-    if (sortedParams.length === 0) return null;
-    const initialPos = {
-      x: 100 + (index * 50),
-      y: 100 + (index * 50)
-    };
-    return (
-      <PortalModal
-        key={effectId}
-        title={effectInstance.name.replace(' Effect', '')}
-        isOpen={isOpen}
-        onClose={() => handleCloseEffectModal(effectId)}
-        initialPosition={initialPos}
-        bounds="#editor-bounds"
-      >
-        <div className="flex flex-col gap-4 max-h-96 overflow-y-auto">
-          {sortedParams.map(([paramName, value]) => {
-            if (typeof value === 'boolean') {
-              return (
-                <div key={paramName} className="flex items-center justify-between">
-                  <Label className="text-white/80 text-xs font-mono">{paramName}</Label>
-                  <Switch
-                    checked={value}
-                    onCheckedChange={(checked) => handleParameterChange(effectId, paramName, checked)}
-                  />
-                </div>
-              );
-            }
-            if (typeof value === 'number') {
-              const paramKey = `${effectId}-${paramName}`;
-              const mapping = mappings[paramKey];
-              const mappedFeatureId = mapping?.featureId || null;
-              const mappedFeatureName = mappedFeatureId ? featureNames[mappedFeatureId] : undefined;
-              const modulationAmount = mapping?.modulationAmount ?? 0.5;
-              const baseVal = activeSliderValues[paramKey] ?? value;
-              return (
-                <DroppableParameter
-                  key={paramKey}
-                  parameterId={paramKey}
-                  label={paramName}
-                  mappedFeatureId={mappedFeatureId}
-                  mappedFeatureName={mappedFeatureName}
-                  modulationAmount={modulationAmount}
-                  baseValue={baseParameterValues[paramKey] ?? baseVal}
-                  modulatedValue={modulatedParameterValues[paramKey] ?? baseVal}
-                  sliderMax={getSliderMax(paramName)}
-                  onFeatureDrop={handleMapFeature}
-                  onFeatureUnmap={handleUnmapFeature}
-                  onModulationAmountChange={handleModulationAmountChange}
-                  className="mb-2"
-                  dropZoneStyle="inlayed"
-                  showTagOnHover
-                >
-                                            <Slider
-                            value={[baseParameterValues[paramKey] ?? (activeSliderValues[paramKey] ?? value)]}
-                            onValueChange={([val]) => {
-                              // Update base value (not the modulated value)
-                              setBaseParameterValues(prev => ({ ...prev, [paramKey]: val }));
-                              setActiveSliderValues(prev => ({ ...prev, [paramKey]: val }));
-                              handleParameterChange(effectId, paramName, val);
-                            }}
-                            min={0}
-                            max={getSliderMax(paramName)}
-                            step={getSliderStep(paramName)}
-                            className="w-full"
-                          />
-                </DroppableParameter>
-              );
-            }
-            if ((paramName === 'highlightColor' || paramName === 'particleColor') && Array.isArray(value)) {
-              const displayName = paramName === 'highlightColor' ? 'Highlight Color' : 'Particle Color';
-              return (
-                <div key={paramName} className="space-y-2">
-                  <Label className="text-white/90 text-sm font-medium flex items-center justify-between">
-                    {displayName}
-                    <span className="ml-2 w-6 h-6 rounded-full border border-white/40 inline-block" style={{ background: `rgb(${value.map((v) => Math.round(v * 255)).join(',')})` }} />
-                  </Label>
-                  <input
-                    type="color"
-                    value={`#${value.map((v) => Math.round(v * 255).toString(16).padStart(2, '0')).join('')}`}
-                    onChange={e => {
-                      const hex = e.target.value;
-                      const rgb = [
-                        parseInt(hex.slice(1, 3), 16) / 255,
-                        parseInt(hex.slice(3, 5), 16) / 255,
-                        parseInt(hex.slice(5, 7), 16) / 255
-                      ];
-                      handleParameterChange(effectId, paramName, rgb);
-                    }}
-                    className="w-12 h-8 rounded border border-white/30 bg-transparent cursor-pointer"
-                  />
-                </div>
-              );
-            }
-            return null;
-          })}
-          {/* Effect Enabled Toggle - Remove border and adjust spacing */}
-          <div className="pt-2 mt-2">
-            <div className="flex items-center justify-between">
-              <Label className="text-white/80 text-xs font-mono">Effect Enabled</Label>
-              <Switch 
-                checked={selectedEffects[effectId]}
-                onCheckedChange={(checked) => {
-                  setSelectedEffects(prev => ({
-                    ...prev,
-                    [effectId]: checked
-                  }));
-                }}
-              />
-            </div>
-          </div>
-        </div>
-      </PortalModal>
-    );
+    // All other effects are handled by three-visualizer.tsx
+    // Return null to prevent duplicate modals
+    return null;
   });
 
   // Helper to infer stem type from file name
