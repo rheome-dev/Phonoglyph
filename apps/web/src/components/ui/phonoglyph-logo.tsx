@@ -96,9 +96,24 @@ export function PhonoglyphLogo({ className, size = 'md' }: PhonoglyphLogoProps) 
   const scaledFontSize = baseFontSize * scale;
   const scaledLineHeight = baseFontSize * scale;
   
-  // Safari renders JetBrains Mono ~10% wider, so we apply a correction factor
-  const safariCorrection = safari ? 0.6 : 1;
-  const finalScale = transformScale * safariCorrection;
+  // Safari renders JetBrains Mono wider horizontally, so we apply a correction factor
+  // Use separate X/Y scaling to prevent vertical squishing
+  const safariCorrectionX = safari ? 0.7 : 1;
+  const safariCorrectionY = safari ? 1.0 : 1; // Keep vertical at 1.0 to prevent squish
+  const finalScaleX = transformScale * safariCorrectionX;
+  const finalScaleY = transformScale * safariCorrectionY;
+
+  // Build transform string - only apply if we need scaling
+  let transformValue: string | undefined;
+  if (finalScaleX < 1 || finalScaleY < 1) {
+    if (safari && finalScaleX < 1) {
+      // Safari: separate X/Y scaling to prevent vertical squish
+      transformValue = `scaleX(${finalScaleX}) scaleY(${finalScaleY})`;
+    } else if (finalScaleX < 1) {
+      // Other browsers: uniform scaling if needed
+      transformValue = `scale(${finalScaleX})`;
+    }
+  }
 
   return (
     <div 
@@ -126,7 +141,7 @@ export function PhonoglyphLogo({ className, size = 'md' }: PhonoglyphLogoProps) 
           textRendering: 'geometricPrecision',
           WebkitFontSmoothing: 'antialiased',
           MozOsxFontSmoothing: 'grayscale',
-          transform: finalScale < 1 ? `scale(${finalScale})` : undefined,
+          transform: transformValue,
           transformOrigin: 'top left',
         }}
       >
