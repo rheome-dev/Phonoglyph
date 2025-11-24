@@ -8,13 +8,13 @@ interface PhonoglyphLogoProps {
 
 export function PhonoglyphLogo({ className, size = 'md' }: PhonoglyphLogoProps) {
   const sizeScale = {
-    sm: 0.32,
-    md: 0.42,
-    lg: 0.52
+    sm: 0.67,
+    md: 1,
+    lg: 1.33
   } as const satisfies Record<NonNullable<PhonoglyphLogoProps['size']>, number>;
 
   const scale = sizeScale[size] ?? sizeScale.md;
-  const baseFontSize = 10;
+  const baseFontSize = 3;
   const scaledFontSize = baseFontSize * scale;
   const scaledLineHeight = baseFontSize * scale;
   
