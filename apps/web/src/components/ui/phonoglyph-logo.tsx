@@ -62,10 +62,18 @@ export function PhonoglyphLogo({ className, size = 'md' }: PhonoglyphLogoProps) 
           className
         )}
         style={{
+          fontFamily: 'var(--font-mono)',
           fontSize: `${scaledFontSize}px`,
           lineHeight: `${scaledLineHeight}px`,
+          letterSpacing: '0',
           margin: 0,
           padding: 0,
+          fontVariantLigatures: 'none',
+          fontKerning: 'none',
+          fontFeatureSettings: '"liga" 0, "calt" 0, "kern" 0',
+          textRendering: 'optimizeSpeed',
+          WebkitFontSmoothing: 'antialiased',
+          MozOsxFontSmoothing: 'grayscale',
           transform: horizontalScale < 1 ? `scaleX(${horizontalScale})` : undefined,
           transformOrigin: 'left top'
         }}
