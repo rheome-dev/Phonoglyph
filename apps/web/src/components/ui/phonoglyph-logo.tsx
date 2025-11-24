@@ -97,7 +97,7 @@ export function PhonoglyphLogo({ className, size = 'md' }: PhonoglyphLogoProps) 
   const scaledLineHeight = baseFontSize * scale;
   
   // Safari renders JetBrains Mono ~10% wider, so we apply a correction factor
-  const safariCorrection = safari ? 0.9 : 1;
+  const safariCorrection = safari ? 0.6 : 1;
   const finalScale = transformScale * safariCorrection;
 
   return (
