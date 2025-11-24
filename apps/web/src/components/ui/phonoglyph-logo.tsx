@@ -8,6 +8,18 @@ interface PhonoglyphLogoProps {
   size?: 'sm' | 'md' | 'lg';
 }
 
+const LOGO_TEXT = `                                                                                                                    
+                                                                                                                    
+\`7MM"""Mq.\`7MMF'  \`7MMF' .g8""8q. \`7MN.   \`7MF' .g8""8q.     .g8"""bgd \`7MMF'   \`YMM'   \`MM'\`7MM"""Mq.\`7MMF'  \`7MMF'
+  MM   \`MM. MM      MM .dP'    \`YM. MMN.    M .dP'    \`YM. .dP'     \`M   MM       VMA   ,V    MM   \`MM. MM      MM  
+  MM   ,M9  MM      MM dM'      \`MM M YMb   M dM'      \`MM dM'       \`   MM        VMA ,V     MM   ,M9  MM      MM  
+  MMmmdM9   MMmmmmmmMM MM        MM M  \`MN. M MM        MM MM            MM         VMMP      MMmmdM9   MMmmmmmmMM  
+  MM        MM      MM MM.      ,MP M   \`MM.M MM.      ,MP MM.    \`7MMF' MM      ,   MM       MM        MM      MM  
+  MM        MM      MM \`Mb.    ,dP' M     YMM \`Mb.    ,dP' \`Mb.     MM   MM     ,M   MM       MM        MM      MM  
+.JMML.    .JMML.  .JMML. \`"bmmd"' .JML.    YM   \`"bmmd"'     \`"bmmmdPY .JMMmmmmMMM .JMML.   .JMML.    .JMML.  .JMML.
+                                                                                                                    
+                                                                                                                    `;
+
 export function PhonoglyphLogo({ className, size = 'md' }: PhonoglyphLogoProps) {
   const sizeScale = {
     sm: 0.67,
@@ -21,38 +33,49 @@ export function PhonoglyphLogo({ className, size = 'md' }: PhonoglyphLogoProps) 
   const scaledLineHeight = baseFontSize * scale;
   const containerRef = React.useRef<HTMLDivElement>(null);
   const preRef = React.useRef<HTMLPreElement>(null);
-  const [horizontalScale, setHorizontalScale] = React.useState(1);
+  const [fontScale, setFontScale] = React.useState(1);
+
+  const updateScale = React.useCallback(() => {
+    if (!containerRef.current || !preRef.current) return;
+    const availableWidth = containerRef.current.clientWidth;
+    const naturalWidth = preRef.current.scrollWidth;
+    if (availableWidth === 0 || naturalWidth === 0) {
+      setFontScale(1);
+      return;
+    }
+    const ratio = Math.min(1, availableWidth / naturalWidth);
+    setFontScale(ratio);
+  }, []);
 
   React.useEffect(() => {
     if (typeof ResizeObserver === 'undefined') {
-      setHorizontalScale(1);
+      setFontScale(1);
       return;
     }
     
-    const updateScale = () => {
-      if (!containerRef.current || !preRef.current) return;
-      const availableWidth = containerRef.current.clientWidth;
-      const naturalWidth = preRef.current.scrollWidth;
-      if (availableWidth === 0 || naturalWidth === 0) {
-        setHorizontalScale(1);
-        return;
-      }
-      const scaleValue = Math.min(1, availableWidth / naturalWidth);
-      setHorizontalScale(scaleValue);
-    };
-
     updateScale();
 
     const resizeObserver = new ResizeObserver(updateScale);
     if (containerRef.current) {
       resizeObserver.observe(containerRef.current);
     }
+    if (preRef.current) {
+      resizeObserver.observe(preRef.current);
+    }
+
+    const fontReady = (document as any)?.fonts?.ready;
+    if (fontReady && typeof fontReady.then === 'function') {
+      fontReady.then(updateScale).catch(() => {});
+    }
 
     return () => {
       resizeObserver.disconnect();
     };
-  }, [scale]);
+  }, [scale, updateScale]);
   
+  const appliedFontSize = `${scaledFontSize * fontScale}px`;
+  const appliedLineHeight = `${scaledLineHeight * fontScale}px`;
+
   return (
     <div ref={containerRef} className="overflow-hidden w-full" style={{ maxWidth: '100%' }}>
       <pre
@@ -63,8 +86,8 @@ export function PhonoglyphLogo({ className, size = 'md' }: PhonoglyphLogoProps) 
         )}
         style={{
           fontFamily: 'var(--font-mono)',
-          fontSize: `${scaledFontSize}px`,
-          lineHeight: `${scaledLineHeight}px`,
+          fontSize: appliedFontSize,
+          lineHeight: appliedLineHeight,
           letterSpacing: '0',
           margin: 0,
           padding: 0,
@@ -73,22 +96,10 @@ export function PhonoglyphLogo({ className, size = 'md' }: PhonoglyphLogoProps) 
           fontFeatureSettings: '"liga" 0, "calt" 0, "kern" 0',
           textRendering: 'optimizeSpeed',
           WebkitFontSmoothing: 'antialiased',
-          MozOsxFontSmoothing: 'grayscale',
-          transform: horizontalScale < 1 ? `scaleX(${horizontalScale})` : undefined,
-          transformOrigin: 'left top'
+          MozOsxFontSmoothing: 'grayscale'
         }}
       >
-{`                                                                                                                    
-                                                                                                                    
-\`7MM"""Mq.\`7MMF'  \`7MMF' .g8""8q. \`7MN.   \`7MF' .g8""8q.     .g8"""bgd \`7MMF'   \`YMM'   \`MM'\`7MM"""Mq.\`7MMF'  \`7MMF'
-  MM   \`MM. MM      MM .dP'    \`YM. MMN.    M .dP'    \`YM. .dP'     \`M   MM       VMA   ,V    MM   \`MM. MM      MM  
-  MM   ,M9  MM      MM dM'      \`MM M YMb   M dM'      \`MM dM'       \`   MM        VMA ,V     MM   ,M9  MM      MM  
-  MMmmdM9   MMmmmmmmMM MM        MM M  \`MN. M MM        MM MM            MM         VMMP      MMmmdM9   MMmmmmmmMM  
-  MM        MM      MM MM.      ,MP M   \`MM.M MM.      ,MP MM.    \`7MMF' MM      ,   MM       MM        MM      MM  
-  MM        MM      MM \`Mb.    ,dP' M     YMM \`Mb.    ,dP' \`Mb.     MM   MM     ,M   MM       MM        MM      MM  
-.JMML.    .JMML.  .JMML. \`"bmmd"' .JML.    YM   \`"bmmd"'     \`"bmmmdPY .JMMmmmmMMM .JMML.   .JMML.    .JMML.  .JMML.
-                                                                                                                    
-                                                                                                                    `}
+        {LOGO_TEXT}
       </pre>
     </div>
   );
