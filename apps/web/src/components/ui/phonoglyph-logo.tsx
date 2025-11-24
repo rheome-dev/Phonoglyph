@@ -1,3 +1,5 @@
+'use client';
+
 import React from 'react';
 import { cn } from '@/lib/utils';
 
@@ -22,6 +24,11 @@ export function PhonoglyphLogo({ className, size = 'md' }: PhonoglyphLogoProps) 
   const [horizontalScale, setHorizontalScale] = React.useState(1);
 
   React.useEffect(() => {
+    if (typeof ResizeObserver === 'undefined') {
+      setHorizontalScale(1);
+      return;
+    }
+    
     const updateScale = () => {
       if (!containerRef.current || !preRef.current) return;
       const availableWidth = containerRef.current.clientWidth;
