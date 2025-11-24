@@ -5,13 +5,12 @@ import { MultiLayerCompositor } from '../core/MultiLayerCompositor';
 
 export interface AsciiFilterConfig {
   id?: string; // Optional effect ID
-  textSize: number; // 0.0 to 1.0 - controls text size (maps to gridSize)
-  gridSize?: number; // Deprecated: internal use or direct control
+  textSize: number; // 0.0 to 1.0 - controls text size
   gamma: number; // 0.2 to 2.2 - controls font weight selection (audio reactive)
   opacity: number; // 0.0 to 1.0 - overall effect opacity (audio reactive)
   contrast: number; // 0.0 to 2.0 - contrast boost (audio reactive)
   invert: number; // 0.0 or 1.0 - invert luminance (audio reactive)
-  fontSize: number; // 0.5 to 1.5 - relative font size multiplier
+  hideBackground: boolean; // If true, only show ASCII text without background
   color: [number, number, number]; // RGB color for ASCII characters (0-1 range)
   sourceTexture?: THREE.Texture; // Optional source texture to filter (deprecated - uses compositor)
 }
@@ -45,24 +44,16 @@ export class AsciiFilterEffect implements VisualEffect {
     // Extract id from config to avoid including it in parameters
     const { id, ...paramsWithoutId } = config;
     this.parameters = {
-      textSize: 0.5, // Default text size
-      gridSize: 0.0275, // Matches textSize 0.5 (calculated: 0.005 + 0.5 * 0.045)
+      textSize: 0.4, // Default text size (slightly smaller than 50%)
       gamma: 1.2,
       opacity: 0.87,
       contrast: 1.4,
       invert: 0.0,
-      fontSize: 1.0,
+      hideBackground: false,
       color: [1.0, 1.0, 1.0] as [number, number, number], // White by default
       sourceTexture: config?.sourceTexture,
       ...paramsWithoutId
     };
-
-    // Calculate initial gridSize from textSize if not explicitly provided
-    if (config.gridSize === undefined) {
-      // If textSize was passed in config, it overrides the default 0.5, so we recalculate
-      // If not passed, we use the default 0.5 which matches the default gridSize 0.0275
-      this.parameters.gridSize = this.mapTextSizeToGridSize(this.parameters.textSize);
-    }
 
     this.scene = new THREE.Scene();
     this.scene.background = null;
@@ -93,7 +84,7 @@ export class AsciiFilterEffect implements VisualEffect {
   private generateFontSprite(): { texture: THREE.Texture; cols: number; rows: number } {
     const canvas = document.createElement('canvas');
     const BASE_GLYPH_HEIGHT = 64; // Base resolution for crispness
-    const GLYPH_HEIGHT = Math.round(BASE_GLYPH_HEIGHT * this.parameters.fontSize);
+    const GLYPH_HEIGHT = BASE_GLYPH_HEIGHT; // Fixed size, no fontSize parameter
     const GLYPH_WIDTH = Math.round(GLYPH_HEIGHT * 0.5);  // Aspect ratio ~0.5 for monospace
     const CHARS_PER_ROW = 16;
     const NUM_CHARS = 95; // ASCII 32-126
@@ -157,11 +148,12 @@ export class AsciiFilterEffect implements VisualEffect {
       uSprite: { value: this.fontSpriteTexture },
       uSpriteGrid: { value: new THREE.Vector2(this.spriteCols, this.spriteRows) }, // Pass dimensions to shader
       uResolution: { value: new THREE.Vector2(size.x, size.y) },
-      uGridSize: { value: this.parameters.gridSize || 0.02 },
+      uGridSize: { value: this.mapTextSizeToGridSize(this.parameters.textSize) },
       uGamma: { value: this.parameters.gamma },
       uOpacity: { value: this.parameters.opacity },
       uContrast: { value: this.parameters.contrast },
       uInvert: { value: this.parameters.invert },
+      uHideBackground: { value: this.parameters.hideBackground ? 1.0 : 0.0 },
       uColor: { value: new THREE.Vector3(...this.parameters.color) },
     };
   }
@@ -188,6 +180,7 @@ export class AsciiFilterEffect implements VisualEffect {
       uniform float uOpacity;
       uniform float uContrast;
       uniform float uInvert;
+      uniform float uHideBackground;
       uniform vec3 uColor;
 
       varying vec2 vUv;
@@ -253,22 +246,32 @@ export class AsciiFilterEffect implements VisualEffect {
 
         // 8. Composite
         // Use the character mask (charColor.r) to blend
-        // We want the text to be colored by uColor (or source color?)
-        // The user typically wants the text to be uColor.
-        // Background of the text cell is the source color? Or transparent?
-        // Standard ASCII effect: Background is source color (pixelated), Foreground is text color.
+        // If hideBackground is true, only show the ASCII text, otherwise blend with background
+        vec3 asciiCellColor;
+        float finalAlpha;
         
-        vec3 asciiCellColor = mix(centerColor.rgb, uColor, charColor.r);
+        if (uHideBackground > 0.5) {
+          // Hide background mode: only show ASCII text, make background transparent
+          // Use pure text color, no background blending
+          asciiCellColor = uColor;
+          // Only show pixels where there's actual text (charColor.r > threshold)
+          // Use centerColor.a to respect source transparency, but multiply by charColor.r to only show text
+          finalAlpha = centerColor.a * charColor.r;
+        } else {
+          // Normal mode: blend ASCII text with background
+          asciiCellColor = mix(centerColor.rgb, uColor, charColor.r);
+          // We use the center alpha for the entire cell to maintain the blocky shape
+          finalAlpha = centerColor.a;
+        }
         
-        // We use the center alpha for the entire cell to maintain the blocky shape
-        vec4 asciiResult = vec4(asciiCellColor, centerColor.a);
+        vec4 asciiResult = vec4(asciiCellColor, finalAlpha);
         
         // Mix with original for opacity control
-        // If opacity < 1, we blend the ascii result with the original pixel
-        // Original pixel might be transparent at edges, so we respect that for the blend base
+        // If hideBackground is true, we don't blend with original (it's already transparent in asciiResult)
         vec4 original = texture2D(uTexture, uv);
+        float blendFactor = uHideBackground > 0.5 ? 1.0 : uOpacity;
         
-        gl_FragColor = mix(original, asciiResult, uOpacity);
+        gl_FragColor = mix(original, asciiResult, blendFactor);
       }
     `;
 
@@ -347,11 +350,12 @@ export class AsciiFilterEffect implements VisualEffect {
 
     // Sync parameters to uniforms (these can be audio-modulated externally)
     // Direct uniform updates like MetaballsEffect for immediate visual feedback
-    if (this.uniforms.uGridSize) this.uniforms.uGridSize.value = this.parameters.gridSize;
+    if (this.uniforms.uGridSize) this.uniforms.uGridSize.value = this.mapTextSizeToGridSize(this.parameters.textSize);
     if (this.uniforms.uGamma) this.uniforms.uGamma.value = this.parameters.gamma;
     if (this.uniforms.uOpacity) this.uniforms.uOpacity.value = this.parameters.opacity;
     if (this.uniforms.uContrast) this.uniforms.uContrast.value = this.parameters.contrast;
     if (this.uniforms.uInvert) this.uniforms.uInvert.value = this.parameters.invert;
+    if (this.uniforms.uHideBackground) this.uniforms.uHideBackground.value = this.parameters.hideBackground ? 1.0 : 0.0;
     if (this.uniforms.uColor) this.uniforms.uColor.value.set(...this.parameters.color);
     
     // Update sprite grid dimensions
@@ -424,16 +428,9 @@ export class AsciiFilterEffect implements VisualEffect {
     if (!this.uniforms) return;
 
     switch (paramName) {
-      case 'gridSize':
-        // Legacy support
-        this.parameters.gridSize = typeof value === 'number' ? Math.max(0.005, Math.min(0.05, value)) : this.parameters.gridSize;
-        if (this.uniforms) this.uniforms.uGridSize.value = this.parameters.gridSize;
-        break;
       case 'textSize':
         this.parameters.textSize = typeof value === 'number' ? Math.max(0.0, Math.min(1.0, value)) : this.parameters.textSize;
-        // Update gridSize based on textSize
-        this.parameters.gridSize = this.mapTextSizeToGridSize(this.parameters.textSize);
-        if (this.uniforms) this.uniforms.uGridSize.value = this.parameters.gridSize;
+        if (this.uniforms) this.uniforms.uGridSize.value = this.mapTextSizeToGridSize(this.parameters.textSize);
         break;
       case 'gamma':
         this.parameters.gamma = typeof value === 'number' ? Math.max(0.2, Math.min(2.2, value)) : this.parameters.gamma;
@@ -451,23 +448,9 @@ export class AsciiFilterEffect implements VisualEffect {
         this.parameters.invert = typeof value === 'number' ? (value > 0.5 ? 1.0 : 0.0) : this.parameters.invert;
         this.uniforms.uInvert.value = this.parameters.invert;
         break;
-      case 'fontSize':
-        const oldFontSize = this.parameters.fontSize;
-        this.parameters.fontSize = typeof value === 'number' ? Math.max(0.5, Math.min(1.5, value)) : this.parameters.fontSize;
-        // Regenerate font sprite if fontSize changed
-        if (Math.abs(oldFontSize - this.parameters.fontSize) > 0.01 && this.renderer) {
-          try {
-            const spriteData = this.generateFontSprite();
-            this.fontSpriteTexture.dispose();
-            this.fontSpriteTexture = spriteData.texture;
-            this.spriteCols = spriteData.cols;
-            this.spriteRows = spriteData.rows;
-            this.uniforms.uSprite.value = this.fontSpriteTexture;
-            this.uniforms.uSpriteGrid.value.set(this.spriteCols, this.spriteRows);
-          } catch (error) {
-            debugLog.error('Failed to regenerate font sprite:', error);
-          }
-        }
+      case 'hideBackground':
+        this.parameters.hideBackground = typeof value === 'boolean' ? value : this.parameters.hideBackground;
+        if (this.uniforms) this.uniforms.uHideBackground.value = this.parameters.hideBackground ? 1.0 : 0.0;
         break;
       case 'color':
         if (Array.isArray(value) && value.length === 3) {

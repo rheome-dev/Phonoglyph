@@ -3,6 +3,7 @@ import { MetaballsEffect } from './MetaballsEffect';
 import { ParticleNetworkEffect } from './ParticleNetworkEffect';
 import { ImageSlideshowEffect } from './ImageSlideshowEffect';
 import { AsciiFilterEffect } from './AsciiFilterEffect';
+import { BloomFilterEffect } from './BloomFilterEffect';
 
 // Register built-in effects at module import time
 EffectRegistry.register({
@@ -50,14 +51,27 @@ EffectRegistry.register({
   version: '1.0.0',
   constructor: AsciiFilterEffect,
   defaultConfig: {
-    gridSize: 0.05,
+    textSize: 0.4,
     gamma: 1.2,
     opacity: 0.87,
     contrast: 1.4,
     invert: 0.0,
-    fontSize: 1.0,
+    hideBackground: false,
     color: [1.0, 1.0, 1.0] // White by default
   }
 });
 
-// Bloom post-processing is now handled by the compositor; remove as an effect
+EffectRegistry.register({
+  id: 'bloomFilter',
+  name: 'Bloom Filter',
+  description: 'Post-processing bloom with adjustable threshold and softness',
+  category: 'filter',
+  version: '1.0.0',
+  constructor: BloomFilterEffect,
+  defaultConfig: {
+    intensity: 0.75,
+    threshold: 0.55,
+    softness: 0.35,
+    radius: 0.35
+  }
+});

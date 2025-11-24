@@ -689,11 +689,12 @@ function CreativeVisualizerPage() {
       category: 'Filters',
       rarity: 'Rare',
       parameters: {
-        gridSize: 0.05,
+        textSize: 0.4,
         gamma: 1.2,
         opacity: 0.87,
         contrast: 1.4,
-        invert: 0.0
+        invert: 0.0,
+        hideBackground: false
       }
     },
     { 
@@ -1366,11 +1367,9 @@ function CreativeVisualizerPage() {
     if (paramName === 'particle-size') return 50;
     // ASCII Filter parameters
     if (paramName === 'textSize') return 1.0;
-    if (paramName === 'gridSize') return 0.05;
     if (paramName === 'gamma') return 2.2;
     if (paramName === 'contrast') return 2.0;
     if (paramName === 'invert') return 1.0;
-    if (paramName === 'fontSize') return 1.5;
     // Bloom Filter parameters
     if (paramName === 'intensity') return 2.0;
     if (paramName === 'threshold') return 1.0;
@@ -1390,11 +1389,9 @@ function CreativeVisualizerPage() {
     if (paramName === 'particle-size') return 5;
     // ASCII Filter parameters
     if (paramName === 'textSize') return 0.01;
-    if (paramName === 'gridSize') return 0.001;
     if (paramName === 'gamma') return 0.01;
     if (paramName === 'contrast') return 0.01;
     if (paramName === 'invert') return 1.0; // Binary toggle
-    if (paramName === 'fontSize') return 0.01;
     // Bloom Filter parameters
     if (paramName === 'intensity') return 0.01;
     if (paramName === 'threshold') return 0.01;

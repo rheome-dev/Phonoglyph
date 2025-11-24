@@ -1,0 +1,6 @@
+#!/bin/bash
+# Repomix command to pack stem upload, audio analysis, and mapping features panel files
+
+npx repomix \
+  --include "apps/web/src/components/projects/project-creation-modal.tsx,apps/web/src/components/stem-separation/**/*.tsx,apps/web/src/components/stem-visualization/**/*.tsx,apps/web/src/components/ui/MappingSourcesPanel.tsx,apps/web/src/components/audio-analysis/**/*.tsx,apps/web/src/hooks/use-upload.ts,apps/web/src/hooks/use-audio-analysis.ts,apps/web/src/hooks/use-audio-features.ts,apps/web/src/hooks/use-stem-audio-controller.ts,apps/web/src/types/audio-analysis*.ts,apps/web/src/types/worker-messages.ts,apps/web/src/types/stem-*.ts,apps/web/src/services/audio-analysis-sandbox-service.ts,apps/web/public/workers/audio-analysis-worker.js,apps/web/src/app/workers/audio-analysis.worker.ts,apps/web/src/app/creative-visualizer/page.tsx,apps/api/src/routers/file.ts,apps/api/src/routers/stem.ts,apps/api/src/routers/audio-analysis-sandbox.ts,apps/api/src/services/stem-*.ts,apps/api/src/services/r2-storage.ts,apps/api/src/services/audio-analysis-*.ts,apps/api/src/services/audio-analyzer.ts,apps/api/src/services/media-processor.ts,apps/api/src/lib/file-validation.ts,apps/api/src/scripts/backfill-audio-analysis.ts" \
+  --output audio-features-pack.md
