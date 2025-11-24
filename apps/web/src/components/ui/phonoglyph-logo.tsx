@@ -17,10 +17,39 @@ export function PhonoglyphLogo({ className, size = 'md' }: PhonoglyphLogoProps) 
   const baseFontSize = 3;
   const scaledFontSize = baseFontSize * scale;
   const scaledLineHeight = baseFontSize * scale;
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const preRef = React.useRef<HTMLPreElement>(null);
+  const [horizontalScale, setHorizontalScale] = React.useState(1);
+
+  React.useEffect(() => {
+    const updateScale = () => {
+      if (!containerRef.current || !preRef.current) return;
+      const availableWidth = containerRef.current.clientWidth;
+      const naturalWidth = preRef.current.scrollWidth;
+      if (availableWidth === 0 || naturalWidth === 0) {
+        setHorizontalScale(1);
+        return;
+      }
+      const scaleValue = Math.min(1, availableWidth / naturalWidth);
+      setHorizontalScale(scaleValue);
+    };
+
+    updateScale();
+
+    const resizeObserver = new ResizeObserver(updateScale);
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [scale]);
   
   return (
-    <div className="overflow-hidden w-full" style={{ maxWidth: '100%' }}>
+    <div ref={containerRef} className="overflow-hidden w-full" style={{ maxWidth: '100%' }}>
       <pre
+        ref={preRef}
         className={cn(
           "font-mono whitespace-pre text-gray-100 block",
           className
@@ -29,7 +58,9 @@ export function PhonoglyphLogo({ className, size = 'md' }: PhonoglyphLogoProps) 
           fontSize: `${scaledFontSize}px`,
           lineHeight: `${scaledLineHeight}px`,
           margin: 0,
-          padding: 0
+          padding: 0,
+          transform: horizontalScale < 1 ? `scaleX(${horizontalScale})` : undefined,
+          transformOrigin: 'left top'
         }}
       >
 {`                                                                                                                    
