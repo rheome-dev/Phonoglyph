@@ -14,20 +14,22 @@ export function PhonoglyphLogo({ className, size = 'md' }: PhonoglyphLogoProps) 
   } as const satisfies Record<NonNullable<PhonoglyphLogoProps['size']>, number>;
 
   const scale = sizeScale[size] ?? sizeScale.md;
+  const baseFontSize = 10;
+  const scaledFontSize = baseFontSize * scale;
+  const scaledLineHeight = baseFontSize * scale;
   
   return (
-    <div className="overflow-hidden w-full" style={{ contain: 'layout style', maxWidth: '100%' }}>
+    <div className="overflow-hidden w-full" style={{ maxWidth: '100%' }}>
       <pre
         className={cn(
-          "font-mono whitespace-pre text-gray-100 inline-block origin-top-left",
+          "font-mono whitespace-pre text-gray-100 block",
           className
         )}
         style={{
-          fontSize: '10px',
-          lineHeight: '10px',
-          transform: `scale(${scale})`,
-          transformOrigin: 'top left',
-          width: `${100 / scale}%`
+          fontSize: `${scaledFontSize}px`,
+          lineHeight: `${scaledLineHeight}px`,
+          margin: 0,
+          padding: 0
         }}
       >
 {`                                                                                                                    
