@@ -686,7 +686,7 @@ function CreativeVisualizerPage() {
       id: 'asciiFilter', 
       name: 'ASCII Filter', 
       description: 'Converts layers beneath to ASCII art with audio-reactive parameters',
-      category: 'Post-Processing',
+      category: 'Filters',
       rarity: 'Rare',
       parameters: {
         gridSize: 0.05,
@@ -694,6 +694,19 @@ function CreativeVisualizerPage() {
         opacity: 0.87,
         contrast: 1.4,
         invert: 0.0
+      }
+    },
+    { 
+      id: 'bloomFilter', 
+      name: 'Bloom Filter', 
+      description: 'Adds cinematic bloom glow to everything below this layer',
+      category: 'Filters',
+      rarity: 'Rare',
+      parameters: {
+        intensity: 0.75,
+        threshold: 0.55,
+        softness: 0.35,
+        radius: 0.35
       }
     },
     // HUD Overlay Effects
@@ -1358,6 +1371,11 @@ function CreativeVisualizerPage() {
     if (paramName === 'contrast') return 2.0;
     if (paramName === 'invert') return 1.0;
     if (paramName === 'fontSize') return 1.5;
+    // Bloom Filter parameters
+    if (paramName === 'intensity') return 2.0;
+    if (paramName === 'threshold') return 1.0;
+    if (paramName === 'softness') return 1.0;
+    if (paramName === 'radius') return 1.0;
     return 100; // Default max for other numeric parameters
   };
 
@@ -1377,6 +1395,11 @@ function CreativeVisualizerPage() {
     if (paramName === 'contrast') return 0.01;
     if (paramName === 'invert') return 1.0; // Binary toggle
     if (paramName === 'fontSize') return 0.01;
+    // Bloom Filter parameters
+    if (paramName === 'intensity') return 0.01;
+    if (paramName === 'threshold') return 0.01;
+    if (paramName === 'softness') return 0.01;
+    if (paramName === 'radius') return 0.01;
     return 1; // Default step for other numeric parameters
   };
 

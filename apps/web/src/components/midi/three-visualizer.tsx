@@ -555,6 +555,9 @@ function getSliderMax(paramName: string) {
     case 'connectionDistance': return 5.0;
     case 'maxParticles': return 200;
     case 'connectionOpacity': return 1.0;
+    // Bloom Filter parameters
+    case 'intensity': return 2.0;
+    case 'softness': return 1.0;
     default: return 1;
   }
 }
@@ -576,6 +579,11 @@ function getSliderStep(paramName: string) {
     case 'audioSpawnCooldown': return 0.01;
     case 'audioParticleSize': return 0.1;
     case 'audioSpawnIntensity': return 0.01;
+    // Bloom Filter parameters
+    case 'intensity': return 0.01;
+    case 'threshold': return 0.01;
+    case 'softness': return 0.01;
+    case 'radius': return 0.01;
     default: return 0.01;
   }
 } 

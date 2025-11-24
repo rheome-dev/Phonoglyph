@@ -10,7 +10,7 @@ export interface EffectUIData {
   id: string;
   name: string;
   description: string;
-  category: 'Generative' | 'Overlays' | 'Post-Processing';
+  category: 'Generative' | 'Overlays' | 'Filters';
   rarity: 'Common' | 'Rare' | 'Mythic';
   parameters?: Record<string, any>; // <-- Added optional parameters property
   image?: string; // <-- Added optional image property
@@ -126,7 +126,7 @@ export function EffectsLibrarySidebar({
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({
     'Generative': true,
     'Overlays': true,
-    'Post-Processing': true
+    'Filters': true
   });
 
   // Filter effects based on search query
@@ -147,7 +147,7 @@ export function EffectsLibrarySidebar({
     const categories: Record<string, EffectUIData[]> = {
       'Generative': [],
       'Overlays': [],
-      'Post-Processing': []
+      'Filters': []
     };
 
     filteredEffects.forEach(effect => {

@@ -7,18 +7,28 @@ interface PhonoglyphLogoProps {
 }
 
 export function PhonoglyphLogo({ className, size = 'md' }: PhonoglyphLogoProps) {
-  const sizeClasses = {
-    sm: 'text-[2px] leading-[2px]',
-    md: 'text-[3px] leading-[3px]',
-    lg: 'text-[4px] leading-[4px]'
-  };
+  const sizeScale = {
+    sm: 0.32,
+    md: 0.42,
+    lg: 0.52
+  } as const satisfies Record<NonNullable<PhonoglyphLogoProps['size']>, number>;
 
   return (
-    <pre className={cn(
-      "font-mono whitespace-pre text-gray-100 overflow-hidden w-full",
-      sizeClasses[size],
-      className
-    )}>
+    <div className="overflow-hidden w-full max-w-full" style={{ contain: 'layout' }}>
+      <pre
+        className={cn(
+          "font-mono whitespace-pre text-gray-100 inline-block origin-top-left",
+          className
+        )}
+        style={{
+          fontSize: '10px',
+          lineHeight: '10px',
+          transform: `scale(${sizeScale[size] ?? sizeScale.md})`,
+          transformOrigin: 'top left',
+          maxWidth: '100%',
+          overflow: 'hidden'
+        }}
+      >
 {`                                                                                                                    
                                                                                                                     
 \`7MM"""Mq.\`7MMF'  \`7MMF' .g8""8q. \`7MN.   \`7MF' .g8""8q.     .g8"""bgd \`7MMF'   \`YMM'   \`MM'\`7MM"""Mq.\`7MMF'  \`7MMF'
@@ -30,6 +40,7 @@ export function PhonoglyphLogo({ className, size = 'md' }: PhonoglyphLogoProps) 
 .JMML.    .JMML.  .JMML. \`"bmmd"' .JML.    YM   \`"bmmd"'     \`"bmmmdPY .JMMmmmmMMM .JMML.   .JMML.    .JMML.  .JMML.
                                                                                                                     
                                                                                                                     `}
-    </pre>
+      </pre>
+    </div>
   );
 }
