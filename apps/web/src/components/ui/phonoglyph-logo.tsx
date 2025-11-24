@@ -20,6 +20,13 @@ const LOGO_TEXT = `
                                                                                                                     
                                                                                                                     `;
 
+// Detect Safari browser
+function isSafari(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent;
+  return /^((?!chrome|android).)*safari/i.test(ua);
+}
+
 export function PhonoglyphLogo({ className, size = 'md' }: PhonoglyphLogoProps) {
   const sizeScale = {
     sm: 0.67,
@@ -29,31 +36,39 @@ export function PhonoglyphLogo({ className, size = 'md' }: PhonoglyphLogoProps) 
 
   const scale = sizeScale[size] ?? sizeScale.md;
   const baseFontSize = 3;
-  const scaledFontSize = baseFontSize * scale;
-  const scaledLineHeight = baseFontSize * scale;
   const containerRef = React.useRef<HTMLDivElement>(null);
   const preRef = React.useRef<HTMLPreElement>(null);
-  const [fontScale, setFontScale] = React.useState(1);
+  const [transformScale, setTransformScale] = React.useState(1);
+  const [safari, setSafari] = React.useState(false);
+
+  React.useEffect(() => {
+    setSafari(isSafari());
+  }, []);
 
   const updateScale = React.useCallback(() => {
     if (!containerRef.current || !preRef.current) return;
     const availableWidth = containerRef.current.clientWidth;
     const naturalWidth = preRef.current.scrollWidth;
     if (availableWidth === 0 || naturalWidth === 0) {
-      setFontScale(1);
+      setTransformScale(1);
       return;
     }
-    const ratio = Math.min(1, availableWidth / naturalWidth);
-    setFontScale(ratio);
+    // Only scale down if overflowing
+    const ratio = naturalWidth > availableWidth ? availableWidth / naturalWidth : 1;
+    setTransformScale(ratio);
   }, []);
 
   React.useEffect(() => {
     if (typeof ResizeObserver === 'undefined') {
-      setFontScale(1);
+      setTransformScale(1);
       return;
     }
     
+    // Initial update
     updateScale();
+    
+    // Re-run after a short delay to catch font loading
+    const timeoutId = setTimeout(updateScale, 100);
 
     const resizeObserver = new ResizeObserver(updateScale);
     if (containerRef.current) {
@@ -63,40 +78,56 @@ export function PhonoglyphLogo({ className, size = 'md' }: PhonoglyphLogoProps) 
       resizeObserver.observe(preRef.current);
     }
 
-    const fontReady = (document as any)?.fonts?.ready;
-    if (fontReady && typeof fontReady.then === 'function') {
-      fontReady.then(updateScale).catch(() => {});
+    // Also update when fonts are ready
+    if (typeof document !== 'undefined' && (document as any).fonts?.ready) {
+      (document as any).fonts.ready.then(() => {
+        updateScale();
+        // Safari sometimes needs another tick
+        setTimeout(updateScale, 50);
+      }).catch(() => {});
     }
 
     return () => {
+      clearTimeout(timeoutId);
       resizeObserver.disconnect();
     };
   }, [scale, updateScale]);
   
-  const appliedFontSize = `${scaledFontSize * fontScale}px`;
-  const appliedLineHeight = `${scaledLineHeight * fontScale}px`;
+  const scaledFontSize = baseFontSize * scale;
+  const scaledLineHeight = baseFontSize * scale;
+  
+  // Safari renders JetBrains Mono ~10% wider, so we apply a correction factor
+  const safariCorrection = safari ? 0.9 : 1;
+  const finalScale = transformScale * safariCorrection;
 
   return (
-    <div ref={containerRef} className="overflow-hidden w-full" style={{ maxWidth: '100%' }}>
+    <div 
+      ref={containerRef} 
+      className="overflow-hidden w-full" 
+      style={{ maxWidth: '100%' }}
+    >
       <pre
         ref={preRef}
         className={cn(
-          "font-mono whitespace-pre text-gray-100 block",
+          "whitespace-pre text-gray-100 block origin-top-left",
           className
         )}
         style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize: appliedFontSize,
-          lineHeight: appliedLineHeight,
+          fontFamily: '"JetBrains Mono", var(--font-mono), monospace',
+          fontSize: `${scaledFontSize}px`,
+          lineHeight: `${scaledLineHeight}px`,
           letterSpacing: '0',
+          wordSpacing: '0',
           margin: 0,
           padding: 0,
           fontVariantLigatures: 'none',
           fontKerning: 'none',
           fontFeatureSettings: '"liga" 0, "calt" 0, "kern" 0',
-          textRendering: 'optimizeSpeed',
+          textRendering: 'geometricPrecision',
           WebkitFontSmoothing: 'antialiased',
-          MozOsxFontSmoothing: 'grayscale'
+          MozOsxFontSmoothing: 'grayscale',
+          transform: finalScale < 1 ? `scale(${finalScale})` : undefined,
+          transformOrigin: 'top left',
         }}
       >
         {LOGO_TEXT}
