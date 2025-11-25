@@ -119,7 +119,12 @@ export function PhonoglyphLogo({ className, size = 'md' }: PhonoglyphLogoProps) 
     <div 
       ref={containerRef} 
       className="overflow-hidden w-full" 
-      style={{ maxWidth: '100%' }}
+      style={{ 
+        maxWidth: '100%',
+        pointerEvents: 'none', // Allow clicks to pass through container as well
+        position: 'relative',
+        contain: 'layout style paint'
+      }}
     >
       <pre
         ref={preRef}
@@ -144,6 +149,7 @@ export function PhonoglyphLogo({ className, size = 'md' }: PhonoglyphLogoProps) 
           transform: transformValue,
           transformOrigin: 'top left',
           pointerEvents: 'none', // Allow clicks to pass through to elements behind
+          willChange: transformValue ? 'transform' : 'auto', // Help Safari optimize transforms
         }}
       >
         {LOGO_TEXT}
