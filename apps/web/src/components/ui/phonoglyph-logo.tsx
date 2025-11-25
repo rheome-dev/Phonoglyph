@@ -143,6 +143,7 @@ export function PhonoglyphLogo({ className, size = 'md' }: PhonoglyphLogoProps) 
           MozOsxFontSmoothing: 'grayscale',
           transform: transformValue,
           transformOrigin: 'top left',
+          pointerEvents: 'none', // Allow clicks to pass through to elements behind
         }}
       >
         {LOGO_TEXT}
