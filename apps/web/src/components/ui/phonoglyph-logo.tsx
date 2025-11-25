@@ -39,6 +39,7 @@ export function PhonoglyphLogo({ className, size = 'md' }: PhonoglyphLogoProps) 
   const containerRef = React.useRef<HTMLDivElement>(null);
   const preRef = React.useRef<HTMLPreElement>(null);
   const [transformScale, setTransformScale] = React.useState(1);
+  const [containerWidth, setContainerWidth] = React.useState<number | undefined>(undefined);
   const [safari, setSafari] = React.useState(false);
 
   React.useEffect(() => {
@@ -51,11 +52,22 @@ export function PhonoglyphLogo({ className, size = 'md' }: PhonoglyphLogoProps) 
     const naturalWidth = preRef.current.scrollWidth;
     if (availableWidth === 0 || naturalWidth === 0) {
       setTransformScale(1);
+      setContainerWidth(undefined);
       return;
     }
     // Only scale down if overflowing
     const ratio = naturalWidth > availableWidth ? availableWidth / naturalWidth : 1;
     setTransformScale(ratio);
+    
+    // For Safari, constrain container width to scaled width to prevent blocking clicks
+    const isSafariBrowser = isSafari();
+    if (isSafariBrowser && ratio < 1) {
+      const safariCorrectionX = 0.7;
+      const scaledWidth = naturalWidth * ratio * safariCorrectionX;
+      setContainerWidth(scaledWidth);
+    } else {
+      setContainerWidth(undefined);
+    }
   }, []);
 
   React.useEffect(() => {
@@ -118,8 +130,9 @@ export function PhonoglyphLogo({ className, size = 'md' }: PhonoglyphLogoProps) 
   return (
     <div 
       ref={containerRef} 
-      className="overflow-hidden w-full" 
+      className="overflow-hidden" 
       style={{ 
+        width: containerWidth !== undefined ? `${containerWidth}px` : '100%',
         maxWidth: '100%',
         pointerEvents: 'none', // Allow clicks to pass through container as well
         position: 'relative',
