@@ -8,7 +8,7 @@ interface RayboxLogoProps {
   size?: 'sm' | 'md' | 'lg';
 }
 
-const LOGO_TEXT = 'Raybox.fm';
+const LOGO_TEXT = 'Raybox';
 
 
 export function RayboxLogo({ className, size = 'md' }: RayboxLogoProps) {
@@ -25,12 +25,13 @@ export function RayboxLogo({ className, size = 'md' }: RayboxLogoProps) {
   return (
     <div 
       className={cn(
-        "overflow-hidden",
+        "overflow-hidden w-full",
         className
       )}
       style={{ 
         pointerEvents: 'none',
         position: 'relative',
+        width: '100%',
       }}
     >
       <span
@@ -46,6 +47,8 @@ export function RayboxLogo({ className, size = 'md' }: RayboxLogoProps) {
           WebkitFontSmoothing: 'antialiased',
           MozOsxFontSmoothing: 'grayscale',
           pointerEvents: 'none',
+          display: 'block',
+          width: '100%',
         }}
       >
         {LOGO_TEXT}
