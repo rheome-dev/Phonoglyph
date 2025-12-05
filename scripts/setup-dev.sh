@@ -5,7 +5,7 @@
 
 set -e
 
-echo "🎵 Setting up Raybox Development Environment..."
+echo "🎵 Setting up Phonoglyph Development Environment..."
 
 # Check if Node.js is installed
 if ! command -v node &> /dev/null; then

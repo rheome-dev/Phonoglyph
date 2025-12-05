@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { AuthService } from "@/lib/auth"
 import { useToast } from "@/hooks/use-toast"
-import type { User } from "raybox-types"
+import type { User } from "phonoglyph-types"
 import { debugLog } from '@/lib/utils';
 
 interface ProfileMenuProps {

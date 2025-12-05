@@ -2,7 +2,7 @@ import { initTRPC, TRPCError } from '@trpc/server'
 import type { CreateExpressContextOptions } from '@trpc/server/adapters/express'
 import { z } from 'zod'
 import { createSupabaseServerClient } from './lib/supabase'
-import { transformSupabaseUser, type User, type AuthContext } from 'raybox-types'
+import { transformSupabaseUser, type User, type AuthContext } from 'phonoglyph-types'
 import { 
   extractGuestSession, 
   createGuestUserFromSession, 
