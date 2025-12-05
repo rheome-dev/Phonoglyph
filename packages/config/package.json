@@ -1,8 +1,8 @@
 {
-  "name": "@raybox/config",
+  "name": "@phonoglyph/config",
   "version": "0.1.0",
   "private": true,
-  "description": "Shared configurations for the Raybox monorepo",
+  "description": "Shared configurations for the Phonoglyph monorepo",
   "main": "index.js",
   "files": [
     "eslint",

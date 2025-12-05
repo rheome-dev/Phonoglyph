@@ -2,7 +2,7 @@
   "name": "phonoglyph-monorepo",
   "version": "1.0.0",
   "private": true,
-  "description": "Raybox - MIDI Visualization Platform - Full Stack Application",
+  "description": "MIDI Visualization Platform - Full Stack Application",
   "workspaces": [
     "apps/*",
     "packages/*"

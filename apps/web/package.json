@@ -46,7 +46,7 @@
     "lucide-react": "^0.523.0",
     "meyda": "^5.6.3",
     "next": "^14.2.30",
-    "raybox-types": "^0.2.0",
+    "phonoglyph-types": "^0.2.0",
     "react": "^18.2.0",
     "react-colorful": "^5.6.1",
     "react-dnd": "^16.0.1",
