@@ -1,4 +1,4 @@
-# Phonoglyph Product Requirements Document (PRD)
+# Raybox Product Requirements Document (PRD)
 
 ## Goals and Background Context
 
@@ -12,7 +12,7 @@
 
 ### Background Context
 
-Phonoglyph is a web-based SaaS platform designed for musicians and content creators. The core problem it solves is the difficulty and high technical barrier required to create engaging, music-synced visuals for social media. While professional tools exist, they have a steep learning curve. Phonoglyph offers two powerful approaches: (1) Direct MIDI file visualization for precise control, and (2) Automated stem separation and audio analysis for instant results from any audio file. The platform provides a curated set of high-quality visualization styles ("Data Viz", "Gradient Flow", "Light Waves") and color schemes that users can apply instantly, with a real-time preview editor and a backend rendering pipeline for high-quality video output.
+Raybox is a web-based SaaS platform designed for musicians and content creators. The core problem it solves is the difficulty and high technical barrier required to create engaging, music-synced visuals for social media. While professional tools exist, they have a steep learning curve. Raybox offers two powerful approaches: (1) Direct MIDI file visualization for precise control, and (2) Automated stem separation and audio analysis for instant results from any audio file. The platform provides a curated set of high-quality visualization styles ("Data Viz", "Gradient Flow", "Light Waves") and color schemes that users can apply instantly, with a real-time preview editor and a backend rendering pipeline for high-quality video output.
 
 ### Change Log
 

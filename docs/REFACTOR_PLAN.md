@@ -6,7 +6,7 @@ _Phase-tracked with TODO markers for progress visibility._
 
 ## 🌐 Overview
 
-Phonoglyph’s codebase contains the skeleton of a powerful visual synthesis platform but lacks a maintainable architecture for compositing, state flow, and deterministic rendering.
+Raybox's codebase contains the skeleton of a powerful visual synthesis platform but lacks a maintainable architecture for compositing, state flow, and deterministic rendering.
 
 This plan establishes a clean separation of concerns and provides a roadmap to reach **Private Alpha → Paid Beta** without introducing unnecessary scalability work prematurely.
 

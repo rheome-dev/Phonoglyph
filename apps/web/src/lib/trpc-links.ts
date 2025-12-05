@@ -101,7 +101,7 @@ supabase.auth.onAuthStateChange(() => {
 // Determine API URL for tRPC
 const apiUrl =
   process.env.NEXT_PUBLIC_API_URL ||
-  (typeof window !== 'undefined' ? 'https://api.phonoglyph.rheome.tools' : 'http://localhost:3001'); // fallback for SSR dev
+  (typeof window !== 'undefined' ? 'https://api.raybox.rheome.tools' : 'http://localhost:3001'); // fallback for SSR dev
 
 // Debug logging to see what URL is being used
 debugLog.log('🔧 tRPC API URL Debug:', {

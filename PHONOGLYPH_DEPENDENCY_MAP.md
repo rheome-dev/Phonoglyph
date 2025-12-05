@@ -1,12 +1,12 @@
-# Phonoglyph Codebase Dependency Map
+# Raybox Codebase Dependency Map
 
 ## Overview
 
-This document provides a comprehensive analysis of the Phonoglyph codebase dependencies, focusing on the audio processing pipeline, visualization rendering system, data flow architecture, and UI state management.
+This document provides a comprehensive analysis of the Raybox codebase dependencies, focusing on the audio processing pipeline, visualization rendering system, data flow architecture, and UI state management.
 
 ## Architecture Summary
 
-Phonoglyph is a full-stack MIDI visualization platform built with:
+Raybox is a full-stack MIDI visualization platform built with:
 - **Frontend**: Next.js 14.1.0 + TypeScript + Three.js + tRPC
 - **Backend**: Express.js + tRPC + PostgreSQL + Supabase
 - **Audio Processing**: Spleeter (Docker) + FFmpeg + Web Audio API
@@ -173,7 +173,7 @@ useStemAudioController → Web Audio API → AudioContext
 ```mermaid
 graph TD
     A[auth.ts] --> B[supabase]
-    A --> C[phonoglyph-types]
+    A --> C[raybox-types]
     
     D[trpc.ts] --> E[trpc-links]
     D --> F[AppRouter type]
@@ -579,4 +579,4 @@ graph TD
 
 ---
 
-This dependency map provides a comprehensive overview of the Phonoglyph codebase architecture, highlighting the intricate relationships between components, services, and external dependencies that power this sophisticated MIDI visualization platform.
+This dependency map provides a comprehensive overview of the Raybox codebase architecture, highlighting the intricate relationships between components, services, and external dependencies that power this sophisticated MIDI visualization platform.

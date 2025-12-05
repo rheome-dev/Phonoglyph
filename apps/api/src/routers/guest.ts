@@ -1,6 +1,6 @@
 import { router, guestFriendlyProcedure, flexibleProcedure } from '../trpc';
 import { isGuestUser, type GuestUser } from '../types/guest';
-import type { User } from 'phonoglyph-types';
+import type { User } from 'raybox-types';
 
 export const guestRouter = router({
     // Get session info for any user type

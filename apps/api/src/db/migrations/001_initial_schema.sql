@@ -1,4 +1,4 @@
--- Initial schema for Phonoglyph application
+-- Initial schema for Raybox application
 -- Migration: 001_initial_schema
 
 -- Enable UUID extension

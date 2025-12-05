@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { LoginCredentials, SignupCredentials, AuthProvider, User } from 'phonoglyph-types'
+import type { LoginCredentials, SignupCredentials, AuthProvider, User } from 'raybox-types'
 
 export class AuthService {
   // Email/Password Authentication

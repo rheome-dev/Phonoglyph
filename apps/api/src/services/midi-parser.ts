@@ -1,6 +1,6 @@
 import MidiParser from 'midi-parser-js';
 import { randomUUID } from 'crypto';
-import { MIDIData, MIDINote, MIDITrack, TempoEvent, MIDIParsingResult } from 'phonoglyph-types';
+import { MIDIData, MIDINote, MIDITrack, TempoEvent, MIDIParsingResult } from 'raybox-types';
 import { logger } from '../lib/logger';
 
 // Color palette for track visualization

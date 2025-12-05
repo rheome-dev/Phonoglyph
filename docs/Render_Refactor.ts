@@ -1,4 +1,4 @@
-Technical Guide: Refactoring the Phonoglyph Rendering Pipeline
+Technical Guide: Refactoring the Raybox Rendering Pipeline
 
 Objective:
 Transition the VisualizerManager from a monolithic, single-scene renderer to a modular orchestrator that leverages the existing MultiLayerCompositor. This will enable true layering of visual effects, which is a prerequisite for all advanced composition features.

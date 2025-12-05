@@ -22,7 +22,7 @@ NEXT_PUBLIC_API_URL=http://localhost:3001
 
 Or for production:
 ```bash
-NEXT_PUBLIC_API_URL=https://api.phonoglyph.rheome.tools
+NEXT_PUBLIC_API_URL=https://api.raybox.rheome.tools
 ```
 
 ## Usage

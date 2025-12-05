@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  transpilePackages: ["@phonoglyph/config"],
+  transpilePackages: ["@raybox/config"],
 }
 
 module.exports = nextConfig 

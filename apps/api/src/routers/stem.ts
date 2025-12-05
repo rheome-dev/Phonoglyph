@@ -90,7 +90,7 @@ export const stemRouter = router({
                   mime_type: `audio/${input.config.quality.outputFormat}`,
                   file_size: stemBuffer.length,
                   s3_key: stemKey,
-                  s3_bucket: process.env.R2_BUCKET_NAME || 'phonoglyph-storage',
+                  s3_bucket: process.env.R2_BUCKET_NAME || 'raybox-storage',
                   upload_status: 'completed',
                   processing_status: 'completed',
                   project_id: fileData.project_id, // Associate with same project

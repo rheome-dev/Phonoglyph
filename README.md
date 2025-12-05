@@ -1,4 +1,4 @@
-# Phonoglyph - MIDI Visualization Platform
+# Raybox - MIDI Visualization Platform
 
 Transform your MIDI files into stunning visual experiences with our full-stack web application.
 
@@ -15,7 +15,7 @@ Transform your MIDI files into stunning visual experiences with our full-stack w
 1. **Clone the repository:**
    ```bash
    git clone <repository-url>
-   cd Phonoglyph
+   cd Raybox
    ```
 
 2. **Install dependencies:**
@@ -34,7 +34,7 @@ Transform your MIDI files into stunning visual experiences with our full-stack w
 4. **Set up the database:**
    ```bash
    # Make sure PostgreSQL is running
-   # Create database: phonoglyph
+   # Create database: raybox
    
    # Run migrations and seed data
    npm run db:setup -w apps/api
@@ -54,7 +54,7 @@ Transform your MIDI files into stunning visual experiences with our full-stack w
 ### Monorepo Structure
 
 ```
-Phonoglyph/
+Raybox/
 ├── apps/
 │   ├── web/          # Next.js Frontend (TypeScript)
 │   ├── api/          # Express.js Backend (TypeScript)
@@ -132,10 +132,10 @@ npm run test:coverage -w apps/web
 ```
 NODE_ENV=development
 PORT=3001
-DATABASE_URL=postgresql://username:password@localhost:5432/phonoglyph
+DATABASE_URL=postgresql://username:password@localhost:5432/raybox
 DB_HOST=localhost
 DB_PORT=5432
-DB_NAME=phonoglyph
+DB_NAME=raybox
 DB_USER=username
 DB_PASSWORD=password
 ```
@@ -166,4 +166,4 @@ If you encounter any issues, please check the troubleshooting section or create 
 
 ---
 
-Made with ❤️ by the Phonoglyph Team 🎵 
+Made with ❤️ by the Raybox Team 🎵 

@@ -162,7 +162,7 @@ app.post('/test', (req: any, res: any) => {
 
 // Basic route
 app.get('/', (req: any, res: any) => {
-  res.json({ message: 'Phonoglyph API Server is running! 🎵' })
+  res.json({ message: 'Raybox API Server is running! 🎵' })
 })
 
 // Initialize services (for serverless, this runs on cold start)

@@ -7,7 +7,7 @@ import { TRPCProvider } from '@/components/providers/trpc-provider'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata = {
-  title: 'Phonoglyph - MIDI Visualization Platform',
+  title: 'Raybox - MIDI Visualization Platform',
   description: 'Transform MIDI files into stunning visual experiences',
 }
 

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { router, protectedProcedure } from '../trpc';
 import { TRPCError } from '@trpc/server';
-import type { UserProfile } from 'phonoglyph-types';
+import type { UserProfile } from 'raybox-types';
 import { logger } from '../lib/logger';
 
 const updateProfileSchema = z.object({

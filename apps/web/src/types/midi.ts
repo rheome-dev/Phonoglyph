@@ -1,2 +1,2 @@
 // Re-export from centralized types package
-export * from 'phonoglyph-types' 
+export * from 'raybox-types' 

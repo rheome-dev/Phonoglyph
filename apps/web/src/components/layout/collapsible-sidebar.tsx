@@ -3,7 +3,7 @@
 import * as React from 'react';
 import { ChevronsLeft, ChevronsRight, Home, Folder, User, UploadCloud } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { PhonoglyphLogo } from '@/components/ui/phonoglyph-logo';
+import { RayboxLogo } from '@/components/ui/phonoglyph-logo';
 
 interface CollapsibleSidebarProps {
   children: React.ReactNode;
@@ -34,7 +34,7 @@ export function CollapsibleSidebar({ children }: CollapsibleSidebarProps) {
       <div className="h-full flex flex-col p-4">
         <div className={cn("flex items-center mb-6", isCollapsed ? 'justify-center' : 'justify-between')}>
           <div className={cn("text-2xl font-semibold text-gray-100", isCollapsed && "hidden")}>
-            <PhonoglyphLogo size="md" className="text-gray-100" />
+            <RayboxLogo size="md" className="text-gray-100" />
           </div>
         </div>
 
