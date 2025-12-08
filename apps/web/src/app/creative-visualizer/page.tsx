@@ -39,6 +39,7 @@ import { AspectRatioSelector } from '@/components/ui/aspect-ratio-selector';
 import { getAspectRatioConfig } from '@/lib/visualizer/aspect-ratios';
 import { useProjectSettingsStore } from '@/stores/projectSettingsStore';
 import { CollectionManager } from '@/components/assets/CollectionManager';
+import { AutoSaveProvider } from '@/components/auto-save/auto-save-provider';
 
 // Derived boolean: are stem URLs ready?
 // const stemUrlsReady = Object.keys(asyncStemUrlMap).length > 0; // This line was moved
@@ -1815,9 +1816,11 @@ function CreativeVisualizerPage() {
           onClose={handleCloseCreateModal}
         />
       )}
-      <DndProvider backend={HTML5Backend}>
-        {/* Main visualizer UI */}
-        <div className="flex h-screen bg-stone-800 text-white min-w-0 creative-visualizer-text">
+      {currentProjectId ? (
+        <AutoSaveProvider projectId={currentProjectId}>
+          <DndProvider backend={HTML5Backend}>
+            {/* Main visualizer UI */}
+            <div className="flex h-screen bg-stone-800 text-white min-w-0 creative-visualizer-text">
           <CollapsibleSidebar>
             <div className="space-y-4">
               <MappingSourcesPanel 
@@ -2077,6 +2080,39 @@ function CreativeVisualizerPage() {
         </main>
       </div>
       </DndProvider>
+        </AutoSaveProvider>
+      ) : (
+        <DndProvider backend={HTML5Backend}>
+          {/* Main visualizer UI */}
+          <div className="flex h-screen bg-stone-800 text-white min-w-0 creative-visualizer-text">
+            <CollapsibleSidebar>
+              <div className="space-y-4">
+                <MappingSourcesPanel 
+                  activeTrackId={activeTrackId || undefined}
+                  className="mb-4"
+                  selectedStemType={selectedStemType}
+                  currentTime={currentTime}
+                  cachedAnalysis={audioAnalysis.cachedAnalysis}
+                  isPlaying={isPlaying}
+                />
+                <FileSelector 
+                  onFileSelected={handleFileSelected}
+                  selectedFileId={selectedFileId || undefined}
+                  useDemoData={useDemoData}
+                  onDemoModeChange={handleDemoModeChange}
+                  projectId={currentProjectId || undefined}
+                  projectName={projectData?.name}
+                />
+              </div>
+            </CollapsibleSidebar>
+            <main className="flex-1 flex overflow-hidden min-w-0">
+              <div className="flex-1 flex items-center justify-center text-stone-400">
+                <p>Please select or create a project to begin</p>
+              </div>
+            </main>
+          </div>
+        </DndProvider>
+      )}
     </HudOverlayProvider>
   );
 }

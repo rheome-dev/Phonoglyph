@@ -10,6 +10,7 @@ interface ProjectSettingsState {
 interface ProjectSettingsActions {
   setBackgroundColor: (color: string) => void;
   toggleBackgroundVisibility: () => void;
+  setIsBackgroundVisible: (visible: boolean) => void;
 }
 
 export const useProjectSettingsStore = create<ProjectSettingsState & ProjectSettingsActions>((set) => ({
@@ -18,6 +19,7 @@ export const useProjectSettingsStore = create<ProjectSettingsState & ProjectSett
 
   setBackgroundColor: (color) => set({ backgroundColor: color }),
   toggleBackgroundVisibility: () => set((state) => ({ isBackgroundVisible: !state.isBackgroundVisible })),
+  setIsBackgroundVisible: (visible) => set({ isBackgroundVisible: visible }),
 }));
 
 

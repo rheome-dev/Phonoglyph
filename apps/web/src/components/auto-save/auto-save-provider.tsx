@@ -10,6 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Settings, History, Save } from 'lucide-react'
 import { cn, debugLog } from '@/lib/utils'
+import { useTimelineStore } from '@/stores/timelineStore'
+import { useProjectSettingsStore } from '@/stores/projectSettingsStore'
 
 interface AutoSaveContextType {
   saveCurrentState: () => Promise<void>
@@ -37,71 +39,120 @@ interface AutoSaveProviderProps {
   className?: string
 }
 
+// Simple debounce utility
+function debounce<T extends (...args: any[]) => void>(
+  func: T,
+  wait: number
+): T & { cancel: () => void } {
+  let timeout: NodeJS.Timeout | null = null
+  
+  const debounced = ((...args: Parameters<T>) => {
+    if (timeout) clearTimeout(timeout)
+    timeout = setTimeout(() => func(...args), wait)
+  }) as T & { cancel: () => void }
+  
+  debounced.cancel = () => {
+    if (timeout) {
+      clearTimeout(timeout)
+      timeout = null
+    }
+  }
+  
+  return debounced
+}
+
 export function AutoSaveProvider({ projectId, children, className }: AutoSaveProviderProps) {
   const [showSettings, setShowSettings] = React.useState(false)
   const [showHistory, setShowHistory] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
+  const [isHydrating, setIsHydrating] = React.useState(false)
   
   const autoSave = useAutoSave(projectId)
-  const stateRef = useRef<any>(null)
 
-  // Function to capture current visualization state
+  // Function to capture current visualization state from Zustand stores
   const captureCurrentState = useCallback(() => {
-    // This function should be implemented to capture the current state
-    // from the visualization components. For now, we'll use a placeholder
-    const currentState = {
-      visualizationParams: {
-        // Capture visualization parameters
-        effects: [], // Will be populated by child components
-        settings: {}, // Will be populated by child components
-      },
-      stemMappings: {
-        // Capture stem mappings
-        mappings: [], // Will be populated by child components
-      },
-      effectSettings: {
-        // Capture effect settings
-        effects: {}, // Will be populated by child components
-      },
-      timelineState: {
-        // Capture timeline state
-        currentTime: 0,
-        duration: 0,
-        isPlaying: false,
-      }
-    }
+    // Access state non-reactively via getState() to avoid unnecessary re-renders during capture
+    const timelineState = useTimelineStore.getState()
+    const projectSettings = useProjectSettingsStore.getState()
 
-    return currentState
+    return {
+      // We structure this to match the EditState interface in schema
+      timelineState: {
+        layers: timelineState.layers,
+        duration: timelineState.duration,
+        zoom: timelineState.zoom,
+        // We generally don't save currentTime or isPlaying as those are transient
+      },
+      projectSettings: {
+        backgroundColor: projectSettings.backgroundColor,
+        isBackgroundVisible: projectSettings.isBackgroundVisible,
+      },
+      // Placeholder for future effect-specific settings if not in layers
+      effectSettings: {},
+      stemMappings: {}, // If mappings are stored in a store, grab them here
+      visualizationParams: {},
+      schemaVersion: 1
+    }
   }, [])
 
   // Save current state
   const saveCurrentState = useCallback(async () => {
+    if (isHydrating) {
+      // Don't save while hydrating to avoid race conditions
+      return
+    }
+    
     try {
       setError(null)
       const stateData = captureCurrentState()
-      await autoSave.saveState()
+      await autoSave.saveState(stateData)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save state')
       debugLog.error('Auto-save error:', err)
     }
-  }, [autoSave, captureCurrentState])
+  }, [autoSave, captureCurrentState, isHydrating])
 
   // Restore state
   const handleRestoreState = useCallback(async (stateId: string) => {
     try {
       setError(null)
+      setIsHydrating(true)
       const restoredState = await autoSave.restoreState(stateId)
       
-      // Apply the restored state to the visualization
-      // This will be implemented to restore the state to child components
-      debugLog.log('Restored state:', restoredState)
-      
-      // Trigger a re-render or state update in child components
-      // This is a placeholder - actual implementation will depend on the child components
-      
+      // Apply the restored state to the stores
+      if (restoredState && restoredState.data) {
+        const { timelineState, projectSettings } = restoredState.data
+
+        // Hydrate Timeline Store
+        if (timelineState) {
+          if (timelineState.layers) {
+            useTimelineStore.getState().setLayers(timelineState.layers)
+          }
+          if (timelineState.duration !== undefined) {
+            useTimelineStore.getState().setDuration(timelineState.duration)
+          }
+          if (timelineState.zoom !== undefined) {
+            useTimelineStore.getState().setZoom(timelineState.zoom)
+          }
+        }
+
+        // Hydrate Settings Store
+        if (projectSettings) {
+          if (projectSettings.backgroundColor) {
+            useProjectSettingsStore.getState().setBackgroundColor(projectSettings.backgroundColor)
+          }
+          if (projectSettings.isBackgroundVisible !== undefined) {
+            useProjectSettingsStore.getState().setIsBackgroundVisible(projectSettings.isBackgroundVisible)
+          }
+        }
+
+        debugLog.log('✅ Restored project state from version', restoredState.version)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to restore state')
       debugLog.error('Restore error:', err)
+    } finally {
+      setIsHydrating(false)
     }
   }, [autoSave])
 
@@ -129,34 +180,119 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
     }
   }, [autoSave])
 
-  // Auto-save on state changes
+  // Create debounced save function
+  const debouncedSave = useRef(
+    debounce(() => {
+      saveCurrentState()
+    }, autoSave.config.debounceTime)
+  ).current
+
+  // Reactive auto-save: Subscribe to store changes
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (autoSave.config.enabled && stateRef.current) {
-        saveCurrentState()
+    if (!autoSave.config.enabled || isHydrating) {
+      return
+    }
+
+    // Track previous state for comparison
+    let prevTimelineState = useTimelineStore.getState()
+    let prevSettingsState = useProjectSettingsStore.getState()
+
+    // Subscribe to timeline changes
+    const unsubTimeline = useTimelineStore.subscribe((state) => {
+      // Only trigger save on meaningful changes (not transient playback state)
+      if (
+        state.layers !== prevTimelineState.layers || 
+        state.duration !== prevTimelineState.duration ||
+        state.zoom !== prevTimelineState.zoom
+      ) {
+        prevTimelineState = state
+        debouncedSave()
+      } else {
+        prevTimelineState = state
       }
+    })
+
+    // Subscribe to settings changes
+    const unsubSettings = useProjectSettingsStore.subscribe((state) => {
+      if (
+        state.backgroundColor !== prevSettingsState.backgroundColor ||
+        state.isBackgroundVisible !== prevSettingsState.isBackgroundVisible
+      ) {
+        prevSettingsState = state
+        debouncedSave()
+      } else {
+        prevSettingsState = state
+      }
+    })
+
+    return () => {
+      unsubTimeline()
+      unsubSettings()
+      debouncedSave.cancel()
+    }
+  }, [autoSave.config.enabled, debouncedSave, isHydrating])
+
+  // Fallback interval-based auto-save (as backup)
+  useEffect(() => {
+    if (!autoSave.config.enabled || isHydrating) {
+      return
+    }
+
+    const interval = setInterval(() => {
+      saveCurrentState()
     }, autoSave.config.interval)
 
     return () => clearInterval(interval)
-  }, [autoSave.config.enabled, autoSave.config.interval, saveCurrentState])
+  }, [autoSave.config.enabled, autoSave.config.interval, saveCurrentState, isHydrating])
 
-  // Load saved state on mount
+  // Load saved state on mount (hydration)
   useEffect(() => {
     const loadSavedState = async () => {
+      if (!projectId) {
+        return
+      }
+
       try {
+        setIsHydrating(true)
         const savedState = await autoSave.getCurrentState()
-        if (savedState) {
-          // Apply the saved state to the visualization
-          // This will be implemented to restore the state to child components
-          debugLog.log('Loaded saved state:', savedState)
+        
+        if (savedState && savedState.data) {
+          const { timelineState, projectSettings } = savedState.data
+
+          // Hydrate Timeline Store
+          if (timelineState) {
+            if (timelineState.layers) {
+              useTimelineStore.getState().setLayers(timelineState.layers)
+            }
+            if (timelineState.duration !== undefined) {
+              useTimelineStore.getState().setDuration(timelineState.duration)
+            }
+            if (timelineState.zoom !== undefined) {
+              useTimelineStore.getState().setZoom(timelineState.zoom)
+            }
+          }
+
+          // Hydrate Settings Store
+          if (projectSettings) {
+            if (projectSettings.backgroundColor) {
+              useProjectSettingsStore.getState().setBackgroundColor(projectSettings.backgroundColor)
+            }
+            if (projectSettings.isBackgroundVisible !== undefined) {
+              useProjectSettingsStore.getState().setIsBackgroundVisible(projectSettings.isBackgroundVisible)
+            }
+          }
+
+          debugLog.log('✅ Hydrated project state from version', savedState.version)
         }
       } catch (err) {
         debugLog.error('Failed to load saved state:', err)
+      } finally {
+        setIsHydrating(false)
       }
     }
 
     loadSavedState()
-  }, [autoSave])
+  }, [autoSave, projectId])
 
   const contextValue: AutoSaveContextType = {
     saveCurrentState,
