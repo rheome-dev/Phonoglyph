@@ -1122,6 +1122,24 @@ function CreativeVisualizerPage() {
   useEffect(() => { activeSliderValuesRef.current = activeSliderValues; }, [activeSliderValues]);
   useEffect(() => { cachedAnalysisRef.current = audioAnalysis.cachedAnalysis; }, [audioAnalysis.cachedAnalysis]);
 
+  // Ensure restored/saved parameter values are pushed into the visualizer engine
+  useEffect(() => {
+    const manager = visualizerRef.current;
+    if (!manager) return;
+
+    Object.entries(baseParameterValues).forEach(([paramKey, value]) => {
+      const lastDashIndex = paramKey.lastIndexOf('-');
+      if (lastDashIndex === -1) return;
+      const effectId = paramKey.substring(0, lastDashIndex);
+      const paramName = paramKey.substring(lastDashIndex + 1);
+      try {
+        manager.updateEffectParameter(effectId, paramName, value);
+      } catch (err) {
+        debugLog.warn('Failed to rehydrate effect parameter', { paramKey, effectId, paramName, value, err });
+      }
+    });
+  }, [baseParameterValues, layers, visualizerRef.current]);
+
   // Real-time feature mapping and visualizer update loop
   useEffect(() => {
     let cachedMappings: [string, string][] = [];
