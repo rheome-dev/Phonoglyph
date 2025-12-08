@@ -23,6 +23,11 @@ interface AutoSaveContextType {
   lastSaved: Date | null
   config: any
   updateConfig: (config: any) => void
+  showSettings?: boolean
+  setShowSettings?: (show: boolean) => void
+  showHistory?: boolean
+  setShowHistory?: (show: boolean) => void
+  error?: string | null
 }
 
 const AutoSaveContext = createContext<AutoSaveContextType | null>(null)
@@ -303,52 +308,28 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
     updateConfig: autoSave.updateConfig,
   }
 
-  return (
-    <AutoSaveContext.Provider value={contextValue}>
-      <div className={cn("relative", className)}>
-        {/* Auto-save controls */}
-        <div className="absolute top-4 right-4 z-50 flex items-center gap-2">
-          <AutoSaveIndicator
-            isSaving={autoSave.isSaving}
-            lastSaved={autoSave.lastSaved}
-            error={error}
-            className="bg-white/90 backdrop-blur-sm px-3 py-2 rounded-lg shadow-lg"
-          />
-          
-          <div className="flex items-center gap-1">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowHistory(!showHistory)}
-              className="bg-white/90 backdrop-blur-sm"
-            >
-              <History className="h-4 w-4" />
-            </Button>
-            
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowSettings(!showSettings)}
-              className="bg-white/90 backdrop-blur-sm"
-            >
-              <Settings className="h-4 w-4" />
-            </Button>
-            
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={saveCurrentState}
-              disabled={autoSave.isSaving}
-              className="bg-white/90 backdrop-blur-sm"
-            >
-              <Save className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
+  // Expose panel state setters for external use
+  const contextValueWithPanels: AutoSaveContextType & {
+    showSettings: boolean
+    setShowSettings: (show: boolean) => void
+    showHistory: boolean
+    setShowHistory: (show: boolean) => void
+    error: string | null
+  } = {
+    ...contextValue,
+    showSettings,
+    setShowSettings,
+    showHistory,
+    setShowHistory,
+    error,
+  }
 
-        {/* Settings Panel */}
+  return (
+    <AutoSaveContext.Provider value={contextValueWithPanels}>
+      <div className={cn("relative", className)}>
+        {/* Settings Panel - positioned relative to top bar */}
         {showSettings && (
-          <div className="absolute top-16 right-4 z-50 w-80">
+          <div className="fixed top-14 right-4 z-50 w-80">
             <AutoSaveSettings
               config={autoSave.config}
               onConfigChange={autoSave.updateConfig}
@@ -358,9 +339,9 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
           </div>
         )}
 
-        {/* History Panel */}
+        {/* History Panel - positioned relative to top bar */}
         {showHistory && (
-          <div className="absolute top-16 right-4 z-50 w-96">
+          <div className="fixed top-14 right-4 z-50 w-96">
             <SaveHistory
               saveHistory={autoSave.saveHistory}
               onRestore={async (stateId: string) => {

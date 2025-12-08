@@ -9,13 +9,15 @@ export interface AutoSaveIndicatorProps {
   lastSaved: Date | null
   error?: string | null
   className?: string
+  style?: React.CSSProperties
 }
 
 export function AutoSaveIndicator({ 
   isSaving, 
   lastSaved, 
   error, 
-  className 
+  className,
+  style
 }: AutoSaveIndicatorProps) {
   const [showSaved, setShowSaved] = useState(false)
 
@@ -61,7 +63,7 @@ export function AutoSaveIndicator({
     <div className={cn(
       "flex items-center gap-2 text-sm text-gray-600",
       className
-    )}>
+    )} style={style}>
       {getStatusIcon()}
       <span className="font-medium">{getStatusText()}</span>
       {error && (

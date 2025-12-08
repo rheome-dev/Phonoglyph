@@ -39,7 +39,9 @@ import { AspectRatioSelector } from '@/components/ui/aspect-ratio-selector';
 import { getAspectRatioConfig } from '@/lib/visualizer/aspect-ratios';
 import { useProjectSettingsStore } from '@/stores/projectSettingsStore';
 import { CollectionManager } from '@/components/assets/CollectionManager';
-import { AutoSaveProvider } from '@/components/auto-save/auto-save-provider';
+import { AutoSaveProvider, useAutoSaveContext } from '@/components/auto-save/auto-save-provider';
+import { AutoSaveIndicator } from '@/components/auto-save/auto-save-indicator';
+import { AutoSaveTopBar } from '@/components/auto-save/auto-save-top-bar';
 
 // Derived boolean: are stem URLs ready?
 // const stemUrlsReady = Object.keys(asyncStemUrlMap).length > 0; // This line was moved
@@ -1923,15 +1925,11 @@ function CreativeVisualizerPage() {
                 <div className="text-xs font-mono uppercase tracking-wider px-2 py-1 rounded text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
                   FPS: <span className="font-creative-mono">{fps}</span>
                 </div>
-                {hasStems && (
-                  <div className="text-xs font-mono uppercase tracking-wider px-2 py-1 rounded text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                    STEMS: <span className="font-creative-mono">{availableStems.length}</span>
-                  </div>
-                )}
                 
               </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                  <AutoSaveTopBar />
                 <AspectRatioSelector
                   currentAspectRatio={visualizerAspectRatio}
                   onAspectRatioChange={setVisualizerAspectRatio}
