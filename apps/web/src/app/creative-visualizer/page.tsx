@@ -34,7 +34,7 @@ import { UnifiedTimeline } from '@/components/video-composition/UnifiedTimeline'
 import { TestVideoComposition } from '@/components/video-composition/TestVideoComposition';
 import type { Layer } from '@/types/video-composition';
 import { useFeatureValue } from '@/hooks/use-feature-value';
-import { HudOverlayProvider, useHudOverlayContext } from '@/components/hud/HudOverlayManager';
+import { HudOverlayRenderer } from '@/components/hud/HudOverlayManager';
 import { AspectRatioSelector } from '@/components/ui/aspect-ratio-selector';
 import { getAspectRatioConfig } from '@/lib/visualizer/aspect-ratios';
 import { useProjectSettingsStore } from '@/stores/projectSettingsStore';
@@ -56,13 +56,12 @@ const EffectsLibrarySidebarWithHud: React.FC<{
   isVisible: boolean;
   stemUrlsReady: boolean;
 }> = ({ effects, selectedEffects, onEffectToggle, onEffectDoubleClick, isVisible, stemUrlsReady }) => {
-  const [isClient, setIsClient] = useState(false);
-  
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-  
-  const hudContext = useHudOverlayContext();
+  const { addLayer, duration, layers } = useTimelineStore((state) => ({
+    addLayer: state.addLayer,
+    duration: state.duration,
+    layers: state.layers,
+  }));
+  const overlayCount = layers.filter((l) => l.type === 'overlay').length;
   
   const handleEffectDoubleClick = (effectId: string) => {
     if (!stemUrlsReady) {
@@ -70,7 +69,7 @@ const EffectsLibrarySidebarWithHud: React.FC<{
       return;
     }
     const effect = effects.find(e => e.id === effectId);
-    if (effect && effect.category === 'Overlays' && isClient) {
+    if (effect && effect.category === 'Overlays') {
       // Map effect ID to overlay type
       const overlayTypeMap: Record<string, string> = {
         'waveform': 'waveform',
@@ -79,13 +78,38 @@ const EffectsLibrarySidebarWithHud: React.FC<{
         'stereometer': 'stereometer',
         'oscilloscope': 'oscilloscope',
         'spectrumAnalyzer': 'spectrumAnalyzer',
-        'midiMeter': 'midiMeter'
+        'midiMeter': 'midiMeter',
+        'vuMeter': 'vuMeter',
+        'chromaWheel': 'chromaWheel',
+        'consoleFeed': 'consoleFeed',
       };
       
       const overlayType = overlayTypeMap[effectId];
       if (overlayType) {
-        debugLog.log('🎯 Adding HUD overlay:', overlayType);
-        hudContext.addOverlay(overlayType);
+        debugLog.log('🎯 Adding HUD overlay to timeline:', overlayType);
+        const newLayer: Layer = {
+          id: `overlay-${Date.now()}`,
+          name: `Overlay ${overlayCount + 1}`,
+          type: 'overlay',
+          effectType: overlayType as any,
+          src: '',
+          position: { x: 20 + overlayCount * 10, y: 20 + overlayCount * 10 },
+          scale: { x: 1, y: 1 },
+          rotation: 0,
+          opacity: 1,
+          audioBindings: [],
+          midiBindings: [],
+          zIndex: 0,
+          blendMode: 'normal',
+          startTime: 0,
+          endTime: duration,
+          duration,
+          settings: {
+            size: { width: 400, height: 200 },
+            stemId: undefined,
+          },
+        };
+        addLayer(newLayer);
       }
     }
     onEffectDoubleClick(effectId);
@@ -1802,11 +1826,7 @@ function CreativeVisualizerPage() {
   }
 
   return (
-    <HudOverlayProvider 
-      cachedAnalysis={audioAnalysis.cachedAnalysis}
-      stemAudio={stemAudio}
-      stemUrlMap={asyncStemUrlMap}
-    >
+    <>
       {showPicker && (
         <ProjectPickerModal
           isOpen={showPicker}
@@ -2033,7 +2053,7 @@ function CreativeVisualizerPage() {
 
                   {/* HUD Overlays positioned relative to visualizer */}
                   <div id="hud-overlays" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 20 }}>
-                    {/* Overlays will be rendered here by the HudOverlayProvider */}
+                    <HudOverlayRenderer stemUrlMap={asyncStemUrlMap} />
                   </div>
 
                       {/* Visualizer content only - no modals here */}
@@ -2114,7 +2134,7 @@ function CreativeVisualizerPage() {
           </div>
         </DndProvider>
       )}
-    </HudOverlayProvider>
+    </>
   );
 }
 

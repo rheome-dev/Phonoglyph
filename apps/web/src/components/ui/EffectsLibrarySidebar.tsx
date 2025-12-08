@@ -35,6 +35,7 @@ const DraggableEffectCard: React.FC<{
     type: 'EFFECT_CARD',
     item: {
       type: 'EFFECT_CARD',
+      effectId: effect.id,
       id: effect.id,
       name: effect.name,
       category: effect.category,

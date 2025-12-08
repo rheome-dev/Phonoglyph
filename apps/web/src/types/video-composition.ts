@@ -19,7 +19,7 @@ export interface Layer {
   id: string;
   name: string;
   isDeletable?: boolean;
-  type: 'video' | 'image' | 'effect';
+  type: LayerType;
   src?: string;
   effectType?: EffectType;
   settings?: any;
@@ -36,8 +36,28 @@ export interface Layer {
   duration: number;
 }
 
-export type EffectType = 'metaballs' | 'particles' | 'particleNetwork' | 'midihud' | 'bloom' | 'imageSlideshow';
-export type LayerType = 'video' | 'image' | 'effect';
+export type OverlayType =
+  | 'waveform'
+  | 'spectrogram'
+  | 'peakMeter'
+  | 'stereometer'
+  | 'oscilloscope'
+  | 'spectrumAnalyzer'
+  | 'midiMeter'
+  | 'vuMeter'
+  | 'chromaWheel'
+  | 'consoleFeed';
+
+export type EffectType =
+  | 'metaballs'
+  | 'particles'
+  | 'particleNetwork'
+  | 'midihud'
+  | 'bloom'
+  | 'imageSlideshow'
+  | OverlayType;
+
+export type LayerType = 'video' | 'image' | 'effect' | 'overlay';
 
 export interface VideoComposition {
   id: string;

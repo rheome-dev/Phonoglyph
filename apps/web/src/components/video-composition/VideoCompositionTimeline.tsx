@@ -101,24 +101,28 @@ export const VideoCompositionTimeline: React.FC<VideoCompositionTimelineProps> =
     duration: duration
   });
 
-  const createEffectLayer = (item: any): Layer => ({
-    id: `effect-${Date.now()}`,
-    name: item.name || item.effectId || 'Effect Layer',
-    type: 'effect',
-    effectType: item.effectId,
-    settings: item.settings || {},
-    position: { x: 50, y: 50 },
-    scale: { x: 1, y: 1 },
-    rotation: 0,
-    opacity: 1,
-    audioBindings: [],
-    midiBindings: [],
-    zIndex: layers.length,
-    blendMode: 'normal',
-    startTime: 0,
-    endTime: duration,
-    duration: duration
-  });
+  const createEffectLayer = (item: any): Layer => {
+    const isOverlay = item.category === 'Overlays';
+    const base: Layer = {
+      id: `${isOverlay ? 'overlay' : 'effect'}-${Date.now()}`,
+      name: item.name || item.effectId || (isOverlay ? 'Overlay Layer' : 'Effect Layer'),
+      type: isOverlay ? 'overlay' : 'effect',
+      effectType: item.effectId || item.id,
+      settings: item.settings || {},
+      position: { x: 10, y: 10 },
+      scale: isOverlay ? { x: 25, y: 20 } : { x: 1, y: 1 },
+      rotation: 0,
+      opacity: 1,
+      audioBindings: [],
+      midiBindings: [],
+      zIndex: layers.length,
+      blendMode: 'normal',
+      startTime: 0,
+      endTime: duration,
+      duration: duration
+    };
+    return base;
+  };
 
   const timeToX = (time: number) => {
     return (time / duration) * 100;

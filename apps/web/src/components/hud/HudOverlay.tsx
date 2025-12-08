@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { debugLog } from '@/lib/utils';
+import type { Layer } from '@/types/video-composition';
 
 function drawWaveform(ctx: CanvasRenderingContext2D, w: number, h: number) {
   ctx.strokeStyle = '#00ffff';
@@ -231,13 +232,47 @@ const ANCHORS = [
 
 const SPECTROGRAM_BUFFER_SIZE = 200; // Number of FFT frames to keep (controls width)
 
-export function HudOverlay({ id, type, position, size, stem, settings, featureData, onOpenModal, onUpdate, isSelected, onSelect }: any) {
+type HudOverlayProps = {
+  layer: Layer;
+  featureData?: any;
+  onOpenModal?: () => void;
+  onUpdate: (updates: Partial<Layer>) => void;
+  isSelected?: boolean;
+  onSelect?: () => void;
+};
+
+const clamp = (val: number, min: number, max: number) => Math.max(min, Math.min(max, val));
+
+export function HudOverlay({
+  layer,
+  featureData,
+  onOpenModal,
+  onUpdate,
+  isSelected,
+  onSelect,
+}: HudOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
   const [resizing, setResizing] = useState<string | null>(null); // anchor key
-  const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
-  const [resizeStart, setResizeStart] = useState<any>(null);
   const [isHovered, setIsHovered] = useState(false);
+  const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
+
+  const dragStartRef = useRef<{
+    mouseX: number;
+    mouseY: number;
+    startX: number;
+    startY: number;
+  } | null>(null);
+
+  const resizeStartRef = useRef<{
+    startX: number;
+    startY: number;
+    posX: number;
+    posY: number;
+    width: number;
+    height: number;
+  } | null>(null);
 
   // Rolling buffer for spectrogram
   const spectrogramBufferRef = useRef<Array<Float32Array>>([]);
@@ -246,34 +281,79 @@ export function HudOverlay({ id, type, position, size, stem, settings, featureDa
   const onMouseMoveRef = useRef<(e: MouseEvent) => void>();
   const onMouseUpRef = useRef<(e: MouseEvent) => void>();
 
+  const position = layer.position || { x: 0, y: 0 };
+  const scale = layer.scale || { x: 20, y: 20 };
+  const widthPct = scale.x ?? 20;
+  const heightPct = scale.y ?? 20;
+  const settings = (layer as any).settings || {};
+  const type = layer.effectType || (layer as any).type;
+  const stem = (layer as any).stem;
+
+  const updateCanvasSize = useCallback(() => {
+    const parentRect = containerRef.current?.parentElement?.getBoundingClientRect();
+    if (!parentRect) return;
+    const width = (parentRect.width * widthPct) / 100;
+    const height = (parentRect.height * heightPct) / 100;
+    setCanvasSize({
+      width: Math.max(1, width),
+      height: Math.max(1, height),
+    });
+  }, [widthPct, heightPct]);
+
+  useEffect(() => {
+    updateCanvasSize();
+    window.addEventListener('resize', updateCanvasSize);
+    return () => window.removeEventListener('resize', updateCanvasSize);
+  }, [updateCanvasSize]);
+
   // Mouse move handler
-  const onMouseMove = useCallback((e: MouseEvent) => {
-    if (dragging && dragStart) {
-      onUpdate({ position: { x: e.clientX - dragStart.x, y: e.clientY - dragStart.y } });
-    }
-    if (resizing && resizeStart) {
-      const anchor = ANCHORS.find(a => a.key === resizing);
-      if (!anchor) return;
-      let { x, y, width, height } = resizeStart;
-      const dx = e.clientX - resizeStart.startX;
-      const dy = e.clientY - resizeStart.startY;
-      // Corner/side logic
-      if (anchor.dx === -1) { width -= dx; x += dx; }
-      if (anchor.dx === 1)  { width += dx; }
-      if (anchor.dy === -1) { height -= dy; y += dy; }
-      if (anchor.dy === 1)  { height += dy; }
-      width = Math.max(60, width);
-      height = Math.max(40, height);
-      onUpdate({ position: { x, y }, size: { width, height } });
-    }
-  }, [dragging, dragStart, resizing, resizeStart, onUpdate]);
+  const onMouseMove = useCallback(
+    (e: MouseEvent) => {
+      const parentRect = containerRef.current?.parentElement?.getBoundingClientRect();
+      if (!parentRect) return;
+
+      if (dragging && dragStartRef.current) {
+        const deltaX = ((e.clientX - dragStartRef.current.mouseX) / parentRect.width) * 100;
+        const deltaY = ((e.clientY - dragStartRef.current.mouseY) / parentRect.height) * 100;
+        const newX = clamp(dragStartRef.current.startX + deltaX, 0, 100);
+        const newY = clamp(dragStartRef.current.startY + deltaY, 0, 100);
+        onUpdate({ position: { x: newX, y: newY } });
+      }
+
+      if (resizing && resizeStartRef.current) {
+        const anchor = ANCHORS.find(a => a.key === resizing);
+        if (!anchor) return;
+
+        const dxPct = ((e.clientX - resizeStartRef.current.startX) / parentRect.width) * 100;
+        const dyPct = ((e.clientY - resizeStartRef.current.startY) / parentRect.height) * 100;
+
+        let x = resizeStartRef.current.posX;
+        let y = resizeStartRef.current.posY;
+        let width = resizeStartRef.current.width;
+        let height = resizeStartRef.current.height;
+
+        if (anchor.dx === -1) { width -= dxPct; x += dxPct; }
+        if (anchor.dx === 1)  { width += dxPct; }
+        if (anchor.dy === -1) { height -= dyPct; y += dyPct; }
+        if (anchor.dy === 1)  { height += dyPct; }
+
+        width = clamp(width, 2, 100);
+        height = clamp(height, 2, 100);
+        x = clamp(x, 0, 100);
+        y = clamp(y, 0, 100);
+
+        onUpdate({ position: { x, y }, scale: { x: width, y: height } });
+      }
+    },
+    [dragging, resizing, onUpdate],
+  );
 
   // Mouse up handler
   const onMouseUp = useCallback(() => {
     setDragging(false);
     setResizing(null);
-    setDragStart(null);
-    setResizeStart(null);
+    dragStartRef.current = null;
+    resizeStartRef.current = null;
   }, []);
 
   // Keep refs up to date
@@ -300,18 +380,20 @@ export function HudOverlay({ id, type, position, size, stem, settings, featureDa
     if (!canvasRef.current) return;
     const ctx = canvasRef.current.getContext('2d');
     if (!ctx) return;
-    ctx.clearRect(0, 0, size.width, size.height);
+    const { width, height } = canvasSize;
+    const size = canvasSize;
+    ctx.clearRect(0, 0, width, height);
     // Draw using featureData if available, else fallback to placeholder
     switch (type) {
       case 'waveform':
         if (Array.isArray(featureData) && featureData.length > 0) {
           // Draw bipolar waveform exactly like stem-waveform component
-          const midY = size.height / 2;
+          const midY = height / 2;
           
           // Draw center line
           ctx.beginPath();
           ctx.moveTo(0, midY);
-          ctx.lineTo(size.width, midY);
+          ctx.lineTo(width, midY);
           ctx.strokeStyle = '#444';
           ctx.lineWidth = 1;
           ctx.stroke();
@@ -321,8 +403,8 @@ export function HudOverlay({ id, type, position, size, stem, settings, featureDa
           ctx.strokeStyle = settings.color || '#4db3fa'; // Use settings color or fallback to blue
           ctx.lineWidth = 1;
           
-          for (let i = 0; i < size.width; i++) {
-            const idx = Math.floor(i / size.width * (featureData.length - 1));
+          for (let i = 0; i < width; i++) {
+            const idx = Math.floor(i / width * (featureData.length - 1));
             const pointHeight = featureData[idx] * midY * 0.8; // Scale to 80% of height
             const x = i;
             ctx.moveTo(x, midY - pointHeight);
@@ -330,7 +412,7 @@ export function HudOverlay({ id, type, position, size, stem, settings, featureDa
           }
           ctx.stroke();
         } else {
-          drawWaveform(ctx, size.width, size.height);
+          drawWaveform(ctx, width, height);
         }
         break;
       case 'oscilloscope':
@@ -349,34 +431,34 @@ export function HudOverlay({ id, type, position, size, stem, settings, featureDa
             const cornerRadius = settings.cornerRadius || 0;
             if (cornerRadius > 0) {
               ctx.beginPath();
-              ctx.roundRect(0, 0, size.width, size.height, cornerRadius);
+              ctx.roundRect(0, 0, width, height, cornerRadius);
               ctx.clip();
             }
             
             ctx.strokeStyle = gridColor;
             ctx.lineWidth = 0.5;
             // Vertical grid lines
-            for (let x = 0; x <= size.width; x += size.width / 10) {
+            for (let x = 0; x <= width; x += width / 10) {
               ctx.beginPath();
               ctx.moveTo(x, 0);
-              ctx.lineTo(x, size.height);
+              ctx.lineTo(x, height);
               ctx.stroke();
             }
             // Horizontal grid lines
-            for (let y = 0; y <= size.height; y += size.height / 8) {
+            for (let y = 0; y <= height; y += height / 8) {
               ctx.beginPath();
               ctx.moveTo(0, y);
-              ctx.lineTo(size.width, y);
+              ctx.lineTo(width, y);
               ctx.stroke();
             }
             // Center crosshair
             ctx.strokeStyle = gridColor;
             ctx.lineWidth = 1;
             ctx.beginPath();
-            ctx.moveTo(size.width / 2, 0);
-            ctx.lineTo(size.width / 2, size.height);
-            ctx.moveTo(0, size.height / 2);
-            ctx.lineTo(size.width, size.height / 2);
+            ctx.moveTo(width / 2, 0);
+            ctx.lineTo(width / 2, height);
+            ctx.moveTo(0, height / 2);
+            ctx.lineTo(width, height / 2);
             ctx.stroke();
             ctx.restore();
           }
@@ -384,13 +466,13 @@ export function HudOverlay({ id, type, position, size, stem, settings, featureDa
           if (glowIntensity > 0) {
             ctx.save();
             const glowIntensityValue = glowIntensity * 0.15;
-            const step = Math.max(1, Math.floor(size.width / 100));
-            for (let i = 0; i < size.width; i += step) {
-              const idx = Math.floor(i / size.width * (featureData.length - 1));
+            const step = Math.max(1, Math.floor(width / 100));
+            for (let i = 0; i < width; i += step) {
+              const idx = Math.floor(i / width * (featureData.length - 1));
               const val = featureData[idx];
               // Bipolar: normalize to -1 to 1 range, then center at height/2
               const normalizedVal = (val - 0.5) * 2; // Convert 0-1 to -1 to 1
-              const y = size.height / 2 - normalizedVal * (size.height / 2) * amplitude;
+              const y = height / 2 - normalizedVal * (height / 2) * amplitude;
               const gradient = ctx.createRadialGradient(i, y, 0, i, y, glowIntensity * 2.5);
               const rgbaColor = color.startsWith('#') 
                 ? `rgba(${parseInt(color.slice(1, 3), 16)}, ${parseInt(color.slice(3, 5), 16)}, ${parseInt(color.slice(5, 7), 16)}, ${glowIntensityValue})`
@@ -408,18 +490,18 @@ export function HudOverlay({ id, type, position, size, stem, settings, featureDa
           ctx.strokeStyle = color;
           ctx.lineWidth = traceWidth;
           ctx.beginPath();
-          for (let i = 0; i < size.width; i++) {
-            const idx = Math.floor(i / size.width * (featureData.length - 1));
+          for (let i = 0; i < width; i++) {
+            const idx = Math.floor(i / width * (featureData.length - 1));
             const val = featureData[idx];
             // Bipolar: normalize to -1 to 1 range, then center at height/2
             const normalizedVal = (val - 0.5) * 2; // Convert 0-1 to -1 to 1
-            const y = size.height / 2 - normalizedVal * (size.height / 2) * amplitude;
+            const y = height / 2 - normalizedVal * (height / 2) * amplitude;
             if (i === 0) ctx.moveTo(i, y);
             else ctx.lineTo(i, y);
           }
           ctx.stroke();
         } else {
-          drawOscilloscope(ctx, size.width, size.height, { ...settings, amplitude, traceWidth });
+          drawOscilloscope(ctx, width, height, { ...settings, amplitude, traceWidth });
         }
         break;
       case 'spectrogram': {
@@ -462,11 +544,9 @@ export function HudOverlay({ id, type, position, size, stem, settings, featureDa
           });
           
           // Clear canvas
-          ctx.clearRect(0, 0, size.width, size.height);
+          ctx.clearRect(0, 0, width, height);
           
           // Draw spectrogram with enhanced visualization
-          const width = size.width;
-          const height = size.height;
           const frameCount = buffer.length;
           const binCount = buffer[0]?.length || 0;
           
@@ -603,7 +683,7 @@ export function HudOverlay({ id, type, position, size, stem, settings, featureDa
             }
           }
         } else {
-          drawSpectrogram(ctx, size.width, size.height);
+          drawSpectrogram(ctx, width, height);
         }
         break;
       }
@@ -921,52 +1001,62 @@ export function HudOverlay({ id, type, position, size, stem, settings, featureDa
           ctx.strokeStyle = color;
           ctx.lineWidth = traceWidth;
           ctx.beginPath();
-          for (let i = 0; i < size.width; i++) {
-            const idx = Math.floor(i / size.width * (featureData.length - 1));
+          for (let i = 0; i < width; i++) {
+            const idx = Math.floor(i / width * (featureData.length - 1));
             const val = featureData[idx];
             const normalizedVal = (val - 0.5) * 2;
-            const y = size.height / 2 - normalizedVal * (size.height / 2) * amplitude;
+            const y = height / 2 - normalizedVal * (height / 2) * amplitude;
             if (i === 0) ctx.moveTo(i, y);
             else ctx.lineTo(i, y);
           }
           ctx.stroke();
         } else {
-          drawOscilloscope(ctx, size.width, size.height, { ...settings, amplitude, traceWidth });
+          drawOscilloscope(ctx, width, height, { ...settings, amplitude, traceWidth });
         }
         break;
       }
       default:
-        drawWaveform(ctx, size.width, size.height);
+        drawWaveform(ctx, width, height);
     }
-  }, [type, stem, size, settings, featureData]);
+  }, [type, stem, settings, featureData, canvasSize]);
 
   function onMouseDown(e: React.MouseEvent) {
     if ((e.target as HTMLElement).classList.contains('transform-anchor')) return;
+    const parentRect = containerRef.current?.parentElement?.getBoundingClientRect();
+    if (!parentRect) return;
     setDragging(true);
-    setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y });
+    dragStartRef.current = {
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      startX: position.x,
+      startY: position.y,
+    };
   }
   function onAnchorMouseDown(anchorKey: string, e: React.MouseEvent) {
     e.stopPropagation();
+    const parentRect = containerRef.current?.parentElement?.getBoundingClientRect();
+    if (!parentRect) return;
     setResizing(anchorKey);
-    setResizeStart({
+    resizeStartRef.current = {
       startX: e.clientX,
       startY: e.clientY,
-      x: position.x,
-      y: position.y,
-      width: size.width,
-      height: size.height,
-    });
+      posX: position.x,
+      posY: position.y,
+      width: widthPct,
+      height: heightPct,
+    };
   }
 
   return (
     <div
-      data-overlay-id={id}
+      ref={containerRef}
+      data-overlay-id={layer.id}
       style={{
         position: 'absolute',
-        left: position.x,
-        top: position.y,
-        width: size.width,
-        height: size.height,
+        left: `${position.x}%`,
+        top: `${position.y}%`,
+        width: `${widthPct}%`,
+        height: `${heightPct}%`,
         pointerEvents: 'auto',
         zIndex: 10,
         borderRadius: settings.cornerRadius !== undefined ? `${settings.cornerRadius}px` : 0,
@@ -993,8 +1083,8 @@ export function HudOverlay({ id, type, position, size, stem, settings, featureDa
     >
       <canvas
         ref={canvasRef}
-        width={size.width}
-        height={size.height}
+        width={canvasSize.width}
+        height={canvasSize.height}
         style={{ width: '100%', height: '100%', display: 'block', borderRadius: settings.cornerRadius !== undefined ? `${settings.cornerRadius}px` : 0 }}
       />
       {/* Photoshop-style transform anchors - only visible on hover */}
