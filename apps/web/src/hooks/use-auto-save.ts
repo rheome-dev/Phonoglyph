@@ -63,7 +63,6 @@ export function useAutoSave(projectId: string): UseAutoSave {
   const [saveHistory, setSaveHistory] = useState<EditState[]>([])
   
   const saveTimeoutRef = useRef<NodeJS.Timeout>()
-  const intervalRef = useRef<NodeJS.Timeout>()
   const currentStateRef = useRef<Record<string, any> | null>(null)
 
   // tRPC mutations and queries
@@ -232,48 +231,11 @@ export function useAutoSave(projectId: string): UseAutoSave {
     setConfig(prev => ({ ...prev, ...newConfig }))
   }, [])
 
-  // Debounced save function
-  const debouncedSave = useCallback((stateData: Record<string, any>) => {
-    currentStateRef.current = stateData
-    
-    // Clear existing timeout
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current)
-    }
-
-    // Set new timeout
-    saveTimeoutRef.current = setTimeout(() => {
-      saveState(stateData)
-    }, config.debounceTime)
-  }, [saveState, config.debounceTime])
-
-  // Auto-save interval
-  useEffect(() => {
-    if (!config.enabled || !isAuthenticated || !projectId) {
-      return
-    }
-
-    intervalRef.current = setInterval(() => {
-      if (currentStateRef.current) {
-        saveState(currentStateRef.current)
-      }
-    }, config.interval)
-
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-      }
-    }
-  }, [config.enabled, config.interval, isAuthenticated, projectId, saveState])
-
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current)
-      }
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
       }
     }
   }, [])

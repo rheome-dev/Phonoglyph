@@ -237,19 +237,6 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
     }
   }, [autoSave.config.enabled, debouncedSave, isHydrating])
 
-  // Fallback interval-based auto-save (as backup)
-  useEffect(() => {
-    if (!autoSave.config.enabled || isHydrating) {
-      return
-    }
-
-    const interval = setInterval(() => {
-      saveCurrentState()
-    }, autoSave.config.interval)
-
-    return () => clearInterval(interval)
-  }, [autoSave.config.enabled, autoSave.config.interval, saveCurrentState, isHydrating])
-
   // Load saved state on mount (hydration)
   useEffect(() => {
     const loadSavedState = async () => {
