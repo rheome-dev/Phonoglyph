@@ -21,7 +21,16 @@ export interface EditState {
     visualizationParams: Record<string, any>
     stemMappings: Record<string, any>
     effectSettings: Record<string, any>
-    timelineState: any
+    timelineState: {
+      layers?: any[]
+      duration?: number
+      zoom?: number
+    }
+    projectSettings?: {
+      backgroundColor?: string
+      isBackgroundVisible?: boolean
+    }
+    schemaVersion?: number
   }
   version: number
   isCurrent: boolean
@@ -31,8 +40,8 @@ export interface UseAutoSave {
   isSaving: boolean
   lastSaved: Date | null
   saveHistory: EditState[]
-  saveState: () => Promise<void>
-  restoreState: (stateId: string) => Promise<void>
+  saveState: (stateData?: Record<string, any>) => Promise<void>
+  restoreState: (stateId: string) => Promise<EditState>
   clearHistory: () => Promise<void>
   getCurrentState: () => Promise<EditState | null>
   config: AutoSaveConfig
@@ -96,6 +105,11 @@ export function useAutoSave(projectId: string): UseAutoSave {
     try {
       setIsSaving(true)
       
+      // If stateData is provided, store it in the ref for future use
+      if (stateData) {
+        currentStateRef.current = stateData
+      }
+      
       const dataToSave = stateData || currentStateRef.current
       if (!dataToSave) {
         debugLog.warn('No state data to save')
@@ -129,7 +143,7 @@ export function useAutoSave(projectId: string): UseAutoSave {
   }, [projectId, isAuthenticated, user, config.enabled, saveStateMutation, getCurrentStateQuery, getProjectStatesQuery])
 
   // Restore state function
-  const restoreState = useCallback(async (stateId: string) => {
+  const restoreState = useCallback(async (stateId: string): Promise<EditState> => {
     if (!projectId || !isAuthenticated || !user) {
       throw new Error('Authentication required to restore state')
     }
@@ -145,7 +159,16 @@ export function useAutoSave(projectId: string): UseAutoSave {
       await getCurrentStateQuery.refetch()
       await getProjectStatesQuery.refetch()
       
-      return restoredState
+      // Map the database response to EditState format
+      return {
+        id: restoredState.id,
+        userId: restoredState.user_id,
+        projectId: restoredState.project_id,
+        timestamp: new Date(restoredState.timestamp),
+        data: restoredState.data,
+        version: restoredState.version,
+        isCurrent: restoredState.is_current
+      }
     } catch (error) {
       debugLog.error('Failed to restore state:', error)
       throw error
@@ -184,7 +207,20 @@ export function useAutoSave(projectId: string): UseAutoSave {
 
     try {
       const currentState = await getCurrentStateQuery.refetch()
-      return currentState.data || null
+      if (!currentState.data) {
+        return null
+      }
+      
+      // Map the database response to EditState format
+      return {
+        id: currentState.data.id,
+        userId: currentState.data.user_id,
+        projectId: currentState.data.project_id,
+        timestamp: new Date(currentState.data.timestamp),
+        data: currentState.data.data,
+        version: currentState.data.version,
+        isCurrent: currentState.data.is_current
+      }
     } catch (error) {
       debugLog.error('Failed to get current state:', error)
       return null

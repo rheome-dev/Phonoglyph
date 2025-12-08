@@ -13,10 +13,12 @@ import { cn, debugLog } from '@/lib/utils'
 import { useTimelineStore } from '@/stores/timelineStore'
 import { useProjectSettingsStore } from '@/stores/projectSettingsStore'
 
+import type { EditState } from '@/hooks/use-auto-save'
+
 interface AutoSaveContextType {
   saveCurrentState: () => Promise<void>
-  restoreState: (stateId: string) => Promise<void>
-  getCurrentState: () => Promise<any>
+  restoreState: (stateId: string) => Promise<EditState>
+  getCurrentState: () => Promise<EditState | null>
   isSaving: boolean
   lastSaved: Date | null
   config: any
@@ -113,7 +115,7 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
   }, [autoSave, captureCurrentState, isHydrating])
 
   // Restore state
-  const handleRestoreState = useCallback(async (stateId: string) => {
+  const handleRestoreState = useCallback(async (stateId: string): Promise<EditState> => {
     try {
       setError(null)
       setIsHydrating(true)
@@ -148,9 +150,12 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
 
         debugLog.log('✅ Restored project state from version', restoredState.version)
       }
+      
+      return restoredState
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to restore state')
       debugLog.error('Restore error:', err)
+      throw err
     } finally {
       setIsHydrating(false)
     }
@@ -294,9 +299,14 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
     loadSavedState()
   }, [autoSave, projectId])
 
+  // Wrapper for restoreState that matches the context interface
+  const handleRestoreStateWrapper = useCallback(async (stateId: string): Promise<EditState> => {
+    return await handleRestoreState(stateId)
+  }, [handleRestoreState])
+
   const contextValue: AutoSaveContextType = {
     saveCurrentState,
-    restoreState: handleRestoreState,
+    restoreState: handleRestoreStateWrapper,
     getCurrentState: autoSave.getCurrentState,
     isSaving: autoSave.isSaving,
     lastSaved: autoSave.lastSaved,
@@ -364,7 +374,9 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
           <div className="absolute top-16 right-4 z-50 w-96">
             <SaveHistory
               saveHistory={autoSave.saveHistory}
-              onRestore={handleRestoreState}
+              onRestore={async (stateId: string) => {
+                await handleRestoreState(stateId)
+              }}
               onDelete={handleDeleteState}
               onClearHistory={handleClearHistory}
               isLoading={autoSave.isSaving}
