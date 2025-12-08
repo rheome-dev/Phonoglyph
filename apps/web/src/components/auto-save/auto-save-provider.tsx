@@ -284,7 +284,9 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
     }
 
     loadSavedState()
-  }, [autoSave, projectId])
+    // FIX: Only run on mount/project change. Excluding autoSave prevents infinite loops.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId])
 
   // Wrapper for restoreState that matches the context interface
   const handleRestoreStateWrapper = useCallback(async (stateId: string): Promise<EditState> => {
