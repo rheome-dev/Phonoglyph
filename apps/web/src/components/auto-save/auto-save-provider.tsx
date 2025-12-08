@@ -12,6 +12,7 @@ import { Settings, History, Save } from 'lucide-react'
 import { cn, debugLog } from '@/lib/utils'
 import { useTimelineStore } from '@/stores/timelineStore'
 import { useProjectSettingsStore } from '@/stores/projectSettingsStore'
+import { useVisualizerStore } from '@/stores/visualizerStore'
 
 import type { EditState } from '@/hooks/use-auto-save'
 
@@ -81,6 +82,7 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
     // Access state non-reactively via getState() to avoid unnecessary re-renders during capture
     const timelineState = useTimelineStore.getState()
     const projectSettings = useProjectSettingsStore.getState()
+    const visualizerState = useVisualizerStore.getState()
 
     return {
       // We structure this to match the EditState interface in schema
@@ -95,9 +97,18 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
         isBackgroundVisible: projectSettings.isBackgroundVisible,
       },
       // Placeholder for future effect-specific settings if not in layers
-      effectSettings: {},
-      stemMappings: {}, // If mappings are stored in a store, grab them here
-      visualizationParams: {},
+      effectSettings: {
+        selectedEffects: visualizerState.selectedEffects,
+      },
+      stemMappings: visualizerState.mappings,
+      visualizationParams: {
+        aspectRatio: visualizerState.aspectRatio,
+        baseParameterValues: visualizerState.baseParameterValues,
+        activeSliderValues: visualizerState.activeSliderValues,
+        audioAnalysisSettings: visualizerState.audioAnalysisSettings,
+        featureDecayTimes: visualizerState.featureDecayTimes,
+        featureSensitivities: visualizerState.featureSensitivities,
+      },
       schemaVersion: 1
     }
   }, [])
@@ -128,7 +139,7 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
       
       // Apply the restored state to the stores
       if (restoredState && restoredState.data) {
-        const { timelineState, projectSettings } = restoredState.data
+        const { timelineState, projectSettings, effectSettings, stemMappings, visualizationParams } = restoredState.data
 
         // Hydrate Timeline Store
         if (timelineState) {
@@ -150,6 +161,42 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
           }
           if (projectSettings.isBackgroundVisible !== undefined) {
             useProjectSettingsStore.getState().setIsBackgroundVisible(projectSettings.isBackgroundVisible)
+          }
+        }
+
+        // Hydrate Visualizer Store
+        const visualizerStore = useVisualizerStore.getState()
+        
+        if (effectSettings?.selectedEffects) {
+          visualizerStore.setSelectedEffects(effectSettings.selectedEffects)
+        }
+        
+        if (stemMappings && Object.keys(stemMappings).length > 0) {
+          visualizerStore.setMappings(stemMappings)
+        }
+        
+        if (visualizationParams) {
+          if (visualizationParams.aspectRatio) {
+            visualizerStore.setAspectRatio(visualizationParams.aspectRatio)
+          }
+          if (visualizationParams.baseParameterValues) {
+            visualizerStore.setBaseParameterValues(visualizationParams.baseParameterValues)
+          }
+          if (visualizationParams.activeSliderValues) {
+            visualizerStore.setActiveSliderValues(visualizationParams.activeSliderValues)
+          }
+          if (visualizationParams.audioAnalysisSettings) {
+            visualizerStore.setAudioAnalysisSettings(visualizationParams.audioAnalysisSettings)
+          }
+          if (visualizationParams.featureDecayTimes) {
+            Object.entries(visualizationParams.featureDecayTimes).forEach(([featureId, decayTime]) => {
+              visualizerStore.setFeatureDecayTime(featureId, decayTime as number)
+            })
+          }
+          if (visualizationParams.featureSensitivities) {
+            Object.entries(visualizationParams.featureSensitivities).forEach(([featureId, sensitivity]) => {
+              visualizerStore.setFeatureSensitivity(featureId, sensitivity as number)
+            })
           }
         }
 
@@ -206,6 +253,7 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
     // Track previous state for comparison
     let prevTimelineState = useTimelineStore.getState()
     let prevSettingsState = useProjectSettingsStore.getState()
+    let prevVisualizerState = useVisualizerStore.getState()
 
     // Subscribe to timeline changes
     const unsubTimeline = useTimelineStore.subscribe((state) => {
@@ -235,9 +283,29 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
       }
     })
 
+    // Subscribe to visualizer changes
+    const unsubVisualizer = useVisualizerStore.subscribe((state) => {
+      if (
+        state.mappings !== prevVisualizerState.mappings ||
+        state.selectedEffects !== prevVisualizerState.selectedEffects ||
+        state.aspectRatio !== prevVisualizerState.aspectRatio ||
+        state.baseParameterValues !== prevVisualizerState.baseParameterValues ||
+        state.activeSliderValues !== prevVisualizerState.activeSliderValues ||
+        state.audioAnalysisSettings !== prevVisualizerState.audioAnalysisSettings ||
+        state.featureDecayTimes !== prevVisualizerState.featureDecayTimes ||
+        state.featureSensitivities !== prevVisualizerState.featureSensitivities
+      ) {
+        prevVisualizerState = state
+        debouncedSave()
+      } else {
+        prevVisualizerState = state
+      }
+    })
+
     return () => {
       unsubTimeline()
       unsubSettings()
+      unsubVisualizer()
       debouncedSave.cancel()
     }
   }, [autoSave.config.enabled, debouncedSave, isHydrating])
@@ -254,7 +322,7 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
         const savedState = await autoSave.getCurrentState()
         
         if (savedState && savedState.data) {
-          const { timelineState, projectSettings } = savedState.data
+          const { timelineState, projectSettings, effectSettings, stemMappings, visualizationParams } = savedState.data
 
           // Hydrate Timeline Store
           if (timelineState) {
@@ -276,6 +344,42 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
             }
             if (projectSettings.isBackgroundVisible !== undefined) {
               useProjectSettingsStore.getState().setIsBackgroundVisible(projectSettings.isBackgroundVisible)
+            }
+          }
+
+          // Hydrate Visualizer Store
+          const visualizerStore = useVisualizerStore.getState()
+          
+          if (effectSettings?.selectedEffects) {
+            visualizerStore.setSelectedEffects(effectSettings.selectedEffects)
+          }
+          
+          if (stemMappings && Object.keys(stemMappings).length > 0) {
+            visualizerStore.setMappings(stemMappings)
+          }
+          
+          if (visualizationParams) {
+            if (visualizationParams.aspectRatio) {
+              visualizerStore.setAspectRatio(visualizationParams.aspectRatio)
+            }
+            if (visualizationParams.baseParameterValues) {
+              visualizerStore.setBaseParameterValues(visualizationParams.baseParameterValues)
+            }
+            if (visualizationParams.activeSliderValues) {
+              visualizerStore.setActiveSliderValues(visualizationParams.activeSliderValues)
+            }
+            if (visualizationParams.audioAnalysisSettings) {
+              visualizerStore.setAudioAnalysisSettings(visualizationParams.audioAnalysisSettings)
+            }
+            if (visualizationParams.featureDecayTimes) {
+              Object.entries(visualizationParams.featureDecayTimes).forEach(([featureId, decayTime]) => {
+                visualizerStore.setFeatureDecayTime(featureId, decayTime as number)
+              })
+            }
+            if (visualizationParams.featureSensitivities) {
+              Object.entries(visualizationParams.featureSensitivities).forEach(([featureId, sensitivity]) => {
+                visualizerStore.setFeatureSensitivity(featureId, sensitivity as number)
+              })
             }
           }
 

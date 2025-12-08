@@ -1,3 +1,1272 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+# File Summary
+
+## Purpose
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+
+## File Format
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  a. A header with the file path (## File: path/to/file)
+  b. The full contents of the file in a code block
+
+## Usage Guidelines
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+
+## Notes
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+
+# Directory Structure
+```
+apps/
+  web/
+    src/
+      app/
+        creative-visualizer/
+          page.tsx
+      components/
+        auto-save/
+          auto-save-provider.tsx
+        ui/
+          MappingSourcesPanel.tsx
+      stores/
+        visualizerStore.ts
+```
+
+# Files
+
+## File: apps/web/src/stores/visualizerStore.ts
+```typescript
+'use client';
+
+import { create } from 'zustand';
+
+// Types
+export interface FeatureMapping {
+  featureId: string | null;
+  modulationAmount: number; // 0-1, default 0.5 (50%)
+}
+
+export interface AudioAnalysisSettings {
+  transientDecay: number;
+  transientSensitivity: number;
+}
+
+interface VisualizerState {
+  // Global Settings
+  aspectRatio: string;
+  selectedEffects: Record<string, boolean>;
+  
+  // Audio Analysis Configuration (per-feature settings)
+  audioAnalysisSettings: AudioAnalysisSettings;
+  featureDecayTimes: Record<string, number>;
+  featureSensitivities: Record<string, number>;
+  
+  // Mappings & Parameters
+  mappings: Record<string, FeatureMapping>;
+  baseParameterValues: Record<string, number>;
+  activeSliderValues: Record<string, number>;
+}
+
+interface VisualizerActions {
+  // Setters
+  setAspectRatio: (ratio: string) => void;
+  setSelectedEffects: (effects: Record<string, boolean> | ((prev: Record<string, boolean>) => Record<string, boolean>)) => void;
+  setAudioAnalysisSettings: (settings: Partial<AudioAnalysisSettings>) => void;
+  setFeatureDecayTime: (featureId: string, decayTime: number) => void;
+  setFeatureSensitivity: (featureId: string, sensitivity: number) => void;
+  setMappings: (mappings: Record<string, FeatureMapping> | ((prev: Record<string, FeatureMapping>) => Record<string, FeatureMapping>)) => void;
+  setBaseParameterValues: (values: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => void;
+  setActiveSliderValues: (values: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => void;
+  
+  // Helper Actions
+  updateMapping: (id: string, mapping: FeatureMapping) => void;
+  removeMapping: (id: string) => void;
+  reset: () => void;
+}
+
+const DEFAULT_STATE: VisualizerState = {
+  aspectRatio: 'mobile',
+  selectedEffects: {},
+  audioAnalysisSettings: {
+    transientDecay: 0.5,
+    transientSensitivity: 0.5,
+  },
+  featureDecayTimes: {},
+  featureSensitivities: {},
+  mappings: {},
+  baseParameterValues: {},
+  activeSliderValues: {},
+};
+
+export const useVisualizerStore = create<VisualizerState & VisualizerActions>((set) => ({
+  ...DEFAULT_STATE,
+
+  setAspectRatio: (ratio) => set({ aspectRatio: ratio }),
+  
+  setSelectedEffects: (updater) => set((state) => ({ 
+    selectedEffects: typeof updater === 'function' ? updater(state.selectedEffects) : updater 
+  })),
+  
+  setAudioAnalysisSettings: (settings) => set((state) => ({
+    audioAnalysisSettings: { ...state.audioAnalysisSettings, ...settings }
+  })),
+
+  setFeatureDecayTime: (featureId, decayTime) => set((state) => ({
+    featureDecayTimes: { ...state.featureDecayTimes, [featureId]: decayTime }
+  })),
+
+  setFeatureSensitivity: (featureId, sensitivity) => set((state) => ({
+    featureSensitivities: { ...state.featureSensitivities, [featureId]: sensitivity }
+  })),
+
+  setMappings: (updater) => set((state) => ({
+    mappings: typeof updater === 'function' ? updater(state.mappings) : updater
+  })),
+
+  setBaseParameterValues: (updater) => set((state) => ({
+    baseParameterValues: typeof updater === 'function' ? updater(state.baseParameterValues) : updater
+  })),
+
+  setActiveSliderValues: (updater) => set((state) => ({
+    activeSliderValues: typeof updater === 'function' ? updater(state.activeSliderValues) : updater
+  })),
+
+  updateMapping: (id, mapping) => set((state) => ({
+    mappings: { ...state.mappings, [id]: mapping }
+  })),
+
+  removeMapping: (id) => set((state) => {
+    const newMappings = { ...state.mappings };
+    delete newMappings[id];
+    return { mappings: newMappings };
+  }),
+
+  reset: () => set(DEFAULT_STATE),
+}));
+```
+
+## File: apps/web/src/components/auto-save/auto-save-provider.tsx
+```typescript
+"use client"
+
+import React, { createContext, useContext, useEffect, useCallback, useRef } from 'react'
+import { useAutoSave } from '@/hooks/use-auto-save'
+import { AutoSaveIndicator } from './auto-save-indicator'
+import { SaveHistory } from './save-history'
+import { AutoSaveSettings } from './auto-save-settings'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Settings, History, Save } from 'lucide-react'
+import { cn, debugLog } from '@/lib/utils'
+import { useTimelineStore } from '@/stores/timelineStore'
+import { useProjectSettingsStore } from '@/stores/projectSettingsStore'
+import { useVisualizerStore } from '@/stores/visualizerStore'
+
+import type { EditState } from '@/hooks/use-auto-save'
+
+interface AutoSaveContextType {
+  saveCurrentState: () => Promise<void>
+  restoreState: (stateId: string) => Promise<EditState>
+  getCurrentState: () => Promise<EditState | null>
+  isSaving: boolean
+  lastSaved: Date | null
+  config: any
+  updateConfig: (config: any) => void
+  showSettings?: boolean
+  setShowSettings?: (show: boolean) => void
+  showHistory?: boolean
+  setShowHistory?: (show: boolean) => void
+  error?: string | null
+}
+
+const AutoSaveContext = createContext<AutoSaveContextType | null>(null)
+
+export function useAutoSaveContext() {
+  const context = useContext(AutoSaveContext)
+  if (!context) {
+    throw new Error('useAutoSaveContext must be used within AutoSaveProvider')
+  }
+  return context
+}
+
+interface AutoSaveProviderProps {
+  projectId: string
+  children: React.ReactNode
+  className?: string
+}
+
+// Simple debounce utility
+function debounce<T extends (...args: any[]) => void>(
+  func: T,
+  wait: number
+): T & { cancel: () => void } {
+  let timeout: NodeJS.Timeout | null = null
+  
+  const debounced = ((...args: Parameters<T>) => {
+    if (timeout) clearTimeout(timeout)
+    timeout = setTimeout(() => func(...args), wait)
+  }) as T & { cancel: () => void }
+  
+  debounced.cancel = () => {
+    if (timeout) {
+      clearTimeout(timeout)
+      timeout = null
+    }
+  }
+  
+  return debounced
+}
+
+export function AutoSaveProvider({ projectId, children, className }: AutoSaveProviderProps) {
+  const [showSettings, setShowSettings] = React.useState(false)
+  const [showHistory, setShowHistory] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
+  const [isHydrating, setIsHydrating] = React.useState(false)
+  
+  const autoSave = useAutoSave(projectId)
+
+  // Function to capture current visualization state from Zustand stores
+  const captureCurrentState = useCallback(() => {
+    // Access state non-reactively via getState() to avoid unnecessary re-renders during capture
+    const timelineState = useTimelineStore.getState()
+    const projectSettings = useProjectSettingsStore.getState()
+    const visualizerState = useVisualizerStore.getState()
+
+    return {
+      // We structure this to match the EditState interface in schema
+      timelineState: {
+        layers: timelineState.layers,
+        duration: timelineState.duration,
+        zoom: timelineState.zoom,
+        // We generally don't save currentTime or isPlaying as those are transient
+      },
+      projectSettings: {
+        backgroundColor: projectSettings.backgroundColor,
+        isBackgroundVisible: projectSettings.isBackgroundVisible,
+      },
+      // Placeholder for future effect-specific settings if not in layers
+      effectSettings: {
+        selectedEffects: visualizerState.selectedEffects,
+      },
+      stemMappings: visualizerState.mappings,
+      visualizationParams: {
+        aspectRatio: visualizerState.aspectRatio,
+        baseParameterValues: visualizerState.baseParameterValues,
+        activeSliderValues: visualizerState.activeSliderValues,
+        audioAnalysisSettings: visualizerState.audioAnalysisSettings,
+        featureDecayTimes: visualizerState.featureDecayTimes,
+        featureSensitivities: visualizerState.featureSensitivities,
+      },
+      schemaVersion: 1
+    }
+  }, [])
+
+  // Save current state
+  const saveCurrentState = useCallback(async () => {
+    if (isHydrating) {
+      // Don't save while hydrating to avoid race conditions
+      return
+    }
+    
+    try {
+      setError(null)
+      const stateData = captureCurrentState()
+      await autoSave.saveState(stateData)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save state')
+      debugLog.error('Auto-save error:', err)
+    }
+  }, [autoSave, captureCurrentState, isHydrating])
+
+  // Restore state
+  const handleRestoreState = useCallback(async (stateId: string): Promise<EditState> => {
+    try {
+      setError(null)
+      setIsHydrating(true)
+      const restoredState = await autoSave.restoreState(stateId)
+      
+      // Apply the restored state to the stores
+      if (restoredState && restoredState.data) {
+        const { timelineState, projectSettings, effectSettings, stemMappings, visualizationParams } = restoredState.data
+
+        // Hydrate Timeline Store
+        if (timelineState) {
+          if (timelineState.layers) {
+            useTimelineStore.getState().setLayers(timelineState.layers)
+          }
+          if (timelineState.duration !== undefined) {
+            useTimelineStore.getState().setDuration(timelineState.duration)
+          }
+          if (timelineState.zoom !== undefined) {
+            useTimelineStore.getState().setZoom(timelineState.zoom)
+          }
+        }
+
+        // Hydrate Settings Store
+        if (projectSettings) {
+          if (projectSettings.backgroundColor) {
+            useProjectSettingsStore.getState().setBackgroundColor(projectSettings.backgroundColor)
+          }
+          if (projectSettings.isBackgroundVisible !== undefined) {
+            useProjectSettingsStore.getState().setIsBackgroundVisible(projectSettings.isBackgroundVisible)
+          }
+        }
+
+        // Hydrate Visualizer Store
+        const visualizerStore = useVisualizerStore.getState()
+        
+        if (effectSettings?.selectedEffects) {
+          visualizerStore.setSelectedEffects(effectSettings.selectedEffects)
+        }
+        
+        if (stemMappings && Object.keys(stemMappings).length > 0) {
+          visualizerStore.setMappings(stemMappings)
+        }
+        
+        if (visualizationParams) {
+          if (visualizationParams.aspectRatio) {
+            visualizerStore.setAspectRatio(visualizationParams.aspectRatio)
+          }
+          if (visualizationParams.baseParameterValues) {
+            visualizerStore.setBaseParameterValues(visualizationParams.baseParameterValues)
+          }
+          if (visualizationParams.activeSliderValues) {
+            visualizerStore.setActiveSliderValues(visualizationParams.activeSliderValues)
+          }
+          if (visualizationParams.audioAnalysisSettings) {
+            visualizerStore.setAudioAnalysisSettings(visualizationParams.audioAnalysisSettings)
+          }
+          if (visualizationParams.featureDecayTimes) {
+            Object.entries(visualizationParams.featureDecayTimes).forEach(([featureId, decayTime]) => {
+              visualizerStore.setFeatureDecayTime(featureId, decayTime as number)
+            })
+          }
+          if (visualizationParams.featureSensitivities) {
+            Object.entries(visualizationParams.featureSensitivities).forEach(([featureId, sensitivity]) => {
+              visualizerStore.setFeatureSensitivity(featureId, sensitivity as number)
+            })
+          }
+        }
+
+        debugLog.log('✅ Restored project state from version', restoredState.version)
+      }
+      
+      return restoredState
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to restore state')
+      debugLog.error('Restore error:', err)
+      throw err
+    } finally {
+      setIsHydrating(false)
+    }
+  }, [autoSave])
+
+  // Delete state
+  const handleDeleteState = useCallback(async (stateId: string) => {
+    try {
+      setError(null)
+      // Note: The delete functionality is not implemented in the hook yet
+      // This is a placeholder for future implementation
+      debugLog.log('Delete state:', stateId)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete state')
+      debugLog.error('Delete error:', err)
+    }
+  }, [])
+
+  // Clear history
+  const handleClearHistory = useCallback(async () => {
+    try {
+      setError(null)
+      await autoSave.clearHistory()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to clear history')
+      debugLog.error('Clear history error:', err)
+    }
+  }, [autoSave])
+
+  // Create debounced save function
+  const debouncedSave = useRef(
+    debounce(() => {
+      saveCurrentState()
+    }, autoSave.config.debounceTime)
+  ).current
+
+  // Reactive auto-save: Subscribe to store changes
+  useEffect(() => {
+    if (!autoSave.config.enabled || isHydrating) {
+      return
+    }
+
+    // Track previous state for comparison
+    let prevTimelineState = useTimelineStore.getState()
+    let prevSettingsState = useProjectSettingsStore.getState()
+    let prevVisualizerState = useVisualizerStore.getState()
+
+    // Subscribe to timeline changes
+    const unsubTimeline = useTimelineStore.subscribe((state) => {
+      // Only trigger save on meaningful changes (not transient playback state)
+      if (
+        state.layers !== prevTimelineState.layers || 
+        state.duration !== prevTimelineState.duration ||
+        state.zoom !== prevTimelineState.zoom
+      ) {
+        prevTimelineState = state
+        debouncedSave()
+      } else {
+        prevTimelineState = state
+      }
+    })
+
+    // Subscribe to settings changes
+    const unsubSettings = useProjectSettingsStore.subscribe((state) => {
+      if (
+        state.backgroundColor !== prevSettingsState.backgroundColor ||
+        state.isBackgroundVisible !== prevSettingsState.isBackgroundVisible
+      ) {
+        prevSettingsState = state
+        debouncedSave()
+      } else {
+        prevSettingsState = state
+      }
+    })
+
+    // Subscribe to visualizer changes
+    const unsubVisualizer = useVisualizerStore.subscribe((state) => {
+      if (
+        state.mappings !== prevVisualizerState.mappings ||
+        state.selectedEffects !== prevVisualizerState.selectedEffects ||
+        state.aspectRatio !== prevVisualizerState.aspectRatio ||
+        state.baseParameterValues !== prevVisualizerState.baseParameterValues ||
+        state.activeSliderValues !== prevVisualizerState.activeSliderValues ||
+        state.audioAnalysisSettings !== prevVisualizerState.audioAnalysisSettings ||
+        state.featureDecayTimes !== prevVisualizerState.featureDecayTimes ||
+        state.featureSensitivities !== prevVisualizerState.featureSensitivities
+      ) {
+        prevVisualizerState = state
+        debouncedSave()
+      } else {
+        prevVisualizerState = state
+      }
+    })
+
+    return () => {
+      unsubTimeline()
+      unsubSettings()
+      unsubVisualizer()
+      debouncedSave.cancel()
+    }
+  }, [autoSave.config.enabled, debouncedSave, isHydrating])
+
+  // Load saved state on mount (hydration)
+  useEffect(() => {
+    const loadSavedState = async () => {
+      if (!projectId) {
+        return
+      }
+
+      try {
+        setIsHydrating(true)
+        const savedState = await autoSave.getCurrentState()
+        
+        if (savedState && savedState.data) {
+          const { timelineState, projectSettings, effectSettings, stemMappings, visualizationParams } = savedState.data
+
+          // Hydrate Timeline Store
+          if (timelineState) {
+            if (timelineState.layers) {
+              useTimelineStore.getState().setLayers(timelineState.layers)
+            }
+            if (timelineState.duration !== undefined) {
+              useTimelineStore.getState().setDuration(timelineState.duration)
+            }
+            if (timelineState.zoom !== undefined) {
+              useTimelineStore.getState().setZoom(timelineState.zoom)
+            }
+          }
+
+          // Hydrate Settings Store
+          if (projectSettings) {
+            if (projectSettings.backgroundColor) {
+              useProjectSettingsStore.getState().setBackgroundColor(projectSettings.backgroundColor)
+            }
+            if (projectSettings.isBackgroundVisible !== undefined) {
+              useProjectSettingsStore.getState().setIsBackgroundVisible(projectSettings.isBackgroundVisible)
+            }
+          }
+
+          // Hydrate Visualizer Store
+          const visualizerStore = useVisualizerStore.getState()
+          
+          if (effectSettings?.selectedEffects) {
+            visualizerStore.setSelectedEffects(effectSettings.selectedEffects)
+          }
+          
+          if (stemMappings && Object.keys(stemMappings).length > 0) {
+            visualizerStore.setMappings(stemMappings)
+          }
+          
+          if (visualizationParams) {
+            if (visualizationParams.aspectRatio) {
+              visualizerStore.setAspectRatio(visualizationParams.aspectRatio)
+            }
+            if (visualizationParams.baseParameterValues) {
+              visualizerStore.setBaseParameterValues(visualizationParams.baseParameterValues)
+            }
+            if (visualizationParams.activeSliderValues) {
+              visualizerStore.setActiveSliderValues(visualizationParams.activeSliderValues)
+            }
+            if (visualizationParams.audioAnalysisSettings) {
+              visualizerStore.setAudioAnalysisSettings(visualizationParams.audioAnalysisSettings)
+            }
+            if (visualizationParams.featureDecayTimes) {
+              Object.entries(visualizationParams.featureDecayTimes).forEach(([featureId, decayTime]) => {
+                visualizerStore.setFeatureDecayTime(featureId, decayTime as number)
+              })
+            }
+            if (visualizationParams.featureSensitivities) {
+              Object.entries(visualizationParams.featureSensitivities).forEach(([featureId, sensitivity]) => {
+                visualizerStore.setFeatureSensitivity(featureId, sensitivity as number)
+              })
+            }
+          }
+
+          debugLog.log('✅ Hydrated project state from version', savedState.version)
+        }
+      } catch (err) {
+        debugLog.error('Failed to load saved state:', err)
+      } finally {
+        setIsHydrating(false)
+      }
+    }
+
+    loadSavedState()
+    // FIX: Only run on mount/project change. Excluding autoSave prevents infinite loops.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId])
+
+  // Wrapper for restoreState that matches the context interface
+  const handleRestoreStateWrapper = useCallback(async (stateId: string): Promise<EditState> => {
+    return await handleRestoreState(stateId)
+  }, [handleRestoreState])
+
+  const contextValue: AutoSaveContextType = {
+    saveCurrentState,
+    restoreState: handleRestoreStateWrapper,
+    getCurrentState: autoSave.getCurrentState,
+    isSaving: autoSave.isSaving,
+    lastSaved: autoSave.lastSaved,
+    config: autoSave.config,
+    updateConfig: autoSave.updateConfig,
+  }
+
+  // Expose panel state setters for external use
+  const contextValueWithPanels: AutoSaveContextType & {
+    showSettings: boolean
+    setShowSettings: (show: boolean) => void
+    showHistory: boolean
+    setShowHistory: (show: boolean) => void
+    error: string | null
+  } = {
+    ...contextValue,
+    showSettings,
+    setShowSettings,
+    showHistory,
+    setShowHistory,
+    error,
+  }
+
+  return (
+    <AutoSaveContext.Provider value={contextValueWithPanels}>
+      <div className={cn("relative", className)}>
+        {/* Settings Panel - positioned relative to top bar */}
+        {showSettings && (
+          <div className="fixed top-14 right-4 z-50 w-80">
+            <AutoSaveSettings
+              config={autoSave.config}
+              onConfigChange={autoSave.updateConfig}
+              onSaveNow={saveCurrentState}
+              isSaving={autoSave.isSaving}
+            />
+          </div>
+        )}
+
+        {/* History Panel - positioned relative to top bar */}
+        {showHistory && (
+          <div className="fixed top-14 right-4 z-50 w-96">
+            <SaveHistory
+              saveHistory={autoSave.saveHistory}
+              onRestore={async (stateId: string) => {
+                await handleRestoreState(stateId)
+              }}
+              onDelete={handleDeleteState}
+              onClearHistory={handleClearHistory}
+              isLoading={autoSave.isSaving}
+            />
+          </div>
+        )}
+
+        {/* Main content */}
+        <div className="w-full h-full">
+          {children}
+        </div>
+      </div>
+    </AutoSaveContext.Provider>
+  )
+}
+
+// Hook for child components to register their state
+export function useAutoSaveState() {
+  const context = useAutoSaveContext()
+  const stateRef = useRef<any>(null)
+
+  const registerState = useCallback((state: any) => {
+    stateRef.current = state
+  }, [])
+
+  const updateState = useCallback((updates: any) => {
+    if (stateRef.current) {
+      stateRef.current = { ...stateRef.current, ...updates }
+    }
+  }, [])
+
+  return {
+    registerState,
+    updateState,
+    saveCurrentState: context.saveCurrentState,
+    isSaving: context.isSaving,
+    lastSaved: context.lastSaved,
+  }
+}
+```
+
+## File: apps/web/src/components/ui/MappingSourcesPanel.tsx
+```typescript
+'use client';
+
+import React, { useEffect, useState, useMemo, useRef } from 'react';
+import { useDrag } from 'react-dnd';
+import { Zap, Music, Activity, BarChart2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { useAudioFeatures, AudioFeature } from '@/hooks/use-audio-features';
+import { Slider } from '@/components/ui/slider';
+import { Label } from '@/components/ui/label';
+import { featureDecayTimesRef } from '@/hooks/use-audio-analysis';
+import { useVisualizerStore } from '@/stores/visualizerStore';
+
+// --- Meter Sub-Components ---
+
+const VolumeMeter = ({ value }: { value: number }) => (
+  <div className="w-full h-4 bg-neutral-800 rounded-sm overflow-hidden border border-neutral-600 relative">
+    <div 
+      className="h-full bg-gradient-to-r from-yellow-500 to-amber-400 transition-all duration-75 ease-out" 
+      style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%` }} 
+    />
+    <div className="absolute inset-0 flex items-center justify-center">
+      <span className="text-[10px] font-bold text-white mix-blend-difference">
+        {(value * 100).toFixed(0)}%
+      </span>
+    </div>
+  </div>
+);
+
+const PitchMeter = ({ value }: { value: number }) => {
+  const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  const noteIndex = Math.floor(value * 12);
+  const noteName = noteNames[noteIndex] || '...';
+  
+  // Piano keyboard layout: naturals (C, D, E, F, G, A, B) and accidentals (C#, D#, F#, G#, A#)
+  const isNatural = (index: number) => [0, 2, 4, 5, 7, 9, 11].includes(index); // C, D, E, F, G, A, B
+  const isAccidental = (index: number) => [1, 3, 6, 8, 10].includes(index); // C#, D#, F#, G#, A#
+
+  return (
+    <div className="w-full h-4 bg-neutral-900 border border-neutral-600 rounded-sm relative overflow-hidden flex items-center justify-center">
+      {/* Piano keyboard background */}
+      <div className="absolute inset-0 flex">
+        {[...Array(12)].map((_, i) => (
+          <div 
+            key={i} 
+            className={cn(
+              "flex-1 h-full border-r border-neutral-700",
+              isNatural(i) ? "bg-neutral-300" : "bg-neutral-600"
+            )} 
+          />
+        ))}
+      </div>
+      {/* Active note indicator */}
+      <div 
+        className="absolute top-0 bottom-0 w-[8.33%] bg-blue-400/60 transition-all duration-100 ease-out border-l border-r border-blue-300" 
+        style={{ left: `${Math.max(0, Math.min(1, value)) * 100}%` }} 
+      />
+      <span className="text-[10px] font-bold text-white mix-blend-difference z-10 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
+        {noteName}
+      </span>
+    </div>
+  );
+};
+
+const ImpactMeter = ({ value }: { value: number }) => (
+  <div className="w-full bg-neutral-800 rounded-sm h-4 overflow-hidden border border-neutral-600 relative">
+    <div 
+      className="h-full bg-gradient-to-r from-red-500 to-orange-400 transition-all duration-75 ease-out" 
+      style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%` }} 
+    />
+    <div className="absolute inset-0 flex items-center justify-center">
+      <span className="text-[10px] font-bold text-white mix-blend-difference">
+        {value > 0.01 ? 'HIT' : '—'}
+      </span>
+    </div>
+  </div>
+);
+
+// Helper to filter transients by sensitivity (1 = keep all, 0 = keep only strongest)
+function filterTransientsBySensitivity(
+  transients: Array<{ time: number; intensity: number }>,
+  sensitivity: number
+): Array<{ time: number; intensity: number }> {
+  if (!transients.length) return transients;
+  const clamped = Math.max(0, Math.min(1, sensitivity));
+  if (clamped >= 0.999) return transients;
+
+  const intensities = transients
+    .map(t => t.intensity)
+    .filter(v => Number.isFinite(v))
+    .sort((a, b) => a - b);
+
+  if (!intensities.length) return transients;
+
+  const index = Math.floor((1 - clamped) * (intensities.length - 1));
+  const threshold = intensities[index];
+
+  return transients.filter(t => (Number.isFinite(t.intensity) ? t.intensity : 0) >= threshold);
+}
+
+// Time-aligned oscilloscope for spectral flux + transient markers
+const PeaksOscilloscope = ({ 
+  analysisData,
+  currentTime,
+  width = 200,
+  height = 40,
+  windowSec = 4.0,
+}: { 
+  analysisData: any | null;
+  currentTime: number;
+  width?: number;
+  height?: number;
+  windowSec?: number;
+}) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !analysisData) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const frameTimes = (analysisData.frameTimes as number[]) || [];
+    const spectralFlux = (analysisData.spectralFlux as number[]) || [];
+    const volume = (analysisData.volume as number[]) || [];
+    // Use volume (RMS) for visual waveform when available, fall back to spectral flux
+    const values =
+      volume.length === frameTimes.length && volume.length > 0
+        ? volume
+        : spectralFlux;
+    const transients = (analysisData.transients as Array<{ time: number; intensity: number }>) || [];
+
+    if (!frameTimes.length || !values.length) {
+      ctx.clearRect(0, 0, width, height);
+      return;
+    }
+
+    const duration = frameTimes[frameTimes.length - 1] ?? 0;
+    const clampedCurrent = Math.max(0, Math.min(currentTime, duration));
+    const halfWindow = windowSec;
+    const tEnd = clampedCurrent;
+    const tStart = Math.max(0, tEnd - halfWindow);
+    const windowDuration = tEnd - tStart || 1e-3;
+
+    const sampleAtTime = (t: number): number => {
+      let lo = 0;
+      let hi = frameTimes.length - 1;
+      while (lo < hi) {
+        const mid = (lo + hi + 1) >>> 1;
+        if (frameTimes[mid] <= t) lo = mid;
+        else hi = mid - 1;
+      }
+      return values[lo] ?? 0;
+    };
+
+    // Use global max for stable height across time
+    const globalMax = values.reduce((m: number, v: number) => {
+      const av = Math.abs(v);
+      if (!isFinite(av)) return m;
+      return av > m ? av : m;
+    }, 1e-6);
+
+    const waveform: number[] = [];
+    for (let x = 0; x < width; x++) {
+      const t = tStart + (x / Math.max(1, width - 1)) * windowDuration;
+      const v = sampleAtTime(t);
+      waveform[x] = v;
+    }
+
+    ctx.clearRect(0, 0, width, height);
+
+    // Background
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(0, 0, width, height);
+
+    // Center line
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, height / 2);
+    ctx.lineTo(width, height / 2);
+    ctx.stroke();
+
+    // Draw waveform (normalized volume / spectral flux)
+    if (globalMax > 0) {
+      // Unipolar envelope from near bottom to near top of scope
+      const baselineY = height * 0.9; // 10% padding at bottom
+      const scale = (height * 0.8) / globalMax; // leave ~10% headroom at top
+      ctx.strokeStyle = '#00ffff';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      for (let x = 0; x < width; x++) {
+        const v = Math.abs(waveform[x]) * scale;
+        const y = baselineY - v;
+        if (x === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    // Draw transient markers aligned in time
+    ctx.strokeStyle = '#ff0';
+    ctx.fillStyle = '#ff0';
+    ctx.lineWidth = 1.5;
+    const triangleSize = 6;
+
+    transients.forEach(tr => {
+      if (tr.time < tStart || tr.time > tEnd) return;
+      const pos = (tr.time - tStart) / windowDuration;
+      const x = Math.max(0, Math.min(width - 1, pos * width));
+
+      // Full-height line
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, height);
+      ctx.stroke();
+
+      // Downward-pointing triangle at top
+      ctx.beginPath();
+      ctx.moveTo(x - triangleSize / 2, 0);
+      ctx.lineTo(x + triangleSize / 2, 0);
+      ctx.lineTo(x, triangleSize);
+      ctx.closePath();
+      ctx.fill();
+    });
+  }, [analysisData, currentTime, width, height, windowSec]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      width={width}
+      height={height}
+      className="w-full h-full"
+      style={{ display: 'block' }}
+    />
+  );
+};
+
+// --- Main FeatureNode Component ---
+
+const FeatureNode = ({ 
+  feature, 
+  currentTime, 
+  cachedAnalysis,
+  isPlaying 
+}: { 
+  feature: AudioFeature; 
+  currentTime: number;
+  cachedAnalysis: any[];
+  isPlaying: boolean;
+}) => {
+  const [liveValue, setLiveValue] = useState(0); // Decayed output value (for meter and oscilloscope waveform)
+  const [isActive, setIsActive] = useState(false);
+  const lastTransientRef = useRef<{ time: number; intensity: number } | null>(null);
+  
+  // Get sensitivity and decay from global store (persisted via auto-save)
+  const { 
+    featureSensitivities, 
+    setFeatureSensitivity, 
+    featureDecayTimes, 
+    setFeatureDecayTime 
+  } = useVisualizerStore();
+  
+  // Use store values with defaults
+  const sensitivity = featureSensitivities[feature.id] ?? 0.5;
+  const decayTime = featureDecayTimes[feature.id] ?? (featureDecayTimesRef.current[feature.id] ?? 0.5);
+  
+  const isTransientFeature = feature.isEvent && feature.id.includes('peaks');
+  
+  // Get transients for oscilloscope display
+  const peaksAnalysisData = useMemo(() => {
+    if (!isTransientFeature) return null;
+    const analysis = cachedAnalysis.find(a => a.stemType === feature.stemType);
+    if (!analysis?.analysisData) return null;
+    const data = analysis.analysisData;
+    const allTransients = (data.transients as Array<{ time: number; intensity: number }> | undefined) || [];
+    const filtered = filterTransientsBySensitivity(allTransients, sensitivity);
+    return {
+      ...data,
+      transients: filtered,
+    };
+  }, [isTransientFeature, cachedAnalysis, feature.stemType, sensitivity]);
+  
+  // Initialize shared ref on mount and sync with store
+  useEffect(() => {
+    if (isTransientFeature) {
+      // If store has a value, use it for the ref; otherwise initialize both
+      const storeValue = featureDecayTimes[feature.id];
+      if (storeValue !== undefined) {
+        featureDecayTimesRef.current[feature.id] = storeValue;
+      } else if (!featureDecayTimesRef.current[feature.id]) {
+        featureDecayTimesRef.current[feature.id] = 0.5; // Default
+        setFeatureDecayTime(feature.id, 0.5);
+      }
+    }
+  }, [feature.id, isTransientFeature, featureDecayTimes, setFeatureDecayTime]);
+
+  useEffect(() => {
+    if (!isPlaying || !feature.stemType) {
+      setLiveValue(0);
+      setIsActive(false);
+      lastTransientRef.current = null; // Reset on stop/pause
+      return;
+    }
+
+    const analysis = cachedAnalysis.find(a => a.stemType === feature.stemType);
+    if (!analysis?.analysisData) {
+      return;
+    }
+
+    const { analysisData } = analysis;
+    const time = currentTime;
+    let featureValue = 0;
+    
+    // --- ENVELOPE LOGIC FOR TRANSIENTS ---
+    if (isTransientFeature) {
+        // *** FIX B: LOOP DETECTION FOR THE UI COMPONENT ***
+        let storedTransient = lastTransientRef.current;
+        if (storedTransient && (time < storedTransient.time - 0.5)) {
+            lastTransientRef.current = null;
+            storedTransient = null;
+        }
+
+        // Filter transients based on sensitivity for envelope generation
+        const allTransients = (analysisData.transients as Array<{ time: number; intensity: number }> | undefined) || [];
+        const relevantTransients = filterTransientsBySensitivity(allTransients, sensitivity);
+
+        const latestTransient = relevantTransients.reduce((latest: any, t: any) => {
+            if (t.time <= time && (!latest || t.time > latest.time)) {
+                return t;
+            }
+            return latest;
+        }, null);
+
+        if (latestTransient) {
+            if (!storedTransient || latestTransient.time > storedTransient.time) {
+                lastTransientRef.current = { time: latestTransient.time, intensity: latestTransient.intensity };
+            }
+        }
+
+        const activeTransient = lastTransientRef.current;
+        if (activeTransient) {
+            const elapsedTime = time - activeTransient.time;
+            // Calculate decayed value for output signal (used for both meter and oscilloscope waveform)
+            if (elapsedTime >= 0 && elapsedTime < decayTime) {
+                featureValue = activeTransient.intensity * (1 - (elapsedTime / decayTime));
+            } else {
+                featureValue = 0;
+            }
+        } else {
+            featureValue = 0;
+        }
+    }
+    // --- EXISTING LOGIC FOR PITCH ---
+    else if (feature.isEvent && feature.id.includes('pitch')) {
+      const times = analysisData.frameTimes;
+      const chromaValues = analysisData.chroma;
+      if (times && chromaValues && Array.isArray(times) && Array.isArray(chromaValues)) {
+        let lo = 0, hi = times.length - 1;
+        while (lo < hi) {
+          const mid = (lo + hi + 1) >>> 1;
+          if (times[mid] <= time) lo = mid; else hi = mid - 1;
+        }
+        const chromaValue = chromaValues[lo] ?? 0;
+        featureValue = chromaValue / 11;
+      }
+    } 
+    // --- EXISTING LOGIC FOR TIME-SERIES ---
+    else {
+      const times = analysisData.frameTimes;
+      const values = analysisData.volume || analysisData.rms;
+      if (times && values && Array.isArray(times) && Array.isArray(values)) {
+        let lo = 0, hi = times.length - 1;
+        while (lo < hi) {
+          const mid = (lo + hi + 1) >>> 1;
+          if (times[mid] <= time) lo = mid; else hi = mid - 1;
+        }
+        featureValue = values[lo] ?? 0;
+      }
+    }
+
+    const normalizedValue = Math.max(0, Math.min(1, featureValue));
+    setLiveValue(normalizedValue);
+    setIsActive(isPlaying && normalizedValue > 0.05); // Lowered threshold for active state
+  }, [feature, currentTime, cachedAnalysis, isPlaying, decayTime, sensitivity]); // decayTime and sensitivity from store
+
+  const [{ isDragging }, dragRef] = useDrag({
+    type: 'feature',
+    item: () => ({ 
+      id: feature.id, 
+      name: feature.name, 
+      stemType: feature.stemType
+    }),
+    collect: (monitor) => ({ isDragging: monitor.isDragging() }),
+  });
+  const drag = React.useCallback((node: HTMLDivElement | null) => {
+    dragRef(node);
+  }, [dragRef]);
+  
+  const renderMeter = () => {
+    if (isTransientFeature) {
+      return (
+        <div className="space-y-2">
+          {/* Oscilloscope display (time-aligned spectral flux + transient markers) */}
+          <div className="w-full h-10 bg-neutral-900 border border-neutral-600 rounded-sm overflow-hidden">
+            <PeaksOscilloscope 
+              analysisData={peaksAnalysisData}
+              currentTime={currentTime}
+              width={200}
+              height={40}
+            />
+          </div>
+          {/* Output signal meter (with decay applied) */}
+          <ImpactMeter value={liveValue} />
+        </div>
+      );
+    }
+    if (feature.name === 'Pitch') return <PitchMeter value={liveValue} />;
+    if (feature.name === 'Volume') return <VolumeMeter value={liveValue} />;
+    return <div className="w-full bg-neutral-800 rounded-sm h-1 mb-1" />;
+  };
+
+  return (
+    <div 
+      className={cn(
+        "w-full px-2 py-1.5 text-xs border border-neutral-600 bg-neutral-700 rounded-md transition-all duration-200",
+        "hover:bg-neutral-600",
+        isActive && "ring-1 ring-opacity-70",
+        isActive && feature.category === 'rhythm' && "ring-red-400",
+        isActive && feature.category === 'pitch' && "ring-blue-400", 
+        isActive && feature.category === 'intensity' && "ring-yellow-400",
+        isActive && feature.category === 'timbre' && "ring-purple-400",
+        isDragging && "opacity-40"
+      )}
+      title={feature.description}
+    >
+      {/* This inner div is now the draggable handle */}
+      <div ref={drag} className="cursor-grab">
+        <div className="flex items-center justify-between w-full mb-1.5">
+          <span className="truncate font-mono text-[10px] font-bold tracking-wide text-white uppercase">
+            {feature.name}
+          </span>
+        </div>
+        {renderMeter()}
+      </div>
+      {/* Controls outside the draggable handle */}
+      {isTransientFeature && (
+        <div className="mt-2 space-y-2">
+          {/* Sensitivity slider (below HIT meter, above Decay) */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <Label className="text-[10px] text-neutral-400 font-mono">Sensitivity</Label>
+              <span className="text-[10px] text-neutral-300 font-mono">
+                {(sensitivity * 100).toFixed(0)}%
+              </span>
+            </div>
+            <Slider
+              value={[sensitivity]}
+              onValueChange={(value) => {
+                const next = Math.max(0, Math.min(1, value[0] ?? 0));
+                setFeatureSensitivity(feature.id, next);
+              }}
+              min={0}
+              max={1}
+              step={0.05}
+              className="h-2"
+            />
+          </div>
+          {/* Decay slider */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <Label className="text-[10px] text-neutral-400 font-mono">Decay</Label>
+              <span className="text-[10px] text-neutral-300 font-mono">{decayTime.toFixed(2)}s</span>
+            </div>
+              <Slider
+                value={[decayTime]}
+                onValueChange={(value) => {
+                  const newDecayTime = value[0];
+                  setFeatureDecayTime(feature.id, newDecayTime);
+                  // Update shared ref so getFeatureValue uses this decayTime for envelope generation
+                  featureDecayTimesRef.current[feature.id] = newDecayTime;
+                }}
+                min={0.05}
+                max={2.0}
+                step={0.05}
+                className="h-2"
+              />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// --- Panel and Category Components ---
+
+const categoryIcons: Record<string, React.ElementType> = {
+  rhythm: Activity,
+  pitch: Music,
+  intensity: Zap,
+  timbre: BarChart2,
+};
+
+const categoryDisplayNames: Record<string, string> = {
+  rhythm: 'Rhythm & Impact',
+  pitch: 'Pitch & Melody',
+  intensity: 'Energy & Loudness',
+  timbre: 'Texture & Character',
+};
+
+export function MappingSourcesPanel({ 
+  activeTrackId, 
+  className, 
+  selectedStemType,
+  currentTime = 0,
+  cachedAnalysis = [],
+  isPlaying = false
+}: {
+  activeTrackId?: string;
+  className?: string;
+  selectedStemType?: string;
+  currentTime?: number;
+  cachedAnalysis?: any[];
+  isPlaying?: boolean;
+}) {
+  const features = useAudioFeatures(activeTrackId, selectedStemType, cachedAnalysis);
+  
+  const featuresByCategory = useMemo(() => {
+    return features.reduce((acc, feature) => {
+      (acc[feature.category] = acc[feature.category] || []).push(feature);
+      return acc;
+    }, {} as Record<string, AudioFeature[]>);
+  }, [features]);
+
+  // Capitalize stem type
+  const capitalizedStemType = selectedStemType 
+    ? selectedStemType.charAt(0).toUpperCase() + selectedStemType.slice(1)
+    : '';
+
+  if (!activeTrackId || !selectedStemType) {
+    return (
+      <div className={cn("bg-black border-l border-neutral-800 flex flex-col", className)}>
+        <div className="p-3 border-b border-neutral-800">
+          <h2 className="font-mono text-sm font-bold text-gray-100 uppercase tracking-wider">
+            Audio Features
+          </h2>
+        </div>
+        <div className="p-4 text-center text-xs text-neutral-500">
+          Select a track in the timeline to see its available modulation sources.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={cn("bg-black border-l border-neutral-800 flex flex-col", className)}>
+      <div className="p-3 border-b border-neutral-800">
+        <h2 className="font-mono text-sm font-bold text-gray-100 uppercase tracking-wider mb-2">
+          {capitalizedStemType} Features
+        </h2>
+        <p className="text-xs text-neutral-500 font-mono">
+          Drag a feature onto an effect parameter to create a mapping.
+        </p>
+      </div>
+      <div className="flex-1 overflow-y-auto p-3 space-y-3">
+        {Object.entries(featuresByCategory).length > 0 ? (
+          Object.entries(featuresByCategory).map(([category, categoryFeatures]) => {
+            const Icon = categoryIcons[category];
+            return (
+              <div key={category} className="space-y-1.5">
+                {/* Category Header */}
+                <div className="w-full flex items-center justify-between p-2 bg-neutral-900 border border-neutral-600">
+                  <span className="font-mono text-xs font-semibold text-neutral-300 uppercase tracking-wide flex items-center gap-2">
+                    {Icon && <Icon size={12} />}
+                    {categoryDisplayNames[category] || category}
+                  </span>
+                  <span className="text-xs text-neutral-500 font-mono">
+                    {categoryFeatures.length}
+                  </span>
+                </div>
+                {/* Category Features */}
+                <div className="space-y-1.5">
+                  {categoryFeatures.map((feature) => (
+                    <FeatureNode
+                      key={feature.id}
+                      feature={feature}
+                      currentTime={currentTime}
+                      cachedAnalysis={cachedAnalysis}
+                      isPlaying={isPlaying}
+                    />
+                  ))}
+                </div>
+              </div>
+            );
+          })
+        ) : (
+          <div className="text-xs text-neutral-500 text-center py-4 font-mono">
+            No analysis data available for this stem yet. Press play to begin analysis.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+```
+
+## File: apps/web/src/app/creative-visualizer/page.tsx
+```typescript
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback, Suspense } from 'react';
@@ -2125,3 +3394,4 @@ export default function CreativeVisualizerPageWithSuspense() {
     </Suspense>
   );
 }
+```

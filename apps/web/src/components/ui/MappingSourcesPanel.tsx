@@ -8,6 +8,7 @@ import { useAudioFeatures, AudioFeature } from '@/hooks/use-audio-features';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
 import { featureDecayTimesRef } from '@/hooks/use-audio-analysis';
+import { useVisualizerStore } from '@/stores/visualizerStore';
 
 // --- Meter Sub-Components ---
 
@@ -248,11 +249,20 @@ const FeatureNode = ({
   isPlaying: boolean;
 }) => {
   const [liveValue, setLiveValue] = useState(0); // Decayed output value (for meter and oscilloscope waveform)
-  const [sensitivity, setSensitivity] = useState(0.5); // 0..1, 0.5 = 50% default (keep moderate to strong transients)
   const [isActive, setIsActive] = useState(false);
-  // Initialize decayTime from shared ref if available, otherwise default to 0.5s
-  const [decayTime, setDecayTime] = useState(featureDecayTimesRef.current[feature.id] ?? 0.5);
   const lastTransientRef = useRef<{ time: number; intensity: number } | null>(null);
+  
+  // Get sensitivity and decay from global store (persisted via auto-save)
+  const { 
+    featureSensitivities, 
+    setFeatureSensitivity, 
+    featureDecayTimes, 
+    setFeatureDecayTime 
+  } = useVisualizerStore();
+  
+  // Use store values with defaults
+  const sensitivity = featureSensitivities[feature.id] ?? 0.5;
+  const decayTime = featureDecayTimes[feature.id] ?? (featureDecayTimesRef.current[feature.id] ?? 0.5);
   
   const isTransientFeature = feature.isEvent && feature.id.includes('peaks');
   
@@ -270,12 +280,19 @@ const FeatureNode = ({
     };
   }, [isTransientFeature, cachedAnalysis, feature.stemType, sensitivity]);
   
-  // Initialize shared ref on mount
+  // Initialize shared ref on mount and sync with store
   useEffect(() => {
-    if (isTransientFeature && !featureDecayTimesRef.current[feature.id]) {
-      featureDecayTimesRef.current[feature.id] = decayTime;
+    if (isTransientFeature) {
+      // If store has a value, use it for the ref; otherwise initialize both
+      const storeValue = featureDecayTimes[feature.id];
+      if (storeValue !== undefined) {
+        featureDecayTimesRef.current[feature.id] = storeValue;
+      } else if (!featureDecayTimesRef.current[feature.id]) {
+        featureDecayTimesRef.current[feature.id] = 0.5; // Default
+        setFeatureDecayTime(feature.id, 0.5);
+      }
     }
-  }, [feature.id, isTransientFeature, decayTime]);
+  }, [feature.id, isTransientFeature, featureDecayTimes, setFeatureDecayTime]);
 
   useEffect(() => {
     if (!isPlaying || !feature.stemType) {
@@ -364,7 +381,7 @@ const FeatureNode = ({
     const normalizedValue = Math.max(0, Math.min(1, featureValue));
     setLiveValue(normalizedValue);
     setIsActive(isPlaying && normalizedValue > 0.05); // Lowered threshold for active state
-  }, [feature, currentTime, cachedAnalysis, isPlaying, decayTime]); // Add decayTime to dependencies
+  }, [feature, currentTime, cachedAnalysis, isPlaying, decayTime, sensitivity]); // decayTime and sensitivity from store
 
   const [{ isDragging }, dragRef] = useDrag({
     type: 'feature',
@@ -440,7 +457,7 @@ const FeatureNode = ({
               value={[sensitivity]}
               onValueChange={(value) => {
                 const next = Math.max(0, Math.min(1, value[0] ?? 0));
-                setSensitivity(next);
+                setFeatureSensitivity(feature.id, next);
               }}
               min={0}
               max={1}
@@ -458,7 +475,7 @@ const FeatureNode = ({
                 value={[decayTime]}
                 onValueChange={(value) => {
                   const newDecayTime = value[0];
-                  setDecayTime(newDecayTime);
+                  setFeatureDecayTime(feature.id, newDecayTime);
                   // Update shared ref so getFeatureValue uses this decayTime for envelope generation
                   featureDecayTimesRef.current[feature.id] = newDecayTime;
                 }}
