@@ -13,6 +13,7 @@ import { cn, debugLog } from '@/lib/utils'
 import { useTimelineStore } from '@/stores/timelineStore'
 import { useProjectSettingsStore } from '@/stores/projectSettingsStore'
 import { useVisualizerStore } from '@/stores/visualizerStore'
+import { parseParamKey } from '@/lib/visualizer/paramKeys'
 
 import type { EditState } from '@/hooks/use-auto-save'
 
@@ -113,6 +114,35 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
     }
   }, [])
 
+  // Convert legacy flat param maps (key -> number) to nested (effectId -> { paramName: value })
+  const toNestedParams = (maybeFlat: any): Record<string, Record<string, any>> => {
+    if (!maybeFlat || typeof maybeFlat !== 'object') return {}
+    // Heuristic: if any value is an object, assume already nested
+    const values = Object.values(maybeFlat)
+    const hasObjectValue = values.some(v => v && typeof v === 'object' && !Array.isArray(v))
+    if (hasObjectValue) {
+      return maybeFlat as Record<string, Record<string, any>>
+    }
+    const nested: Record<string, Record<string, any>> = {}
+    Object.entries(maybeFlat as Record<string, any>).forEach(([key, value]) => {
+      if (value === undefined) return
+      const parsed = parseParamKey(key)
+      if (parsed) {
+        const { effectInstanceId, paramName } = parsed
+        nested[effectInstanceId] = { ...(nested[effectInstanceId] || {}), [paramName]: value }
+      } else {
+        // Fallback: try last '-' split (legacy)
+        const idx = key.lastIndexOf('-')
+        if (idx !== -1) {
+          const effectInstanceId = key.slice(0, idx)
+          const paramName = key.slice(idx + 1)
+          nested[effectInstanceId] = { ...(nested[effectInstanceId] || {}), [paramName]: value }
+        }
+      }
+    })
+    return nested
+  }
+
   // Save current state
   const saveCurrentState = useCallback(async () => {
     if (isHydrating) {
@@ -180,10 +210,10 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
             visualizerStore.setAspectRatio(visualizationParams.aspectRatio)
           }
           if (visualizationParams.baseParameterValues) {
-            visualizerStore.setBaseParameterValues(visualizationParams.baseParameterValues)
+            visualizerStore.setBaseParameterValues(toNestedParams(visualizationParams.baseParameterValues))
           }
           if (visualizationParams.activeSliderValues) {
-            visualizerStore.setActiveSliderValues(visualizationParams.activeSliderValues)
+            visualizerStore.setActiveSliderValues(toNestedParams(visualizationParams.activeSliderValues))
           }
           if (visualizationParams.audioAnalysisSettings) {
             visualizerStore.setAudioAnalysisSettings(visualizationParams.audioAnalysisSettings)
@@ -362,12 +392,12 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
             if (visualizationParams.aspectRatio) {
               visualizerStore.setAspectRatio(visualizationParams.aspectRatio)
             }
-            if (visualizationParams.baseParameterValues) {
-              visualizerStore.setBaseParameterValues(visualizationParams.baseParameterValues)
-            }
-            if (visualizationParams.activeSliderValues) {
-              visualizerStore.setActiveSliderValues(visualizationParams.activeSliderValues)
-            }
+          if (visualizationParams.baseParameterValues) {
+            visualizerStore.setBaseParameterValues(toNestedParams(visualizationParams.baseParameterValues))
+          }
+          if (visualizationParams.activeSliderValues) {
+            visualizerStore.setActiveSliderValues(toNestedParams(visualizationParams.activeSliderValues))
+          }
             if (visualizationParams.audioAnalysisSettings) {
               visualizerStore.setAudioAnalysisSettings(visualizationParams.audioAnalysisSettings)
             }
