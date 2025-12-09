@@ -381,9 +381,14 @@ export function ThreeVisualizer({
     
     internalVisualizerRef.current.updateEffectParameter(effectId, paramName, value);
     
-    // Update active slider values
-      const paramKey = `${effectId}-${paramName}`;
-    setActiveSliderValues(prev => ({ ...prev, [paramKey]: value }));
+    // Update active slider values (nested by effect instance id)
+    setActiveSliderValues(prev => ({
+      ...prev,
+      [effectId]: {
+        ...(prev[effectId] || {}),
+        [paramName]: value
+      }
+    }));
   };
 
   // Cleanup on unmount
@@ -515,10 +520,6 @@ export function ThreeVisualizer({
                           <Slider
                             value={[activeSliderValues[effectId]?.[paramName] ?? value]}
                             onValueChange={([val]) => {
-                              setActiveSliderValues(prev => ({
-                                ...prev,
-                                [effectId]: { ...(prev[effectId] || {}), [paramName]: val }
-                              }));
                               handleParameterChange(effectId, paramName, val);
                             }}
                             min={0}
