@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { ChevronsLeft, ChevronsRight, Home, Folder, User, UploadCloud } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Home, Folder, User, UploadCloud } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { RayboxLogo } from '@/components/ui/phonoglyph-logo';
 
@@ -25,43 +25,57 @@ export function CollapsibleSidebar({ children }: CollapsibleSidebarProps) {
   const toggleSidebar = () => setIsCollapsed(!isCollapsed);
 
   return (
-    <div
-      className={cn(
-        "relative bg-black border-r border-gray-800 transition-all duration-300 ease-in-out z-20",
-        isCollapsed ? "w-24" : "w-64"
-      )}
-    >
-      <div className="h-full flex flex-col p-4">
-        <div className={cn("flex items-center mb-6", isCollapsed ? 'justify-center' : 'justify-between')}>
-          <div className={cn("text-2xl font-semibold text-gray-100", isCollapsed && "hidden")}>
-            <RayboxLogo size="md" className="text-gray-100" />
+    <div className="relative flex">
+      {/* Main Sidebar */}
+      <div
+        className={cn(
+          "bg-black border-r border-gray-800 transition-all duration-300 ease-in-out",
+          isCollapsed ? "w-0 overflow-hidden" : "w-64"
+        )}
+      >
+        <div className="h-full flex flex-col p-4 min-w-0">
+          <div className={cn("flex items-center mb-6", isCollapsed ? 'justify-center' : 'justify-between')}>
+            <div className={cn("text-2xl font-semibold text-gray-100", isCollapsed && "hidden")}>
+              <RayboxLogo size="md" className="text-gray-100" />
+            </div>
           </div>
-        </div>
 
-        <nav className="flex-grow space-y-2">
+          <nav className="flex-grow space-y-2">
             <NavLink href="/dashboard" icon={Home} label="Home" isCollapsed={isCollapsed} />
             <NavLink href="/files" icon={Folder} label="Files" isCollapsed={isCollapsed} />
             <NavLink href="/profile" icon={User} label="Profile" isCollapsed={isCollapsed} />
-        </nav>
+          </nav>
 
-        <div className="flex-shrink-0">
-          {isCollapsed ? (
-            <div className="flex justify-center items-center p-4">
+          <div className="flex-shrink-0">
+            {isCollapsed ? (
+              <div className="flex justify-center items-center p-4">
                 <UploadCloud className="w-8 h-8 text-gray-400" />
-            </div>
-          ) : (
-            children
-          )}
+              </div>
+            ) : (
+              children
+            )}
+          </div>
         </div>
       </div>
-      
+
+      {/* Collapse/Expand Tab - sits completely outside the sidebar */}
       <button
         onClick={toggleSidebar}
-        className="absolute top-1/2 -translate-y-1/2 -right-4 w-8 h-28 bg-gray-900 hover:bg-gray-800 rounded-r-lg border-y border-r border-gray-700 flex items-center justify-center transition-colors"
+        className={cn(
+          "flex-shrink-0 w-5 h-16 self-center",
+          "bg-gray-900/80 hover:bg-gray-800 backdrop-blur-sm",
+          "border border-l-0 border-gray-700 rounded-r-md",
+          "flex items-center justify-center transition-all duration-200",
+          "hover:w-6 group"
+        )}
         aria-label="Toggle sidebar"
       >
-        {isCollapsed ? <ChevronsRight className="h-6 w-6 text-gray-300" /> : <ChevronsLeft className="h-6 w-6 text-gray-300" />}
+        {isCollapsed ? (
+          <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-gray-200 transition-colors" />
+        ) : (
+          <ChevronLeft className="h-4 w-4 text-gray-400 group-hover:text-gray-200 transition-colors" />
+        )}
       </button>
     </div>
   );
-} 
+}

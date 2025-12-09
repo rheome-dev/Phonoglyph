@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { ChevronsLeft, ChevronsRight, Palette } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Palette } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface CollapsibleEffectsSidebarProps {
@@ -18,47 +18,51 @@ export function CollapsibleEffectsSidebar({
   const toggleSidebar = () => setIsCollapsed(!isCollapsed);
 
   return (
-    <div
-      className={cn(
-        "relative bg-stone-900 border-l border-white/10 transition-all duration-300 ease-in-out z-20",
-        isCollapsed ? "w-16" : expandedWidth
-      )}
-    >
-      <div className="h-full flex flex-col">
-        {/* Header */}
-        <div className={cn("flex items-center p-4 border-b border-white/10", isCollapsed ? 'justify-center' : 'justify-between')}>
-          <div className={cn("flex items-center gap-2", isCollapsed && "hidden")}>
-            <Palette className="h-5 w-5 text-white/70" />
-            <span className="text-lg font-semibold text-white">Effects Library</span>
-          </div>
-          {isCollapsed && (
-            <Palette className="h-6 w-6 text-white/70" />
-          )}
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-hidden">
-          {isCollapsed ? (
-            <div className="flex justify-center items-center p-4 h-full">
-              <div className="text-center space-y-3 text-white/50">
-                <Palette className="w-8 h-8 mx-auto" />
-                <div className="text-xs">Effects</div>
-              </div>
-            </div>
-          ) : (
-            children
-          )}
-        </div>
-      </div>
-      
-      {/* Collapse/Expand Button */}
+    <div className="relative flex">
+      {/* Collapse/Expand Tab - sits completely outside the sidebar */}
       <button
         onClick={toggleSidebar}
-        className="absolute top-1/2 -translate-y-1/2 -left-4 w-8 h-28 bg-stone-800 hover:bg-stone-700 rounded-l-lg border-y border-l border-white/10 flex items-center justify-center transition-colors"
+        className={cn(
+          "flex-shrink-0 w-5 h-16 self-center",
+          "bg-stone-800/80 hover:bg-stone-700 backdrop-blur-sm",
+          "border border-r-0 border-white/10 rounded-l-md",
+          "flex items-center justify-center transition-all duration-200",
+          "hover:w-6 group"
+        )}
         aria-label="Toggle effects sidebar"
       >
-        {isCollapsed ? <ChevronsLeft className="h-6 w-6 text-white/60" /> : <ChevronsRight className="h-6 w-6 text-white/60" />}
+        {isCollapsed ? (
+          <ChevronLeft className="h-4 w-4 text-white/50 group-hover:text-white/80 transition-colors" />
+        ) : (
+          <ChevronRight className="h-4 w-4 text-white/50 group-hover:text-white/80 transition-colors" />
+        )}
       </button>
+
+      {/* Main Sidebar */}
+      <div
+        className={cn(
+          "bg-stone-900 border-l border-white/10 transition-all duration-300 ease-in-out",
+          isCollapsed ? "w-0 overflow-hidden" : expandedWidth
+        )}
+      >
+        <div className="h-full flex flex-col min-w-0">
+          {/* Header */}
+          <div className={cn(
+            "flex items-center p-4 border-b border-white/10",
+            isCollapsed ? 'justify-center' : 'justify-between'
+          )}>
+            <div className={cn("flex items-center gap-2", isCollapsed && "hidden")}>
+              <Palette className="h-5 w-5 text-white/70" />
+              <span className="text-lg font-semibold text-white">Effects Library</span>
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 overflow-hidden">
+            {!isCollapsed && children}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
