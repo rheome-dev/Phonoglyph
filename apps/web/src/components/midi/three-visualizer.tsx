@@ -44,6 +44,7 @@ interface ThreeVisualizerProps {
   activeSliderValues: Record<string, Record<string, any>>;
   baseParameterValues?: Record<string, Record<string, any>>;
   setActiveSliderValues: React.Dispatch<React.SetStateAction<Record<string, Record<string, any>>>>;
+  setBaseParam?: (effectId: string, paramName: string, value: any) => void;
   visualizerRef?: React.RefObject<VisualizerManager> | ((instance: VisualizerManager | null) => void);
   layers: Layer[];
   selectedLayerId?: string | null;
@@ -73,6 +74,7 @@ export function ThreeVisualizer({
   activeSliderValues,
   baseParameterValues = {},
   setActiveSliderValues,
+  setBaseParam,
   visualizerRef: externalVisualizerRef,
   layers,
   selectedLayerId,
@@ -396,6 +398,23 @@ export function ThreeVisualizer({
         [paramName]: value
       }
     }));
+    
+    // Update base parameter store so hydration uses the latest values
+    if (setBaseParam) {
+      setBaseParam(effectId, paramName, value);
+    }
+    
+    // Also update layer settings for persistence (especially for color parameters)
+    const layer = layers.find(l => l.id === effectId && l.type === 'effect');
+    if (layer && onLayerUpdate) {
+      onLayerUpdate(layer.id, {
+        ...layer,
+        settings: {
+          ...layer.settings,
+          [paramName]: value
+        }
+      });
+    }
   };
 
   // Cleanup on unmount

@@ -333,6 +333,11 @@ export class MetaballsEffect implements VisualEffect {
     // Immediately update uniforms when parameters change
     if (!this.uniforms) return;
     
+    // Update the parameter in the parameters object first (for auto-save)
+    if (paramName in this.parameters) {
+      (this.parameters as any)[paramName] = value;
+    }
+    
     switch (paramName) {
       case 'animationSpeed':
         this.uniforms.uAnimationSpeed.value = value;
@@ -347,7 +352,12 @@ export class MetaballsEffect implements VisualEffect {
         this.uniforms.uNoiseIntensity.value = value;
         break;
       case 'highlightColor':
-        this.uniforms.uHighlightColor.value.set(...value);
+        // Ensure the uniform value is a THREE.Color object
+        if (!(this.uniforms.uHighlightColor.value instanceof THREE.Color)) {
+          this.uniforms.uHighlightColor.value = new THREE.Color(...value);
+        } else {
+          this.uniforms.uHighlightColor.value.set(...value);
+        }
         break;
     }
   }
@@ -355,11 +365,24 @@ export class MetaballsEffect implements VisualEffect {
   update(deltaTime: number, audioData: AudioAnalysisData, midiData: LiveMIDIData): void {
     if (!this.uniforms) return;
 
-    // Generic: sync all parameters to uniforms
+    // Generic: sync all parameters to uniforms (except special cases like highlightColor)
     for (const key in this.parameters) {
       const uniformKey = 'u' + key.charAt(0).toUpperCase() + key.slice(1);
       if (this.uniforms[uniformKey]) {
-        this.uniforms[uniformKey].value = this.parameters[key as keyof MetaballConfig];
+        // Skip highlightColor - it needs special handling as THREE.Color
+        if (key === 'highlightColor') {
+          const colorValue = this.parameters.highlightColor;
+          if (Array.isArray(colorValue)) {
+            // Ensure uniform value is a THREE.Color object
+            if (!(this.uniforms.uHighlightColor.value instanceof THREE.Color)) {
+              this.uniforms.uHighlightColor.value = new THREE.Color(...colorValue);
+            } else {
+              this.uniforms.uHighlightColor.value.set(...colorValue);
+            }
+          }
+        } else {
+          this.uniforms[uniformKey].value = this.parameters[key as keyof MetaballConfig];
+        }
       }
     }
 

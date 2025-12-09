@@ -2007,6 +2007,8 @@ function CreativeVisualizerPage() {
                           activeSliderValues={activeSliderValues}
                           baseParameterValues={baseParameterValues}
                           setActiveSliderValues={setActiveSliderValues}
+                          setBaseParam={setBaseParam}
+                          onLayerUpdate={updateLayer}
                       onSelectedEffectsChange={() => {}} // <-- Added no-op
                       visualizerRef={visualizerRef}
                   />
