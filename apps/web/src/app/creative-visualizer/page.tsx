@@ -39,6 +39,7 @@ import { AspectRatioSelector } from '@/components/ui/aspect-ratio-selector';
 import { getAspectRatioConfig } from '@/lib/visualizer/aspect-ratios';
 import { useProjectSettingsStore } from '@/stores/projectSettingsStore';
 import { useVisualizerStore } from '@/stores/visualizerStore';
+import { makeParamKey, parseParamKey } from '@/lib/visualizer/paramKeys';
 import { CollectionManager } from '@/components/assets/CollectionManager';
 import { AutoSaveProvider, useAutoSaveContext } from '@/components/auto-save/auto-save-provider';
 import { AutoSaveIndicator } from '@/components/auto-save/auto-save-indicator';
@@ -292,9 +293,10 @@ function CreativeVisualizerPage() {
     mappings,
     setMappings,
     baseParameterValues,
-    setBaseParameterValues,
     activeSliderValues,
-    setActiveSliderValues
+    setActiveSliderValues,
+    setBaseParam,
+    setActiveParam
   } = useVisualizerStore();
 
   // Effect parameter modal state
@@ -1122,24 +1124,6 @@ function CreativeVisualizerPage() {
   useEffect(() => { activeSliderValuesRef.current = activeSliderValues; }, [activeSliderValues]);
   useEffect(() => { cachedAnalysisRef.current = audioAnalysis.cachedAnalysis; }, [audioAnalysis.cachedAnalysis]);
 
-  // Ensure restored/saved parameter values are pushed into the visualizer engine
-  useEffect(() => {
-    const manager = visualizerRef.current;
-    if (!manager) return;
-
-    Object.entries(baseParameterValues).forEach(([paramKey, value]) => {
-      const lastDashIndex = paramKey.lastIndexOf('-');
-      if (lastDashIndex === -1) return;
-      const effectId = paramKey.substring(0, lastDashIndex);
-      const paramName = paramKey.substring(lastDashIndex + 1);
-      try {
-        manager.updateEffectParameter(effectId, paramName, value);
-      } catch (err) {
-        debugLog.warn('Failed to rehydrate effect parameter', { paramKey, effectId, paramName, value, err });
-      }
-    });
-  }, [baseParameterValues, layers, visualizerRef.current]);
-
   // Real-time feature mapping and visualizer update loop
   useEffect(() => {
     let cachedMappings: [string, string][] = [];
@@ -1215,7 +1199,10 @@ function CreativeVisualizerPage() {
         const newMappings = cachedMappings.filter(([key, featureId]) => 
           !oldMappings.has(key) || oldMappings.get(key) !== featureId
         );
-        const opacityMappings = cachedMappings.filter(([key]) => key.includes('-opacity'));
+        const opacityMappings = cachedMappings.filter(([key]) => {
+          const parsed = parseParamKey(key);
+          return parsed?.paramName === 'opacity';
+        });
         
         if (newMappings.length > 0) {
           // Log removed to reduce console spam
@@ -1225,11 +1212,11 @@ function CreativeVisualizerPage() {
       // General Audio Feature Mapping
       if (currentCachedAnalysis && currentCachedAnalysis.length > 0) {
         // Debug: log once per second if we have opacity mappings
-        const hasOpacityMapping = cachedMappings.some(([key]) => key.includes('-opacity'));
+        const hasOpacityMapping = cachedMappings.some(([key]) => parseParamKey(key)?.paramName === 'opacity');
         if (hasOpacityMapping && frameCount % 60 === 0) {
           console.log('🎚️ Audio mapping loop active:', {
             cachedMappingsCount: cachedMappings.length,
-            opacityMappings: cachedMappings.filter(([key]) => key.includes('-opacity')).map(([key, id]) => ({ key, id })),
+            opacityMappings: cachedMappings.filter(([key]) => parseParamKey(key)?.paramName === 'opacity').map(([key, id]) => ({ key, id })),
             cachedAnalysisCount: currentCachedAnalysis.length,
             syncTime: syncTime.toFixed(3),
             isPlaying
@@ -1239,9 +1226,13 @@ function CreativeVisualizerPage() {
         for (const [paramKey, featureId] of cachedMappings) {
           if (!featureId) continue;
 
+          const parsedKey = parseParamKey(paramKey);
+          if (!parsedKey) continue;
+          const { effectInstanceId: effectId, paramName } = parsedKey;
+
           const featureStemType = getStemTypeFromFeatureId(featureId);
           if (!featureStemType) {
-            if (paramKey.includes('-opacity') && frameCount % 60 === 0) {
+            if (paramName === 'opacity' && frameCount % 60 === 0) {
               console.warn('⚠️ Could not get stem type from featureId:', { paramKey, featureId });
             }
             continue;
@@ -1251,7 +1242,7 @@ function CreativeVisualizerPage() {
             a => a.stemType === featureStemType
           );
           if (!stemAnalysis) {
-            if (paramKey.includes('-opacity') && frameCount % 60 === 0) {
+            if (paramName === 'opacity' && frameCount % 60 === 0) {
               console.warn('⚠️ Stem analysis not found:', { paramKey, featureId, featureStemType, availableStems: currentCachedAnalysis.map(a => a.stemType) });
             }
             continue;
@@ -1265,18 +1256,8 @@ function CreativeVisualizerPage() {
           );
 
           if (rawValue === null || rawValue === undefined) {
-            if (paramKey.includes('-opacity') && frameCount % 60 === 0) {
+            if (paramName === 'opacity' && frameCount % 60 === 0) {
               console.warn('⚠️ Raw value is null/undefined:', { paramKey, featureId, syncTime: syncTime.toFixed(3) });
-            }
-            continue;
-          }
-
-          const [effectId, ...paramParts] = paramKey.split('-');
-          const paramName = paramParts.join('-');
-          
-          if (!effectId || !paramName) {
-            if (paramKey.includes('-opacity') && frameCount % 60 === 0) {
-              console.warn('⚠️ Could not parse paramKey:', { paramKey, effectId, paramName });
             }
             continue;
           }
@@ -1284,7 +1265,7 @@ function CreativeVisualizerPage() {
           const maxValue = getSliderMax(paramName);
           const knobFull = (currentMappings[paramKey]?.modulationAmount ?? 0.5) * 2 - 1; 
           const knob = Math.max(-0.5, Math.min(0.5, knobFull));
-          const baseValue = currentBaseValues[paramKey] ?? (currentActiveSliderValues[paramKey] ?? 0);
+          const baseValue = (currentBaseValues[effectId]?.[paramName] ?? (currentActiveSliderValues[effectId]?.[paramName] ?? 0));
           const delta = rawValue * knob * maxValue;
           const scaledValue = Math.max(0, Math.min(maxValue, baseValue + delta));
 
@@ -1445,10 +1426,11 @@ function CreativeVisualizerPage() {
   };
 
   const handleParameterChange = (effectId: string, paramName: string, value: any) => {
-    const paramKey = `${effectId}-${paramName}`;
-    // Slider sets the base value regardless of mapping
-    setBaseParameterValues(prev => ({ ...prev, [paramKey]: value }));
-    setActiveSliderValues(prev => ({ ...prev, [paramKey]: value }));
+    const paramKey = makeParamKey(effectId, paramName);
+
+    // Update nested stores
+    setBaseParam(effectId, paramName, value);
+    setActiveParam(effectId, paramName, value);
     
     // Update the effect instance directly
     if (visualizerRef.current) {
@@ -1508,13 +1490,13 @@ function CreativeVisualizerPage() {
                 
                 <div className="space-y-4">
                   <DroppableParameter
-                    parameterId={`${layerId}-triggerValue`}
+                    parameterId={makeParamKey(layerId, 'triggerValue')}
                     label="Advance Trigger"
-                    mappedFeatureId={slideshowLayer?.settings?.triggerSourceId || mappings[`${layerId}-triggerValue`]?.featureId}
-                    mappedFeatureName={slideshowLayer?.settings?.triggerSourceId ? featureNames[slideshowLayer.settings.triggerSourceId] : (mappings[`${layerId}-triggerValue`]?.featureId ? featureNames[mappings[`${layerId}-triggerValue`]?.featureId!] : undefined)}
-                    modulationAmount={mappings[`${layerId}-triggerValue`]?.modulationAmount ?? 0.5}
-                    baseValue={baseParameterValues[`${layerId}-triggerValue`] ?? 0}
-                    modulatedValue={modulatedParameterValues[`${layerId}-triggerValue`] ?? 0}
+                    mappedFeatureId={slideshowLayer?.settings?.triggerSourceId || mappings[makeParamKey(layerId, 'triggerValue')]?.featureId}
+                    mappedFeatureName={slideshowLayer?.settings?.triggerSourceId ? featureNames[slideshowLayer.settings.triggerSourceId] : (mappings[makeParamKey(layerId, 'triggerValue')]?.featureId ? featureNames[mappings[makeParamKey(layerId, 'triggerValue')]?.featureId!] : undefined)}
+                    modulationAmount={mappings[makeParamKey(layerId, 'triggerValue')]?.modulationAmount ?? 0.5}
+                    baseValue={baseParameterValues[layerId]?.['triggerValue'] ?? 0}
+                    modulatedValue={modulatedParameterValues[makeParamKey(layerId, 'triggerValue')] ?? 0}
                     sliderMax={1}
                     onFeatureDrop={handleMapFeature}
                     onFeatureUnmap={handleUnmapFeature}
@@ -1537,9 +1519,9 @@ function CreativeVisualizerPage() {
                   <div className="space-y-1">
                     <Label className="text-xs">Threshold</Label>
                     <Slider
-                        value={[activeSliderValues[`${layerId}-threshold`] ?? 0.5]}
+                        value={[activeSliderValues[layerId]?.['threshold'] ?? 0.5]}
                         onValueChange={([val]) => {
-                            setActiveSliderValues(prev => ({ ...prev, [`${layerId}-threshold`]: val }));
+                            setActiveParam(layerId, 'threshold', val);
                             handleParameterChange(layerId, 'threshold', val);
                         }}
                         min={0}
@@ -1547,16 +1529,16 @@ function CreativeVisualizerPage() {
                         step={0.01}
                     />
                     <div className="text-[10px] text-stone-500 mt-1">
-                      Trigger fires when value exceeds threshold (current: {(activeSliderValues[`${layerId}-threshold`] ?? 0.5).toFixed(2)})
+                      Trigger fires when value exceeds threshold (current: {(activeSliderValues[layerId]?.['threshold'] ?? 0.5).toFixed(2)})
                     </div>
                   </div>
 
                   {(() => {
-                    const paramKey = `${layerId}-opacity`;
+                    const paramKey = makeParamKey(layerId, 'opacity');
                     const opacityMapping = mappings[paramKey];
                     const mappedFeatureId = opacityMapping?.featureId || null;
                     const mappedFeatureName = mappedFeatureId ? featureNames[mappedFeatureId] : undefined;
-                    const baseVal = baseParameterValues[paramKey] ?? (activeSliderValues[paramKey] ?? (slideshowLayer?.settings?.opacity ?? 1.0));
+                    const baseVal = baseParameterValues[layerId]?.['opacity'] ?? (activeSliderValues[layerId]?.['opacity'] ?? (slideshowLayer?.settings?.opacity ?? 1.0));
                     const modulatedVal = modulatedParameterValues[paramKey] ?? baseVal;
                     return (
                       <DroppableParameter
@@ -1579,9 +1561,8 @@ function CreativeVisualizerPage() {
                           <Slider
                             value={[baseVal]}
                             onValueChange={([val]) => {
-                              // Update base value (not the modulated value)
-                              setBaseParameterValues(prev => ({ ...prev, [paramKey]: val }));
-                              setActiveSliderValues(prev => ({ ...prev, [paramKey]: val }));
+                              setBaseParam(layerId, 'opacity', val);
+                              setActiveParam(layerId, 'opacity', val);
                               handleParameterChange(layerId, 'opacity', val);
                             }}
                             min={0}
@@ -1604,10 +1585,10 @@ function CreativeVisualizerPage() {
                     <div className="space-y-1">
                       <Label className="text-xs">Position X</Label>
                       <Slider
-                          value={[activeSliderValues[`${layerId}-positionX`] ?? (slideshowLayer?.settings?.position?.x ?? 0.5)]}
+                          value={[activeSliderValues[layerId]?.['position']?.x ?? (slideshowLayer?.settings?.position?.x ?? 0.5)]}
                           onValueChange={([val]) => {
-                              setActiveSliderValues(prev => ({ ...prev, [`${layerId}-positionX`]: val }));
                               const currentPos = slideshowLayer?.settings?.position || { x: 0.5, y: 0.5 };
+                              setActiveParam(layerId, 'position', { ...currentPos, x: val } as any);
                               handleParameterChange(layerId, 'position', { ...currentPos, x: val });
                           }}
                           min={0}
@@ -1615,17 +1596,17 @@ function CreativeVisualizerPage() {
                           step={0.01}
                       />
                       <div className="text-[10px] text-stone-500 mt-1">
-                        {(activeSliderValues[`${layerId}-positionX`] ?? (slideshowLayer?.settings?.position?.x ?? 0.5)).toFixed(2)}
+                        {(activeSliderValues[layerId]?.['position']?.x ?? (slideshowLayer?.settings?.position?.x ?? 0.5)).toFixed(2)}
                       </div>
                     </div>
                     
                     <div className="space-y-1">
                       <Label className="text-xs">Position Y</Label>
                       <Slider
-                          value={[activeSliderValues[`${layerId}-positionY`] ?? (slideshowLayer?.settings?.position?.y ?? 0.5)]}
+                          value={[activeSliderValues[layerId]?.['position']?.y ?? (slideshowLayer?.settings?.position?.y ?? 0.5)]}
                           onValueChange={([val]) => {
-                              setActiveSliderValues(prev => ({ ...prev, [`${layerId}-positionY`]: val }));
                               const currentPos = slideshowLayer?.settings?.position || { x: 0.5, y: 0.5 };
+                              setActiveParam(layerId, 'position', { ...currentPos, y: val } as any);
                               handleParameterChange(layerId, 'position', { ...currentPos, y: val });
                           }}
                           min={0}
@@ -1633,7 +1614,7 @@ function CreativeVisualizerPage() {
                           step={0.01}
                       />
                       <div className="text-[10px] text-stone-500 mt-1">
-                        {(activeSliderValues[`${layerId}-positionY`] ?? (slideshowLayer?.settings?.position?.y ?? 0.5)).toFixed(2)}
+                        {(activeSliderValues[layerId]?.['position']?.y ?? (slideshowLayer?.settings?.position?.y ?? 0.5)).toFixed(2)}
                       </div>
                     </div>
                   </div>
@@ -1642,10 +1623,10 @@ function CreativeVisualizerPage() {
                     <div className="space-y-1">
                       <Label className="text-xs">Width</Label>
                       <Slider
-                          value={[activeSliderValues[`${layerId}-sizeWidth`] ?? (slideshowLayer?.settings?.size?.width ?? 1.0)]}
+                          value={[activeSliderValues[layerId]?.['size']?.width ?? (slideshowLayer?.settings?.size?.width ?? 1.0)]}
                           onValueChange={([val]) => {
-                              setActiveSliderValues(prev => ({ ...prev, [`${layerId}-sizeWidth`]: val }));
                               const currentSize = slideshowLayer?.settings?.size || { width: 1.0, height: 1.0 };
+                              setActiveParam(layerId, 'size', { ...currentSize, width: val } as any);
                               handleParameterChange(layerId, 'size', { ...currentSize, width: val });
                           }}
                           min={0.1}
@@ -1653,17 +1634,17 @@ function CreativeVisualizerPage() {
                           step={0.01}
                       />
                       <div className="text-[10px] text-stone-500 mt-1">
-                        {(activeSliderValues[`${layerId}-sizeWidth`] ?? (slideshowLayer?.settings?.size?.width ?? 1.0)).toFixed(2)}
+                        {(activeSliderValues[layerId]?.['size']?.width ?? (slideshowLayer?.settings?.size?.width ?? 1.0)).toFixed(2)}
                       </div>
                     </div>
                     
                     <div className="space-y-1">
                       <Label className="text-xs">Height</Label>
                       <Slider
-                          value={[activeSliderValues[`${layerId}-sizeHeight`] ?? (slideshowLayer?.settings?.size?.height ?? 1.0)]}
+                          value={[activeSliderValues[layerId]?.['size']?.height ?? (slideshowLayer?.settings?.size?.height ?? 1.0)]}
                           onValueChange={([val]) => {
-                              setActiveSliderValues(prev => ({ ...prev, [`${layerId}-sizeHeight`]: val }));
                               const currentSize = slideshowLayer?.settings?.size || { width: 1.0, height: 1.0 };
+                              setActiveParam(layerId, 'size', { ...currentSize, height: val } as any);
                               handleParameterChange(layerId, 'size', { ...currentSize, height: val });
                           }}
                           min={0.1}
@@ -1671,7 +1652,7 @@ function CreativeVisualizerPage() {
                           step={0.01}
                       />
                       <div className="text-[10px] text-stone-500 mt-1">
-                        {(activeSliderValues[`${layerId}-sizeHeight`] ?? (slideshowLayer?.settings?.size?.height ?? 1.0)).toFixed(2)}
+                        {(activeSliderValues[layerId]?.['size']?.height ?? (slideshowLayer?.settings?.size?.height ?? 1.0)).toFixed(2)}
                       </div>
                     </div>
                   </div>

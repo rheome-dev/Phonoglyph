@@ -1,6 +1,7 @@
 'use client';
 
 import { create } from 'zustand';
+import { getNestedParam, setNestedParam } from '@/lib/visualizer/paramKeys';
 
 // Types
 export interface FeatureMapping {
@@ -25,8 +26,9 @@ interface VisualizerState {
   
   // Mappings & Parameters
   mappings: Record<string, FeatureMapping>;
-  baseParameterValues: Record<string, number>;
-  activeSliderValues: Record<string, number>;
+  // Nested: effectInstanceId -> paramName -> value
+  baseParameterValues: Record<string, Record<string, any>>;
+  activeSliderValues: Record<string, Record<string, any>>;
 }
 
 interface VisualizerActions {
@@ -37,8 +39,12 @@ interface VisualizerActions {
   setFeatureDecayTime: (featureId: string, decayTime: number) => void;
   setFeatureSensitivity: (featureId: string, sensitivity: number) => void;
   setMappings: (mappings: Record<string, FeatureMapping> | ((prev: Record<string, FeatureMapping>) => Record<string, FeatureMapping>)) => void;
-  setBaseParameterValues: (values: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => void;
-  setActiveSliderValues: (values: Record<string, number> | ((prev: Record<string, number>) => Record<string, number>)) => void;
+  // Set full maps (rare)
+  setBaseParameterValues: (values: Record<string, Record<string, any>> | ((prev: Record<string, Record<string, any>>) => Record<string, Record<string, any>>)) => void;
+  setActiveSliderValues: (values: Record<string, Record<string, any>> | ((prev: Record<string, Record<string, any>>) => Record<string, Record<string, any>>)) => void;
+  // Set single parameter helpers
+  setBaseParam: (effectInstanceId: string, paramName: string, value: any) => void;
+  setActiveParam: (effectInstanceId: string, paramName: string, value: any) => void;
   
   // Helper Actions
   updateMapping: (id: string, mapping: FeatureMapping) => void;
@@ -91,6 +97,14 @@ export const useVisualizerStore = create<VisualizerState & VisualizerActions>((s
 
   setActiveSliderValues: (updater) => set((state) => ({
     activeSliderValues: typeof updater === 'function' ? updater(state.activeSliderValues) : updater
+  })),
+
+  setBaseParam: (effectInstanceId, paramName, value) => set((state) => ({
+    baseParameterValues: setNestedParam(state.baseParameterValues, effectInstanceId, paramName, value)
+  })),
+
+  setActiveParam: (effectInstanceId, paramName, value) => set((state) => ({
+    activeSliderValues: setNestedParam(state.activeSliderValues, effectInstanceId, paramName, value)
   })),
 
   updateMapping: (id, mapping) => set((state) => ({

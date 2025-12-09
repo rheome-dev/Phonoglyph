@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Play, Pause, Settings, Maximize, Download } from 'lucide-react';
 import { cn, debugLog } from '@/lib/utils';
 import { VisualizerManager } from '@/lib/visualizer/core/VisualizerManager';
+import { makeParamKey } from '@/lib/visualizer/paramKeys';
 import { EffectRegistry } from '@/lib/visualizer/effects/EffectRegistry';
 import '@/lib/visualizer/effects/EffectDefinitions';
 import { MIDIData, VisualizationSettings } from '@/types/midi';
@@ -40,9 +41,9 @@ interface ThreeVisualizerProps {
   onMapFeature: (parameterId: string, featureId: string) => void;
   onUnmapFeature: (parameterId: string) => void;
   onModulationAmountChange?: (parameterId: string, amount: number) => void;
-  activeSliderValues: Record<string, number>;
-  baseParameterValues?: Record<string, any>;
-  setActiveSliderValues: React.Dispatch<React.SetStateAction<Record<string, number>>>;
+  activeSliderValues: Record<string, Record<string, any>>;
+  baseParameterValues?: Record<string, Record<string, any>>;
+  setActiveSliderValues: React.Dispatch<React.SetStateAction<Record<string, Record<string, any>>>>;
   visualizerRef?: React.RefObject<VisualizerManager> | ((instance: VisualizerManager | null) => void);
   layers: Layer[];
   selectedLayerId?: string | null;
@@ -105,40 +106,24 @@ export function ThreeVisualizer({
     });
 
     Object.entries(effectInstancesRef.current).forEach(([layerId, effect]) => {
-      const layerPrefix = `${layerId}-`;
-      // Also try effectType prefix (handles cases where saved keys used effect type instead of layer id)
-      const layerMeta = layers.find((l) => l.id === layerId);
-      const effectTypePrefix = layerMeta?.type === 'effect' && layerMeta.effectType ? `${layerMeta.effectType}-` : null;
-
-      // Collect relevant keys from active + base (active wins) using both prefixes
-      const relevantKeys = new Set([
-        ...Object.keys(activeSliderValues).filter((k) => k.startsWith(layerPrefix) || (effectTypePrefix && k.startsWith(effectTypePrefix))),
-        ...Object.keys(baseParameterValues).filter((k) => k.startsWith(layerPrefix) || (effectTypePrefix && k.startsWith(effectTypePrefix))),
+      const activeParams = activeSliderValues[layerId] || {};
+      const baseParams = baseParameterValues[layerId] || {};
+      const paramNames = new Set([
+        ...Object.keys(activeParams),
+        ...Object.keys(baseParams),
       ]);
 
-      const relevantArray = Array.from(relevantKeys);
       console.log('[ThreeVisualizer] layer sync', {
         layerId,
-        paramKeys: relevantArray,
-        layerPrefix,
-        effectTypePrefix,
+        paramKeys: Array.from(paramNames),
         effectParamKeys: Object.keys(effect.parameters),
       });
-      if (relevantArray.length === 0) {
+      if (paramNames.size === 0) {
         console.log('[ThreeVisualizer] layer sync: no relevant keys for', layerId);
       }
 
-      relevantKeys.forEach((paramKey) => {
-        const prefixUsed = paramKey.startsWith(layerPrefix)
-          ? layerPrefix
-          : effectTypePrefix && paramKey.startsWith(effectTypePrefix)
-            ? effectTypePrefix
-            : null;
-        if (!prefixUsed) return;
-
-        const paramName = paramKey.substring(prefixUsed.length);
-        const value = activeSliderValues[paramKey] ?? baseParameterValues[paramKey];
-
+      paramNames.forEach((paramName) => {
+        const value = activeParams[paramName] ?? baseParams[paramName];
         const currentVal = (effect.parameters as any)[paramName];
         if (value === undefined) return;
         if (currentVal != value) {
@@ -291,15 +276,17 @@ export function ThreeVisualizer({
           debugLog.log(`[ThreeVisualizer] Added effect instance: ${layer.id} (${layer.effectType}) with effect ID: ${effect.id}`);
           
           // Apply any saved parameter values from the store to the newly created effect
-          // This ensures restored/auto-saved values are applied when effects are (re)created
-          const layerPrefix = `${layer.id}-`;
-          Object.entries(activeSliderValues).forEach(([paramKey, value]) => {
-            if (paramKey.startsWith(layerPrefix)) {
-              const paramName = paramKey.substring(layerPrefix.length);
-              if (paramName && value !== undefined) {
-                manager.updateEffectParameter(layer.id, paramName, value);
-                debugLog.log(`[ThreeVisualizer] Applied saved param: ${layer.id}.${paramName} = ${value}`);
-              }
+          const activeParams = activeSliderValues[layer.id] || {};
+          const baseParams = baseParameterValues[layer.id] || {};
+          const paramNames = new Set([
+            ...Object.keys(activeParams),
+            ...Object.keys(baseParams),
+          ]);
+          paramNames.forEach((paramName) => {
+            const value = activeParams[paramName] ?? baseParams[paramName];
+            if (value !== undefined) {
+              manager.updateEffectParameter(layer.id, paramName, value);
+              debugLog.log(`[ThreeVisualizer] Applied saved param: ${layer.id}.${paramName} = ${value}`);
             }
           });
         } else {
@@ -505,7 +492,7 @@ export function ThreeVisualizer({
                       );
                     }
                     if (typeof value === 'number') {
-                      const paramKey = `${effectId}-${paramName}`;
+                      const paramKey = makeParamKey(effectId, paramName);
                       const mapping = mappings[paramKey];
                       const mappedFeatureId = mapping?.featureId || null;
                       const mappedFeatureName = mappedFeatureId ? featureNames[mappedFeatureId] : undefined;
@@ -526,9 +513,12 @@ export function ThreeVisualizer({
                           showTagOnHover
                         >
                           <Slider
-                            value={[activeSliderValues[paramKey] ?? value]}
+                            value={[activeSliderValues[effectId]?.[paramName] ?? value]}
                             onValueChange={([val]) => {
-                              setActiveSliderValues(prev => ({ ...prev, [paramKey]: val }));
+                              setActiveSliderValues(prev => ({
+                                ...prev,
+                                [effectId]: { ...(prev[effectId] || {}), [paramName]: val }
+                              }));
                               handleParameterChange(effectId, paramName, val);
                             }}
                             min={0}
