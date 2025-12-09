@@ -11,7 +11,7 @@ export interface AsciiFilterConfig {
   contrast: number; // 0.0 to 2.0 - contrast boost (audio reactive)
   invert: number; // 0.0 or 1.0 - invert luminance (audio reactive)
   hideBackground: boolean; // If true, only show ASCII text without background
-  color: [number, number, number]; // RGB color for ASCII characters (0-1 range)
+  textColor: [number, number, number]; // RGB color for ASCII characters (0-1 range)
   sourceTexture?: THREE.Texture; // Optional source texture to filter (deprecated - uses compositor)
 }
 
@@ -50,7 +50,7 @@ export class AsciiFilterEffect implements VisualEffect {
       contrast: 1.4,
       invert: 0.0,
       hideBackground: false,
-      color: [1.0, 1.0, 1.0] as [number, number, number], // White by default
+      textColor: [1.0, 1.0, 1.0] as [number, number, number], // White by default
       sourceTexture: config?.sourceTexture,
       ...paramsWithoutId
     };
@@ -154,7 +154,7 @@ export class AsciiFilterEffect implements VisualEffect {
       uContrast: { value: this.parameters.contrast },
       uInvert: { value: this.parameters.invert },
       uHideBackground: { value: this.parameters.hideBackground ? 1.0 : 0.0 },
-      uColor: { value: new THREE.Vector3(...this.parameters.color) },
+      uColor: { value: new THREE.Vector3(...this.parameters.textColor) },
     };
   }
 
@@ -356,7 +356,7 @@ export class AsciiFilterEffect implements VisualEffect {
     if (this.uniforms.uContrast) this.uniforms.uContrast.value = this.parameters.contrast;
     if (this.uniforms.uInvert) this.uniforms.uInvert.value = this.parameters.invert;
     if (this.uniforms.uHideBackground) this.uniforms.uHideBackground.value = this.parameters.hideBackground ? 1.0 : 0.0;
-    if (this.uniforms.uColor) this.uniforms.uColor.value.set(...this.parameters.color);
+    if (this.uniforms.uColor) this.uniforms.uColor.value.set(...this.parameters.textColor);
     
     // Update sprite grid dimensions
     if (this.uniforms.uSpriteGrid) {
@@ -452,14 +452,25 @@ export class AsciiFilterEffect implements VisualEffect {
         this.parameters.hideBackground = typeof value === 'boolean' ? value : this.parameters.hideBackground;
         if (this.uniforms) this.uniforms.uHideBackground.value = this.parameters.hideBackground ? 1.0 : 0.0;
         break;
-      case 'color':
+      case 'textColor':
         if (Array.isArray(value) && value.length === 3) {
-          this.parameters.color = [
+          this.parameters.textColor = [
             Math.max(0, Math.min(1, value[0])),
             Math.max(0, Math.min(1, value[1])),
             Math.max(0, Math.min(1, value[2]))
           ] as [number, number, number];
-          this.uniforms.uColor.value.set(...this.parameters.color);
+          this.uniforms.uColor.value.set(...this.parameters.textColor);
+        }
+        break;
+      case 'color':
+        // Backward compatibility: support old 'color' parameter name
+        if (Array.isArray(value) && value.length === 3) {
+          this.parameters.textColor = [
+            Math.max(0, Math.min(1, value[0])),
+            Math.max(0, Math.min(1, value[1])),
+            Math.max(0, Math.min(1, value[2]))
+          ] as [number, number, number];
+          this.uniforms.uColor.value.set(...this.parameters.textColor);
         }
         break;
       case 'sourceTexture':
