@@ -25,11 +25,11 @@ export function CollapsibleSidebar({ children }: CollapsibleSidebarProps) {
   const toggleSidebar = () => setIsCollapsed(!isCollapsed);
 
   return (
-    <div className="relative flex">
+    <div className="relative flex h-full">
       {/* Main Sidebar */}
       <div
         className={cn(
-          "bg-black border-r border-gray-800 transition-all duration-300 ease-in-out",
+          "bg-black border-r border-gray-800 transition-all duration-300 ease-in-out h-full",
           isCollapsed ? "w-0 overflow-hidden" : "w-64"
         )}
       >
@@ -58,24 +58,43 @@ export function CollapsibleSidebar({ children }: CollapsibleSidebarProps) {
         </div>
       </div>
 
-      {/* Collapse/Expand Tab - sits completely outside the sidebar */}
-      <button
-        onClick={toggleSidebar}
-        className={cn(
-          "flex-shrink-0 w-5 h-16 self-center",
-          "bg-gray-900/80 hover:bg-gray-800 backdrop-blur-sm",
-          "border border-l-0 border-gray-700 rounded-r-md",
-          "flex items-center justify-center transition-all duration-200",
-          "hover:w-6 group"
-        )}
-        aria-label="Toggle sidebar"
-      >
-        {isCollapsed ? (
-          <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-gray-200 transition-colors" />
-        ) : (
-          <ChevronLeft className="h-4 w-4 text-gray-400 group-hover:text-gray-200 transition-colors" />
-        )}
-      </button>
+      {/* Collapse/Expand Tab Container - positioned to float */}
+      <div className="relative flex-shrink-0 self-center z-10">
+        {/* Top rounded corner connector */}
+        <div 
+          className="absolute -top-[6px] left-0 w-[6px] h-[6px]"
+          style={{
+            background: 'radial-gradient(circle at 0% 100%, transparent 6px, rgb(0 0 0) 6px)'
+          }}
+        />
+        
+        {/* The tab button */}
+        <button
+          onClick={toggleSidebar}
+          className={cn(
+            "w-5 h-14",
+            "bg-black hover:bg-gray-900",
+            "border-y border-r border-gray-800 rounded-r-md",
+            "flex items-center justify-center transition-all duration-200",
+            "hover:w-6 group"
+          )}
+          aria-label="Toggle sidebar"
+        >
+          {isCollapsed ? (
+            <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-gray-200 transition-colors" />
+          ) : (
+            <ChevronLeft className="h-4 w-4 text-gray-400 group-hover:text-gray-200 transition-colors" />
+          )}
+        </button>
+
+        {/* Bottom rounded corner connector */}
+        <div 
+          className="absolute -bottom-[6px] left-0 w-[6px] h-[6px]"
+          style={{
+            background: 'radial-gradient(circle at 0% 0%, transparent 6px, rgb(0 0 0) 6px)'
+          }}
+        />
+      </div>
     </div>
   );
 }
