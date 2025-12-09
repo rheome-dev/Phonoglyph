@@ -18,22 +18,7 @@ export function CollapsibleEffectsSidebar({
   const toggleSidebar = () => setIsCollapsed(!isCollapsed);
 
   return (
-    <div className="relative flex h-full">
-      {/* Collapse/Expand Tab */}
-      <div className="relative flex-shrink-0 self-center">
-        <button
-          onClick={toggleSidebar}
-          className="collapse-tab-right group"
-          aria-label="Toggle effects sidebar"
-        >
-          {isCollapsed ? (
-            <ChevronLeft className="h-4 w-4 text-white/50 group-hover:text-white/80 transition-colors" />
-          ) : (
-            <ChevronRight className="h-4 w-4 text-white/50 group-hover:text-white/80 transition-colors" />
-          )}
-        </button>
-      </div>
-
+    <div className="relative h-full">
       {/* Main Sidebar */}
       <div
         className={cn(
@@ -60,10 +45,26 @@ export function CollapsibleEffectsSidebar({
         </div>
       </div>
 
+      {/* Collapse/Expand Tab - absolutely positioned to float over main content */}
+      <button
+        onClick={toggleSidebar}
+        className="collapse-tab-right group"
+        aria-label="Toggle effects sidebar"
+      >
+        {isCollapsed ? (
+          <ChevronLeft className="h-4 w-4 text-white/50 group-hover:text-white/80 transition-colors" />
+        ) : (
+          <ChevronRight className="h-4 w-4 text-white/50 group-hover:text-white/80 transition-colors" />
+        )}
+      </button>
+
       <style jsx>{`
         .collapse-tab-right {
           --tab-bg: rgb(28 25 23); /* stone-900 */
-          position: relative;
+          position: absolute;
+          top: 50%;
+          left: -20px;
+          transform: translateY(-50%);
           width: 20px;
           height: 56px;
           background: var(--tab-bg);
@@ -75,6 +76,7 @@ export function CollapsibleEffectsSidebar({
           justify-content: center;
           cursor: pointer;
           transition: background-color 0.2s ease;
+          z-index: 10;
         }
         
         .collapse-tab-right:hover {
@@ -82,7 +84,7 @@ export function CollapsibleEffectsSidebar({
           background: var(--tab-bg);
         }
         
-        /* Top corner connector - curve should face inward toward main content */
+        /* Top corner connector - flat edge touches sidebar (right), curve faces main content (left) */
         .collapse-tab-right::before {
           content: '';
           position: absolute;
@@ -90,11 +92,11 @@ export function CollapsibleEffectsSidebar({
           right: 0;
           width: 12px;
           height: 12px;
-          background: radial-gradient(circle at 100% 0%, transparent 12px, var(--tab-bg) 12px);
+          background: radial-gradient(circle at 0% 100%, transparent 12px, var(--tab-bg) 12px);
           pointer-events: none;
         }
         
-        /* Bottom corner connector - curve should face inward toward main content */
+        /* Bottom corner connector - flat edge touches sidebar (right), curve faces main content (left) */
         .collapse-tab-right::after {
           content: '';
           position: absolute;
@@ -102,7 +104,7 @@ export function CollapsibleEffectsSidebar({
           right: 0;
           width: 12px;
           height: 12px;
-          background: radial-gradient(circle at 100% 100%, transparent 12px, var(--tab-bg) 12px);
+          background: radial-gradient(circle at 0% 0%, transparent 12px, var(--tab-bg) 12px);
           pointer-events: none;
         }
       `}</style>

@@ -25,7 +25,7 @@ export function CollapsibleSidebar({ children }: CollapsibleSidebarProps) {
   const toggleSidebar = () => setIsCollapsed(!isCollapsed);
 
   return (
-    <div className="relative flex h-full">
+    <div className="relative h-full">
       {/* Main Sidebar */}
       <div
         className={cn(
@@ -58,25 +58,26 @@ export function CollapsibleSidebar({ children }: CollapsibleSidebarProps) {
         </div>
       </div>
 
-      {/* Collapse/Expand Tab */}
-      <div className="relative flex-shrink-0 self-center">
-        <button
-          onClick={toggleSidebar}
-          className="collapse-tab-left group"
-          aria-label="Toggle sidebar"
-        >
-          {isCollapsed ? (
-            <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-gray-200 transition-colors" />
-          ) : (
-            <ChevronLeft className="h-4 w-4 text-gray-400 group-hover:text-gray-200 transition-colors" />
-          )}
-        </button>
-      </div>
+      {/* Collapse/Expand Tab - absolutely positioned to float over main content */}
+      <button
+        onClick={toggleSidebar}
+        className="collapse-tab-left group"
+        aria-label="Toggle sidebar"
+      >
+        {isCollapsed ? (
+          <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-gray-200 transition-colors" />
+        ) : (
+          <ChevronLeft className="h-4 w-4 text-gray-400 group-hover:text-gray-200 transition-colors" />
+        )}
+      </button>
 
       <style jsx>{`
         .collapse-tab-left {
           --tab-bg: rgb(0 0 0); /* black */
-          position: relative;
+          position: absolute;
+          top: 50%;
+          right: -20px;
+          transform: translateY(-50%);
           width: 20px;
           height: 56px;
           background: var(--tab-bg);
@@ -88,6 +89,7 @@ export function CollapsibleSidebar({ children }: CollapsibleSidebarProps) {
           justify-content: center;
           cursor: pointer;
           transition: background-color 0.2s ease;
+          z-index: 10;
         }
         
         .collapse-tab-left:hover {
@@ -95,7 +97,7 @@ export function CollapsibleSidebar({ children }: CollapsibleSidebarProps) {
           background: var(--tab-bg);
         }
         
-        /* Top corner connector - curve should face inward toward main content */
+        /* Top corner connector - flat edge touches sidebar (left), curve faces main content (right) */
         .collapse-tab-left::before {
           content: '';
           position: absolute;
@@ -103,11 +105,11 @@ export function CollapsibleSidebar({ children }: CollapsibleSidebarProps) {
           left: 0;
           width: 12px;
           height: 12px;
-          background: radial-gradient(circle at 0% 0%, transparent 12px, var(--tab-bg) 12px);
+          background: radial-gradient(circle at 100% 100%, transparent 12px, var(--tab-bg) 12px);
           pointer-events: none;
         }
         
-        /* Bottom corner connector - curve should face inward toward main content */
+        /* Bottom corner connector - flat edge touches sidebar (left), curve faces main content (right) */
         .collapse-tab-left::after {
           content: '';
           position: absolute;
@@ -115,7 +117,7 @@ export function CollapsibleSidebar({ children }: CollapsibleSidebarProps) {
           left: 0;
           width: 12px;
           height: 12px;
-          background: radial-gradient(circle at 0% 100%, transparent 12px, var(--tab-bg) 12px);
+          background: radial-gradient(circle at 100% 0%, transparent 12px, var(--tab-bg) 12px);
           pointer-events: none;
         }
       `}</style>
