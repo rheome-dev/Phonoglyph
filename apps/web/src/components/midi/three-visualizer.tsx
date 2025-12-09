@@ -243,6 +243,27 @@ export function ThreeVisualizer({
     }
   }, [layers, internalVisualizerRef.current]);
 
+  // Sync parameters from store to visualizer when activeSliderValues changes (e.g. hydration)
+  // This handles the case where effects are created BEFORE hydration completes.
+  useEffect(() => {
+    const manager = internalVisualizerRef.current;
+    if (!manager) return;
+
+    Object.entries(effectInstancesRef.current).forEach(([layerId, effect]) => {
+      const layerPrefix = `${layerId}-`;
+      Object.entries(activeSliderValues).forEach(([paramKey, value]) => {
+        if (paramKey.startsWith(layerPrefix)) {
+          const paramName = paramKey.substring(layerPrefix.length);
+          // Only update if value differs to avoid redundant updates during interaction
+          // Use loose equality to handle potential type mismatches (string vs number)
+          if ((effect.parameters as any)[paramName] != value) {
+            manager.updateEffectParameter(layerId, paramName, value);
+          }
+        }
+      });
+    });
+  }, [activeSliderValues]);
+
   // Expose visualizer ref to parent
   useEffect(() => {
     if (externalVisualizerRef && internalVisualizerRef.current) {
