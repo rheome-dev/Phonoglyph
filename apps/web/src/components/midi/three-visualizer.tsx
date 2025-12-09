@@ -113,6 +113,16 @@ export function ThreeVisualizer({
         ...Object.keys(baseParameterValues).filter((k) => k.startsWith(layerPrefix)),
       ]);
 
+      const relevantArray = Array.from(relevantKeys);
+      console.log('[ThreeVisualizer] layer sync', {
+        layerId,
+        paramKeys: relevantArray,
+        effectParamKeys: Object.keys(effect.parameters),
+      });
+      if (relevantArray.length === 0) {
+        console.log('[ThreeVisualizer] layer sync: no relevant keys for', layerId);
+      }
+
       relevantKeys.forEach((paramKey) => {
         const paramName = paramKey.substring(layerPrefix.length);
         const value = activeSliderValues[paramKey] ?? baseParameterValues[paramKey];
@@ -127,6 +137,12 @@ export function ThreeVisualizer({
             to: value,
           });
           manager.updateEffectParameter(layerId, paramName, value);
+        } else {
+          console.log('[ThreeVisualizer] Skipped param (same value)', {
+            layerId,
+            paramName,
+            value,
+          });
         }
       });
     });
