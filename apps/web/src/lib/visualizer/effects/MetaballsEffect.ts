@@ -21,7 +21,14 @@ export class MetaballsEffect implements VisualEffect {
   private baseCameraDistance = 3.0;
   private cameraOrbitRadius = 2.0;
   private cameraHeight = 1.0;
-  private cameraSmoothing = 0.02;
+  private cameraSmoothing = 5.0; // Higher = faster response (used with deltaTime)
+  
+  // Smoothed input values for jerk-free animation
+  private smoothedMidiIntensity = 0;
+  private smoothedAvgPitch = 60; // Middle C default
+  private smoothedAvgVelocity = 0;
+  private smoothedNoteCount = 0;
+  private smoothedCameraTarget = new THREE.Vector3(0, 0, 0);
 
   constructor(config: Partial<MetaballConfig> = {}) {
     this.parameters = {
@@ -395,8 +402,8 @@ export class MetaballsEffect implements VisualEffect {
     // Ensure we always have a good base intensity so metaballs are visible
     this.uniforms.uIntensity.value = Math.max(0.8, (midiIntensity + audioIntensity) * 1.2);
 
-    // Animate camera based on MIDI notes
-    this.updateCameraAnimation(midiData, audioData);
+    // Animate camera based on MIDI notes (pass deltaTime for frame-rate independent smoothing)
+    this.updateCameraAnimation(midiData, audioData, deltaTime);
 
     // Debug log to see if we're getting MIDI data
     if (midiData.activeNotes.length > 0) {
@@ -412,41 +419,57 @@ export class MetaballsEffect implements VisualEffect {
     // No conditional visibility logic here
   }
 
-  private updateCameraAnimation(midiData: LiveMIDIData, audioData: AudioAnalysisData): void {
+  private updateCameraAnimation(midiData: LiveMIDIData, audioData: AudioAnalysisData, deltaTime: number): void {
     const time = this.uniforms.uTime.value;
+    
+    // Frame-rate independent smoothing factor
+    // Using exponential decay: factor approaches 1 as deltaTime increases
+    const inputSmoothingFactor = 1 - Math.exp(-8.0 * deltaTime); // Fast input smoothing
+    const cameraSmoothingFactor = 1 - Math.exp(-this.cameraSmoothing * deltaTime);
+    
+    // Smooth MIDI input values to prevent sudden jumps
+    let targetPitch = 60; // Default to middle C
+    let targetVelocity = 0;
+    let targetNoteCount = 0;
+    
+    if (midiData.activeNotes.length > 0) {
+      targetPitch = midiData.activeNotes.reduce((sum, note) => sum + note.note, 0) / midiData.activeNotes.length;
+      targetVelocity = midiData.activeNotes.reduce((sum, note) => sum + note.velocity, 0) / midiData.activeNotes.length / 127;
+      targetNoteCount = Math.min(midiData.activeNotes.length, 5);
+    }
+    
+    // Smoothly interpolate input values
+    this.smoothedAvgPitch += (targetPitch - this.smoothedAvgPitch) * inputSmoothingFactor;
+    this.smoothedAvgVelocity += (targetVelocity - this.smoothedAvgVelocity) * inputSmoothingFactor;
+    this.smoothedNoteCount += (targetNoteCount - this.smoothedNoteCount) * inputSmoothingFactor;
+    
+    // Calculate normalized pitch from smoothed value
+    const normalizedPitch = (this.smoothedAvgPitch - 60) / 48;
     
     // Base camera orbit animation
     let cameraAngle = time * 0.3;
     let cameraElevation = Math.sin(time * 0.2) * 0.3;
     let cameraDistance = this.baseCameraDistance;
 
-    // MIDI-based camera effects
-    if (midiData.activeNotes.length > 0) {
-      // Use note pitches to influence camera position
-      const avgPitch = midiData.activeNotes.reduce((sum, note) => sum + note.note, 0) / midiData.activeNotes.length;
-      const normalizedPitch = (avgPitch - 60) / 48; // Normalize around middle C
-      
-      // Use note velocities for camera movement intensity
-      const avgVelocity = midiData.activeNotes.reduce((sum, note) => sum + note.velocity, 0) / midiData.activeNotes.length / 127;
-      
+    // MIDI-based camera effects using smoothed values
+    if (this.smoothedNoteCount > 0.1) { // Use threshold instead of note count check
       // Pitch affects camera angle and height
-      cameraAngle += normalizedPitch * 2.0; // Higher notes move camera clockwise
-      cameraElevation += normalizedPitch * 0.8; // Higher notes raise camera
+      cameraAngle += normalizedPitch * 2.0;
+      cameraElevation += normalizedPitch * 0.8;
       
       // Velocity affects camera distance and orbit speed
-      cameraDistance += avgVelocity * 1.5; // Louder notes move camera back
-      cameraAngle += avgVelocity * Math.sin(time * 4.0) * 0.5; // Add velocity-based wobble
+      cameraDistance += this.smoothedAvgVelocity * 1.5;
+      cameraAngle += this.smoothedAvgVelocity * Math.sin(time * 4.0) * 0.5;
       
-      // Multiple notes create more dynamic movement
-      const noteCount = Math.min(midiData.activeNotes.length, 5);
-      const complexity = noteCount / 5.0;
+      // Note count complexity affects movement
+      const complexity = this.smoothedNoteCount / 5.0;
       cameraElevation += Math.sin(time * 3.0 + complexity * 2.0) * complexity * 0.3;
       
-      // Add chord-based camera effects
-      if (midiData.activeNotes.length >= 3) {
-        // For chords, add orbital variation
-        cameraAngle += Math.sin(time * 2.0) * 0.4;
-        cameraDistance += Math.cos(time * 1.5) * 0.3;
+      // Chord-based camera effects (smoothed)
+      if (this.smoothedNoteCount >= 2.5) {
+        const chordIntensity = Math.min((this.smoothedNoteCount - 2.5) / 2.5, 1.0);
+        cameraAngle += Math.sin(time * 2.0) * 0.4 * chordIntensity;
+        cameraDistance += Math.cos(time * 1.5) * 0.3 * chordIntensity;
       }
     }
 
@@ -455,28 +478,30 @@ export class MetaballsEffect implements VisualEffect {
     cameraDistance += audioInfluence;
     cameraElevation += Math.sin(time * 5.0) * audioInfluence * 0.2;
 
-    // Calculate new camera position
-    const newCameraPos = new THREE.Vector3(
+    // Calculate target camera position
+    const targetCameraPos = new THREE.Vector3(
       Math.cos(cameraAngle) * cameraDistance,
       cameraElevation + this.cameraHeight,
       Math.sin(cameraAngle) * cameraDistance
     );
 
-    // Smooth camera movement
+    // Frame-rate independent camera position smoothing
     const currentPos = this.uniforms.uCameraPos.value;
-    currentPos.lerp(newCameraPos, this.cameraSmoothing);
+    currentPos.lerp(targetCameraPos, cameraSmoothingFactor);
 
-    // Keep camera target at the center (where metaballs are)
-    const target = new THREE.Vector3(0, 0, 0);
+    // Calculate target for camera look-at (also smoothed)
+    const targetLookAt = new THREE.Vector3(0, 0, 0);
 
-    // Add subtle target movement based on intense MIDI activity
-    if (midiData.activeNotes.length > 2) {
-      const intensity = Math.min(midiData.activeNotes.length / 5.0, 1.0);
-      target.x = Math.sin(time * 2.0) * intensity * 0.2;
-      target.y = Math.cos(time * 1.5) * intensity * 0.1;
+    // Add subtle target movement based on smoothed MIDI activity
+    if (this.smoothedNoteCount > 2) {
+      const intensity = Math.min(this.smoothedNoteCount / 5.0, 1.0);
+      targetLookAt.x = Math.sin(time * 2.0) * intensity * 0.2;
+      targetLookAt.y = Math.cos(time * 1.5) * intensity * 0.1;
     }
 
-    this.uniforms.uCameraTarget.value.copy(target);
+    // Smooth the camera target as well (prevents sudden look-at jumps)
+    this.smoothedCameraTarget.lerp(targetLookAt, cameraSmoothingFactor);
+    this.uniforms.uCameraTarget.value.copy(this.smoothedCameraTarget);
   }
 
   destroy(): void {
