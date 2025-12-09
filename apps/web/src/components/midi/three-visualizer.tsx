@@ -129,7 +129,14 @@ export function ThreeVisualizer({
       }
 
       relevantKeys.forEach((paramKey) => {
-        const paramName = paramKey.substring(layerPrefix.length);
+        const prefixUsed = paramKey.startsWith(layerPrefix)
+          ? layerPrefix
+          : effectTypePrefix && paramKey.startsWith(effectTypePrefix)
+            ? effectTypePrefix
+            : null;
+        if (!prefixUsed) return;
+
+        const paramName = paramKey.substring(prefixUsed.length);
         const value = activeSliderValues[paramKey] ?? baseParameterValues[paramKey];
 
         const currentVal = (effect.parameters as any)[paramName];
