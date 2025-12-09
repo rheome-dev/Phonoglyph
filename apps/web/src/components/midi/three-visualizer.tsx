@@ -214,6 +214,19 @@ export function ThreeVisualizer({
           // Add effect with the unique layer ID from the timeline
           manager.addEffect(layer.id, effect);
           debugLog.log(`[ThreeVisualizer] Added effect instance: ${layer.id} (${layer.effectType}) with effect ID: ${effect.id}`);
+          
+          // Apply any saved parameter values from the store to the newly created effect
+          // This ensures restored/auto-saved values are applied when effects are (re)created
+          const layerPrefix = `${layer.id}-`;
+          Object.entries(activeSliderValues).forEach(([paramKey, value]) => {
+            if (paramKey.startsWith(layerPrefix)) {
+              const paramName = paramKey.substring(layerPrefix.length);
+              if (paramName && value !== undefined) {
+                manager.updateEffectParameter(layer.id, paramName, value);
+                debugLog.log(`[ThreeVisualizer] Applied saved param: ${layer.id}.${paramName} = ${value}`);
+              }
+            }
+          });
         } else {
           debugLog.warn(`[ThreeVisualizer] Failed to create effect: ${layer.effectType} for layer: ${layer.id}`);
         }
