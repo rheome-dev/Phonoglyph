@@ -6,9 +6,13 @@ import { cn } from '@/lib/utils';
 
 interface CollapsibleEffectsSidebarProps {
   children: React.ReactNode;
+  expandedWidth?: string; // Optional custom width when expanded (default: 'w-80')
 }
 
-export function CollapsibleEffectsSidebar({ children }: CollapsibleEffectsSidebarProps) {
+export function CollapsibleEffectsSidebar({ 
+  children,
+  expandedWidth = 'w-80' 
+}: CollapsibleEffectsSidebarProps) {
   const [isCollapsed, setIsCollapsed] = React.useState(false);
 
   const toggleSidebar = () => setIsCollapsed(!isCollapsed);
@@ -17,7 +21,7 @@ export function CollapsibleEffectsSidebar({ children }: CollapsibleEffectsSideba
     <div
       className={cn(
         "relative bg-stone-900 border-l border-white/10 transition-all duration-300 ease-in-out z-20",
-        isCollapsed ? "w-16" : "w-80"
+        isCollapsed ? "w-16" : expandedWidth
       )}
     >
       <div className="h-full flex flex-col">
@@ -57,4 +61,4 @@ export function CollapsibleEffectsSidebar({ children }: CollapsibleEffectsSideba
       </button>
     </div>
   );
-} 
+}

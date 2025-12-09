@@ -56,7 +56,58 @@ const EffectsLibrarySidebarWithHud: React.FC<{
   onEffectDoubleClick: (effectId: string) => void;
   isVisible: boolean;
   stemUrlsReady: boolean;
-}> = ({ effects, selectedEffects, onEffectToggle, onEffectDoubleClick, isVisible, stemUrlsReady }) => {
+  // Inspector mode props
+  editingEffectId?: string | null;
+  editingEffectInstance?: { 
+    id: string; 
+    name: string; 
+    description: string; 
+    parameters: Record<string, any>;
+  } | null;
+  activeSliderValues?: Record<string, Record<string, any>>;
+  baseParameterValues?: Record<string, Record<string, any>>;
+  onParameterChange?: (effectId: string, paramName: string, value: any) => void;
+  onBack?: () => void;
+  mappings?: Record<string, { featureId: string | null; modulationAmount: number }>;
+  featureNames?: Record<string, string>;
+  onMapFeature?: (parameterId: string, featureId: string, stemType?: string) => void;
+  onUnmapFeature?: (parameterId: string) => void;
+  onModulationAmountChange?: (parameterId: string, amount: number) => void;
+  // ImageSlideshow specific props
+  projectId?: string;
+  availableFiles?: any[];
+  activeCollectionId?: string;
+  setActiveCollectionId?: (id: string | undefined) => void;
+  modulatedParameterValues?: Record<string, number>;
+  layers?: Layer[];
+  setActiveParam?: (effectId: string, paramName: string, value: any) => void;
+}> = ({ 
+  effects, 
+  selectedEffects, 
+  onEffectToggle, 
+  onEffectDoubleClick, 
+  isVisible, 
+  stemUrlsReady,
+  editingEffectId,
+  editingEffectInstance,
+  activeSliderValues,
+  baseParameterValues,
+  onParameterChange,
+  onBack,
+  mappings,
+  featureNames,
+  onMapFeature,
+  onUnmapFeature,
+  onModulationAmountChange,
+  // ImageSlideshow specific props
+  projectId,
+  availableFiles,
+  activeCollectionId,
+  setActiveCollectionId,
+  modulatedParameterValues,
+  layers: layersProp,
+  setActiveParam
+}) => {
   const { addLayer, duration, layers } = useTimelineStore((state) => ({
     addLayer: state.addLayer,
     duration: state.duration,
@@ -115,6 +166,9 @@ const EffectsLibrarySidebarWithHud: React.FC<{
     }
     onEffectDoubleClick(effectId);
   };
+
+  // Find the effect metadata for the header
+  const editingEffect = editingEffectId ? effects.find(e => e.id === editingEffectId) : null;
   
   return (
     <EffectsLibrarySidebar
@@ -123,6 +177,27 @@ const EffectsLibrarySidebarWithHud: React.FC<{
       onEffectToggle={onEffectToggle}
       onEffectDoubleClick={handleEffectDoubleClick}
       isVisible={isVisible}
+      // Inspector mode props
+      editingEffectId={editingEffectId}
+      editingEffect={editingEffect}
+      editingEffectInstance={editingEffectInstance}
+      activeSliderValues={activeSliderValues}
+      baseParameterValues={baseParameterValues}
+      onParameterChange={onParameterChange}
+      onBack={onBack}
+      mappings={mappings}
+      featureNames={featureNames}
+      onMapFeature={onMapFeature}
+      onUnmapFeature={onUnmapFeature}
+      onModulationAmountChange={onModulationAmountChange}
+      // ImageSlideshow specific props
+      projectId={projectId}
+      availableFiles={availableFiles}
+      activeCollectionId={activeCollectionId}
+      setActiveCollectionId={setActiveCollectionId}
+      modulatedParameterValues={modulatedParameterValues}
+      layers={layersProp || layers}
+      setActiveParam={setActiveParam}
     />
   );
 };
@@ -299,12 +374,15 @@ function CreativeVisualizerPage() {
     setActiveParam
   } = useVisualizerStore();
 
-  // Effect parameter modal state
+  // Effect parameter modal state (kept for imageSlideshow special handling)
   const [openEffectModals, setOpenEffectModals] = useState<Record<string, boolean>>({
     'metaballs': false,
     'midiHud': false,
     'particleNetwork': false
   });
+  
+  // Inspector mode state - track which effect is being edited in the sidebar
+  const [editingEffectId, setEditingEffectId] = useState<string | null>(null);
 
   // Feature mapping state - now from visualizerStore
   const [featureNames, setFeatureNames] = useState<Record<string, string>>({});
@@ -840,11 +918,43 @@ function CreativeVisualizerPage() {
   };
 
   const handleEffectDoubleClick = (effectId: string) => {
-    // Open the parameter modal for this effect
-    setOpenEffectModals(prev => ({
-      ...prev,
-      [effectId]: true
-    }));
+    // All effects now use the sidebar Inspector
+    setEditingEffectId(effectId);
+  };
+
+  // Handler to close the sidebar Inspector and return to library view
+  const handleBackFromInspector = () => {
+    setEditingEffectId(null);
+  };
+
+  // Get the effect instance from the visualizer for the Inspector
+  const getEditingEffectInstance = () => {
+    if (!editingEffectId || !visualizerRef.current) return null;
+    
+    // Try to get the effect by type first (for built-in effects)
+    const effectByType = visualizerRef.current.getEffectByType?.(editingEffectId);
+    if (effectByType) {
+      return {
+        id: editingEffectId,
+        name: effectByType.name,
+        description: effectByType.description,
+        parameters: effectByType.parameters
+      };
+    }
+    
+    // Fall back to searching layers for timeline-based effect instances
+    const effectLayer = layers.find(l => l.id === editingEffectId && l.type === 'effect');
+    if (effectLayer) {
+      const effectDef = effects.find(e => e.id === effectLayer.effectType);
+      return {
+        id: effectLayer.id,
+        name: effectDef?.name || effectLayer.name,
+        description: effectDef?.description || '',
+        parameters: effectLayer.settings || {}
+      };
+    }
+    
+    return null;
   };
 
   // Effect clip timeline is merged into layers via store; per-effect UI remains via modals
@@ -1442,223 +1552,8 @@ function CreativeVisualizerPage() {
     }
   };
 
-  const effectModals = Object.entries(openEffectModals).map(([effectId, isOpen], index) => {
-    if (!isOpen) return null;
-    const effectInstance = effects.find(e => e.id === effectId);
-    if (!effectInstance) return null;
-
-    // Special case for Image Slideshow to show Collection Manager
-    if (effectId === 'imageSlideshow') {
-      const initialPos = { x: 100 + (index * 50), y: 100 + (index * 50) };
-      // Find the layer with this effect type - the effect instance uses the layer ID, not the effect type ID
-      const slideshowLayer = layers.find(l => l.type === 'effect' && l.effectType === 'imageSlideshow');
-      const layerId = slideshowLayer?.id || effectId; // Fallback to effectId if no layer found
-      
-      return (
-        <PortalModal
-          key={effectId}
-          title="Slideshow Collections"
-          isOpen={isOpen}
-          onClose={() => handleCloseEffectModal(effectId)}
-          initialPosition={initialPos}
-          bounds="#editor-bounds"
-          modalWidth={520}
-          className="w-[520px]"
-        >
-          <div className="max-w-full">
-            <CollectionManager
-              projectId={currentProjectId || ''}
-              availableFiles={projectFiles?.files || []}
-              onSelectCollection={(imageUrls, collectionId) => {
-                // Use layerId instead of effectId - the effect instance is keyed by layer ID
-                console.log('🖼️ Collection selected, updating effect with layerId:', layerId, 'imageUrls count:', imageUrls.length);
-                handleParameterChange(layerId, 'images', imageUrls);
-                setActiveCollectionId(collectionId);
-              }}
-              selectedCollectionId={activeCollectionId}
-            />
-            <div className="mt-4 pt-4 border-t border-white/10">
-                <Label className="text-xs uppercase text-stone-400 mb-2 block">Playback Settings</Label>
-                
-                <div className="space-y-4">
-                  <DroppableParameter
-                    parameterId={makeParamKey(layerId, 'triggerValue')}
-                    label="Advance Trigger"
-                    mappedFeatureId={slideshowLayer?.settings?.triggerSourceId || mappings[makeParamKey(layerId, 'triggerValue')]?.featureId}
-                    mappedFeatureName={slideshowLayer?.settings?.triggerSourceId ? featureNames[slideshowLayer.settings.triggerSourceId] : (mappings[makeParamKey(layerId, 'triggerValue')]?.featureId ? featureNames[mappings[makeParamKey(layerId, 'triggerValue')]?.featureId!] : undefined)}
-                    modulationAmount={mappings[makeParamKey(layerId, 'triggerValue')]?.modulationAmount ?? 0.5}
-                    baseValue={baseParameterValues[layerId]?.['triggerValue'] ?? 0}
-                    modulatedValue={modulatedParameterValues[makeParamKey(layerId, 'triggerValue')] ?? 0}
-                    sliderMax={1}
-                    onFeatureDrop={handleMapFeature}
-                    onFeatureUnmap={handleUnmapFeature}
-                    onModulationAmountChange={handleModulationAmountChange}
-                    dropZoneStyle="inlayed"
-                  >
-                     <div className="h-2 bg-stone-800 rounded overflow-hidden mt-1">
-                        <div 
-                            className="h-full bg-blue-500 transition-all duration-75"
-                            style={{ width: `${(modulatedParameterValues[`${layerId}-triggerValue`] || 0) * 100}%` }}
-                        />
-                     </div>
-                     <div className="text-[10px] text-stone-500 mt-1">
-                        {(slideshowLayer?.settings?.triggerSourceId || mappings[`${layerId}-triggerValue`]?.featureId)
-                            ? "Mapped to audio analysis" 
-                            : "Drag 'Transients' here to trigger slides"}
-                     </div>
-                  </DroppableParameter>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs">Threshold</Label>
-                    <Slider
-                        value={[activeSliderValues[layerId]?.['threshold'] ?? 0.5]}
-                        onValueChange={([val]) => {
-                            setActiveParam(layerId, 'threshold', val);
-                            handleParameterChange(layerId, 'threshold', val);
-                        }}
-                        min={0}
-                        max={1.0}
-                        step={0.01}
-                    />
-                    <div className="text-[10px] text-stone-500 mt-1">
-                      Trigger fires when value exceeds threshold (current: {(activeSliderValues[layerId]?.['threshold'] ?? 0.5).toFixed(2)})
-                    </div>
-                  </div>
-
-                  {(() => {
-                    const paramKey = makeParamKey(layerId, 'opacity');
-                    const opacityMapping = mappings[paramKey];
-                    const mappedFeatureId = opacityMapping?.featureId || null;
-                    const mappedFeatureName = mappedFeatureId ? featureNames[mappedFeatureId] : undefined;
-                    const baseVal = baseParameterValues[layerId]?.['opacity'] ?? (activeSliderValues[layerId]?.['opacity'] ?? (slideshowLayer?.settings?.opacity ?? 1.0));
-                    const modulatedVal = modulatedParameterValues[paramKey] ?? baseVal;
-                    return (
-                      <DroppableParameter
-                        parameterId={paramKey}
-                        label="Opacity"
-                        mappedFeatureId={mappedFeatureId}
-                        mappedFeatureName={mappedFeatureName}
-                        modulationAmount={opacityMapping?.modulationAmount ?? 0.5}
-                        baseValue={baseVal}
-                        modulatedValue={modulatedVal}
-                        sliderMax={1.0}
-                        onFeatureDrop={handleMapFeature}
-                        onFeatureUnmap={handleUnmapFeature}
-                        onModulationAmountChange={handleModulationAmountChange}
-                        className="mb-2"
-                        dropZoneStyle="inlayed"
-                        showTagOnHover
-                      >
-                        <div className="relative z-20">
-                          <Slider
-                            value={[baseVal]}
-                            onValueChange={([val]) => {
-                              setBaseParam(layerId, 'opacity', val);
-                              setActiveParam(layerId, 'opacity', val);
-                              handleParameterChange(layerId, 'opacity', val);
-                            }}
-                            min={0}
-                            max={1.0}
-                            step={0.01}
-                            className="w-full"
-                          />
-                        </div>
-                      </DroppableParameter>
-                    );
-                  })()}
-                </div>
-            </div>
-            
-            <div className="mt-4 pt-4 border-t border-white/10">
-                <Label className="text-xs uppercase text-stone-400 mb-2 block">Position & Size</Label>
-                
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <Label className="text-xs">Position X</Label>
-                      <Slider
-                          value={[activeSliderValues[layerId]?.['position']?.x ?? (slideshowLayer?.settings?.position?.x ?? 0.5)]}
-                          onValueChange={([val]) => {
-                              const currentPos = slideshowLayer?.settings?.position || { x: 0.5, y: 0.5 };
-                              setActiveParam(layerId, 'position', { ...currentPos, x: val } as any);
-                              handleParameterChange(layerId, 'position', { ...currentPos, x: val });
-                          }}
-                          min={0}
-                          max={1.0}
-                          step={0.01}
-                      />
-                      <div className="text-[10px] text-stone-500 mt-1">
-                        {(activeSliderValues[layerId]?.['position']?.x ?? (slideshowLayer?.settings?.position?.x ?? 0.5)).toFixed(2)}
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-1">
-                      <Label className="text-xs">Position Y</Label>
-                      <Slider
-                          value={[activeSliderValues[layerId]?.['position']?.y ?? (slideshowLayer?.settings?.position?.y ?? 0.5)]}
-                          onValueChange={([val]) => {
-                              const currentPos = slideshowLayer?.settings?.position || { x: 0.5, y: 0.5 };
-                              setActiveParam(layerId, 'position', { ...currentPos, y: val } as any);
-                              handleParameterChange(layerId, 'position', { ...currentPos, y: val });
-                          }}
-                          min={0}
-                          max={1.0}
-                          step={0.01}
-                      />
-                      <div className="text-[10px] text-stone-500 mt-1">
-                        {(activeSliderValues[layerId]?.['position']?.y ?? (slideshowLayer?.settings?.position?.y ?? 0.5)).toFixed(2)}
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <Label className="text-xs">Width</Label>
-                      <Slider
-                          value={[activeSliderValues[layerId]?.['size']?.width ?? (slideshowLayer?.settings?.size?.width ?? 1.0)]}
-                          onValueChange={([val]) => {
-                              const currentSize = slideshowLayer?.settings?.size || { width: 1.0, height: 1.0 };
-                              setActiveParam(layerId, 'size', { ...currentSize, width: val } as any);
-                              handleParameterChange(layerId, 'size', { ...currentSize, width: val });
-                          }}
-                          min={0.1}
-                          max={1.0}
-                          step={0.01}
-                      />
-                      <div className="text-[10px] text-stone-500 mt-1">
-                        {(activeSliderValues[layerId]?.['size']?.width ?? (slideshowLayer?.settings?.size?.width ?? 1.0)).toFixed(2)}
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-1">
-                      <Label className="text-xs">Height</Label>
-                      <Slider
-                          value={[activeSliderValues[layerId]?.['size']?.height ?? (slideshowLayer?.settings?.size?.height ?? 1.0)]}
-                          onValueChange={([val]) => {
-                              const currentSize = slideshowLayer?.settings?.size || { width: 1.0, height: 1.0 };
-                              setActiveParam(layerId, 'size', { ...currentSize, height: val } as any);
-                              handleParameterChange(layerId, 'size', { ...currentSize, height: val });
-                          }}
-                          min={0.1}
-                          max={1.0}
-                          step={0.01}
-                      />
-                      <div className="text-[10px] text-stone-500 mt-1">
-                        {(activeSliderValues[layerId]?.['size']?.height ?? (slideshowLayer?.settings?.size?.height ?? 1.0)).toFixed(2)}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-            </div>
-          </div>
-        </PortalModal>
-      );
-    }
-
-    // All other effects are handled by three-visualizer.tsx
-    // Return null to prevent duplicate modals
-            return null;
-  });
+  // Effect modals are no longer needed - all effects use the sidebar Inspector
+  const effectModals: React.ReactNode[] = [];
 
   // Helper to infer stem type from file name
   const getStemTypeFromFileName = (fileName: string) => {
@@ -2075,7 +1970,15 @@ function CreativeVisualizerPage() {
             </div>
 
             {/* Right Effects Sidebar */}
-            <CollapsibleEffectsSidebar>
+            <CollapsibleEffectsSidebar
+              expandedWidth={
+                // Wider sidebar when editing imageSlideshow
+                (editingEffectId === 'imageSlideshow' || 
+                 layers.find(l => l.id === editingEffectId && l.effectType === 'imageSlideshow'))
+                  ? 'w-[360px]' 
+                  : 'w-[260px]'
+              }
+            >
               <EffectsLibrarySidebarWithHud
                 effects={effects}
                 selectedEffects={selectedEffects}
@@ -2083,6 +1986,26 @@ function CreativeVisualizerPage() {
                 onEffectDoubleClick={handleEffectDoubleClick}
                 isVisible={true}
                 stemUrlsReady={stemUrlsReady}
+                // Inspector mode props
+                editingEffectId={editingEffectId}
+                editingEffectInstance={getEditingEffectInstance()}
+                activeSliderValues={activeSliderValues}
+                baseParameterValues={baseParameterValues}
+                onParameterChange={handleParameterChange}
+                onBack={handleBackFromInspector}
+                mappings={mappings}
+                featureNames={featureNames}
+                onMapFeature={handleMapFeature}
+                onUnmapFeature={handleUnmapFeature}
+                onModulationAmountChange={handleModulationAmountChange}
+                // ImageSlideshow specific props
+                projectId={currentProjectId || ''}
+                availableFiles={projectFiles?.files || []}
+                activeCollectionId={activeCollectionId}
+                setActiveCollectionId={setActiveCollectionId}
+                modulatedParameterValues={modulatedParameterValues}
+                layers={layers}
+                setActiveParam={setActiveParam}
               />
             </CollapsibleEffectsSidebar>
 
