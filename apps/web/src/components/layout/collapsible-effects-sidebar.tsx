@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 
 interface CollapsibleEffectsSidebarProps {
   children: React.ReactNode;
-  expandedWidth?: string; // Optional custom width when expanded (default: 'w-80')
+  expandedWidth?: string;
 }
 
 export function CollapsibleEffectsSidebar({ 
@@ -19,26 +19,11 @@ export function CollapsibleEffectsSidebar({
 
   return (
     <div className="relative flex h-full">
-      {/* Collapse/Expand Tab Container - positioned to float */}
+      {/* Collapse/Expand Tab - uses pseudo-elements for corner connectors */}
       <div className="relative flex-shrink-0 self-center z-10">
-        {/* Top rounded corner connector */}
-        <div 
-          className="absolute -top-[6px] right-0 w-[6px] h-[6px]"
-          style={{
-            background: 'radial-gradient(circle at 100% 100%, transparent 6px, rgb(28 25 23) 6px)'
-          }}
-        />
-        
-        {/* The tab button */}
         <button
           onClick={toggleSidebar}
-          className={cn(
-            "w-5 h-14",
-            "bg-stone-900 hover:bg-stone-800",
-            "border-y border-l border-white/10 rounded-l-md",
-            "flex items-center justify-center transition-all duration-200",
-            "hover:w-6 group"
-          )}
+          className="collapse-tab-right group"
           aria-label="Toggle effects sidebar"
         >
           {isCollapsed ? (
@@ -47,14 +32,6 @@ export function CollapsibleEffectsSidebar({
             <ChevronRight className="h-4 w-4 text-white/50 group-hover:text-white/80 transition-colors" />
           )}
         </button>
-
-        {/* Bottom rounded corner connector */}
-        <div 
-          className="absolute -bottom-[6px] right-0 w-[6px] h-[6px]"
-          style={{
-            background: 'radial-gradient(circle at 100% 0%, transparent 6px, rgb(28 25 23) 6px)'
-          }}
-        />
       </div>
 
       {/* Main Sidebar */}
@@ -82,6 +59,55 @@ export function CollapsibleEffectsSidebar({
           </div>
         </div>
       </div>
+
+      <style jsx>{`
+        .collapse-tab-right {
+          --tab-bg: rgb(28 25 23); /* stone-900 */
+          position: relative;
+          width: 20px;
+          height: 56px;
+          background: var(--tab-bg);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-right: none;
+          border-top-left-radius: 8px;
+          border-bottom-left-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: background-color 0.2s ease, width 0.2s ease;
+        }
+        
+        .collapse-tab-right:hover {
+          --tab-bg: rgb(41 37 36); /* stone-800 */
+          background: var(--tab-bg);
+          width: 24px;
+        }
+        
+        /* Top corner connector - circle at bottom-right creates curve connecting to sidebar */
+        .collapse-tab-right::before {
+          content: '';
+          position: absolute;
+          top: -12px;
+          right: -1px;
+          width: 12px;
+          height: 12px;
+          background: radial-gradient(circle at 100% 100%, transparent 11px, var(--tab-bg) 11px);
+          pointer-events: none;
+        }
+        
+        /* Bottom corner connector - circle at top-right creates curve connecting to sidebar */
+        .collapse-tab-right::after {
+          content: '';
+          position: absolute;
+          bottom: -12px;
+          right: -1px;
+          width: 12px;
+          height: 12px;
+          background: radial-gradient(circle at 100% 0%, transparent 11px, var(--tab-bg) 11px);
+          pointer-events: none;
+        }
+      `}</style>
     </div>
   );
 }

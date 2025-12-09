@@ -58,26 +58,11 @@ export function CollapsibleSidebar({ children }: CollapsibleSidebarProps) {
         </div>
       </div>
 
-      {/* Collapse/Expand Tab Container - positioned to float */}
+      {/* Collapse/Expand Tab - uses pseudo-elements for corner connectors */}
       <div className="relative flex-shrink-0 self-center z-10">
-        {/* Top rounded corner connector */}
-        <div 
-          className="absolute -top-[6px] left-0 w-[6px] h-[6px]"
-          style={{
-            background: 'radial-gradient(circle at 0% 100%, transparent 6px, rgb(0 0 0) 6px)'
-          }}
-        />
-        
-        {/* The tab button */}
         <button
           onClick={toggleSidebar}
-          className={cn(
-            "w-5 h-14",
-            "bg-black hover:bg-gray-900",
-            "border-y border-r border-gray-800 rounded-r-md",
-            "flex items-center justify-center transition-all duration-200",
-            "hover:w-6 group"
-          )}
+          className="collapse-tab-left group"
           aria-label="Toggle sidebar"
         >
           {isCollapsed ? (
@@ -86,15 +71,56 @@ export function CollapsibleSidebar({ children }: CollapsibleSidebarProps) {
             <ChevronLeft className="h-4 w-4 text-gray-400 group-hover:text-gray-200 transition-colors" />
           )}
         </button>
-
-        {/* Bottom rounded corner connector */}
-        <div 
-          className="absolute -bottom-[6px] left-0 w-[6px] h-[6px]"
-          style={{
-            background: 'radial-gradient(circle at 0% 0%, transparent 6px, rgb(0 0 0) 6px)'
-          }}
-        />
       </div>
+
+      <style jsx>{`
+        .collapse-tab-left {
+          --tab-bg: rgb(0 0 0); /* black */
+          position: relative;
+          width: 20px;
+          height: 56px;
+          background: var(--tab-bg);
+          border: 1px solid rgb(31 41 55); /* gray-800 */
+          border-left: none;
+          border-top-right-radius: 8px;
+          border-bottom-right-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: background-color 0.2s ease, width 0.2s ease;
+        }
+        
+        .collapse-tab-left:hover {
+          --tab-bg: rgb(17 24 39); /* gray-900 */
+          background: var(--tab-bg);
+          width: 24px;
+        }
+        
+        /* Top corner connector - circle at bottom-left creates curve connecting to sidebar */
+        .collapse-tab-left::before {
+          content: '';
+          position: absolute;
+          top: -12px;
+          left: -1px;
+          width: 12px;
+          height: 12px;
+          background: radial-gradient(circle at 0% 100%, transparent 11px, var(--tab-bg) 11px);
+          pointer-events: none;
+        }
+        
+        /* Bottom corner connector - circle at top-left creates curve connecting to sidebar */
+        .collapse-tab-left::after {
+          content: '';
+          position: absolute;
+          bottom: -12px;
+          left: -1px;
+          width: 12px;
+          height: 12px;
+          background: radial-gradient(circle at 0% 0%, transparent 11px, var(--tab-bg) 11px);
+          pointer-events: none;
+        }
+      `}</style>
     </div>
   );
 }
