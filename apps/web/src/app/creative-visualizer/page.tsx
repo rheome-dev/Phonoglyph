@@ -2032,6 +2032,7 @@ function CreativeVisualizerPage() {
                           onUnmapFeature={handleUnmapFeature}
                           onModulationAmountChange={handleModulationAmountChange}
                           activeSliderValues={activeSliderValues}
+                          baseParameterValues={baseParameterValues}
                           setActiveSliderValues={setActiveSliderValues}
                       onSelectedEffectsChange={() => {}} // <-- Added no-op
                       visualizerRef={visualizerRef}
