@@ -19,8 +19,8 @@ export function CollapsibleEffectsSidebar({
 
   return (
     <div className="relative flex h-full">
-      {/* Collapse/Expand Tab - uses pseudo-elements for corner connectors */}
-      <div className="relative flex-shrink-0 self-center z-10">
+      {/* Collapse/Expand Tab */}
+      <div className="relative flex-shrink-0 self-center">
         <button
           onClick={toggleSidebar}
           className="collapse-tab-right group"
@@ -67,44 +67,42 @@ export function CollapsibleEffectsSidebar({
           width: 20px;
           height: 56px;
           background: var(--tab-bg);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          border-right: none;
+          border: none;
           border-top-left-radius: 8px;
           border-bottom-left-radius: 8px;
           display: flex;
           align-items: center;
           justify-content: center;
           cursor: pointer;
-          transition: background-color 0.2s ease, width 0.2s ease;
+          transition: background-color 0.2s ease;
         }
         
         .collapse-tab-right:hover {
           --tab-bg: rgb(41 37 36); /* stone-800 */
           background: var(--tab-bg);
-          width: 24px;
         }
         
-        /* Top corner connector - circle at bottom-right creates curve connecting to sidebar */
+        /* Top corner connector - curve should face inward toward main content */
         .collapse-tab-right::before {
           content: '';
           position: absolute;
           top: -12px;
-          right: -1px;
+          right: 0;
           width: 12px;
           height: 12px;
-          background: radial-gradient(circle at 100% 100%, transparent 11px, var(--tab-bg) 11px);
+          background: radial-gradient(circle at 100% 0%, transparent 12px, var(--tab-bg) 12px);
           pointer-events: none;
         }
         
-        /* Bottom corner connector - circle at top-right creates curve connecting to sidebar */
+        /* Bottom corner connector - curve should face inward toward main content */
         .collapse-tab-right::after {
           content: '';
           position: absolute;
           bottom: -12px;
-          right: -1px;
+          right: 0;
           width: 12px;
           height: 12px;
-          background: radial-gradient(circle at 100% 0%, transparent 11px, var(--tab-bg) 11px);
+          background: radial-gradient(circle at 100% 100%, transparent 12px, var(--tab-bg) 12px);
           pointer-events: none;
         }
       `}</style>

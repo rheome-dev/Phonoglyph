@@ -58,8 +58,8 @@ export function CollapsibleSidebar({ children }: CollapsibleSidebarProps) {
         </div>
       </div>
 
-      {/* Collapse/Expand Tab - uses pseudo-elements for corner connectors */}
-      <div className="relative flex-shrink-0 self-center z-10">
+      {/* Collapse/Expand Tab */}
+      <div className="relative flex-shrink-0 self-center">
         <button
           onClick={toggleSidebar}
           className="collapse-tab-left group"
@@ -80,44 +80,42 @@ export function CollapsibleSidebar({ children }: CollapsibleSidebarProps) {
           width: 20px;
           height: 56px;
           background: var(--tab-bg);
-          border: 1px solid rgb(31 41 55); /* gray-800 */
-          border-left: none;
+          border: none;
           border-top-right-radius: 8px;
           border-bottom-right-radius: 8px;
           display: flex;
           align-items: center;
           justify-content: center;
           cursor: pointer;
-          transition: background-color 0.2s ease, width 0.2s ease;
+          transition: background-color 0.2s ease;
         }
         
         .collapse-tab-left:hover {
           --tab-bg: rgb(17 24 39); /* gray-900 */
           background: var(--tab-bg);
-          width: 24px;
         }
         
-        /* Top corner connector - circle at bottom-left creates curve connecting to sidebar */
+        /* Top corner connector - curve should face inward toward main content */
         .collapse-tab-left::before {
           content: '';
           position: absolute;
           top: -12px;
-          left: -1px;
+          left: 0;
           width: 12px;
           height: 12px;
-          background: radial-gradient(circle at 0% 100%, transparent 11px, var(--tab-bg) 11px);
+          background: radial-gradient(circle at 0% 0%, transparent 12px, var(--tab-bg) 12px);
           pointer-events: none;
         }
         
-        /* Bottom corner connector - circle at top-left creates curve connecting to sidebar */
+        /* Bottom corner connector - curve should face inward toward main content */
         .collapse-tab-left::after {
           content: '';
           position: absolute;
           bottom: -12px;
-          left: -1px;
+          left: 0;
           width: 12px;
           height: 12px;
-          background: radial-gradient(circle at 0% 0%, transparent 11px, var(--tab-bg) 11px);
+          background: radial-gradient(circle at 0% 100%, transparent 12px, var(--tab-bg) 12px);
           pointer-events: none;
         }
       `}</style>
