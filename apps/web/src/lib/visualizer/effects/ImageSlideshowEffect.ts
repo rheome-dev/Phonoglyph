@@ -448,8 +448,9 @@ export class ImageSlideshowEffect implements VisualEffect {
   }
 
   /**
-   * Resize image if it exceeds max dimension (for performance with high-res images)
-   * Also flips the image to match Three.js coordinate system
+   * Process image: resize if needed AND flip vertically for correct Three.js orientation.
+   * We always process through canvas to ensure consistent orientation regardless of
+   * browser ImageBitmap implementation differences.
    */
   private async resizeImageIfNeeded(imageBitmap: ImageBitmap, maxDimension: number = 2048): Promise<{ bitmap: ImageBitmap; wasResized: boolean; originalWidth: number; originalHeight: number }> {
       const originalWidth = imageBitmap.width;
@@ -458,33 +459,36 @@ export class ImageSlideshowEffect implements VisualEffect {
       // Check if resizing is needed
       const needsResize = imageBitmap.width > maxDimension || imageBitmap.height > maxDimension;
       
-      if (!needsResize) {
-          // No resize needed, return original
-          return { bitmap: imageBitmap, wasResized: false, originalWidth, originalHeight };
-      }
+      // Calculate target dimensions
+      let width = imageBitmap.width;
+      let height = imageBitmap.height;
       
-      // Resize only
-      const scale = Math.min(maxDimension / imageBitmap.width, maxDimension / imageBitmap.height);
-      const width = Math.floor(imageBitmap.width * scale);
-      const height = Math.floor(imageBitmap.height * scale);
+      if (needsResize) {
+          const scale = Math.min(maxDimension / imageBitmap.width, maxDimension / imageBitmap.height);
+          width = Math.floor(imageBitmap.width * scale);
+          height = Math.floor(imageBitmap.height * scale);
+      }
       
       const canvas = new OffscreenCanvas(width, height);
       const ctx = canvas.getContext('2d');
       if (!ctx) {
-          slideshowLog.warn('Could not get 2d context for resizing, using original');
+          slideshowLog.warn('Could not get 2d context for processing, using original');
           return { bitmap: imageBitmap, wasResized: false, originalWidth, originalHeight };
       }
       
-      // Draw without flipping - we'll use texture.flipY instead
+      // Flip vertically for correct WebGL/Three.js texture orientation
+      // This ensures consistent behavior regardless of browser ImageBitmap handling
+      ctx.translate(0, height);
+      ctx.scale(1, -1);
       ctx.drawImage(imageBitmap, 0, 0, width, height);
       
-      const resizedBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.92 });
-      const resizedBitmap = await createImageBitmap(resizedBlob);
+      const processedBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.92 });
+      const processedBitmap = await createImageBitmap(processedBlob);
       
       // Close original to free memory
       imageBitmap.close();
       
-      return { bitmap: resizedBitmap, wasResized: true, originalWidth, originalHeight };
+      return { bitmap: processedBitmap, wasResized: needsResize, originalWidth, originalHeight };
   }
 
   private loadTexture(url: string): Promise<THREE.Texture> {
@@ -530,9 +534,8 @@ export class ImageSlideshowEffect implements VisualEffect {
               texture.magFilter = THREE.LinearFilter;
               texture.generateMipmaps = false;
               texture.matrixAutoUpdate = true;
-              // IMPORTANT: flipY = false for ImageBitmap sources
-              // ImageBitmap from createImageBitmap() already has correct orientation,
-              // setting flipY = true would cause a double-flip (upside-down images)
+              // flipY = false because we pre-flip the image in resizeImageIfNeeded()
+              // via canvas transform. This ensures consistent orientation across browsers.
               texture.flipY = false;
               
               this.textureCache.set(url, texture);
