@@ -929,21 +929,26 @@ function CreativeVisualizerPage() {
 
   // Get the effect instance from the visualizer for the Inspector
   const getEditingEffectInstance = () => {
-    if (!editingEffectId || !visualizerRef.current) return null;
+    if (!editingEffectId) return null;
     
     // Try to get the effect by type first (for built-in effects)
-    const effectByType = visualizerRef.current.getEffectByType?.(editingEffectId);
-    if (effectByType) {
-      return {
-        id: editingEffectId,
-        name: effectByType.name,
-        description: effectByType.description,
-        parameters: effectByType.parameters
-      };
+    if (visualizerRef.current) {
+      const effectByType = visualizerRef.current.getEffectByType?.(editingEffectId);
+      if (effectByType) {
+        return {
+          id: editingEffectId,
+          name: effectByType.name,
+          description: effectByType.description,
+          parameters: effectByType.parameters
+        };
+      }
     }
     
     // Fall back to searching layers for timeline-based effect instances
-    const effectLayer = layers.find(l => l.id === editingEffectId && l.type === 'effect');
+    const effectLayer = layers.find(l => 
+      l.id === editingEffectId || 
+      (l.type === 'effect' && l.effectType === editingEffectId)
+    );
     if (effectLayer) {
       const effectDef = effects.find(e => e.id === effectLayer.effectType);
       return {
@@ -951,6 +956,18 @@ function CreativeVisualizerPage() {
         name: effectDef?.name || effectLayer.name,
         description: effectDef?.description || '',
         parameters: effectLayer.settings || {}
+      };
+    }
+    
+    // Final fallback: use the effect definition from the effects array
+    // This allows opening the Inspector even if the effect hasn't been added to the visualizer yet
+    const effectDef = effects.find(e => e.id === editingEffectId);
+    if (effectDef) {
+      return {
+        id: editingEffectId,
+        name: effectDef.name,
+        description: effectDef.description,
+        parameters: effectDef.parameters || {}
       };
     }
     

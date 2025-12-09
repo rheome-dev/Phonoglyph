@@ -557,12 +557,16 @@ export function EffectsLibrarySidebar({
 
   // Render the Inspector panel when an effect is being edited
   const renderInspector = () => {
-    if (!editingEffectId || !editingEffectInstance) return null;
+    if (!editingEffectId) return null;
 
     // Check if this is imageSlideshow (either by ID or by layer effectType)
+    // imageSlideshow can render even without an instance (uses effect definition)
     if (isEditingSlideshow) {
       return renderSlideshowInspector();
     }
+
+    // Other effects require an instance
+    if (!editingEffectInstance) return null;
 
     const effectInstance = editingEffectInstance;
     
@@ -823,7 +827,7 @@ export function EffectsLibrarySidebar({
       "h-full w-full flex flex-col bg-black border-l border-gray-800",
       className
     )}>
-      {editingEffectId && editingEffectInstance ? renderInspector() : renderLibrary()}
+      {editingEffectId && (editingEffectInstance || isEditingSlideshow) ? renderInspector() : renderLibrary()}
     </div>
   );
 }
