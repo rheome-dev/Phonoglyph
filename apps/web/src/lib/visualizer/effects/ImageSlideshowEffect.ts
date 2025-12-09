@@ -530,7 +530,10 @@ export class ImageSlideshowEffect implements VisualEffect {
               texture.magFilter = THREE.LinearFilter;
               texture.generateMipmaps = false;
               texture.matrixAutoUpdate = true;
-              texture.flipY = true; // Flip Y to match OpenGL texture coordinate system (bottom-left origin)
+              // IMPORTANT: flipY = false for ImageBitmap sources
+              // ImageBitmap from createImageBitmap() already has correct orientation,
+              // setting flipY = true would cause a double-flip (upside-down images)
+              texture.flipY = false;
               
               this.textureCache.set(url, texture);
               this.loadingImages.delete(url);
