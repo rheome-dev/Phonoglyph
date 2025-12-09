@@ -487,11 +487,13 @@ export function ThreeVisualizer({
             effectInstance.parameters.opacity = 1.0;
           }
           
-          const sortedParams = Object.entries(effectInstance.parameters).sort(([, a], [, b]) => {
-            if (typeof a === 'boolean' && typeof b !== 'boolean') return -1;
-            if (typeof a !== 'boolean' && typeof b === 'boolean') return 1;
-            return 0;
-          });
+          const sortedParams = Object.entries(effectInstance.parameters)
+            .filter(([paramName]) => paramName !== 'sourceTexture' && paramName !== 'id') // Filter out internal parameters
+            .sort(([, a], [, b]) => {
+              if (typeof a === 'boolean' && typeof b !== 'boolean') return -1;
+              if (typeof a !== 'boolean' && typeof b === 'boolean') return 1;
+              return 0;
+            });
           const initialPos = {
             x: 100 + (index * 50),
             y: 100 + (index * 50)
@@ -556,8 +558,8 @@ export function ThreeVisualizer({
                         </DroppableParameter>
                       );
                     }
-                    if ((paramName === 'highlightColor' || paramName === 'particleColor') && Array.isArray(value)) {
-                      const displayName = paramName === 'highlightColor' ? 'Highlight Color' : 'Particle Color';
+                    if ((paramName === 'highlightColor' || paramName === 'particleColor' || paramName === 'textColor') && Array.isArray(value)) {
+                      const displayName = paramName === 'highlightColor' ? 'Highlight Color' : paramName === 'particleColor' ? 'Particle Color' : 'Text Color';
                       return (
                         <div key={paramName} className="space-y-2">
                           <Label className="text-white/90 text-sm font-medium flex items-center justify-between">
