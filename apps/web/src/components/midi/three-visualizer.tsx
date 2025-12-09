@@ -106,8 +106,12 @@ export function ThreeVisualizer({
     });
 
     Object.entries(effectInstancesRef.current).forEach(([layerId, effect]) => {
-      const activeParams = activeSliderValues[layerId] || {};
-      const baseParams = baseParameterValues[layerId] || {};
+      const layerMeta = layers.find((l) => l.id === layerId);
+      const effectTypeKey = layerMeta?.type === 'effect' ? layerMeta.effectType : undefined;
+
+      // Fallback: if no params stored under layerId, check effectType key (covers older/new modals storing by effect type)
+      const activeParams = activeSliderValues[layerId] || (effectTypeKey ? activeSliderValues[effectTypeKey] : {}) || {};
+      const baseParams = baseParameterValues[layerId] || (effectTypeKey ? baseParameterValues[effectTypeKey] : {}) || {};
       const paramNames = new Set([
         ...Object.keys(activeParams),
         ...Object.keys(baseParams),
@@ -276,8 +280,10 @@ export function ThreeVisualizer({
           debugLog.log(`[ThreeVisualizer] Added effect instance: ${layer.id} (${layer.effectType}) with effect ID: ${effect.id}`);
           
           // Apply any saved parameter values from the store to the newly created effect
-          const activeParams = activeSliderValues[layer.id] || {};
-          const baseParams = baseParameterValues[layer.id] || {};
+          const layerMeta = layers.find((l) => l.id === layer.id);
+          const effectTypeKey = layerMeta?.type === 'effect' ? layerMeta.effectType : undefined;
+          const activeParams = activeSliderValues[layer.id] || (effectTypeKey ? activeSliderValues[effectTypeKey] : {}) || {};
+          const baseParams = baseParameterValues[layer.id] || (effectTypeKey ? baseParameterValues[effectTypeKey] : {}) || {};
           const paramNames = new Set([
             ...Object.keys(activeParams),
             ...Object.keys(baseParams),
@@ -285,7 +291,8 @@ export function ThreeVisualizer({
           paramNames.forEach((paramName) => {
             const value = activeParams[paramName] ?? baseParams[paramName];
             if (value !== undefined) {
-              manager.updateEffectParameter(layer.id, paramName, value);
+          // Apply with layerId (effect instance id)
+          manager.updateEffectParameter(layer.id, paramName, value);
               debugLog.log(`[ThreeVisualizer] Applied saved param: ${layer.id}.${paramName} = ${value}`);
             }
           });
