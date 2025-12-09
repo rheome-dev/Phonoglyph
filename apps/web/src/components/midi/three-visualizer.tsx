@@ -248,13 +248,19 @@ export function ThreeVisualizer({
   // Sync parameters from store to visualizer when activeSliderValues or baseParameterValues changes (e.g. hydration)
   // This handles the case where effects are created BEFORE hydration completes.
   useEffect(() => {
-    const manager = internalVisualizerRef.current;
-    if (!manager) return;
-
     // Debug: Trace parameter updates
     const activeCount = Object.keys(activeSliderValues).length;
     const baseCount = Object.keys(baseParameterValues).length;
+    const hasManager = !!internalVisualizerRef.current;
     
+    // Log sync attempts to diagnose race conditions
+    if (activeCount > 0 || baseCount > 0) {
+      debugLog.log('[ThreeVisualizer] Parameter sync check', { activeCount, baseCount, hasManager, isInitialized });
+    }
+
+    const manager = internalVisualizerRef.current;
+    if (!manager) return;
+
     if (activeCount > 0 || baseCount > 0) {
       debugLog.log('[ThreeVisualizer] Parameter sync triggered', { activeCount, baseCount });
     }
@@ -281,7 +287,7 @@ export function ThreeVisualizer({
         }
       });
     });
-  }, [activeSliderValues, baseParameterValues]);
+  }, [activeSliderValues, baseParameterValues, isInitialized]);
 
   // Expose visualizer ref to parent
   useEffect(() => {
