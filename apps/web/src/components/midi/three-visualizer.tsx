@@ -86,6 +86,51 @@ export function ThreeVisualizer({
   const [canvasSize, setCanvasSize] = useState({ width: 400, height: 711 });
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const effectInstancesRef = useRef<{ [id: string]: VisualEffect }>({});
+
+  // Helper: apply parameter values from store to effect instances
+  const syncParametersToEffects = useCallback(() => {
+    const manager = internalVisualizerRef.current;
+    if (!manager) {
+      console.log('[ThreeVisualizer] syncParameters: manager not ready');
+      return;
+    }
+
+    const activeCount = Object.keys(activeSliderValues).length;
+    const baseCount = Object.keys(baseParameterValues).length;
+    console.log('[ThreeVisualizer] syncParameters start', {
+      activeCount,
+      baseCount,
+      isInitialized,
+      effectCount: Object.keys(effectInstancesRef.current).length,
+    });
+
+    Object.entries(effectInstancesRef.current).forEach(([layerId, effect]) => {
+      const layerPrefix = `${layerId}-`;
+
+      // Collect relevant keys from active + base (active wins)
+      const relevantKeys = new Set([
+        ...Object.keys(activeSliderValues).filter((k) => k.startsWith(layerPrefix)),
+        ...Object.keys(baseParameterValues).filter((k) => k.startsWith(layerPrefix)),
+      ]);
+
+      relevantKeys.forEach((paramKey) => {
+        const paramName = paramKey.substring(layerPrefix.length);
+        const value = activeSliderValues[paramKey] ?? baseParameterValues[paramKey];
+
+        const currentVal = (effect.parameters as any)[paramName];
+        if (value === undefined) return;
+        if (currentVal != value) {
+          console.log('[ThreeVisualizer] Hydrating param', {
+            layerId,
+            paramName,
+            from: currentVal,
+            to: value,
+          });
+          manager.updateEffectParameter(layerId, paramName, value);
+        }
+      });
+    });
+  }, [activeSliderValues, baseParameterValues, isInitialized]);
   
   // Get aspect ratio configuration
   const aspectRatioConfig = getAspectRatioConfig(aspectRatio);
@@ -245,49 +290,10 @@ export function ThreeVisualizer({
     }
   }, [layers, internalVisualizerRef.current]);
 
-  // Sync parameters from store to visualizer when activeSliderValues or baseParameterValues changes (e.g. hydration)
-  // This handles the case where effects are created BEFORE hydration completes.
+  // Sync parameters when store values or initialization/layers change
   useEffect(() => {
-    // Debug: Trace parameter updates
-    const activeCount = Object.keys(activeSliderValues).length;
-    const baseCount = Object.keys(baseParameterValues).length;
-    const hasManager = !!internalVisualizerRef.current;
-    
-    // Log sync attempts to diagnose race conditions
-    if (activeCount > 0 || baseCount > 0) {
-      debugLog.log('[ThreeVisualizer] Parameter sync check', { activeCount, baseCount, hasManager, isInitialized });
-    }
-
-    const manager = internalVisualizerRef.current;
-    if (!manager) return;
-
-    if (activeCount > 0 || baseCount > 0) {
-      debugLog.log('[ThreeVisualizer] Parameter sync triggered', { activeCount, baseCount });
-    }
-
-    Object.entries(effectInstancesRef.current).forEach(([layerId, effect]) => {
-      const layerPrefix = `${layerId}-`;
-      
-      // Check both active and base values, with active taking precedence
-      const relevantKeys = new Set([
-        ...Object.keys(activeSliderValues).filter(k => k.startsWith(layerPrefix)),
-        ...Object.keys(baseParameterValues).filter(k => k.startsWith(layerPrefix))
-      ]);
-
-      relevantKeys.forEach(paramKey => {
-        const paramName = paramKey.substring(layerPrefix.length);
-        // Prefer active, fallback to base
-        const value = activeSliderValues[paramKey] ?? baseParameterValues[paramKey];
-
-        // Only update if value differs to avoid redundant updates during interaction
-        // Use loose equality to handle potential type mismatches (string vs number)
-        if (value !== undefined && (effect.parameters as any)[paramName] != value) {
-          debugLog.log(`[ThreeVisualizer] Hydrating param ${layerId}.${paramName}: ${(effect.parameters as any)[paramName]} -> ${value}`);
-          manager.updateEffectParameter(layerId, paramName, value);
-        }
-      });
-    });
-  }, [activeSliderValues, baseParameterValues, isInitialized]);
+    syncParametersToEffects();
+  }, [syncParametersToEffects, layers, isInitialized]);
 
   // Expose visualizer ref to parent
   useEffect(() => {
