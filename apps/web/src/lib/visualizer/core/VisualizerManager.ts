@@ -554,6 +554,16 @@ export class VisualizerManager {
   public updateTimelineState(layers: any[], currentTime: number): void {
     this.timelineLayers = layers;
     this.timelineCurrentTime = currentTime;
+
+    // Sync layer z-indices from timeline to compositor
+    if (this.multiLayerCompositor) {
+      layers.forEach(layer => {
+        if (typeof layer.zIndex === 'number') {
+          // The compositor handles re-sorting internally when zIndex is updated
+          this.multiLayerCompositor.updateLayer(layer.id, { zIndex: layer.zIndex });
+        }
+      });
+    }
   }
   
   // Update methods for real data
