@@ -249,6 +249,12 @@ export function ThreeVisualizer({
     const manager = internalVisualizerRef.current;
     if (!manager) return;
 
+    // Debug: Trace activeSliderValues updates
+    const paramCount = Object.keys(activeSliderValues).length;
+    if (paramCount > 0) {
+      debugLog.log('[ThreeVisualizer] activeSliderValues updated, count:', paramCount);
+    }
+
     Object.entries(effectInstancesRef.current).forEach(([layerId, effect]) => {
       const layerPrefix = `${layerId}-`;
       Object.entries(activeSliderValues).forEach(([paramKey, value]) => {
@@ -257,6 +263,7 @@ export function ThreeVisualizer({
           // Only update if value differs to avoid redundant updates during interaction
           // Use loose equality to handle potential type mismatches (string vs number)
           if ((effect.parameters as any)[paramName] != value) {
+            debugLog.log(`[ThreeVisualizer] Hydrating param ${layerId}.${paramName}: ${(effect.parameters as any)[paramName]} -> ${value}`);
             manager.updateEffectParameter(layerId, paramName, value);
           }
         }

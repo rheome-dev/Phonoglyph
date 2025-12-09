@@ -1218,11 +1218,7 @@ function CreativeVisualizerPage() {
         const opacityMappings = cachedMappings.filter(([key]) => key.includes('-opacity'));
         
         if (newMappings.length > 0) {
-          console.log('🎯 Mappings updated:', {
-            totalMappings: cachedMappings.length,
-            newMappings: newMappings.map(([key, featureId]) => ({ paramKey: key, featureId })),
-            opacityMappings: opacityMappings.map(([key, featureId]) => ({ paramKey: key, featureId }))
-          });
+          // Log removed to reduce console spam
         }
       }
 

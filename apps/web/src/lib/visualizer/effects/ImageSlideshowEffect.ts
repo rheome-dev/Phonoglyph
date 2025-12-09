@@ -2,11 +2,11 @@ import * as THREE from 'three';
 import { VisualEffect, AudioAnalysisData, LiveMIDIData } from '@/types/visualizer';
 import { debugLog } from '@/lib/utils';
 
-// Always log ImageSlideshowEffect logs for debugging (bypass debugLog conditional)
+// Use standard debugLog for ImageSlideshowEffect to allow suppression
 const slideshowLog = {
-  log: (...args: any[]) => console.log('🖼️', ...args),
-  warn: (...args: any[]) => console.warn('🖼️', ...args),
-  error: (...args: any[]) => console.error('🖼️', ...args),
+  log: (...args: any[]) => debugLog.log('🖼️', ...args),
+  warn: (...args: any[]) => debugLog.warn('🖼️', ...args),
+  error: (...args: any[]) => debugLog.error('🖼️', ...args),
 };
 
 export class ImageSlideshowEffect implements VisualEffect {
