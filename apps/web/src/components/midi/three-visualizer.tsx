@@ -106,17 +106,22 @@ export function ThreeVisualizer({
 
     Object.entries(effectInstancesRef.current).forEach(([layerId, effect]) => {
       const layerPrefix = `${layerId}-`;
+      // Also try effectType prefix (handles cases where saved keys used effect type instead of layer id)
+      const layerMeta = layers.find((l) => l.id === layerId);
+      const effectTypePrefix = layerMeta?.type === 'effect' && layerMeta.effectType ? `${layerMeta.effectType}-` : null;
 
-      // Collect relevant keys from active + base (active wins)
+      // Collect relevant keys from active + base (active wins) using both prefixes
       const relevantKeys = new Set([
-        ...Object.keys(activeSliderValues).filter((k) => k.startsWith(layerPrefix)),
-        ...Object.keys(baseParameterValues).filter((k) => k.startsWith(layerPrefix)),
+        ...Object.keys(activeSliderValues).filter((k) => k.startsWith(layerPrefix) || (effectTypePrefix && k.startsWith(effectTypePrefix))),
+        ...Object.keys(baseParameterValues).filter((k) => k.startsWith(layerPrefix) || (effectTypePrefix && k.startsWith(effectTypePrefix))),
       ]);
 
       const relevantArray = Array.from(relevantKeys);
       console.log('[ThreeVisualizer] layer sync', {
         layerId,
         paramKeys: relevantArray,
+        layerPrefix,
+        effectTypePrefix,
         effectParamKeys: Object.keys(effect.parameters),
       });
       if (relevantArray.length === 0) {
