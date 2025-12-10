@@ -79,7 +79,7 @@ export function CollapsibleSidebar({ children }: CollapsibleSidebarProps) {
           right: -20px;
           transform: translateY(-50%);
           width: 20px;
-          height: 56px;
+          height: 80px;
           background: var(--tab-bg);
           border: none;
           border-top-right-radius: 8px;

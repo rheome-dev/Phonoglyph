@@ -66,7 +66,7 @@ export function CollapsibleEffectsSidebar({
           left: -20px;
           transform: translateY(-50%);
           width: 20px;
-          height: 56px;
+          height: 80px;
           background: var(--tab-bg);
           border: none;
           border-top-left-radius: 8px;
