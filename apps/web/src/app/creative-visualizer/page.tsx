@@ -84,6 +84,8 @@ const EffectsLibrarySidebarWithHud: React.FC<{
   // Overlay sizing and stem inheritance props
   aspectRatio?: string;
   masterStemId?: string | null;
+  availableStems?: Array<{ id: string; file_name: string; stem_type?: string; is_master?: boolean }>;
+  onLayerUpdate?: (layerId: string, updates: Partial<Layer>) => void;
 }> = ({ 
   effects, 
   selectedEffects, 
@@ -111,7 +113,9 @@ const EffectsLibrarySidebarWithHud: React.FC<{
   layers: layersProp,
   setActiveParam,
   aspectRatio = 'mobile',
-  masterStemId
+  masterStemId,
+  availableStems,
+  onLayerUpdate
 }) => {
   const { addLayer, duration, layers } = useTimelineStore((state) => ({
     addLayer: state.addLayer,
@@ -220,6 +224,9 @@ const EffectsLibrarySidebarWithHud: React.FC<{
       modulatedParameterValues={modulatedParameterValues}
       layers={layersProp || layers}
       setActiveParam={setActiveParam}
+      availableStems={availableStems}
+      masterStemId={masterStemId}
+      onLayerUpdate={onLayerUpdate}
     />
   );
 };
@@ -2220,6 +2227,8 @@ function CreativeVisualizerPage() {
                 setActiveParam={setActiveParam}
                 aspectRatio={visualizerAspectRatio}
                 masterStemId={projectAudioFiles?.files?.find(f => f.is_master)?.id ?? null}
+                availableStems={sortedAvailableStems}
+                onLayerUpdate={updateLayer}
               />
             </CollapsibleEffectsSidebar>
 

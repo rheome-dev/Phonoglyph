@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useDrag } from 'react-dnd';
+import { useDrag, useDrop } from 'react-dnd';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ChevronDown, ChevronRight, ChevronLeft, Search, X } from 'lucide-react';
@@ -10,6 +10,7 @@ import { Switch } from '@/components/ui/switch';
 import { DroppableParameter } from '@/components/ui/droppable-parameter';
 import { makeParamKey } from '@/lib/visualizer/paramKeys';
 import { CollectionManager } from '@/components/assets/CollectionManager';
+import { Badge } from '@/components/ui/badge';
 import type { Layer } from '@/types/video-composition';
 
 // Extended interface to support categorization and rarity for the UI
@@ -57,6 +58,10 @@ interface EffectsLibrarySidebarProps {
   modulatedParameterValues?: Record<string, number>;
   layers?: Layer[];
   setActiveParam?: (effectId: string, paramName: string, value: any) => void;
+  // Overlay stem mapping props
+  availableStems?: Array<{ id: string; file_name: string; stem_type?: string; is_master?: boolean }>;
+  masterStemId?: string | null;
+  onLayerUpdate?: (layerId: string, updates: Partial<Layer>) => void;
 }
 
 // Helper: getSliderMax for effect parameter sliders
@@ -242,7 +247,10 @@ export function EffectsLibrarySidebar({
   setActiveCollectionId,
   modulatedParameterValues = {},
   layers = [],
-  setActiveParam
+  setActiveParam,
+  availableStems = [],
+  masterStemId,
+  onLayerUpdate
 }: EffectsLibrarySidebarProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({
@@ -553,9 +561,316 @@ export function EffectsLibrarySidebar({
     );
   };
 
+  // Check if we're editing an overlay
+  const isEditingOverlay = editingEffectId && layers.find(l => l.id === editingEffectId && l.type === 'overlay');
+
+  // Stem drop zone hook (must be at component level)
+  const overlayLayer = isEditingOverlay ? layers.find(l => l.id === editingEffectId) : null;
+  const [{ isOver, canDrop }, drop] = useDrop({
+    accept: 'AUDIO_STEM',
+    drop: (item: any) => {
+      if (overlayLayer && onLayerUpdate && editingEffectId) {
+        const currentSettings = (overlayLayer as any).settings || {};
+        onLayerUpdate(editingEffectId, {
+          settings: {
+            ...currentSettings,
+            stemId: item.id,
+            stem: { id: item.id, name: item.stemType || item.file_name, stemType: item.stemType }
+          }
+        });
+      }
+    },
+    collect: (monitor) => ({
+      isOver: monitor.isOver(),
+      canDrop: monitor.canDrop(),
+    }),
+  });
+  
+  const dropRef = React.useCallback((node: HTMLDivElement | null) => {
+    drop(node);
+  }, [drop]);
+
+  // Render overlay inspector with stem mapping and grouped parameters
+  const renderOverlayInspector = () => {
+    if (!editingEffectId || !editingEffectInstance) return null;
+    
+    if (!overlayLayer || overlayLayer.type !== 'overlay') return null;
+    
+    const settings = (overlayLayer as any).settings || {};
+    const stemId = settings.stemId || settings.stem?.id || masterStemId;
+    const stem = availableStems.find(s => s.id === stemId);
+    const stemName = stem?.stem_type || stem?.file_name || (stemId === masterStemId ? 'Master' : 'Unknown');
+    
+    // Group parameters: toggles with their related parameters
+    const groupedParams: Array<{
+      group: string;
+      toggle?: { name: string; value: boolean };
+      params: Array<{ name: string; value: any; type: 'number' | 'string' | 'select' | 'color' }>;
+    }> = [];
+    
+    const params = editingEffectInstance.parameters;
+    const processedParams = new Set<string>();
+    
+    // Group outline parameters
+    if ('outline' in params || 'outlineWidth' in params || 'outlineColor' in params) {
+      groupedParams.push({
+        group: 'outline',
+        toggle: 'outline' in params ? { name: 'outline', value: params.outline as boolean } : undefined,
+        params: [
+          ...('outlineWidth' in params ? [{ name: 'outlineWidth', value: params.outlineWidth, type: 'number' as const }] : []),
+          ...('outlineColor' in params ? [{ name: 'outlineColor', value: params.outlineColor, type: 'color' as const }] : []),
+        ]
+      });
+      if ('outline' in params) processedParams.add('outline');
+      if ('outlineWidth' in params) processedParams.add('outlineWidth');
+      if ('outlineColor' in params) processedParams.add('outlineColor');
+    }
+    
+    // Group drop shadow parameters
+    if ('dropShadow' in params || 'shadowColor' in params || 'shadowBlur' in params) {
+      groupedParams.push({
+        group: 'dropShadow',
+        toggle: 'dropShadow' in params ? { name: 'dropShadow', value: params.dropShadow as boolean } : undefined,
+        params: [
+          ...('shadowColor' in params ? [{ name: 'shadowColor', value: params.shadowColor, type: 'color' as const }] : []),
+          ...('shadowBlur' in params ? [{ name: 'shadowBlur', value: params.shadowBlur, type: 'number' as const }] : []),
+        ]
+      });
+      if ('dropShadow' in params) processedParams.add('dropShadow');
+      if ('shadowColor' in params) processedParams.add('shadowColor');
+      if ('shadowBlur' in params) processedParams.add('shadowBlur');
+    }
+    
+    // Group transient detector parameters
+    if ('showTransients' in params || 'transientColor' in params || 'transientSensitivity' in params) {
+      groupedParams.push({
+        group: 'transients',
+        toggle: 'showTransients' in params ? { name: 'showTransients', value: params.showTransients as boolean } : undefined,
+        params: [
+          ...('transientColor' in params ? [{ name: 'transientColor', value: params.transientColor, type: 'color' as const }] : []),
+          ...('transientSensitivity' in params ? [{ name: 'transientSensitivity', value: params.transientSensitivity, type: 'number' as const }] : []),
+        ]
+      });
+      if ('showTransients' in params) processedParams.add('showTransients');
+      if ('transientColor' in params) processedParams.add('transientColor');
+      if ('transientSensitivity' in params) processedParams.add('transientSensitivity');
+    }
+    
+    // Add remaining parameters that aren't grouped
+    Object.entries(params).forEach(([name, value]) => {
+      if (processedParams.has(name) || name === 'sourceTexture' || name === 'id') return;
+      
+      let type: 'number' | 'string' | 'select' | 'color' = 'string';
+      if (typeof value === 'number') type = 'number';
+      else if (typeof value === 'boolean') {
+        // Standalone boolean - add to its own group
+        groupedParams.push({
+          group: name,
+          toggle: { name, value: value as boolean },
+          params: []
+        });
+        processedParams.add(name);
+        return;
+      } else if (['colorMap', 'colorScheme', 'style', 'meterType', 'dataSource'].includes(name)) {
+        type = 'select';
+      } else if (['color', 'shadowColor', 'outlineColor', 'transientColor', 'peakColor', 'traceColor', 'gridColor', 'barColor', 'fontColor'].includes(name)) {
+        type = 'color';
+      }
+      
+      groupedParams.push({
+        group: name,
+        params: [{ name, value, type }]
+      });
+      processedParams.add(name);
+    });
+    
+    const handleUnlinkStem = () => {
+      if (overlayLayer && onLayerUpdate && editingEffectId) {
+        const currentSettings = (overlayLayer as any).settings || {};
+        onLayerUpdate(editingEffectId, {
+          settings: {
+            ...currentSettings,
+            stemId: undefined,
+            stem: undefined
+          }
+        });
+      }
+    };
+    
+    return (
+      <div className="h-full flex flex-col">
+        {/* Header with Back button */}
+        <div className="p-3 border-b border-gray-800">
+          <div className="flex items-center gap-2 mb-2">
+            <button
+              onClick={onBack}
+              className="p-1 rounded hover:bg-gray-700 transition-colors"
+              aria-label="Back to library"
+            >
+              <ChevronLeft className="h-4 w-4 text-gray-400" />
+            </button>
+            <h2 className="font-mono text-sm font-bold text-gray-100 uppercase tracking-wider">
+              {editingEffectInstance.name.replace(' Effect', '')}
+            </h2>
+          </div>
+          <p className="text-xs text-white/60 pl-6">{editingEffectInstance.description}</p>
+        </div>
+
+        {/* Scrollable Parameters */}
+        <div className="flex-1 overflow-y-auto p-3 space-y-4">
+          {/* Stem Mapping Section */}
+          <div className="space-y-2 pb-4 border-b border-gray-800">
+            <Label className="text-white/80 text-xs font-mono">Audio Source</Label>
+            <div className="flex items-center justify-between">
+              <label className="text-white/60 text-xs">Audio Stem</label>
+              <div
+                ref={dropRef}
+                className={cn(
+                  "relative flex items-center justify-center w-8 h-6 rounded-full cursor-pointer transition-all duration-200",
+                  stemId
+                    ? "bg-emerald-600/20 border-2 border-emerald-500/50 shadow-lg"
+                    : "bg-stone-700/50 border-2 border-stone-600/50 shadow-inner",
+                  isOver && canDrop && "scale-110 bg-emerald-500/30 border-emerald-400 shadow-lg ring-2 ring-emerald-400/50",
+                  !stemId && !isOver && "hover:bg-stone-600/60 hover:border-stone-500/60"
+                )}
+              >
+                {!stemId && (
+                  <div className={cn(
+                    "w-2 h-2 rounded-full transition-all duration-200",
+                    isOver && canDrop ? "bg-emerald-400 scale-125" : "bg-stone-400/50"
+                  )} />
+                )}
+                {stemId && (
+                  <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                )}
+              </div>
+            </div>
+            {stemId && (
+              <div className="flex items-center justify-between">
+                <Badge className="bg-emerald-600/90 text-emerald-100 text-xs px-2 py-1 border border-emerald-500/50">
+                  {stemName}
+                </Badge>
+                <button
+                  onClick={handleUnlinkStem}
+                  className="text-xs text-red-400 hover:text-red-300 transition-colors"
+                >
+                  Unlink
+                </button>
+              </div>
+            )}
+            {!stemId && isOver && canDrop && (
+              <div className="text-xs text-emerald-400/80 font-mono animate-pulse">
+                Drop to assign stem
+              </div>
+            )}
+          </div>
+          
+          {/* Grouped Parameters */}
+          {groupedParams.map((group) => (
+            <div key={group.group} className="space-y-2">
+              {group.toggle && (
+                <div className="flex items-center justify-between">
+                  <Label className="text-white/80 text-xs font-mono">
+                    {group.toggle.name.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase())}
+                  </Label>
+                  <Switch
+                    checked={activeSliderValues[editingEffectId]?.[group.toggle.name] ?? group.toggle.value}
+                    onCheckedChange={(checked) => onParameterChange?.(editingEffectId, group.toggle!.name, checked)}
+                  />
+                </div>
+              )}
+              {group.params.map((param) => {
+                if (param.type === 'number') {
+                  const sliderMax = getSliderMax(param.name);
+                  const currentValue = activeSliderValues[editingEffectId]?.[param.name] ?? param.value;
+                  return (
+                    <div key={param.name} className="space-y-1">
+                      <Label className="text-white/70 text-xs font-mono">
+                        {param.name.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase())}
+                      </Label>
+                      <Slider
+                        value={[currentValue]}
+                        onValueChange={([val]) => onParameterChange?.(editingEffectId, param.name, val)}
+                        min={0}
+                        max={sliderMax}
+                        step={getSliderStep(param.name)}
+                        className="w-full"
+                      />
+                      <div className="text-xs text-white/50">{currentValue}</div>
+                    </div>
+                  );
+                } else if (param.type === 'color') {
+                  const currentValue = activeSliderValues[editingEffectId]?.[param.name] ?? param.value;
+                  return (
+                    <div key={param.name} className="flex items-center justify-between">
+                      <Label className="text-white/70 text-xs font-mono">
+                        {param.name.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase())}
+                      </Label>
+                      <div className="flex items-center gap-2">
+                        <span className="w-6 h-6 rounded border border-white/40" style={{ background: currentValue }} />
+                        <input
+                          type="color"
+                          value={currentValue}
+                          onChange={e => onParameterChange?.(editingEffectId, param.name, e.target.value)}
+                          className="w-8 h-6 rounded border border-white/30 bg-transparent cursor-pointer"
+                        />
+                      </div>
+                    </div>
+                  );
+                } else if (param.type === 'select') {
+                  const selectOptions: Record<string, string[]> = {
+                    colorMap: ['Classic', 'Inferno', 'Viridis', 'Rainbow'],
+                    colorScheme: ['Classic', 'Rainbow', 'Viridis', 'Inferno'],
+                    style: ['Needle', 'Bar'],
+                    meterType: ['RMS', 'Peak'],
+                    dataSource: ['MIDI', 'LUFS/RMS', 'FFT Summary', 'All'],
+                  };
+                  const currentValue = activeSliderValues[editingEffectId]?.[param.name] ?? param.value;
+                  return (
+                    <div key={param.name} className="flex items-center justify-between">
+                      <Label className="text-white/70 text-xs font-mono">
+                        {param.name.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase())}
+                      </Label>
+                      <select
+                        value={currentValue}
+                        onChange={e => onParameterChange?.(editingEffectId, param.name, e.target.value)}
+                        className="bg-gray-800 border border-gray-600 text-white text-xs rounded px-2 py-1"
+                      >
+                        {selectOptions[param.name]?.map(opt => (
+                          <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                }
+                return null;
+              })}
+            </div>
+          ))}
+          
+          {/* Effect Enabled Toggle */}
+          <div className="pt-4 border-t border-white/20">
+            <div className="flex items-center justify-between">
+              <Label className="text-white/80 text-xs font-mono">Effect Enabled</Label>
+              <Switch 
+                checked={selectedEffects[editingEffectId]}
+                onCheckedChange={(checked) => onEffectToggle(editingEffectId)}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // Render the Inspector panel when an effect is being edited
   const renderInspector = () => {
     if (!editingEffectId) return null;
+
+    // Check if this is an overlay - use special overlay inspector
+    if (isEditingOverlay) {
+      return renderOverlayInspector();
+    }
 
     // Check if this is imageSlideshow (either by ID or by layer effectType)
     // imageSlideshow can render even without an instance (uses effect definition)
