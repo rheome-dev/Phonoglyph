@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { ChevronLeft, ChevronRight, Palette } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface CollapsibleEffectsSidebarProps {
@@ -27,17 +27,6 @@ export function CollapsibleEffectsSidebar({
         )}
       >
         <div className="h-full flex flex-col min-w-0">
-          {/* Header */}
-          <div className={cn(
-            "flex items-center p-4 border-b border-white/10",
-            isCollapsed ? 'justify-center' : 'justify-between'
-          )}>
-            <div className={cn("flex items-center gap-2", isCollapsed && "hidden")}>
-              <Palette className="h-5 w-5 text-white/70" />
-              <span className="text-lg font-semibold text-white">Effects Library</span>
-            </div>
-          </div>
-
           {/* Content */}
           <div className="flex-1 overflow-hidden">
             {!isCollapsed && children}
