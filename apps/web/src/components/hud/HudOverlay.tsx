@@ -389,6 +389,7 @@ export function HudOverlay({
         if (Array.isArray(featureData) && featureData.length > 0) {
           // Draw bipolar waveform exactly like stem-waveform component
           const midY = height / 2;
+          const lineWidth = typeof settings.lineWidth === 'number' ? settings.lineWidth : 1;
           
           // Draw center line
           ctx.beginPath();
@@ -401,7 +402,7 @@ export function HudOverlay({
           // Draw bipolar waveform
           ctx.beginPath();
           ctx.strokeStyle = settings.color || '#4db3fa'; // Use settings color or fallback to blue
-          ctx.lineWidth = 1;
+          ctx.lineWidth = lineWidth;
           
           for (let i = 0; i < width; i++) {
             const idx = Math.floor(i / width * (featureData.length - 1));
@@ -809,6 +810,13 @@ export function HudOverlay({
             right: featureData.stereoWindow_right
           };
         }
+        
+        const traceColor = settings.traceColor || '#00ffff';
+        const glowIntensity = typeof settings.glowIntensity === 'number' ? settings.glowIntensity : 0;
+        const pointSize = typeof settings.pointSize === 'number' ? settings.pointSize : 2;
+        const showGrid = !!settings.showGrid;
+        const cornerRadius = typeof settings.cornerRadius === 'number' ? settings.cornerRadius : 0;
+        
         if (stereoWindow && stereoWindow.left && stereoWindow.right) {
           // Debug log
           debugLog.log('[stereometer render]', {
@@ -821,9 +829,71 @@ export function HudOverlay({
           const left = stereoWindow.left;
           const right = stereoWindow.right;
           const N = Math.min(left.length, right.length, 1024);
+          
           ctx.save();
+          
+          // Apply corner radius clipping if set
+          if (cornerRadius > 0) {
+            ctx.beginPath();
+            ctx.roundRect(0, 0, size.width, size.height, cornerRadius);
+            ctx.clip();
+          }
+          
+          // Draw grid if enabled
+          if (showGrid) {
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.lineWidth = 0.5;
+            // Vertical grid lines
+            for (let x = 0; x <= size.width; x += size.width / 10) {
+              ctx.beginPath();
+              ctx.moveTo(x, 0);
+              ctx.lineTo(x, size.height);
+              ctx.stroke();
+            }
+            // Horizontal grid lines
+            for (let y = 0; y <= size.height; y += size.height / 10) {
+              ctx.beginPath();
+              ctx.moveTo(0, y);
+              ctx.lineTo(size.width, y);
+              ctx.stroke();
+            }
+            // Center crosshair
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(size.width / 2, 0);
+            ctx.lineTo(size.width / 2, size.height);
+            ctx.moveTo(0, size.height / 2);
+            ctx.lineTo(size.width, size.height / 2);
+            ctx.stroke();
+          }
+          
+          // Draw glow effect if enabled
+          if (glowIntensity > 0) {
+            ctx.save();
+            ctx.globalAlpha = glowIntensity * 0.3;
+            for (let i = 0; i < N; i += Math.max(1, Math.floor(N / 200))) {
+              const lx = left[i];
+              const ry = right[i];
+              const x = ((lx + 1) / 2) * size.width;
+              const y = ((ry + 1) / 2) * size.height;
+              const gradient = ctx.createRadialGradient(x, y, 0, x, y, pointSize * 3);
+              const rgbaColor = traceColor.startsWith('#') 
+                ? `rgba(${parseInt(traceColor.slice(1, 3), 16)}, ${parseInt(traceColor.slice(3, 5), 16)}, ${parseInt(traceColor.slice(5, 7), 16)}, ${glowIntensity * 0.3})`
+                : traceColor;
+              gradient.addColorStop(0, rgbaColor);
+              gradient.addColorStop(1, 'transparent');
+              ctx.fillStyle = gradient;
+              ctx.beginPath();
+              ctx.arc(x, y, pointSize * 3, 0, Math.PI * 2);
+              ctx.fill();
+            }
+            ctx.restore();
+          }
+          
+          // Draw main trace
           ctx.globalAlpha = 0.8;
-          ctx.strokeStyle = '#00ffff';
+          ctx.strokeStyle = traceColor;
           ctx.lineWidth = 1.5;
           ctx.beginPath();
           for (let i = 0; i < N; i++) {
@@ -836,18 +906,22 @@ export function HudOverlay({
             else ctx.lineTo(x, y);
           }
           ctx.stroke();
-          // Optionally, draw fading trail/cloud
-          ctx.globalAlpha = 0.2;
-          for (let i = 0; i < N; i += 4) {
-            const lx = left[i];
-            const ry = right[i];
-            const x = ((lx + 1) / 2) * size.width;
-            const y = ((ry + 1) / 2) * size.height;
-            ctx.beginPath();
-            ctx.arc(x, y, 2, 0, Math.PI * 2);
-            ctx.fillStyle = '#00ffff';
-            ctx.fill();
+          
+          // Draw points if pointSize > 1
+          if (pointSize > 1) {
+            ctx.globalAlpha = 0.4;
+            for (let i = 0; i < N; i += Math.max(1, Math.floor(N / 100))) {
+              const lx = left[i];
+              const ry = right[i];
+              const x = ((lx + 1) / 2) * size.width;
+              const y = ((ry + 1) / 2) * size.height;
+              ctx.beginPath();
+              ctx.arc(x, y, pointSize / 2, 0, Math.PI * 2);
+              ctx.fillStyle = traceColor;
+              ctx.fill();
+            }
           }
+          
           ctx.restore();
         } else {
           drawStereometer(ctx, size.width, size.height);
@@ -877,53 +951,6 @@ export function HudOverlay({
       case 'chromaWheel': {
         // featureData.chroma should be an array of 12 values (0-1)
         drawChromaWheel(ctx, size.width, size.height, featureData && featureData.chroma, settings);
-        break;
-      }
-      case 'waveform': {
-        if (Array.isArray(featureData) && featureData.length > 0) {
-          // Draw bipolar waveform exactly like stem-waveform component
-          const midY = size.height / 2;
-      
-          // Draw center line
-          ctx.beginPath();
-          ctx.moveTo(0, midY);
-          ctx.lineTo(size.width, midY);
-          ctx.strokeStyle = '#444';
-          ctx.lineWidth = 1;
-          ctx.stroke();
-      
-          // Draw bipolar waveform
-          ctx.beginPath();
-          ctx.strokeStyle = settings.color || '#4db3fa'; // Use settings color or fallback to blue
-          ctx.lineWidth = 1;
-      
-          for (let i = 0; i < size.width; i++) {
-            const idx = Math.floor(i / size.width * (featureData.length - 1));
-            // Normalize to [-1, 1] for bipolar display
-            const normalizedVal = (featureData[idx] - 0.5) * 2;
-            const pointHeight = normalizedVal * (midY * 0.8); // Scale to 80% of height
-            const x = i;
-            ctx.moveTo(x, midY - pointHeight);
-            ctx.lineTo(x, midY + pointHeight);
-          }
-          ctx.stroke();
-        } else {
-          drawWaveform(ctx, size.width, size.height);
-        }
-        // Transient detector
-        if (settings.showTransients && Array.isArray(featureData.transients)) {
-          ctx.save();
-          ctx.strokeStyle = settings.transientColor || '#ff0';
-          ctx.lineWidth = 1.5;
-          for (const t of featureData.transients) {
-            const x = Math.floor(t * size.width);
-            ctx.beginPath();
-            ctx.moveTo(x, 0);
-            ctx.lineTo(x, size.height);
-            ctx.stroke();
-          }
-          ctx.restore();
-        }
         break;
       }
       case 'oscilloscope': {
@@ -1059,7 +1086,7 @@ export function HudOverlay({
         height: `${heightPct}%`,
         pointerEvents: 'auto',
         zIndex: 10,
-        borderRadius: settings.cornerRadius !== undefined ? `${settings.cornerRadius}px` : 0,
+        borderRadius: typeof settings.cornerRadius === 'number' ? `${settings.cornerRadius}px` : 0,
         background: settings.glass || settings.glassmorphism
           ? 'rgba(20, 40, 60, 0.25)'
           : 'rgba(0,0,0,0.2)',
@@ -1085,7 +1112,7 @@ export function HudOverlay({
         ref={canvasRef}
         width={canvasSize.width}
         height={canvasSize.height}
-        style={{ width: '100%', height: '100%', display: 'block', borderRadius: settings.cornerRadius !== undefined ? `${settings.cornerRadius}px` : 0 }}
+        style={{ width: '100%', height: '100%', display: 'block', borderRadius: typeof settings.cornerRadius === 'number' ? `${settings.cornerRadius}px` : 0 }}
       />
       {/* Photoshop-style transform anchors - only visible on hover */}
       {isHovered && ANCHORS.map(anchor => (

@@ -641,20 +641,6 @@ export function EffectsLibrarySidebar({
       if ('shadowBlur' in params) processedParams.add('shadowBlur');
     }
     
-    // Group transient detector parameters
-    if ('showTransients' in params || 'transientColor' in params || 'transientSensitivity' in params) {
-      groupedParams.push({
-        group: 'transients',
-        toggle: 'showTransients' in params ? { name: 'showTransients', value: params.showTransients as boolean } : undefined,
-        params: [
-          ...('transientColor' in params ? [{ name: 'transientColor', value: params.transientColor, type: 'color' as const }] : []),
-          ...('transientSensitivity' in params ? [{ name: 'transientSensitivity', value: params.transientSensitivity, type: 'number' as const }] : []),
-        ]
-      });
-      if ('showTransients' in params) processedParams.add('showTransients');
-      if ('transientColor' in params) processedParams.add('transientColor');
-      if ('transientSensitivity' in params) processedParams.add('transientSensitivity');
-    }
     
     // Add remaining parameters that aren't grouped
     Object.entries(params).forEach(([name, value]) => {
@@ -673,7 +659,7 @@ export function EffectsLibrarySidebar({
         return;
       } else if (['colorMap', 'colorScheme', 'style', 'meterType', 'dataSource'].includes(name)) {
         type = 'select';
-      } else if (['color', 'shadowColor', 'outlineColor', 'transientColor', 'peakColor', 'traceColor', 'gridColor', 'barColor', 'fontColor'].includes(name)) {
+      } else if (['color', 'shadowColor', 'outlineColor', 'peakColor', 'traceColor', 'gridColor', 'barColor', 'fontColor'].includes(name)) {
         type = 'color';
       }
       
@@ -1017,7 +1003,7 @@ export function EffectsLibrarySidebar({
               }
               
               // String color parameters (hex strings like '#4db3fa' for overlays)
-              const colorParamNames = ['color', 'shadowColor', 'outlineColor', 'transientColor', 'peakColor', 'traceColor', 'gridColor', 'barColor', 'fontColor'];
+              const colorParamNames = ['color', 'shadowColor', 'outlineColor', 'peakColor', 'traceColor', 'gridColor', 'barColor', 'fontColor'];
               if (colorParamNames.includes(paramName) && typeof value === 'string') {
                 const displayName = paramName.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase());
                 const currentValue = activeSliderValues[editingEffectId]?.[paramName] ?? value;
