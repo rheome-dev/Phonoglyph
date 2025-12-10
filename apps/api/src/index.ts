@@ -168,10 +168,20 @@ app.get('/', (req: any, res: any) => {
 // Initialize services (for serverless, this runs on cold start)
 const initializeServices = async () => {
   try {
-    await testConnection()
+    // Test connection but don't block if it fails in serverless
+    const dbConnected = await testConnection()
+    if (!dbConnected && process.env.VERCEL) {
+      console.log('⚠️  Database connection test failed, but continuing (will connect on first query)');
+    }
+    
     await initializeS3()
   } catch (error) {
-    console.error('Service initialization warning:', error)
+    // In serverless, don't fail initialization - services will connect on first use
+    if (process.env.VERCEL) {
+      console.error('⚠️  Service initialization warning (non-blocking):', error);
+    } else {
+      console.error('❌ Service initialization error:', error);
+    }
   }
 }
 
