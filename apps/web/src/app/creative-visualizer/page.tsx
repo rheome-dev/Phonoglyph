@@ -2117,7 +2117,10 @@ function CreativeVisualizerPage() {
                   >
                     {/* HUD Overlays rendered inside canvas container so they're constrained to canvas bounds */}
                     <div className="absolute inset-0 pointer-events-none z-20 overflow-hidden">
-                      <HudOverlayRenderer stemUrlMap={asyncStemUrlMap} />
+                      <HudOverlayRenderer 
+                        stemUrlMap={asyncStemUrlMap} 
+                        cachedAnalysis={audioAnalysis.cachedAnalysis || []}
+                      />
                     </div>
                   </ThreeVisualizer>
 
