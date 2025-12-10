@@ -918,8 +918,50 @@ function CreativeVisualizerPage() {
   };
 
   const handleEffectDoubleClick = (effectId: string) => {
-    // All effects now use the sidebar Inspector
-    setEditingEffectId(effectId);
+    // Check if this is a layer ID (from timeline clip) or an effect type (from library)
+    const existingLayer = layers.find(l => l.id === effectId);
+    
+    if (existingLayer) {
+      // Double-click on timeline clip: open inspector for this specific instance
+      setEditingEffectId(effectId);
+    } else {
+      // Double-click on effect card in library: add new effect layer and open its inspector
+      const effectDef = effects.find(e => e.id === effectId);
+      if (!effectDef) {
+        console.warn('Effect definition not found:', effectId);
+        return;
+      }
+      
+      // Create a new layer ID for this effect instance
+      const newLayerId = `effect-${effectId}-${Date.now()}`;
+      const { duration, addLayer, selectLayer } = useTimelineStore.getState();
+      
+      // Add new effect layer to timeline
+      addLayer({
+        id: newLayerId,
+        name: effectDef.name || effectId,
+        type: 'effect',
+        effectType: effectId,
+        src: effectDef.name || effectId,
+        settings: effectDef.parameters || {},
+        zIndex: 0,
+        isDeletable: true,
+        startTime: 0,
+        endTime: duration,
+        duration: duration,
+        position: { x: 50, y: 50 },
+        scale: { x: 1, y: 1 },
+        rotation: 0,
+        opacity: 1,
+        audioBindings: [],
+        midiBindings: [],
+        blendMode: 'normal',
+      } as Layer);
+      
+      // Select the new layer and open its inspector
+      selectLayer(newLayerId);
+      setEditingEffectId(newLayerId);
+    }
   };
 
   // Handler to close the sidebar Inspector and return to library view
@@ -931,43 +973,33 @@ function CreativeVisualizerPage() {
   const getEditingEffectInstance = () => {
     if (!editingEffectId) return null;
     
-    // Try to get the effect by type first (for built-in effects)
+    // First, check if this is a layer ID and get the effect instance from the visualizer
+    // This is the primary path when double-clicking timeline clips
     if (visualizerRef.current) {
-      const effectByType = visualizerRef.current.getEffectByType?.(editingEffectId);
-      if (effectByType) {
+      const effectByLayerId = visualizerRef.current.getEffect?.(editingEffectId);
+      if (effectByLayerId) {
+        // Found the effect instance by layer ID - use its live parameters
+        const effectLayer = layers.find(l => l.id === editingEffectId);
+        const effectDef = effectLayer ? effects.find(e => e.id === effectLayer.effectType) : null;
         return {
           id: editingEffectId,
-          name: effectByType.name,
-          description: effectByType.description,
-          parameters: effectByType.parameters
+          name: effectByLayerId.name,
+          description: effectDef?.description || effectByLayerId.description || '',
+          parameters: effectByLayerId.parameters
         };
       }
     }
     
-    // Fall back to searching layers for timeline-based effect instances
-    const effectLayer = layers.find(l => 
-      l.id === editingEffectId || 
-      (l.type === 'effect' && l.effectType === editingEffectId)
-    );
-    if (effectLayer) {
+    // Fallback: look up the layer and use its settings
+    // This handles cases where the effect hasn't been instantiated in the visualizer yet
+    const effectLayer = layers.find(l => l.id === editingEffectId);
+    if (effectLayer && effectLayer.type === 'effect') {
       const effectDef = effects.find(e => e.id === effectLayer.effectType);
       return {
         id: effectLayer.id,
         name: effectDef?.name || effectLayer.name,
         description: effectDef?.description || '',
-        parameters: effectLayer.settings || {}
-      };
-    }
-    
-    // Final fallback: use the effect definition from the effects array
-    // This allows opening the Inspector even if the effect hasn't been added to the visualizer yet
-    const effectDef = effects.find(e => e.id === editingEffectId);
-    if (effectDef) {
-      return {
-        id: editingEffectId,
-        name: effectDef.name,
-        description: effectDef.description,
-        parameters: effectDef.parameters || {}
+        parameters: effectLayer.settings || effectDef?.parameters || {}
       };
     }
     
