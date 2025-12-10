@@ -167,7 +167,9 @@ export function HudOverlayRenderer({ stemUrlMap = {}, cachedAnalysis = [] }: Hud
     // For stereometer, use real-time stereo window if available
     if (overlayType === 'stereometer') {
       if (getStereoWindow && stemId) {
-        const stereoWindow = getStereoWindow(stemId, 1024);
+        // Pass currentTime (which is loop-aware) to getStereoWindow
+        // This ensures the stereometer works correctly when audio loops
+        const stereoWindow = getStereoWindow(stemId, 1024, currentTime);
         if (stereoWindow) {
           return { stereoWindow };
         }

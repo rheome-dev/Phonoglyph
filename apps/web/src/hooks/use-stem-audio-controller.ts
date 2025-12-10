@@ -581,38 +581,150 @@ export function useStemAudioController(): UseStemAudioController {
   }, []);
 
   // Helper: Get a real-time stereo window for a stem
-  const getStereoWindow = useCallback((stemId: string, windowSize: number = 1024) => {
+  // currentTime is the loop-aware playback time (0 to duration, wraps on loop)
+  const getStereoWindow = useCallback((stemId: string, windowSize: number = 1024, currentTimeOverride?: number) => {
     const buffer = audioBuffersRef.current[stemId];
     if (!buffer) {
       debugLog.warn('[getStereoWindow] No buffer for stemId', stemId, 'Available buffers:', Object.keys(audioBuffersRef.current));
       return null;
     }
+    
     const numChannels = buffer.numberOfChannels;
-    const currentSample = Math.floor((audioContextRef.current?.currentTime || 0 - startTimeRef.current) * buffer.sampleRate);
-    const start = Math.max(0, currentSample - windowSize);
-    const end = Math.min(buffer.length, currentSample);
+    const bufferDuration = buffer.duration;
+    const sampleRate = buffer.sampleRate;
+    
+    // Use provided currentTime (which is loop-aware) or calculate from audio context
+    let playbackTime: number;
+    if (currentTimeOverride !== undefined) {
+      // Use the provided currentTime which is already loop-aware
+      playbackTime = currentTimeOverride;
+    } else {
+      // Calculate from audio context, handling looping
+      const elapsedTime = (audioContextRef.current?.currentTime || 0) - startTimeRef.current;
+      const masterDuration = getMasterDuration();
+      playbackTime = masterDuration > 0 ? (elapsedTime % masterDuration) : Math.max(0, elapsedTime);
+    }
+    
+    // Ensure playbackTime is within buffer bounds (handle looping)
+    playbackTime = playbackTime % bufferDuration;
+    if (playbackTime < 0) playbackTime += bufferDuration;
+    
+    // Calculate sample position in the buffer
+    const currentSample = Math.floor(playbackTime * sampleRate);
+    const start = currentSample - windowSize;
+    const end = currentSample;
+    
     let left: number[] = [];
     let right: number[] = [];
+    
     try {
       if (numChannels === 1) {
-        const channel = buffer.getChannelData(0).slice(start, end);
-        left = Array.from(channel);
-        right = Array.from(channel);
+        // Mono: duplicate to both channels
+        const channel = buffer.getChannelData(0);
+        
+        // Handle wrapping around buffer boundaries for looping
+        if (start < 0) {
+          // Need to wrap: get samples from end of buffer + beginning
+          const samplesFromEnd = Math.abs(start);
+          const samplesFromStart = end; // Number of samples from start of buffer
+          
+          if (samplesFromEnd > 0 && samplesFromEnd <= buffer.length) {
+            const endSamples = Array.from(channel.slice(buffer.length - samplesFromEnd, buffer.length));
+            left = left.concat(endSamples);
+            right = right.concat(endSamples);
+          }
+          if (samplesFromStart > 0 && samplesFromStart <= buffer.length) {
+            const startSamples = Array.from(channel.slice(0, samplesFromStart));
+            left = left.concat(startSamples);
+            right = right.concat(startSamples);
+          }
+        } else if (end > buffer.length) {
+          // Need to wrap: get samples from end + beginning
+          const samplesBeforeWrap = buffer.length - start;
+          const samplesAfterWrap = end - buffer.length;
+          
+          if (samplesBeforeWrap > 0) {
+            const beforeWrap = Array.from(channel.slice(start, buffer.length));
+            left = left.concat(beforeWrap);
+            right = right.concat(beforeWrap);
+          }
+          if (samplesAfterWrap > 0 && samplesAfterWrap <= buffer.length) {
+            const afterWrap = Array.from(channel.slice(0, samplesAfterWrap));
+            left = left.concat(afterWrap);
+            right = right.concat(afterWrap);
+          }
+        } else {
+          // Normal case: all samples within buffer bounds
+          const channelData = Array.from(channel.slice(start, end));
+          left = channelData;
+          right = channelData;
+        }
       } else {
-        left = Array.from(buffer.getChannelData(0).slice(start, end));
-        right = Array.from(buffer.getChannelData(1).slice(start, end));
+        // Stereo: get both channels
+        const leftChannel = buffer.getChannelData(0);
+        const rightChannel = buffer.getChannelData(1);
+        
+        // Handle wrapping around buffer boundaries for looping
+        if (start < 0) {
+          // Need to wrap: get samples from end of buffer + beginning
+          const samplesFromEnd = Math.abs(start);
+          const samplesFromStart = end; // Number of samples from start of buffer
+          
+          if (samplesFromEnd > 0 && samplesFromEnd <= buffer.length) {
+            const endLeft = Array.from(leftChannel.slice(buffer.length - samplesFromEnd, buffer.length));
+            const endRight = Array.from(rightChannel.slice(buffer.length - samplesFromEnd, buffer.length));
+            left = left.concat(endLeft);
+            right = right.concat(endRight);
+          }
+          if (samplesFromStart > 0 && samplesFromStart <= buffer.length) {
+            const startLeft = Array.from(leftChannel.slice(0, samplesFromStart));
+            const startRight = Array.from(rightChannel.slice(0, samplesFromStart));
+            left = left.concat(startLeft);
+            right = right.concat(startRight);
+          }
+        } else if (end > buffer.length) {
+          // Need to wrap: get samples from end + beginning
+          const samplesBeforeWrap = buffer.length - start;
+          const samplesAfterWrap = end - buffer.length;
+          
+          if (samplesBeforeWrap > 0) {
+            const beforeLeft = Array.from(leftChannel.slice(start, buffer.length));
+            const beforeRight = Array.from(rightChannel.slice(start, buffer.length));
+            left = left.concat(beforeLeft);
+            right = right.concat(beforeRight);
+          }
+          if (samplesAfterWrap > 0 && samplesAfterWrap <= buffer.length) {
+            const afterLeft = Array.from(leftChannel.slice(0, samplesAfterWrap));
+            const afterRight = Array.from(rightChannel.slice(0, samplesAfterWrap));
+            left = left.concat(afterLeft);
+            right = right.concat(afterRight);
+          }
+        } else {
+          // Normal case: all samples within buffer bounds
+          left = Array.from(leftChannel.slice(start, end));
+          right = Array.from(rightChannel.slice(start, end));
+        }
       }
     } catch (err) {
-      debugLog.error('[getStereoWindow] Error accessing buffer:', err, { stemId, buffer });
+      debugLog.error('[getStereoWindow] Error accessing buffer:', err, { stemId, buffer, start, end, currentSample, playbackTime });
       return null;
     }
-    // Pad if needed
+    
+    // Pad if needed to reach windowSize (shouldn't happen with proper wrapping, but safety check)
     if (left.length < windowSize) {
-      left = Array(windowSize - left.length).fill(0).concat(left);
-      right = Array(windowSize - right.length).fill(0).concat(right);
+      const padding = windowSize - left.length;
+      left = Array(padding).fill(0).concat(left);
+      right = Array(padding).fill(0).concat(right);
     }
+    
+    // Trim if longer than windowSize (shouldn't happen, but safety check)
+    if (left.length > windowSize) {
+      left = left.slice(-windowSize);
+      right = right.slice(-windowSize);
+    }
+    
     return { left, right };
-  }, []);
+  }, [getMasterDuration]);
 
   return {
     play,
