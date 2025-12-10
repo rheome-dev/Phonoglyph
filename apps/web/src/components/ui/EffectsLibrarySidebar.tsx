@@ -95,6 +95,13 @@ function getSliderMax(paramName: string) {
     case 'gamma': return 2.2;
     case 'contrast': return 2.0;
     case 'invert': return 1.0;
+    // ConsoleFeed overlay parameters
+    case 'fontSize': return 20;
+    case 'maxLines': return 100;
+    case 'scrollSpeed': return 5.0;
+    case 'cornerRadius': return 50;
+    case 'shadowBlur': return 50;
+    case 'outlineWidth': return 10;
     default: return 1;
   }
 }
@@ -125,6 +132,13 @@ function getSliderStep(paramName: string) {
     case 'gamma': return 0.01;
     case 'contrast': return 0.01;
     case 'invert': return 1.0;
+    // ConsoleFeed overlay parameters
+    case 'fontSize': return 1;
+    case 'maxLines': return 1;
+    case 'scrollSpeed': return 0.1;
+    case 'cornerRadius': return 1;
+    case 'shadowBlur': return 1;
+    case 'outlineWidth': return 1;
     default: return 0.01;
   }
 }
