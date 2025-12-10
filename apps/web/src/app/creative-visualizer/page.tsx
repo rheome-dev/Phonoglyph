@@ -81,6 +81,9 @@ const EffectsLibrarySidebarWithHud: React.FC<{
   modulatedParameterValues?: Record<string, number>;
   layers?: Layer[];
   setActiveParam?: (effectId: string, paramName: string, value: any) => void;
+  // Overlay sizing and stem inheritance props
+  aspectRatio?: string;
+  masterStemId?: string | null;
 }> = ({ 
   effects, 
   selectedEffects, 
@@ -106,7 +109,9 @@ const EffectsLibrarySidebarWithHud: React.FC<{
   setActiveCollectionId,
   modulatedParameterValues,
   layers: layersProp,
-  setActiveParam
+  setActiveParam,
+  aspectRatio = 'mobile',
+  masterStemId
 }) => {
   const { addLayer, duration, layers } = useTimelineStore((state) => ({
     addLayer: state.addLayer,
@@ -114,6 +119,11 @@ const EffectsLibrarySidebarWithHud: React.FC<{
     layers: state.layers,
   }));
   const overlayCount = layers.filter((l) => l.type === 'overlay').length;
+  
+  // Get canvas size based on aspect ratio for proper overlay sizing
+  const aspectRatioConfig = getAspectRatioConfig(aspectRatio);
+  const maxCanvasWidth = parseInt(aspectRatioConfig.maxWidth || '400');
+  const maxCanvasHeight = parseInt(aspectRatioConfig.maxHeight || '711');
   
   const handleEffectDoubleClick = (effectId: string) => {
     if (!stemUrlsReady) {
@@ -138,14 +148,25 @@ const EffectsLibrarySidebarWithHud: React.FC<{
       
       const overlayType = overlayTypeMap[effectId];
       if (overlayType) {
-        debugLog.log('🎯 Adding HUD overlay to timeline:', overlayType);
+        debugLog.log('🎯 Adding HUD overlay to timeline:', overlayType, 'with master stem:', masterStemId);
+        
+        // Calculate overlay size as a percentage of canvas (40% width, maintaining reasonable height)
+        const overlayWidth = Math.min(Math.floor(maxCanvasWidth * 0.4), 300);
+        const overlayHeight = Math.min(Math.floor(overlayWidth * 0.5), 150);
+        
+        // Position within canvas bounds with some padding, offset by overlay count
+        const padding = 20;
+        const offsetStep = 30;
+        const posX = padding + (overlayCount * offsetStep) % (maxCanvasWidth - overlayWidth - padding * 2);
+        const posY = padding + (overlayCount * offsetStep) % (maxCanvasHeight - overlayHeight - padding * 2);
+        
         const newLayer: Layer = {
           id: `overlay-${Date.now()}`,
           name: `Overlay ${overlayCount + 1}`,
           type: 'overlay',
           effectType: overlayType as any,
           src: '',
-          position: { x: 20 + overlayCount * 10, y: 20 + overlayCount * 10 },
+          position: { x: posX, y: posY },
           scale: { x: 1, y: 1 },
           rotation: 0,
           opacity: 1,
@@ -157,8 +178,8 @@ const EffectsLibrarySidebarWithHud: React.FC<{
           endTime: duration,
           duration,
           settings: {
-            size: { width: 400, height: 200 },
-            stemId: undefined,
+            size: { width: overlayWidth, height: overlayHeight },
+            stemId: masterStemId || undefined, // Inherit master stem by default
           },
         };
         addLayer(newLayer);
@@ -985,6 +1006,110 @@ function CreativeVisualizerPage() {
   const getEditingEffectInstance = () => {
     if (!editingEffectId) return null;
     
+    // Check if this is an overlay layer - overlays have their own parameter definitions
+    const overlayLayer = layers.find(l => l.id === editingEffectId && l.type === 'overlay');
+    if (overlayLayer) {
+      // Overlay parameter definitions - these match OVERLAY_SETTINGS in HudOverlayParameterModal.tsx
+      const overlayParameters: Record<string, Record<string, any>> = {
+        waveform: {
+          color: overlayLayer.settings?.color || '#4db3fa',
+          lineWidth: overlayLayer.settings?.lineWidth || 2,
+          cornerRadius: overlayLayer.settings?.cornerRadius || 8,
+          dropShadow: overlayLayer.settings?.dropShadow || false,
+          shadowColor: overlayLayer.settings?.shadowColor || '#000000',
+          shadowBlur: overlayLayer.settings?.shadowBlur || 8,
+          outline: overlayLayer.settings?.outline || false,
+          outlineColor: overlayLayer.settings?.outlineColor || '#ffffff',
+          outlineWidth: overlayLayer.settings?.outlineWidth || 1,
+          glassmorphism: overlayLayer.settings?.glassmorphism || false,
+          showTransients: overlayLayer.settings?.showTransients || false,
+          transientColor: overlayLayer.settings?.transientColor || '#ff0',
+          transientSensitivity: overlayLayer.settings?.transientSensitivity || 0.5,
+        },
+        spectrogram: {
+          colorMap: overlayLayer.settings?.colorMap || 'Classic',
+          showFrequencyLabels: overlayLayer.settings?.showFrequencyLabels || false,
+          brightness: overlayLayer.settings?.brightness || 1,
+          contrast: overlayLayer.settings?.contrast || 1,
+          scrollSpeed: overlayLayer.settings?.scrollSpeed || 1,
+          fftSize: overlayLayer.settings?.fftSize || 2048,
+          cornerRadius: overlayLayer.settings?.cornerRadius || 8,
+          dropShadow: overlayLayer.settings?.dropShadow || false,
+          glassmorphism: overlayLayer.settings?.glassmorphism || false,
+        },
+        peakMeter: {
+          peakColor: overlayLayer.settings?.peakColor || '#ff0000',
+          holdTime: overlayLayer.settings?.holdTime || 1000,
+          cornerRadius: overlayLayer.settings?.cornerRadius || 8,
+          glassmorphism: overlayLayer.settings?.glassmorphism || false,
+        },
+        stereometer: {
+          traceColor: overlayLayer.settings?.traceColor || '#00ffff',
+          glowIntensity: overlayLayer.settings?.glowIntensity || 0.5,
+          pointSize: overlayLayer.settings?.pointSize || 2,
+          showGrid: overlayLayer.settings?.showGrid || false,
+          cornerRadius: overlayLayer.settings?.cornerRadius || 8,
+          glassmorphism: overlayLayer.settings?.glassmorphism || false,
+        },
+        oscilloscope: {
+          followPitch: overlayLayer.settings?.followPitch || false,
+          color: overlayLayer.settings?.color || '#00ff00',
+          glowIntensity: overlayLayer.settings?.glowIntensity || 0,
+          amplitude: overlayLayer.settings?.amplitude || 1,
+          traceWidth: overlayLayer.settings?.traceWidth || 2,
+          showGrid: overlayLayer.settings?.showGrid || false,
+          gridColor: overlayLayer.settings?.gridColor || '#333333',
+          cornerRadius: overlayLayer.settings?.cornerRadius || 8,
+          glassmorphism: overlayLayer.settings?.glassmorphism || false,
+          lissajous: overlayLayer.settings?.lissajous || false,
+        },
+        spectrumAnalyzer: {
+          barColor: overlayLayer.settings?.barColor || '#00ffff',
+          showFrequencyLabels: overlayLayer.settings?.showFrequencyLabels || false,
+          fftSize: overlayLayer.settings?.fftSize || 2048,
+          cornerRadius: overlayLayer.settings?.cornerRadius || 8,
+          glassmorphism: overlayLayer.settings?.glassmorphism || false,
+        },
+        midiMeter: {
+          showNoteNames: overlayLayer.settings?.showNoteNames || false,
+          color: overlayLayer.settings?.color || '#ff00ff',
+          cornerRadius: overlayLayer.settings?.cornerRadius || 8,
+          glassmorphism: overlayLayer.settings?.glassmorphism || false,
+        },
+        vuMeter: {
+          color: overlayLayer.settings?.color || '#00ff00',
+          style: overlayLayer.settings?.style || 'Needle',
+          meterType: overlayLayer.settings?.meterType || 'RMS',
+          cornerRadius: overlayLayer.settings?.cornerRadius || 8,
+          glassmorphism: overlayLayer.settings?.glassmorphism || false,
+        },
+        chromaWheel: {
+          colorScheme: overlayLayer.settings?.colorScheme || 'Classic',
+          showNoteNames: overlayLayer.settings?.showNoteNames || false,
+          cornerRadius: overlayLayer.settings?.cornerRadius || 8,
+          glassmorphism: overlayLayer.settings?.glassmorphism || false,
+        },
+        consoleFeed: {
+          dataSource: overlayLayer.settings?.dataSource || 'All',
+          fontSize: overlayLayer.settings?.fontSize || 12,
+          fontColor: overlayLayer.settings?.fontColor || '#00ff00',
+          maxLines: overlayLayer.settings?.maxLines || 50,
+          scrollSpeed: overlayLayer.settings?.scrollSpeed || 1,
+          cornerRadius: overlayLayer.settings?.cornerRadius || 8,
+          glassmorphism: overlayLayer.settings?.glassmorphism || false,
+        },
+      };
+      
+      const effectDef = effects.find(e => e.id === overlayLayer.effectType);
+      const overlayType = overlayLayer.effectType as string;
+      return {
+        id: overlayLayer.id,
+        name: effectDef?.name || overlayLayer.name,
+        description: effectDef?.description || `${overlayType} overlay visualization`,
+        parameters: overlayParameters[overlayType] || {}
+      };
+    }
+    
     // First, check if this is a layer ID and get the effect instance from the visualizer
     // This is the primary path when double-clicking timeline clips
     if (visualizerRef.current) {
@@ -1610,12 +1735,24 @@ function CreativeVisualizerPage() {
     }
     
     // Also update layer settings for persistence (especially for slideshow position/size/opacity)
-    const layer = layers.find(l => l.id === effectId && l.type === 'effect');
-    if (layer) {
-      updateLayer(layer.id, {
-        ...layer,
+    const effectLayer = layers.find(l => l.id === effectId && l.type === 'effect');
+    if (effectLayer) {
+      updateLayer(effectLayer.id, {
+        ...effectLayer,
         settings: {
-          ...layer.settings,
+          ...effectLayer.settings,
+          [paramName]: value
+        }
+      });
+    }
+    
+    // Handle overlay layer settings updates
+    const overlayLayer = layers.find(l => l.id === effectId && l.type === 'overlay');
+    if (overlayLayer) {
+      updateLayer(overlayLayer.id, {
+        ...overlayLayer,
+        settings: {
+          ...overlayLayer.settings,
           [paramName]: value
         }
       });
@@ -2077,6 +2214,8 @@ function CreativeVisualizerPage() {
                 modulatedParameterValues={modulatedParameterValues}
                 layers={layers}
                 setActiveParam={setActiveParam}
+                aspectRatio={visualizerAspectRatio}
+                masterStemId={projectAudioFiles?.files?.find(f => f.is_master)?.id ?? null}
               />
             </CollapsibleEffectsSidebar>
 

@@ -700,6 +700,59 @@ export function EffectsLibrarySidebar({
                   </div>
                 );
               }
+              
+              // String color parameters (hex strings like '#4db3fa' for overlays)
+              const colorParamNames = ['color', 'shadowColor', 'outlineColor', 'transientColor', 'peakColor', 'traceColor', 'gridColor', 'barColor', 'fontColor'];
+              if (colorParamNames.includes(paramName) && typeof value === 'string') {
+                const displayName = paramName.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase());
+                const currentValue = activeSliderValues[editingEffectId]?.[paramName] ?? value;
+                
+                return (
+                  <div key={paramName} className="flex items-center justify-between">
+                    <Label className="text-white/80 text-xs font-mono">{displayName}</Label>
+                    <div className="flex items-center gap-2">
+                      <span 
+                        className="w-6 h-6 rounded border border-white/40 inline-block" 
+                        style={{ background: currentValue }} 
+                      />
+                      <input
+                        type="color"
+                        value={currentValue}
+                        onChange={e => onParameterChange?.(editingEffectId, paramName, e.target.value)}
+                        className="w-8 h-6 rounded border border-white/30 bg-transparent cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                );
+              }
+              
+              // Select/dropdown parameters for overlays
+              const selectParamOptions: Record<string, string[]> = {
+                colorMap: ['Classic', 'Inferno', 'Viridis', 'Rainbow'],
+                colorScheme: ['Classic', 'Rainbow', 'Viridis', 'Inferno'],
+                style: ['Needle', 'Bar'],
+                meterType: ['RMS', 'Peak'],
+                dataSource: ['MIDI', 'LUFS/RMS', 'FFT Summary', 'All'],
+              };
+              if (selectParamOptions[paramName] && typeof value === 'string') {
+                const displayName = paramName.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase());
+                const currentValue = activeSliderValues[editingEffectId]?.[paramName] ?? value;
+                
+                return (
+                  <div key={paramName} className="flex items-center justify-between">
+                    <Label className="text-white/80 text-xs font-mono">{displayName}</Label>
+                    <select
+                      value={currentValue}
+                      onChange={e => onParameterChange?.(editingEffectId, paramName, e.target.value)}
+                      className="bg-gray-800 border border-gray-600 text-white text-xs rounded px-2 py-1"
+                    >
+                      {selectParamOptions[paramName].map(opt => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              }
 
               return null;
             })
