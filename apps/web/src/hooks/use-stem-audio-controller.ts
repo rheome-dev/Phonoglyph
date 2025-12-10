@@ -37,7 +37,7 @@ interface UseStemAudioController {
   getAudioContextTime: () => number;
   scheduledStartTimeRef: React.MutableRefObject<number>;
   duration: number;
-  getStereoWindow: (stemId: string, windowSize: number) => { left: number[], right: number[] } | null;
+  getStereoWindow: (stemId: string, windowSize: number, currentTimeOverride?: number) => { left: number[], right: number[] } | null;
 }
 
 export function useStemAudioController(): UseStemAudioController {
