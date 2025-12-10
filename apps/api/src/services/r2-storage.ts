@@ -52,13 +52,34 @@ export async function createBucketIfNotExists(): Promise<void> {
 
 // Configure CORS for web uploads
 export async function configureBucketCors(): Promise<void> {
+  // Build allowed origins list
+  const allowedOrigins: string[] = [
+    'http://localhost:3000', // Local development
+    'https://phonoglyph.rheome.tools', // Production domain
+  ];
+
+  // Add FRONTEND_URL if provided and not already in list
+  if (process.env.FRONTEND_URL) {
+    const frontendUrl = process.env.FRONTEND_URL.trim();
+    if (!allowedOrigins.includes(frontendUrl)) {
+      allowedOrigins.push(frontendUrl);
+    }
+  }
+
+  // Add additional origins from env if provided (comma-separated)
+  if (process.env.R2_CORS_ORIGINS) {
+    const additionalOrigins = process.env.R2_CORS_ORIGINS.split(',').map(o => o.trim()).filter(Boolean);
+    additionalOrigins.forEach(origin => {
+      if (!allowedOrigins.includes(origin)) {
+        allowedOrigins.push(origin);
+      }
+    });
+  }
+
   const corsConfiguration = {
     CORSRules: [
       {
-        AllowedOrigins: [
-          process.env.FRONTEND_URL || 'http://localhost:3000',
-          'https://*.vercel.app', // For preview deployments
-        ],
+        AllowedOrigins: allowedOrigins,
         AllowedMethods: ['GET', 'PUT', 'POST', 'DELETE', 'HEAD'],
         AllowedHeaders: [
           'Origin',

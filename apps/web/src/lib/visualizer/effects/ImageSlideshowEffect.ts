@@ -516,7 +516,14 @@ export class ImageSlideshowEffect implements VisualEffect {
               // Fetch image data
               const response = await fetch(url);
               if (!response.ok) {
-                  throw new Error(`Failed to fetch image: ${response.statusText}`);
+                  // Provide more specific error messages
+                  if (response.status === 403) {
+                      throw new Error(`Image access forbidden (403). The signed URL may have expired. URL: ${url.substring(0, 100)}...`);
+                  } else if (response.status === 404) {
+                      throw new Error(`Image not found (404). URL: ${url.substring(0, 100)}...`);
+                  } else {
+                      throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+                  }
               }
               
               const blob = await response.blob();
@@ -565,10 +572,22 @@ export class ImageSlideshowEffect implements VisualEffect {
                 });
                 this.pendingTextureResolvers.delete(url);
               }
-          } catch (err) {
+          } catch (err: any) {
               this.loadingImages.delete(url);
               this.pendingTextureResolvers.delete(url);
-              slideshowLog.error('Texture load failed:', url.substring(0, 80), err);
+              
+              // Provide more detailed error information
+              let errorMessage = 'Texture load failed';
+              if (err?.message) {
+                  errorMessage = err.message;
+              } else if (err?.name === 'TypeError' && err?.message?.includes('Failed to fetch')) {
+                  // This is likely a CORS error or network issue
+                  errorMessage = `Network error (likely CORS or expired URL): ${url.substring(0, 100)}...`;
+              }
+              
+              slideshowLog.error('🖼️ Texture load failed:', errorMessage);
+              slideshowLog.error('Failed URL:', url.substring(0, 100));
+              
               reject(err);
           }
       });
