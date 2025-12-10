@@ -565,9 +565,6 @@ export function EffectsLibrarySidebar({
     );
   };
 
-  // Check if we're editing an overlay
-  const isEditingOverlay = editingEffectId && layers.find(l => l.id === editingEffectId && l.type === 'overlay');
-
   // Stem drop zone hook (must be at component level)
   const [{ isOver, canDrop }, drop] = useDrop({
     accept: 'AUDIO_STEM',
