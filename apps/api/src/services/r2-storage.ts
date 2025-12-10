@@ -103,7 +103,14 @@ export async function configureBucketCors(): Promise<void> {
       CORSConfiguration: corsConfiguration,
     }));
     logger.log(`✅ Configured CORS for R2 bucket '${BUCKET_NAME}'`);
-  } catch (error) {
+    logger.log(`   Allowed origins: ${allowedOrigins.join(', ')}`);
+  } catch (error: any) {
+    // Always log CORS errors - this is critical for production
+    console.error('❌ Failed to configure CORS for R2 bucket:', error);
+    console.error('   Error code:', error.Code || error.name);
+    console.error('   Error message:', error.message);
+    console.error('   Allowed origins attempted:', allowedOrigins.join(', '));
+    console.error('   ⚠️  If this fails, CORS must be configured manually in Cloudflare dashboard');
     logger.error('❌ Failed to configure CORS:', error);
     throw error;
   }
@@ -262,10 +269,18 @@ export async function initializeR2(): Promise<void> {
     try {
       await configureBucketCors();
     } catch (corsError: any) {
-      if (corsError.Code === 'AccessDenied') {
+      // Always log CORS errors - critical for debugging production issues
+      console.error('⚠️  CORS configuration failed:', corsError.Code || corsError.name, corsError.message);
+      if (corsError.Code === 'AccessDenied' || corsError.name === 'AccessDenied') {
+        console.error('⚠️  CORS configuration skipped (insufficient permissions)');
+        console.error('⚠️  You must configure CORS manually in Cloudflare R2 dashboard:');
+        console.error('   1. Go to Cloudflare Dashboard > R2 > Your Bucket > Settings');
+        console.error('   2. Add CORS policy with allowed origins: https://phonoglyph.rheome.tools');
         logger.log('⚠️  CORS configuration skipped (insufficient permissions - this is OK for development)');
       } else {
-        throw corsError;
+        // Log other errors but don't fail initialization
+        console.error('⚠️  CORS configuration error (non-fatal):', corsError);
+        logger.error('⚠️  CORS configuration error:', corsError);
       }
     }
     
