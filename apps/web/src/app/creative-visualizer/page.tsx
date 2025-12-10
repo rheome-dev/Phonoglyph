@@ -937,13 +937,15 @@ function CreativeVisualizerPage() {
       const { duration, addLayer, selectLayer } = useTimelineStore.getState();
       
       // Add new effect layer to timeline
+      // IMPORTANT: Use empty settings {} - the effect class constructor defines its own defaults
+      // This ensures new instances don't inherit parameters from previous instances
       addLayer({
         id: newLayerId,
         name: effectDef.name || effectId,
         type: 'effect',
         effectType: effectId,
         src: effectDef.name || effectId,
-        settings: effectDef.parameters || {},
+        settings: {}, // Empty - effect constructor provides defaults
         zIndex: 0,
         isDeletable: true,
         startTime: 0,

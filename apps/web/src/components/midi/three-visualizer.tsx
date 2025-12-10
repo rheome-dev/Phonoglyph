@@ -262,10 +262,10 @@ export function ThreeVisualizer({
           debugLog.log(`[ThreeVisualizer] Added effect instance: ${layer.id} (${layer.effectType}) with effect ID: ${effect.id}`);
           
           // Apply any saved parameter values from the store to the newly created effect
-          const layerMeta = layers.find((l) => l.id === layer.id);
-          const effectTypeKey = layerMeta?.type === 'effect' ? layerMeta.effectType : undefined;
-          const activeParams = activeSliderValues[layer.id] || (effectTypeKey ? activeSliderValues[effectTypeKey] : {}) || {};
-          const baseParams = baseParameterValues[layer.id] || (effectTypeKey ? baseParameterValues[effectTypeKey] : {}) || {};
+          // IMPORTANT: Only look for values stored by this specific layer ID, NOT by effect type
+          // This prevents new instances from inheriting parameters from previous instances of the same effect type
+          const activeParams = activeSliderValues[layer.id] || {};
+          const baseParams = baseParameterValues[layer.id] || {};
           const paramNames = new Set([
             ...Object.keys(activeParams),
             ...Object.keys(baseParams),
