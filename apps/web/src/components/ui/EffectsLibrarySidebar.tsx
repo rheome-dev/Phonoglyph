@@ -312,12 +312,10 @@ export function EffectsLibrarySidebar({
   const renderSlideshowInspector = () => {
     if (!editingEffectId) return null;
 
-    // Find the slideshow layer - might be editing by effectType ID or layer ID
-    const slideshowLayer = layers.find(l => 
-      l.id === editingEffectId || 
-      (l.type === 'effect' && l.effectType === 'imageSlideshow')
-    );
-    const layerId = slideshowLayer?.id || editingEffectId;
+    // Find the slideshow layer - MUST match by exact editingEffectId only
+    // Do NOT fall back to "any slideshow" as that would cause multiple instances to share params
+    const slideshowLayer = layers.find(l => l.id === editingEffectId);
+    const layerId = editingEffectId; // Always use the specific layer ID being edited
 
     return (
       <div className="h-full flex flex-col">

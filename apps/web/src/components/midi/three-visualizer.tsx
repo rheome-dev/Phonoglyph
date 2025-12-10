@@ -93,44 +93,21 @@ export function ThreeVisualizer({
     });
 
     Object.entries(effectInstancesRef.current).forEach(([layerId, effect]) => {
-      const layerMeta = layers.find((l) => l.id === layerId);
-      const effectTypeKey = layerMeta?.type === 'effect' ? layerMeta.effectType : undefined;
-
-      // Fallback: if no params stored under layerId, check effectType key
-      const activeParams = activeSliderValues[layerId] || (effectTypeKey ? activeSliderValues[effectTypeKey] : {}) || {};
-      const baseParams = baseParameterValues[layerId] || (effectTypeKey ? baseParameterValues[effectTypeKey] : {}) || {};
+      // IMPORTANT: Only look at params stored by the specific layer ID
+      // Do NOT fall back to effect type - that would cause parameter sharing between instances
+      const activeParams = activeSliderValues[layerId] || {};
+      const baseParams = baseParameterValues[layerId] || {};
       const paramNames = new Set([
         ...Object.keys(activeParams),
         ...Object.keys(baseParams),
       ]);
-
-      console.log('[ThreeVisualizer] layer sync', {
-        layerId,
-        paramKeys: Array.from(paramNames),
-        effectParamKeys: Object.keys(effect.parameters),
-      });
-      if (paramNames.size === 0) {
-        console.log('[ThreeVisualizer] layer sync: no relevant keys for', layerId);
-      }
 
       paramNames.forEach((paramName) => {
         const value = activeParams[paramName] ?? baseParams[paramName];
         const currentVal = (effect.parameters as any)[paramName];
         if (value === undefined) return;
         if (currentVal != value) {
-          console.log('[ThreeVisualizer] Hydrating param', {
-            layerId,
-            paramName,
-            from: currentVal,
-            to: value,
-          });
           manager.updateEffectParameter(layerId, paramName, value);
-        } else {
-          console.log('[ThreeVisualizer] Skipped param (same value)', {
-            layerId,
-            paramName,
-            value,
-          });
         }
       });
     });
