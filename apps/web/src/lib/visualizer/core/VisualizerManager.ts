@@ -452,10 +452,11 @@ export class VisualizerManager {
       }
     }
     
-    // Update all enabled effects with improved performance
+    // Update all enabled effects
+    // NOTE: Removed maxEffectsPerFrame limit - it was causing effects to stop animating
+    // when more than 3 were active. The update() methods are lightweight (just uniform updates),
+    // the real GPU work happens in rendering which occurs regardless.
     let activeEffectCount = 0;
-    const maxEffectsPerFrame = 3; // Reduced back to 3 for 30fps
-    let updatedEffects = 0;
     
     this.effects.forEach((effect, layerId) => {
       // Find the corresponding layer from the timeline state using the correct key
@@ -471,10 +472,9 @@ export class VisualizerManager {
       // Update the compositor's render state for this layer
       this.multiLayerCompositor.updateLayer(layerId, { enabled: isLayerActive });
 
-      // Only run the effect's update logic if it's visible on this frame
-      if (isLayerActive && updatedEffects < maxEffectsPerFrame) {
+      // Run the effect's update logic if it's active
+      if (isLayerActive) {
           activeEffectCount++;
-          updatedEffects++;
           
           try {
             const audioData: AudioAnalysisData = this.currentAudioData || this.createMockAudioData();
@@ -482,10 +482,7 @@ export class VisualizerManager {
             effect.update(deltaTime, audioData, midiData);
           } catch (error) {
             debugLog.error(`❌ Effect ${layerId} update failed:`, error);
-            // You might want to disable the layer in the UI state here
           }
-      } else if (isLayerActive) {
-        activeEffectCount++;
       }
     });
     
