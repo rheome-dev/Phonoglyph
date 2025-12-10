@@ -78,6 +78,9 @@ interface UnifiedTimelineProps {
   // Optional external seek override (store used by default)
   onSeek?: (time: number) => void;
   
+  // Handler for double-clicking on effect layers to open inspector
+  onLayerDoubleClick?: (layerId: string) => void;
+  
   // Collapsible sections
   className?: string;
 }
@@ -406,7 +409,8 @@ const LayerClip: React.FC<{
   activeDragLayerId: string | null;
   postDropTransform?: { id: string; x: number; y: number } | null;
   destinationAnimateId?: string | null;
-}> = ({ layer, index, onAssetDrop, activeDragLayerId, postDropTransform, destinationAnimateId }) => {
+  onLayerDoubleClick?: (layerId: string) => void;
+}> = ({ layer, index, onAssetDrop, activeDragLayerId, postDropTransform, destinationAnimateId, onLayerDoubleClick }) => {
   const { zoom, selectLayer, selectedLayerId, updateLayer } = useTimelineStore();
 
   const isSelected = selectedLayerId === layer.id;
@@ -525,6 +529,14 @@ const LayerClip: React.FC<{
     willChange: shouldDisableTransition ? undefined : 'top',
   } as React.CSSProperties;
 
+  // Handle double-click to open inspector for effect layers
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isEffect && onLayerDoubleClick && !isEmpty) {
+      onLayerDoubleClick(layer.id);
+    }
+  };
+
   return (
     <div
       ref={combinedRef}
@@ -533,6 +545,7 @@ const LayerClip: React.FC<{
       {...(!isEmpty ? listeners : {})}
       {...(!isEmpty ? attributes : {})}
       onMouseDown={() => selectLayer(layer.id)}
+      onDoubleClick={handleDoubleClick}
       className={cn(
         "absolute flex items-center justify-center rounded border z-10 group",
         isEmpty
@@ -583,6 +596,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
   stemLoadingState = false,
   stemError = null,
   onSeek,
+  onLayerDoubleClick,
   className
 }) => {
   const {
@@ -1217,6 +1231,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
                     activeDragLayerId={activeDragId}
                         postDropTransform={postDropTransform}
                         destinationAnimateId={destinationAnimateId}
+                        onLayerDoubleClick={onLayerDoubleClick}
                       />
                       {activeDragId === layer.id && (
                         <div

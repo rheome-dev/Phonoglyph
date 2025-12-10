@@ -1976,6 +1976,7 @@ function CreativeVisualizerPage() {
                     stemLoadingState={audioAnalysis.isLoading}
                     stemError={audioAnalysis.error}
                     onSeek={useTimelineStore.getState().setCurrentTime}
+                    onLayerDoubleClick={handleEffectDoubleClick}
                     className="bg-stone-800 border border-gray-700"
                   />
                 </div>
