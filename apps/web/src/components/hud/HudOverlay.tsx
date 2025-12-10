@@ -343,33 +343,115 @@ function drawMidiMeter(ctx: CanvasRenderingContext2D, w: number, h: number) {
 }
 
 function drawVuMeter(ctx: CanvasRenderingContext2D, w: number, h: number, value: number, settings: any) {
-  const color = settings.color || '#00ff55';
-  const style = settings.style || 'Needle';
-  ctx.save();
+  // Classic Analog VU Style
   ctx.clearRect(0, 0, w, h);
-  if (style === 'Needle') {
-    // Draw arc
-    ctx.strokeStyle = '#333';
-    ctx.lineWidth = 6;
+
+  // Geometry: Pivot point is well below the bottom of the canvas to create a shallow arc
+  const pivotY = h * 1.5; 
+  const pivotX = w / 2;
+  const arcRadius = pivotY - (h * 0.2); // Top of tick marks
+  
+  // Angle range (Left to Right)
+  const angleStart = -Math.PI / 4.5; // ~-40 deg
+  const angleEnd = Math.PI / 4.5;    // ~+40 deg
+  const totalAngle = angleEnd - angleStart;
+
+  // VU Scale: -20 to +3 dB
+  const minDb = -20;
+  const maxDb = 3;
+  
+  // Helper: Map dB to Angle
+  const getAngle = (db: number) => {
+    // Clamp range
+    const d = Math.max(minDb, Math.min(maxDb, db));
+    // Normalize 0..1 based on range
+    const t = (d - minDb) / (maxDb - minDb);
+    // Map to angle (Subtract PI/2 because 0 radians is 3 o'clock)
+    return angleStart + t * totalAngle - (Math.PI / 2);
+  };
+
+  // Draw Background Scale Ticks & Labels
+  ctx.lineCap = 'butt';
+  
+  // Specific tick marks for VU scale
+  const ticks = [-20, -10, -7, -5, -3, -2, -1, 0, 1, 2, 3];
+  
+  ticks.forEach(db => {
+    const angle = getAngle(db);
+    const isRed = db > 0;
+    
+    // Calculate Tick position
+    const rOuter = arcRadius;
+    const rInner = arcRadius - (h * (db === 0 || db === -20 || db === 3 ? 0.15 : 0.08));
+    
+    const x1 = pivotX + Math.cos(angle) * rOuter;
+    const y1 = pivotY + Math.sin(angle) * rOuter;
+    const x2 = pivotX + Math.cos(angle) * rInner;
+    const y2 = pivotY + Math.sin(angle) * rInner;
+
+    // Draw Tick
     ctx.beginPath();
-    ctx.arc(w/2, h*0.9, h*0.7, Math.PI, 2*Math.PI, false);
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.strokeStyle = isRed ? '#ff4444' : '#e0e0e0';
+    ctx.lineWidth = w * 0.008; // responsive line width
     ctx.stroke();
-    // Draw needle
-    const angle = Math.PI + value * Math.PI;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(w/2, h*0.9);
-    ctx.lineTo(w/2 + Math.cos(angle)*h*0.7, h*0.9 + Math.sin(angle)*h*0.7);
-    ctx.stroke();
-  } else {
-    // Bar style
-    ctx.fillStyle = color;
-    ctx.fillRect(w*0.3, h*0.1, w*0.4, h*0.8*value);
-    ctx.strokeStyle = '#333';
-    ctx.strokeRect(w*0.3, h*0.1, w*0.4, h*0.8);
+
+    // Draw Label (numbers)
+    if ([-20, -10, -5, 0, 3].includes(db)) {
+      const rText = rInner - (h * 0.1);
+      const tx = pivotX + Math.cos(angle) * rText;
+      const ty = pivotY + Math.sin(angle) * rText;
+      
+      ctx.fillStyle = isRed ? '#ff4444' : '#e0e0e0';
+      ctx.font = `bold ${Math.round(h * 0.12)}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(Math.abs(db).toString(), tx, ty);
+    }
+  });
+
+  // Draw "Red Zone" Arc line connecting the tops of positive ticks
+  const angleZero = getAngle(0);
+  const angleMax = getAngle(3);
+  ctx.beginPath();
+  ctx.arc(pivotX, pivotY, arcRadius, angleZero, angleMax);
+  ctx.strokeStyle = '#ff4444';
+  ctx.lineWidth = w * 0.008;
+  ctx.stroke();
+
+  // Draw Needle
+  // 1. Convert linear input (0-1) to dB
+  // We align 1.0 (max) to +3dB
+  let db = -60; // Floor
+  if (value > 0.001) {
+    db = 20 * Math.log10(value);
   }
-  ctx.restore();
+  const displayDb = db + 3; // Offset so 1.0 input = +3dB
+
+  const needleAngle = getAngle(displayDb);
+  
+  ctx.strokeStyle = '#ff8800'; // Classic Orange Needle
+  ctx.lineWidth = w * 0.012;
+  ctx.lineCap = 'round';
+  
+  ctx.beginPath();
+  ctx.moveTo(pivotX, pivotY); // From Pivot
+  // Needle length (slightly past the ticks)
+  const tipX = pivotX + Math.cos(needleAngle) * (arcRadius + h * 0.05);
+  const tipY = pivotY + Math.sin(needleAngle) * (arcRadius + h * 0.05);
+  ctx.lineTo(tipX, tipY);
+  
+  // Needle Glow
+  ctx.shadowColor = '#ff8800';
+  ctx.shadowBlur = 15;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  
+  // Draw Pivot Cover (The black box at the bottom)
+  ctx.fillStyle = '#111'; // Or match background color
+  ctx.beginPath();
+  ctx.fillRect(0, h * 0.85, w, h * 0.15);
 }
 
 function drawChromaWheel(ctx: CanvasRenderingContext2D, w: number, h: number, chroma: any, settings: any) {
@@ -627,19 +709,12 @@ export function HudOverlay({
           drawMidiMeter(ctx, size.width, size.height);
         }
         break;
-      case 'vuMeter': {
-        // Use RMS or peak from featureData; guard nullish
-        let value = 0;
-        if (settings.meterType === 'Peak' && typeof featureData?.peak === 'number') {
-          value = featureData.peak;
-        } else if (typeof featureData?.rms === 'number') {
-          value = featureData.rms;
-        } else if (typeof featureData === 'number') {
-          value = featureData;
-        }
-        drawVuMeter(ctx, size.width, size.height, value, settings);
+      case 'vuMeter':
+        // Handle both simple number or object {rms, peak}
+        // If it's an object, prefer RMS for the needle
+        const vuVal = typeof featureData === 'number' ? featureData : (featureData?.rms || 0);
+        drawVuMeter(ctx, width, height, vuVal, settings);
         break;
-      }
       case 'chromaWheel': {
         // featureData.chroma should be an array of 12 values (0-1)
         drawChromaWheel(ctx, size.width, size.height, featureData && featureData.chroma, settings);
