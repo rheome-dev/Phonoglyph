@@ -120,11 +120,6 @@ const EffectsLibrarySidebarWithHud: React.FC<{
   }));
   const overlayCount = layers.filter((l) => l.type === 'overlay').length;
   
-  // Get canvas size based on aspect ratio for proper overlay sizing
-  const aspectRatioConfig = getAspectRatioConfig(aspectRatio);
-  const maxCanvasWidth = parseInt(aspectRatioConfig.maxWidth || '400');
-  const maxCanvasHeight = parseInt(aspectRatioConfig.maxHeight || '711');
-  
   const handleEffectDoubleClick = (effectId: string) => {
     if (!stemUrlsReady) {
       debugLog.warn('[EffectsLibrarySidebarWithHud] Overlay creation blocked: stem URLs not ready');
@@ -150,24 +145,27 @@ const EffectsLibrarySidebarWithHud: React.FC<{
       if (overlayType) {
         debugLog.log('🎯 Adding HUD overlay to timeline:', overlayType, 'with master stem:', masterStemId);
         
-        // Calculate overlay size as a percentage of canvas (40% width, maintaining reasonable height)
-        const overlayWidth = Math.min(Math.floor(maxCanvasWidth * 0.4), 300);
-        const overlayHeight = Math.min(Math.floor(overlayWidth * 0.5), 150);
+        // HudOverlay uses scale.x/y as PERCENTAGES of parent container
+        // and position.x/y as PERCENTAGES for positioning
+        // Default to 40% width, 25% height for a reasonable overlay size
+        const overlayWidthPct = 40;
+        const overlayHeightPct = 25;
         
-        // Position within canvas bounds with some padding, offset by overlay count
-        const padding = 20;
-        const offsetStep = 30;
-        const posX = padding + (overlayCount * offsetStep) % (maxCanvasWidth - overlayWidth - padding * 2);
-        const posY = padding + (overlayCount * offsetStep) % (maxCanvasHeight - overlayHeight - padding * 2);
+        // Position within canvas bounds with some padding (as percentages), offset by overlay count
+        const paddingPct = 5;
+        const offsetStepPct = 8;
+        const posXPct = paddingPct + (overlayCount * offsetStepPct) % (100 - overlayWidthPct - paddingPct * 2);
+        const posYPct = paddingPct + (overlayCount * offsetStepPct) % (100 - overlayHeightPct - paddingPct * 2);
         
+        const newOverlayId = `overlay-${Date.now()}`;
         const newLayer: Layer = {
-          id: `overlay-${Date.now()}`,
+          id: newOverlayId,
           name: `Overlay ${overlayCount + 1}`,
           type: 'overlay',
           effectType: overlayType as any,
           src: '',
-          position: { x: posX, y: posY },
-          scale: { x: 1, y: 1 },
+          position: { x: posXPct, y: posYPct },
+          scale: { x: overlayWidthPct, y: overlayHeightPct }, // Percentages!
           rotation: 0,
           opacity: 1,
           audioBindings: [],
@@ -178,11 +176,14 @@ const EffectsLibrarySidebarWithHud: React.FC<{
           endTime: duration,
           duration,
           settings: {
-            size: { width: overlayWidth, height: overlayHeight },
             stemId: masterStemId || undefined, // Inherit master stem by default
           },
         };
         addLayer(newLayer);
+        
+        // Pass the new overlay layer ID so the parent opens the inspector for THIS layer
+        onEffectDoubleClick(newOverlayId);
+        return; // Don't call onEffectDoubleClick again below
       }
     }
     onEffectDoubleClick(effectId);
