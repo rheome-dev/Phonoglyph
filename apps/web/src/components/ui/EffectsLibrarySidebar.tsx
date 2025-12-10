@@ -263,6 +263,10 @@ export function EffectsLibrarySidebar({
   const isEditingSlideshow = editingEffectId === 'imageSlideshow' || 
     (editingEffectInstance && layers.find(l => l.id === editingEffectId && l.effectType === 'imageSlideshow'));
 
+  // Check if we're editing an overlay
+  const isEditingOverlay = editingEffectId && layers.find(l => l.id === editingEffectId && l.type === 'overlay');
+  const overlayLayer = isEditingOverlay ? layers.find(l => l.id === editingEffectId) : null;
+
   // Filter effects based on search query
   const filteredEffects = React.useMemo(() => {
     if (!searchQuery.trim()) return effects;
@@ -565,7 +569,6 @@ export function EffectsLibrarySidebar({
   const isEditingOverlay = editingEffectId && layers.find(l => l.id === editingEffectId && l.type === 'overlay');
 
   // Stem drop zone hook (must be at component level)
-  const overlayLayer = isEditingOverlay ? layers.find(l => l.id === editingEffectId) : null;
   const [{ isOver, canDrop }, drop] = useDrop({
     accept: 'AUDIO_STEM',
     drop: (item: any) => {
