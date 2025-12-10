@@ -628,10 +628,15 @@ export function HudOverlay({
         }
         break;
       case 'vuMeter': {
-        // Use RMS or peak from featureData
+        // Use RMS or peak from featureData; guard nullish
         let value = 0;
-        if (settings.meterType === 'Peak' && typeof featureData.peak === 'number') value = featureData.peak;
-        else if (typeof featureData.rms === 'number') value = featureData.rms;
+        if (settings.meterType === 'Peak' && typeof featureData?.peak === 'number') {
+          value = featureData.peak;
+        } else if (typeof featureData?.rms === 'number') {
+          value = featureData.rms;
+        } else if (typeof featureData === 'number') {
+          value = featureData;
+        }
         drawVuMeter(ctx, size.width, size.height, value, settings);
         break;
       }
