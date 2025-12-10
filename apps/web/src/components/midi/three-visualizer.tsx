@@ -42,6 +42,8 @@ interface ThreeVisualizerProps {
   onMapFeature?: (parameterId: string, featureId: string) => void;
   onUnmapFeature?: (parameterId: string) => void;
   onModulationAmountChange?: (parameterId: string, amount: number) => void;
+  // Children to render inside the canvas container (for HUD overlays)
+  children?: React.ReactNode;
 }
 
 export function ThreeVisualizer({
@@ -64,7 +66,8 @@ export function ThreeVisualizer({
   layers,
   selectedLayerId,
   onLayerSelect,
-  onLayerUpdate
+  onLayerUpdate,
+  children
 }: ThreeVisualizerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -429,6 +432,8 @@ export function ThreeVisualizer({
             </span>
           </div>
         )}
+        {/* HUD overlays and other children rendered inside canvas container */}
+        {children}
       </div>
     </div>
   );

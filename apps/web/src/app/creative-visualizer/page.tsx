@@ -2114,7 +2114,12 @@ function CreativeVisualizerPage() {
                           onLayerUpdate={updateLayer}
                       onSelectedEffectsChange={() => {}} // <-- Added no-op
                       visualizerRef={visualizerRef}
-                  />
+                  >
+                    {/* HUD Overlays rendered inside canvas container so they're constrained to canvas bounds */}
+                    <div className="absolute inset-0 pointer-events-none z-20 overflow-hidden">
+                      <HudOverlayRenderer stemUrlMap={asyncStemUrlMap} />
+                    </div>
+                  </ThreeVisualizer>
 
                   {/* Video Composition Layer Container */}
                   {showVideoComposition && (
@@ -2143,11 +2148,6 @@ function CreativeVisualizerPage() {
                       onLayerDelete={deleteLayer}
                     />
                   )}
-
-                  {/* HUD Overlays positioned relative to visualizer */}
-                  <div id="hud-overlays" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 20 }}>
-                    <HudOverlayRenderer stemUrlMap={asyncStemUrlMap} />
-                  </div>
 
                       {/* Visualizer content only - no modals here */}
                 </div>

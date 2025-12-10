@@ -88,8 +88,8 @@ interface UnifiedTimelineProps {
 // Header for composition layers in the fixed left column
 const CompositionLayerHeader: React.FC<{ layer: Layer }> = ({ layer }) => {
   const { selectLayer, deleteLayer, selectedLayerId } = useTimelineStore();
-  const isEffect = layer.type === 'effect';
-  const isEmpty = !isEffect && !layer.src;
+  const isEffectOrOverlay = layer.type === 'effect' || layer.type === 'overlay';
+  const isEmpty = !isEffectOrOverlay && !layer.src;
   const isSelected = selectedLayerId === layer.id;
 
   return (
@@ -108,6 +108,8 @@ const CompositionLayerHeader: React.FC<{ layer: Layer }> = ({ layer }) => {
           <Video className="h-4 w-4 text-emerald-400" />
         ) : layer.type === 'image' ? (
           <Image className="h-4 w-4 text-blue-400" />
+        ) : layer.type === 'overlay' ? (
+          <FileAudio className="h-4 w-4 text-cyan-400" />
         ) : (
           <Zap className="h-4 w-4 text-purple-400" />
         )}
@@ -264,7 +266,7 @@ const DroppableLane: React.FC<{
   duration,
   yOffset
 }) => {
-  const isEffect = layer.type === 'effect';
+  const isEffectOrOverlay = layer.type === 'effect' || layer.type === 'overlay';
   
   const [{ isOver, canDrop }, drop] = useDrop({
     accept: ['VIDEO_FILE', 'IMAGE_FILE', 'EFFECT_CARD'],
@@ -297,7 +299,7 @@ const DroppableLane: React.FC<{
           : isSelected
             ? "bg-white text-black border-white"
             : isActive
-              ? isEffect 
+              ? isEffectOrOverlay 
                 ? "bg-purple-400 text-black border-purple-500"
                 : "bg-emerald-500 text-black border-emerald-400"
               : "bg-stone-700 text-stone-100 border-stone-700 hover:bg-stone-600 hover:text-white hover:border-white"
@@ -330,6 +332,7 @@ const DroppableLane: React.FC<{
           <>
             {layer.type === 'video' ? <Video className="h-3 w-3" /> : 
              layer.type === 'image' ? <Image className="h-3 w-3" /> : 
+             layer.type === 'overlay' ? <FileAudio className="h-3 w-3" /> :
              <Zap className="h-3 w-3" />}
             <span className="truncate font-medium">{layer.name}</span>
           </>
@@ -414,8 +417,8 @@ const LayerClip: React.FC<{
   const { zoom, selectLayer, selectedLayerId, updateLayer } = useTimelineStore();
 
   const isSelected = selectedLayerId === layer.id;
-  const isEffect = layer.type === 'effect';
-  const isEmpty = !isEffect && !layer.src;
+  const isEffectOrOverlay = layer.type === 'effect' || layer.type === 'overlay';
+  const isEmpty = !isEffectOrOverlay && !layer.src;
   const isSlideshow = layer.effectType === 'imageSlideshow';
 
   // --- Draggable Hooks ---
@@ -529,10 +532,10 @@ const LayerClip: React.FC<{
     willChange: shouldDisableTransition ? undefined : 'top',
   } as React.CSSProperties;
 
-  // Handle double-click to open inspector for effect layers
+  // Handle double-click to open inspector for effect/overlay layers
   const handleDoubleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (isEffect && onLayerDoubleClick && !isEmpty) {
+    if (isEffectOrOverlay && onLayerDoubleClick && !isEmpty) {
       onLayerDoubleClick(layer.id);
     }
   };
@@ -765,7 +768,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
     }
     
     // Fallback: check if there's an empty lane to fill
-    const emptyLane = layers.find(layer => !layer.src && layer.type !== 'effect');
+    const emptyLane = layers.find(layer => !layer.src && layer.type !== 'effect' && layer.type !== 'overlay');
     
     if (emptyLane) {
       // Fill the empty lane with the dropped content
