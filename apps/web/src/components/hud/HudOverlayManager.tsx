@@ -52,7 +52,7 @@ export function HudOverlayRenderer({ stemUrlMap = {}, cachedAnalysis = [] }: Hud
   }));
 
   const audioController = useStemAudioController();
-  const { loadStems, getStereoWindow } = audioController;
+  const { loadStems, getStereoWindow, getAudioBuffer } = audioController;
   
   // Force re-render on animation frame for real-time updates
   const [frame, setFrame] = useState(0);
@@ -176,6 +176,18 @@ export function HudOverlayRenderer({ stemUrlMap = {}, cachedAnalysis = [] }: Hud
       }
       return null;
     }
+
+    // For consoleFeed, use real-time raw audio buffer data
+    if (overlayType === 'consoleFeed') {
+      if (getAudioBuffer && stemId) {
+        // Get a window of raw audio samples (512 samples = ~11ms at 44.1kHz)
+        const audioBuffer = getAudioBuffer(stemId, 512, currentTime);
+        if (audioBuffer) {
+          return { audioBuffer: Array.from(audioBuffer) };
+        }
+      }
+      return null;
+    }
     
     // For chroma wheel
     if (overlayType === 'chromaWheel') {
@@ -240,7 +252,7 @@ export function HudOverlayRenderer({ stemUrlMap = {}, cachedAnalysis = [] }: Hud
 
     // Default: return single value
     return featureArr[idx];
-  }, [cachedAnalysis, currentTime, duration, getStereoWindow]);
+  }, [cachedAnalysis, currentTime, duration, getStereoWindow, getAudioBuffer]);
 
   return (
     <div

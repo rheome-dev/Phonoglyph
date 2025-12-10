@@ -276,6 +276,10 @@ export function HudOverlay({
 
   // Rolling buffer for spectrogram
   const spectrogramBufferRef = useRef<Array<Float32Array>>([]);
+  
+  // Scrolling text buffer for consoleFeed
+  const consoleFeedLinesRef = useRef<string[]>([]);
+  const consoleFeedScrollOffsetRef = useRef<number>(0);
 
   // Stable refs for event handlers
   const onMouseMoveRef = useRef<(e: MouseEvent) => void>();
@@ -951,6 +955,71 @@ export function HudOverlay({
       case 'chromaWheel': {
         // featureData.chroma should be an array of 12 values (0-1)
         drawChromaWheel(ctx, size.width, size.height, featureData && featureData.chroma, settings);
+        break;
+      }
+      case 'consoleFeed': {
+        // Draw scrolling text feed of raw audio buffer data
+        const fontSize = typeof settings.fontSize === 'number' ? settings.fontSize : 12;
+        const fontColor = settings.fontColor || '#00ff00';
+        const maxLines = typeof settings.maxLines === 'number' ? settings.maxLines : 50;
+        const scrollSpeed = typeof settings.scrollSpeed === 'number' ? settings.scrollSpeed : 1;
+        
+        ctx.clearRect(0, 0, width, height);
+        ctx.fillStyle = fontColor;
+        ctx.font = `${fontSize}px monospace`;
+        ctx.textBaseline = 'top';
+        
+        // Get raw audio buffer data
+        if (featureData && featureData.audioBuffer && Array.isArray(featureData.audioBuffer)) {
+          const audioBuffer = featureData.audioBuffer;
+          
+          // Sample every Nth value to create readable feed (e.g., every 10th sample)
+          // This creates a reasonable number of lines per frame
+          const sampleStep = Math.max(1, Math.floor(audioBuffer.length / 20)); // ~20 lines per frame
+          
+          // Add individual sample values as lines
+          for (let i = 0; i < audioBuffer.length; i += sampleStep) {
+            const value = audioBuffer[i];
+            // Format as floating point with 6 decimal places
+            const formatted = value.toFixed(6).padStart(12, ' ');
+            const newLine = `[${i.toString().padStart(4, '0')}] ${formatted}`;
+            consoleFeedLinesRef.current.push(newLine);
+          }
+          
+          // Trim to maxLines (keep most recent)
+          if (consoleFeedLinesRef.current.length > maxLines) {
+            consoleFeedLinesRef.current = consoleFeedLinesRef.current.slice(-maxLines);
+          }
+        } else {
+          // No data yet, show placeholder
+          if (consoleFeedLinesRef.current.length === 0) {
+            consoleFeedLinesRef.current = ['Waiting for audio data...'];
+          }
+        }
+        
+        // Update scroll offset for smooth scrolling
+        consoleFeedScrollOffsetRef.current += scrollSpeed * 0.5;
+        if (consoleFeedScrollOffsetRef.current > fontSize + 2) {
+          consoleFeedScrollOffsetRef.current = 0;
+        }
+        
+        // Draw lines from bottom up (scrolling upward like a console)
+        const lineHeight = fontSize + 2;
+        const startY = height - consoleFeedScrollOffsetRef.current;
+        let y = startY;
+        
+        for (let i = consoleFeedLinesRef.current.length - 1; i >= 0; i--) {
+          if (y < -lineHeight) break; // Off screen top
+          if (y > height) continue; // Off screen bottom
+          
+          const line = consoleFeedLinesRef.current[i];
+          // Truncate if too long to fit
+          const maxChars = Math.floor(width / (fontSize * 0.6));
+          const displayLine = line.length > maxChars ? line.substring(0, maxChars) : line;
+          
+          ctx.fillText(displayLine, 4, y);
+          y -= lineHeight;
+        }
         break;
       }
       case 'oscilloscope': {

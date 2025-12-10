@@ -38,6 +38,7 @@ interface UseStemAudioController {
   scheduledStartTimeRef: React.MutableRefObject<number>;
   duration: number;
   getStereoWindow: (stemId: string, windowSize: number, currentTimeOverride?: number) => { left: number[], right: number[] } | null;
+  getAudioBuffer: (stemId: string, windowSize: number, currentTimeOverride?: number) => Float32Array | null;
 }
 
 export function useStemAudioController(): UseStemAudioController {
@@ -726,6 +727,61 @@ export function useStemAudioController(): UseStemAudioController {
     return { left, right };
   }, [getMasterDuration]);
 
+  // Helper: Get raw audio buffer data as Float32Array for data feed overlay
+  const getAudioBuffer = useCallback((stemId: string, windowSize: number = 512, currentTimeOverride?: number) => {
+    const buffer = audioBuffersRef.current[stemId];
+    if (!buffer) {
+      debugLog.warn('[getAudioBuffer] No buffer for stemId', stemId, 'Available buffers:', Object.keys(audioBuffersRef.current));
+      return null;
+    }
+    
+    const numChannels = buffer.numberOfChannels;
+    const bufferDuration = buffer.duration;
+    const sampleRate = buffer.sampleRate;
+    
+    // Use provided currentTime (which is loop-aware) or calculate from audio context
+    let playbackTime: number;
+    if (currentTimeOverride !== undefined) {
+      playbackTime = currentTimeOverride;
+    } else {
+      const elapsedTime = (audioContextRef.current?.currentTime || 0) - startTimeRef.current;
+      const masterDuration = getMasterDuration();
+      playbackTime = masterDuration > 0 ? (elapsedTime % masterDuration) : Math.max(0, elapsedTime);
+    }
+    
+    // Ensure playbackTime is within buffer bounds (handle looping)
+    playbackTime = playbackTime % bufferDuration;
+    if (playbackTime < 0) playbackTime += bufferDuration;
+    
+    // Calculate sample position in the buffer
+    const currentSample = Math.floor(playbackTime * sampleRate);
+    const start = Math.max(0, currentSample - windowSize);
+    const end = Math.min(buffer.length, currentSample);
+    
+    try {
+      // Get the first channel (or mono channel)
+      const channel = buffer.getChannelData(0);
+      
+      // Extract the window of samples
+      const samples = new Float32Array(end - start);
+      for (let i = 0; i < samples.length; i++) {
+        const idx = start + i;
+        if (idx >= 0 && idx < channel.length) {
+          samples[i] = channel[idx];
+        } else {
+          // Handle wrapping for looping
+          const wrappedIdx = idx < 0 ? channel.length + idx : idx % channel.length;
+          samples[i] = channel[wrappedIdx];
+        }
+      }
+      
+      return samples;
+    } catch (err) {
+      debugLog.error('[getAudioBuffer] Error accessing buffer:', err, { stemId, start, end, currentSample, playbackTime });
+      return null;
+    }
+  }, [getMasterDuration]);
+
   return {
     play,
     pause,
@@ -750,6 +806,7 @@ export function useStemAudioController(): UseStemAudioController {
     scheduledStartTimeRef, // <-- expose for mapping loop
     duration: getMasterDuration(), // <-- expose duration
     getStereoWindow, // <-- expose real-time stereo window
+    getAudioBuffer, // <-- expose raw audio buffer access
   };
 }
 
