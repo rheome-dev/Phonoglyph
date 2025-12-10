@@ -60,7 +60,7 @@ export function CollapsibleEffectsSidebar({
 
       <style jsx>{`
         .collapse-tab-right {
-          --tab-bg: rgb(28 25 23); /* stone-900 */
+          --tab-bg: rgb(0 0 0); /* black */
           position: absolute;
           top: 50%;
           left: -20px;
@@ -80,11 +80,11 @@ export function CollapsibleEffectsSidebar({
         }
         
         .collapse-tab-right:hover {
-          --tab-bg: rgb(41 37 36); /* stone-800 */
+          --tab-bg: rgb(24 24 27); /* zinc-900 */
           background: var(--tab-bg);
         }
         
-        /* Top corner connector - flat edge touches sidebar (right), curve faces main content (left) */
+        /* Top corner connector - flipped Y axis */
         .collapse-tab-right::before {
           content: '';
           position: absolute;
@@ -92,11 +92,11 @@ export function CollapsibleEffectsSidebar({
           right: 0;
           width: 12px;
           height: 12px;
-          background: radial-gradient(circle at 0% 100%, transparent 12px, var(--tab-bg) 12px);
+          background: radial-gradient(circle at 0% 0%, transparent 12px, var(--tab-bg) 12px);
           pointer-events: none;
         }
         
-        /* Bottom corner connector - flat edge touches sidebar (right), curve faces main content (left) */
+        /* Bottom corner connector - flipped Y axis */
         .collapse-tab-right::after {
           content: '';
           position: absolute;
@@ -104,7 +104,7 @@ export function CollapsibleEffectsSidebar({
           right: 0;
           width: 12px;
           height: 12px;
-          background: radial-gradient(circle at 0% 0%, transparent 12px, var(--tab-bg) 12px);
+          background: radial-gradient(circle at 0% 100%, transparent 12px, var(--tab-bg) 12px);
           pointer-events: none;
         }
       `}</style>

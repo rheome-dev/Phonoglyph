@@ -93,11 +93,11 @@ export function CollapsibleSidebar({ children }: CollapsibleSidebarProps) {
         }
         
         .collapse-tab-left:hover {
-          --tab-bg: rgb(17 24 39); /* gray-900 */
+          --tab-bg: rgb(24 24 27); /* zinc-900 */
           background: var(--tab-bg);
         }
         
-        /* Top corner connector - flat edge touches sidebar (left), curve faces main content (right) */
+        /* Top corner connector - flipped Y axis */
         .collapse-tab-left::before {
           content: '';
           position: absolute;
@@ -105,11 +105,11 @@ export function CollapsibleSidebar({ children }: CollapsibleSidebarProps) {
           left: 0;
           width: 12px;
           height: 12px;
-          background: radial-gradient(circle at 100% 100%, transparent 12px, var(--tab-bg) 12px);
+          background: radial-gradient(circle at 100% 0%, transparent 12px, var(--tab-bg) 12px);
           pointer-events: none;
         }
         
-        /* Bottom corner connector - flat edge touches sidebar (left), curve faces main content (right) */
+        /* Bottom corner connector - flipped Y axis */
         .collapse-tab-left::after {
           content: '';
           position: absolute;
@@ -117,7 +117,7 @@ export function CollapsibleSidebar({ children }: CollapsibleSidebarProps) {
           left: 0;
           width: 12px;
           height: 12px;
-          background: radial-gradient(circle at 100% 0%, transparent 12px, var(--tab-bg) 12px);
+          background: radial-gradient(circle at 100% 100%, transparent 12px, var(--tab-bg) 12px);
           pointer-events: none;
         }
       `}</style>
