@@ -923,6 +923,7 @@ function CreativeVisualizerPage() {
     
     if (existingLayer) {
       // Double-click on timeline clip: open inspector for this specific instance
+      console.log('🎯 [handleEffectDoubleClick] Opening inspector for existing layer:', effectId);
       setEditingEffectId(effectId);
     } else {
       // Double-click on effect card in library: add new effect layer and open its inspector
@@ -933,8 +934,15 @@ function CreativeVisualizerPage() {
       }
       
       // Create a new layer ID for this effect instance
-      const newLayerId = `effect-${effectId}-${Date.now()}`;
+      // Use timestamp + random suffix to guarantee uniqueness
+      const newLayerId = `effect-${effectId}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
       const { duration, addLayer, selectLayer } = useTimelineStore.getState();
+      
+      console.log('🆕 [handleEffectDoubleClick] Creating new effect layer:', {
+        effectType: effectId,
+        newLayerId,
+        existingMappingKeys: Object.keys(mappings).filter(k => k.includes(effectId))
+      });
       
       // Add new effect layer to timeline
       // IMPORTANT: Use empty settings {} - the effect class constructor defines its own defaults
@@ -963,6 +971,8 @@ function CreativeVisualizerPage() {
       // Select the new layer and open its inspector
       selectLayer(newLayerId);
       setEditingEffectId(newLayerId);
+      
+      console.log('✅ [handleEffectDoubleClick] New layer created and inspector opened:', newLayerId);
     }
   };
 
