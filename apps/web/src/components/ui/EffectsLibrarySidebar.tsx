@@ -624,26 +624,8 @@ export function EffectsLibrarySidebar({
                 const paramKey = makeParamKey(editingEffectId, paramName);
                 let mapping = mappings[paramKey];
                 
-                // SAFEGUARD: Also check for legacy mappings stored by effect TYPE (not instance ID)
-                // These should NOT be shown for specific instances - they were from old code
-                // Effect types are short strings like "metaballs", "particleNetwork"
-                // Instance IDs are longer like "effect-metaballs-1234567890-abc12"
-                const effectTypeNames = ['metaballs', 'particleNetwork', 'imageSlideshow', 'asciiFilter', 'bloomFilter'];
-                const legacyParamKey = effectTypeNames.find(t => editingEffectId.includes(t))
-                  ? makeParamKey(effectTypeNames.find(t => editingEffectId.includes(t))!, paramName)
-                  : null;
-                
-                // If we found a legacy mapping but NOT an instance-specific one, DON'T show the legacy one
-                // This ensures new instances start clean
-                if (!mapping && legacyParamKey && mappings[legacyParamKey]) {
-                  console.log('⚠️ [Inspector] Ignoring legacy effect-type mapping:', {
-                    editingEffectId,
-                    paramName,
-                    legacyParamKey,
-                    paramKey
-                  });
-                  // Don't use the legacy mapping - leave mapping as undefined
-                }
+                // SAFEGUARD: Legacy mappings stored by effect TYPE (not instance ID) are ignored
+                // The audio loop also skips these legacy mappings to prevent cross-instance effects
                 
                 const mappedFeatureId = mapping?.featureId || null;
                 const mappedFeatureName = mappedFeatureId ? featureNames[mappedFeatureId] : undefined;

@@ -1386,12 +1386,21 @@ function CreativeVisualizerPage() {
           });
         }
         
+        // Known effect TYPE names (not instance IDs) - these are legacy mappings that should be skipped
+        const effectTypeNames = ['metaballs', 'particleNetwork', 'imageSlideshow', 'asciiFilter', 'bloomFilter'];
+        
         for (const [paramKey, featureId] of cachedMappings) {
           if (!featureId) continue;
 
           const parsedKey = parseParamKey(paramKey);
           if (!parsedKey) continue;
           const { effectInstanceId: effectId, paramName } = parsedKey;
+
+          // SKIP legacy mappings that use effect TYPE instead of instance ID
+          // These would apply to ALL instances of that effect type, which is wrong
+          if (effectTypeNames.includes(effectId)) {
+            continue; // Skip this legacy mapping
+          }
 
           const featureStemType = getStemTypeFromFeatureId(featureId);
           if (!featureStemType) {
