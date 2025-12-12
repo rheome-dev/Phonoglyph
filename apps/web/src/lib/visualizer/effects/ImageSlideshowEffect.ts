@@ -516,9 +516,10 @@ export class ImageSlideshowEffect implements VisualEffect {
               // Fetch image data
               const response = await fetch(url);
               if (!response.ok) {
-                  // Provide more specific error messages
                   if (response.status === 403) {
-                      throw new Error(`Image access forbidden (403). The signed URL may have expired. URL: ${url.substring(0, 100)}...`);
+                      const msg = `Image access forbidden (403). The signed URL may have expired. This usually auto-corrects when the project assets refresh. URL: ${url.substring(0, 50)}...`;
+                      slideshowLog.warn(msg); // Warn instead of error to reduce console noise
+                      throw new Error(msg);
                   } else if (response.status === 404) {
                       throw new Error(`Image not found (404). URL: ${url.substring(0, 100)}...`);
                   } else {

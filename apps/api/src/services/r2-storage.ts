@@ -91,7 +91,7 @@ export async function configureBucketCors(): Promise<void> {
           'x-amz-date',
           'x-amz-security-token',
         ],
-        ExposeHeaders: ['ETag'],
+        ExposeHeaders: ['ETag', 'Content-Length', 'Content-Type', 'Date'],
         MaxAgeSeconds: 3000,
       },
     ],

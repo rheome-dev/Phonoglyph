@@ -554,6 +554,75 @@ function CreativeVisualizerPage() {
     setIsInitialized(true);
   }, [searchParams]);
 
+  // Asset Refresher: Fix expired signed URLs for Image Slideshow layers
+  useEffect(() => {
+    // Only run if we have files and layers populated
+    if (!projectFiles?.files || !isInitialized || layers.length === 0) return;
+
+    const refreshAssets = () => {
+      let updatesMade = false;
+      const files = projectFiles.files;
+      
+      // Iterate layers to find ImageSlideshow effects with expired/mismatched URLs
+      const updatedLayers = layers.map(layer => {
+        if (layer.effectType === 'imageSlideshow' && layer.settings?.images?.length > 0) {
+          const currentImages = layer.settings.images as string[];
+          let newImages: string[] = [];
+
+          // Heuristic: Match by base URL path (ignoring query params which contain signatures)
+          newImages = currentImages.map(url => {
+            // Ignore non-R2 URLs
+            if (!url.includes('cloudflarestorage') && !url.includes('phonoglyph')) return url;
+            
+            // Extract the base path without query params
+            const currentUrlBase = url.split('?')[0];
+            
+            // Find a matching file in the fresh project files
+            const found = files.find(f => {
+              if (!f.downloadUrl) return false;
+              const freshUrlBase = f.downloadUrl.split('?')[0];
+              return freshUrlBase === currentUrlBase;
+            });
+            
+            if (found && found.downloadUrl) {
+              return found.downloadUrl;
+            }
+            return url;
+          });
+          
+          // Check if any URLs actually changed
+          if (JSON.stringify(newImages) !== JSON.stringify(currentImages)) {
+            updatesMade = true;
+            return {
+              ...layer,
+              settings: {
+                ...layer.settings,
+                images: newImages
+              }
+            };
+          }
+        }
+        return layer;
+      });
+
+      if (updatesMade) {
+        debugLog.log('🔄 Refreshed expired asset URLs in timeline layers');
+        // Apply updates to specific layers that changed
+        updatedLayers.forEach(l => {
+          const original = layers.find(old => old.id === l.id);
+          // Only update if settings specifically changed to avoid re-renders
+          if (original && JSON.stringify(original.settings) !== JSON.stringify(l.settings)) {
+            updateLayer(l.id, { settings: l.settings });
+          }
+        });
+      }
+    };
+
+    // Debounce slightly to ensure files are fully loaded
+    const timer = setTimeout(refreshAssets, 500);
+    return () => clearTimeout(timer);
+  }, [projectFiles?.files, isInitialized, layers.length, updateLayer]);
+
   // Helper to sort stems: non-master first, master last
   function sortStemsWithMasterLast(stems: any[]) {
     return [...stems].sort((a, b) => {
