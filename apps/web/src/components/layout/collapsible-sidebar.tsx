@@ -37,7 +37,7 @@ export function CollapsibleSidebar({ children }: CollapsibleSidebarProps) {
           <div className={cn("flex items-center mb-6", isCollapsed ? 'justify-center' : 'justify-between')}>
             <div className={cn("flex items-center gap-3 text-2xl font-semibold text-gray-100", isCollapsed && "hidden")}>
               <img 
-                src="/logo/IMG_1255.PNG" 
+                src="/logo/rayboxLogo.png" 
                 alt="Raybox Logo" 
                 className="h-8 w-auto object-contain"
               />
