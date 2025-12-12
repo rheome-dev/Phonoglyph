@@ -26,6 +26,13 @@ export default function RootLayout({
           type="font/ttf"
           crossOrigin="anonymous"
         />
+        <link
+          rel="preload"
+          href="/fonts/DM_Sans,Instrument_Serif/Instrument_Serif/InstrumentSerif-Regular.ttf"
+          as="font"
+          type="font/ttf"
+          crossOrigin="anonymous"
+        />
       </head>
       <body className={inter.className}>
         <TRPCProvider>
