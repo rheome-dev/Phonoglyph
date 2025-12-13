@@ -777,13 +777,26 @@ function CreativeVisualizerPage() {
     file.file_type === 'audio' && file.upload_status === 'completed'
   ) || [];
 
-  // Load all analyses when stems are available
+  // Load analysis for ALL stems (Project Files + Overlay Layer References)
   useEffect(() => {
-    if (availableStems.length > 0) {
-      const stemIds = availableStems.map(stem => stem.id);
-      audioAnalysis.loadAnalysis(stemIds);
+    // 1. Start with stems from the project
+    const idsToLoad = new Set(availableStems.map(s => s.id));
+    
+    // 2. Add stems referenced in overlay layers
+    layers.forEach(layer => {
+      if (layer.type === 'overlay') {
+        const s = (layer as any).settings;
+        const stemId = s?.stemId || s?.stem?.id;
+        if (stemId) idsToLoad.add(stemId);
+      }
+    });
+
+    const uniqueIds = Array.from(idsToLoad);
+    if (uniqueIds.length > 0) {
+      // Only trigger if we have IDs to load
+      audioAnalysis.loadAnalysis(uniqueIds);
     }
-  }, [availableStems.length]); // Only depend on stem count, not the analysis functions
+  }, [availableStems.length, layers.length]); // Depend on lengths to catch new additions
 
 
 
@@ -1919,8 +1932,22 @@ function CreativeVisualizerPage() {
   }, [isPlaying, hasStems, stemAudio]);
 
 
-  // In the render, use the sorted stems
-  const sortedAvailableStems = sortStemsWithMasterLast(availableStems);
+  // Merge project files with any "orphaned" stems found in analysis cache (for UI labels)
+  const allStemsForUI = React.useMemo(() => {
+    const baseStems = sortStemsWithMasterLast(availableStems);
+    
+    // Find stems in cachedAnalysis that aren't in baseStems
+    const recoveredStems = (audioAnalysis.cachedAnalysis || [])
+      .filter(a => !baseStems.find(s => s.id === a.fileMetadataId))
+      .map(a => ({
+        id: a.fileMetadataId,
+        file_name: `Recovered ${a.stemType || 'Stem'}`,
+        stem_type: a.stemType,
+        is_master: false
+      }));
+      
+    return [...baseStems, ...recoveredStems];
+  }, [availableStems, audioAnalysis.cachedAnalysis]);
 
   // Log audio files before building stemUrlMap
   useEffect(() => {
@@ -2334,7 +2361,7 @@ function CreativeVisualizerPage() {
                 {/* Unified Timeline */}
                 <div className="flex-shrink-0 mb-4">
                   <UnifiedTimeline
-                    stems={sortedAvailableStems}
+                    stems={allStemsForUI}
                     masterStemId={projectAudioFiles?.files?.find(f => f.is_master)?.id ?? null}
                     onStemSelect={handleStemSelect}
                     activeTrackId={activeTrackId}
@@ -2395,7 +2422,7 @@ function CreativeVisualizerPage() {
                 setActiveParam={setActiveParam}
                 aspectRatio={visualizerAspectRatio}
                 masterStemId={projectAudioFiles?.files?.find(f => f.is_master)?.id ?? null}
-                availableStems={sortedAvailableStems}
+                availableStems={allStemsForUI}
                 onLayerUpdate={updateLayer}
               />
             </CollapsibleEffectsSidebar>
