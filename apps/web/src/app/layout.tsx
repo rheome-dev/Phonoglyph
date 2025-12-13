@@ -28,7 +28,7 @@ export default function RootLayout({
         />
         <link
           rel="preload"
-          href="/fonts/DM_Sans,Instrument_Serif/Instrument_Serif/InstrumentSerif-Regular.ttf"
+          href="/fonts/InstrumentSerif-Regular.ttf"
           as="font"
           type="font/ttf"
           crossOrigin="anonymous"
