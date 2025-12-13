@@ -1947,26 +1947,67 @@ function CreativeVisualizerPage() {
       debugLog.log('fetchUrls - audioFiles:', audioFiles);
       debugLog.log('fetchUrls - overlayStemIds:', Array.from(overlayStemIds));
       
-      // Fetch URLs for all audio files in project
-      const entries = await Promise.all(audioFiles.map(async f => {
-        let url = f.downloadUrl;
-        if (!url && getDownloadUrlMutation) {
-          try {
-            // Debug: Check if f.id exists
-            if (!f.id) {
-              debugLog.error('fetchUrls - File missing ID:', f);
-              return [f.id, null];
+      // Helper to batch fetch URLs with rate limiting
+      const batchFetchUrls = async (items: Array<{ id: string; name?: string }>, batchSize: number = 3, delayMs: number = 200) => {
+        const results: Array<[string, string | null]> = [];
+        
+        // Process in batches to avoid overwhelming the browser
+        for (let i = 0; i < items.length; i += batchSize) {
+          const batch = items.slice(i, i + batchSize);
+          
+          const batchResults = await Promise.allSettled(
+            batch.map(async (item) => {
+              if (!getDownloadUrlMutation) return [item.id, null] as [string, string | null];
+              
+              try {
+                debugLog.log('fetchUrls - Getting download URL for file:', { id: item.id, name: item.name });
+                const result = await getDownloadUrlMutation.mutateAsync({ fileId: item.id });
+                return [item.id, result.downloadUrl] as [string, string | null];
+              } catch (err) {
+                debugLog.error('[CreativeVisualizerPage] Failed to fetch downloadUrl for', item.id, err);
+                return [item.id, null] as [string, string | null];
+              }
+            })
+          );
+          
+          // Extract results from settled promises
+          batchResults.forEach((result, idx) => {
+            if (result.status === 'fulfilled') {
+              results.push(result.value);
+            } else {
+              results.push([batch[idx].id, null]);
             }
-            
-            debugLog.log('fetchUrls - Getting download URL for file:', { id: f.id, name: f.file_name });
-            const result = await getDownloadUrlMutation.mutateAsync({ fileId: f.id });
-            url = result.downloadUrl;
-          } catch (err) {
-            debugLog.error('[CreativeVisualizerPage] Failed to fetch downloadUrl for', f.id, err);
+          });
+          
+          // Add delay between batches to avoid overwhelming the browser
+          if (i + batchSize < items.length) {
+            await new Promise(resolve => setTimeout(resolve, delayMs));
           }
         }
-        return [f.id, url];
-      }));
+        
+        return results;
+      };
+      
+      // First, collect files that need URL fetching (don't have downloadUrl)
+      const filesNeedingUrls = audioFiles.filter(f => !f.downloadUrl && f.id);
+      
+      // Fetch URLs for files that need them (in batches)
+      let entries: Array<[string, string | null]> = [];
+      
+      if (filesNeedingUrls.length > 0 && getDownloadUrlMutation) {
+        entries = await batchFetchUrls(
+          filesNeedingUrls.map(f => ({ id: f.id, name: f.file_name })),
+          3, // Process 3 at a time
+          200 // 200ms delay between batches
+        );
+      }
+      
+      // Add files that already have URLs
+      audioFiles.forEach(f => {
+        if (f.downloadUrl) {
+          entries.push([f.id, f.downloadUrl]);
+        }
+      });
       
       // Also fetch URLs for overlay-referenced stems that aren't in audioFiles
       // (in case they exist in the project but weren't included in the audioFiles query)
@@ -1976,19 +2017,17 @@ function CreativeVisualizerPage() {
       
       if (missingStemIds.length > 0 && getDownloadUrlMutation) {
         debugLog.log('fetchUrls - Fetching URLs for overlay-referenced stems not in audioFiles:', missingStemIds);
-        const missingEntries = await Promise.all(missingStemIds.map(async (stemId) => {
-          try {
-            const result = await getDownloadUrlMutation.mutateAsync({ fileId: stemId });
-            return [stemId, result.downloadUrl];
-          } catch (err) {
-            debugLog.warn('[CreativeVisualizerPage] Failed to fetch URL for overlay-referenced stem:', stemId, err);
-            return [stemId, null];
-          }
-        }));
+        const missingEntries = await batchFetchUrls(
+          missingStemIds.map(id => ({ id })),
+          2, // Smaller batch size for overlay stems
+          300 // Longer delay for overlay stems
+        );
         entries.push(...missingEntries);
       }
       
-      const map = Object.fromEntries(entries.filter(([id, url]) => !!url));
+      const map = Object.fromEntries(
+        entries.filter(([id, url]) => !!url).map(([id, url]) => [id, url as string])
+      ) as Record<string, string>;
       setAsyncStemUrlMap(map);
       if (Object.keys(map).length > 0) {
         debugLog.log('[CreativeVisualizerPage] asyncStemUrlMap populated:', map);
@@ -2007,70 +2046,84 @@ function CreativeVisualizerPage() {
       const overlayLayers = layers.filter(layer => layer.type === 'overlay');
       if (overlayLayers.length === 0) return;
 
-      let updatesMade = false;
-      const updatedLayers = await Promise.all(layers.map(async (layer) => {
-        if (layer.type === 'overlay') {
-          const settings = (layer as any).settings || {};
-          const stemId = settings.stemId || settings.stem?.id;
-          
-          if (!stemId) return layer;
+      // Collect stems that need URL refresh
+      const stemsNeedingRefresh: Array<{ layer: Layer; stemId: string }> = [];
+      
+      overlayLayers.forEach(layer => {
+        const settings = (layer as any).settings || {};
+        const stemId = settings.stemId || settings.stem?.id;
+        
+        if (!stemId) return;
 
-          // Check if we have a valid URL for this stem
-          const currentUrl = asyncStemUrlMap[stemId] || settings.stem?.url;
-          
-          // If URL is missing or looks expired (R2 URLs with query params that might be expired)
-          if (!currentUrl || (currentUrl.includes('cloudflarestorage') && !asyncStemUrlMap[stemId])) {
-            // Try to fetch a fresh URL for this stem
-            // First check if it's in projectAudioFiles
-            const fileInProject = projectAudioFiles?.files?.find(f => f.id === stemId);
-            
-            if (fileInProject) {
-              // File exists in project, fetch fresh URL
-              try {
-                const result = await getDownloadUrlMutation.mutateAsync({ fileId: stemId });
-                const freshUrl = result.downloadUrl;
-                
-                // Update the stemUrlMap
+        // Check if we have a valid URL for this stem
+        const currentUrl = asyncStemUrlMap[stemId] || settings.stem?.url;
+        
+        // If URL is missing or looks expired (R2 URLs with query params that might be expired)
+        if (!currentUrl || (currentUrl.includes('cloudflarestorage') && !asyncStemUrlMap[stemId])) {
+          // Check if it's in projectAudioFiles
+          const fileInProject = projectAudioFiles?.files?.find(f => f.id === stemId);
+          if (fileInProject) {
+            stemsNeedingRefresh.push({ layer, stemId });
+          } else {
+            debugLog.warn('[CreativeVisualizerPage] Overlay references stem not in project:', stemId);
+          }
+        }
+      });
+
+      if (stemsNeedingRefresh.length === 0) return;
+
+      // Process URL refreshes in small batches with delays
+      const batchSize = 2;
+      const delayMs = 300;
+      let updatesMade = false;
+
+      for (let i = 0; i < stemsNeedingRefresh.length; i += batchSize) {
+        const batch = stemsNeedingRefresh.slice(i, i + batchSize);
+        
+        const batchResults = await Promise.allSettled(
+          batch.map(async ({ layer, stemId }) => {
+            try {
+              const result = await getDownloadUrlMutation.mutateAsync({ fileId: stemId });
+              const freshUrl = result.downloadUrl;
+              
+              // Update the stemUrlMap
+              if (freshUrl) {
                 setAsyncStemUrlMap(prev => ({
                   ...prev,
                   [stemId]: freshUrl
                 }));
-                
-                // Update layer settings with fresh URL
-                updatesMade = true;
-                return {
-                  ...layer,
-                  settings: {
-                    ...settings,
-                    stem: {
-                      ...(settings.stem || {}),
-                      id: stemId,
-                      url: freshUrl
-                    }
-                  }
-                };
-              } catch (err) {
-                debugLog.error('[CreativeVisualizerPage] Failed to refresh URL for overlay stem:', stemId, err);
               }
-            } else {
-              // Stem ID not found in current project files - might have been deleted
-              // But we'll keep the reference in case it gets re-added
-              debugLog.warn('[CreativeVisualizerPage] Overlay references stem not in project:', stemId);
+              
+              // Update layer settings with fresh URL
+              const settings = (layer as any).settings || {};
+              updateLayer(layer.id, {
+                settings: {
+                  ...settings,
+                  stem: {
+                    ...(settings.stem || {}),
+                    id: stemId,
+                    url: freshUrl
+                  }
+                }
+              });
+              
+              updatesMade = true;
+              return { success: true, layerId: layer.id };
+            } catch (err) {
+              debugLog.error('[CreativeVisualizerPage] Failed to refresh URL for overlay stem:', stemId, err);
+              return { success: false, layerId: layer.id };
             }
-          }
+          })
+        );
+
+        // Add delay between batches
+        if (i + batchSize < stemsNeedingRefresh.length) {
+          await new Promise(resolve => setTimeout(resolve, delayMs));
         }
-        return layer;
-      }));
+      }
 
       if (updatesMade) {
         debugLog.log('🔄 Refreshed expired stem URLs in overlay layers');
-        // Apply updates to individual layers
-        updatedLayers.forEach(l => {
-          const original = layers.find(old => old.id === l.id);
-          if (original && JSON.stringify(original.settings) !== JSON.stringify(l.settings)) {
-            updateLayer(l.id, { settings: l.settings });
-          }
-        });
       }
     };
 
@@ -2079,7 +2132,7 @@ function CreativeVisualizerPage() {
       refreshOverlayStemUrls().catch(err => {
         debugLog.error('[CreativeVisualizerPage] Error in refreshOverlayStemUrls:', err);
       });
-    }, 500);
+    }, 1000); // Increased debounce time
     return () => clearTimeout(timeoutId);
   }, [layers, asyncStemUrlMap, isInitialized, getDownloadUrlMutation, projectAudioFiles?.files, updateLayer]);
 
