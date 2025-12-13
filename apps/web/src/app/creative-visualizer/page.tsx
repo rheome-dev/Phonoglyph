@@ -567,6 +567,7 @@ function CreativeVisualizerPage() {
     const refreshAssets = () => {
       let updatesMade = false;
       const files = projectFiles.files;
+      const fileIdMap = new Map(files.map(f => [f.id, f.downloadUrl]));
       
       // Iterate layers to find ImageSlideshow effects with expired/mismatched URLs
       const updatedLayers = layers.map(layer => {
@@ -575,42 +576,51 @@ function CreativeVisualizerPage() {
           let newImages: string[] = [];
           let layerModified = false;
 
-          // Strategy 1: If we have stored IDs (best case), use them
-          if (layer.settings.imageIds && Array.isArray(layer.settings.imageIds)) {
-            const fileIdMap = new Map(files.map(f => [f.id, f.downloadUrl]));
-            newImages = layer.settings.imageIds.map((id: string) => fileIdMap.get(id)).filter(Boolean) as string[];
+          // STRATEGY 0: Collection Match (The "Manual Click" Fix)
+          // If we know the collection ID, just get all fresh URLs for that collection.
+          if (layer.settings.collectionId) {
+            const collectionFiles = files.filter(f => f.collection_id === layer.settings.collectionId && f.downloadUrl);
             
+            if (collectionFiles.length > 0) {
+              // Sort by name or creation to ensure consistent order if needed, 
+              // or just rely on the API order which matches the manual behavior
+              newImages = collectionFiles.map(f => f.downloadUrl) as string[];
+              
+              // If the fresh list is different from current (expired) list, apply it
+              if (JSON.stringify(newImages) !== JSON.stringify(currentImages)) {
+                debugLog.log('🔄 Strategy 0 (Collection) matched for layer', layer.id);
+                layerModified = true;
+              }
+            }
+          }
+
+          // STRATEGY 1: Stored IDs (Fallback)
+          if (!layerModified && layer.settings.imageIds && Array.isArray(layer.settings.imageIds)) {
+            newImages = layer.settings.imageIds.map((id: string) => fileIdMap.get(id)).filter(Boolean) as string[];
             if (newImages.length > 0 && JSON.stringify(newImages) !== JSON.stringify(currentImages)) {
+              debugLog.log('🔄 Strategy 1 (IDs) matched for layer', layer.id);
               layerModified = true;
             }
           } 
           
-          // Strategy 2: Robust Pathname Matching (Fall back if IDs missing or failed)
-          if (!layerModified || newImages.length === 0) {
+          // STRATEGY 2: Filename Heuristic (Last Resort)
+          if (!layerModified && (!newImages || newImages.length === 0)) {
             newImages = currentImages.map(url => {
-              // Ignore non-R2 URLs
               if (!url.includes('cloudflarestorage') && !url.includes('phonoglyph')) return url;
+              const urlFilename = url.split('?')[0].split('/').pop();
+              if (!urlFilename) return url;
+
+              const found = files.find(f => {
+                if (!f.downloadUrl) return false;
+                const fileFilename = f.downloadUrl.split('?')[0].split('/').pop();
+                return fileFilename && (fileFilename.includes(urlFilename) || urlFilename.includes(fileFilename));
+              });
               
-              try {
-                // Compare PATHNAMES only (ignores query params/signatures)
-                const currentObj = new URL(url);
-                const currentPath = currentObj.pathname;
-                
-                const found = files.find(f => {
-                  if (!f.downloadUrl) return false;
-                  try {
-                    const freshObj = new URL(f.downloadUrl);
-                    return freshObj.pathname === currentPath;
-                  } catch { return false; }
-                });
-                
-                return found?.downloadUrl || url;
-              } catch (e) {
-                return url;
-              }
+              return (found && found.downloadUrl) ? found.downloadUrl : url;
             });
             
             if (JSON.stringify(newImages) !== JSON.stringify(currentImages)) {
+              debugLog.log('🔄 Strategy 2 (Filename) matched for layer', layer.id);
               layerModified = true;
             }
           }
@@ -630,7 +640,7 @@ function CreativeVisualizerPage() {
       });
 
       if (updatesMade) {
-        debugLog.log('🔄 Refreshed expired asset URLs in timeline layers');
+        debugLog.log('✅ Asset Refresher applied updates to layers');
         // Apply updates to individual layers to avoid race conditions
         updatedLayers.forEach(l => {
           const original = layers.find(old => old.id === l.id);
@@ -642,7 +652,7 @@ function CreativeVisualizerPage() {
     };
 
     // Debounce slightly to ensure files are fully loaded
-    const timer = setTimeout(refreshAssets, 1000); // Increased wait time slightly
+    const timer = setTimeout(refreshAssets, 100);
     return () => clearTimeout(timer);
   }, [projectFiles?.files, isInitialized, layers.length, updateLayer]);
 

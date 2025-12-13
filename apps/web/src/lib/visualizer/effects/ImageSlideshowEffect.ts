@@ -43,6 +43,7 @@ export class ImageSlideshowEffect implements VisualEffect {
   private errorCooldownMs: number = 2000; // 2 seconds cooldown
   private isNetworkThrottled: boolean = false; // Hard stop on 403 errors
   private consecutiveErrors: number = 0; // Track consecutive 403 errors
+  private blacklistedUrls: Set<string> = new Set(); // URLs that returned 403/404
 
   constructor(config?: any) {
     this.id = config?.id || `imageSlideshow_${Math.random().toString(36).substr(2, 9)}`;
@@ -287,6 +288,8 @@ export class ImageSlideshowEffect implements VisualEffect {
         this.textureCache.forEach(t => t.dispose());
         this.textureCache.clear();
         this.loadingImages.clear();
+        // Clear blacklist so refreshed URLs can be loaded
+        this.blacklistedUrls.clear();
         
         // Clear current texture
         if (this.material.map) {
@@ -506,6 +509,11 @@ export class ImageSlideshowEffect implements VisualEffect {
   }
 
   private loadTexture(url: string): Promise<THREE.Texture> {
+      // Check if URL is blacklisted (403/404)
+      if (this.blacklistedUrls.has(url)) {
+        return Promise.reject(new Error("URL is blacklisted (403/404)"));
+      }
+
       // STRICT CHECK: If throttled, reject immediately to save network
       if (this.isNetworkThrottled) {
         return Promise.reject(new Error("Network throttled due to previous 403s"));
@@ -535,24 +543,27 @@ export class ImageSlideshowEffect implements VisualEffect {
               // Fetch image data
               const response = await fetch(url);
               if (!response.ok) {
-                  if (response.status === 403) {
-                      this.consecutiveErrors++;
+                  if (response.status === 403 || response.status === 404) {
+                      // Add to blacklist to prevent future attempts
+                      this.blacklistedUrls.add(url);
                       
-                      // If we hit 3 consecutive 403s, stop trying for 5 seconds
-                      if (this.consecutiveErrors >= 3) {
-                          this.isNetworkThrottled = true;
-                          slideshowLog.warn("⛔ [ImageSlideshow] Too many 403s. Pausing loading for 5s.");
-                          setTimeout(() => {
-                              this.isNetworkThrottled = false;
-                              this.consecutiveErrors = 0;
-                          }, 5000);
+                      if (response.status === 403) {
+                          this.consecutiveErrors++;
+                          
+                          // If we hit 3 consecutive 403s, stop trying for 5 seconds
+                          if (this.consecutiveErrors >= 3) {
+                              this.isNetworkThrottled = true;
+                              slideshowLog.warn("⛔ [ImageSlideshow] Too many 403s. Pausing loading for 5s.");
+                              setTimeout(() => {
+                                  this.isNetworkThrottled = false;
+                                  this.consecutiveErrors = 0;
+                              }, 5000);
+                          }
                       }
                       
-                      const msg = `403 Forbidden: ${url.substring(0, 30)}...`;
+                      const msg = `⛔ ${response.status} Forbidden: URL Blacklisted. ${url.substring(0, 30)}...`;
                       slideshowLog.warn(msg);
                       throw new Error(msg);
-                  } else if (response.status === 404) {
-                      throw new Error(`Image not found (404). URL: ${url.substring(0, 100)}...`);
                   } else {
                       throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
                   }
