@@ -39,6 +39,8 @@ export class ImageSlideshowEffect implements VisualEffect {
   private isAdvancing: boolean = false; // Prevent concurrent advanceSlide calls
   private pendingTextureResolvers: Map<string, ((texture: THREE.Texture) => void)[]> = new Map();
   private frameCounter: number = 0; // For periodic debug logging
+  private lastErrorTime: number = 0;
+  private errorCooldownMs: number = 2000; // 2 seconds cooldown
 
   constructor(config?: any) {
     this.id = config?.id || `imageSlideshow_${Math.random().toString(36).substr(2, 9)}`;
@@ -113,6 +115,11 @@ export class ImageSlideshowEffect implements VisualEffect {
 
   update(deltaTime: number, audioData: AudioAnalysisData, midiData: LiveMIDIData): void {
       if (!this.enabled) return;
+
+      // Emergency backoff if we are hitting errors (e.g. 403s)
+      if (Date.now() - this.lastErrorTime < this.errorCooldownMs) {
+        return;
+      }
 
       this.frameCounter++;
       
@@ -576,6 +583,9 @@ export class ImageSlideshowEffect implements VisualEffect {
           } catch (err: any) {
               this.loadingImages.delete(url);
               this.pendingTextureResolvers.delete(url);
+              
+              // Trigger cooldown on error to prevent flooding
+              this.lastErrorTime = Date.now();
               
               // Provide more detailed error information
               let errorMessage = 'Texture load failed';

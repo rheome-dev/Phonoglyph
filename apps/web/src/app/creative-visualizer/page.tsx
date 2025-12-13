@@ -495,7 +495,7 @@ function CreativeVisualizerPage() {
     isLoading: projectFilesLoading 
   } = trpc.file.getUserFiles.useQuery(
     { 
-      limit: 200, 
+      limit: 1000, // Increased from 200 to ensure we find all assets
       fileType: 'all',
       projectId: currentProjectId || undefined
     },
@@ -568,30 +568,49 @@ function CreativeVisualizerPage() {
         if (layer.effectType === 'imageSlideshow' && layer.settings?.images?.length > 0) {
           const currentImages = layer.settings.images as string[];
           let newImages: string[] = [];
+          let layerModified = false;
 
-          // Heuristic: Match by base URL path (ignoring query params which contain signatures)
-          newImages = currentImages.map(url => {
-            // Ignore non-R2 URLs
-            if (!url.includes('cloudflarestorage') && !url.includes('phonoglyph')) return url;
+          // Strategy 1: If we have stored IDs (best case), use them
+          if (layer.settings.imageIds && Array.isArray(layer.settings.imageIds)) {
+            const fileIdMap = new Map(files.map(f => [f.id, f.downloadUrl]));
+            newImages = layer.settings.imageIds.map((id: string) => fileIdMap.get(id)).filter(Boolean) as string[];
             
-            // Extract the base path without query params
-            const currentUrlBase = url.split('?')[0];
-            
-            // Find a matching file in the fresh project files
-            const found = files.find(f => {
-              if (!f.downloadUrl) return false;
-              const freshUrlBase = f.downloadUrl.split('?')[0];
-              return freshUrlBase === currentUrlBase;
+            if (newImages.length > 0 && JSON.stringify(newImages) !== JSON.stringify(currentImages)) {
+              layerModified = true;
+            }
+          } 
+          
+          // Strategy 2: Robust Pathname Matching (Fall back if IDs missing or failed)
+          if (!layerModified || newImages.length === 0) {
+            newImages = currentImages.map(url => {
+              // Ignore non-R2 URLs
+              if (!url.includes('cloudflarestorage') && !url.includes('phonoglyph')) return url;
+              
+              try {
+                // Compare PATHNAMES only (ignores query params/signatures)
+                const currentObj = new URL(url);
+                const currentPath = currentObj.pathname;
+                
+                const found = files.find(f => {
+                  if (!f.downloadUrl) return false;
+                  try {
+                    const freshObj = new URL(f.downloadUrl);
+                    return freshObj.pathname === currentPath;
+                  } catch { return false; }
+                });
+                
+                return found?.downloadUrl || url;
+              } catch (e) {
+                return url;
+              }
             });
             
-            if (found && found.downloadUrl) {
-              return found.downloadUrl;
+            if (JSON.stringify(newImages) !== JSON.stringify(currentImages)) {
+              layerModified = true;
             }
-            return url;
-          });
-          
-          // Check if any URLs actually changed
-          if (JSON.stringify(newImages) !== JSON.stringify(currentImages)) {
+          }
+
+          if (layerModified && newImages.length > 0) {
             updatesMade = true;
             return {
               ...layer,
@@ -607,10 +626,9 @@ function CreativeVisualizerPage() {
 
       if (updatesMade) {
         debugLog.log('🔄 Refreshed expired asset URLs in timeline layers');
-        // Apply updates to specific layers that changed
+        // Apply updates to individual layers to avoid race conditions
         updatedLayers.forEach(l => {
           const original = layers.find(old => old.id === l.id);
-          // Only update if settings specifically changed to avoid re-renders
           if (original && JSON.stringify(original.settings) !== JSON.stringify(l.settings)) {
             updateLayer(l.id, { settings: l.settings });
           }
@@ -619,7 +637,7 @@ function CreativeVisualizerPage() {
     };
 
     // Debounce slightly to ensure files are fully loaded
-    const timer = setTimeout(refreshAssets, 500);
+    const timer = setTimeout(refreshAssets, 1000); // Increased wait time slightly
     return () => clearTimeout(timer);
   }, [projectFiles?.files, isInitialized, layers.length, updateLayer]);
 
