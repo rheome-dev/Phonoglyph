@@ -41,6 +41,8 @@ export class ImageSlideshowEffect implements VisualEffect {
   private frameCounter: number = 0; // For periodic debug logging
   private lastErrorTime: number = 0;
   private errorCooldownMs: number = 2000; // 2 seconds cooldown
+  private isNetworkThrottled: boolean = false; // Hard stop on 403 errors
+  private consecutiveErrors: number = 0; // Track consecutive 403 errors
 
   constructor(config?: any) {
     this.id = config?.id || `imageSlideshow_${Math.random().toString(36).substr(2, 9)}`;
@@ -115,6 +117,11 @@ export class ImageSlideshowEffect implements VisualEffect {
 
   update(deltaTime: number, audioData: AudioAnalysisData, midiData: LiveMIDIData): void {
       if (!this.enabled) return;
+
+      // STRICT CHECK: If network is throttled due to 403s, stop all operations
+      if (this.isNetworkThrottled) {
+        return;
+      }
 
       // Emergency backoff if we are hitting errors (e.g. 403s)
       if (Date.now() - this.lastErrorTime < this.errorCooldownMs) {
@@ -499,6 +506,11 @@ export class ImageSlideshowEffect implements VisualEffect {
   }
 
   private loadTexture(url: string): Promise<THREE.Texture> {
+      // STRICT CHECK: If throttled, reject immediately to save network
+      if (this.isNetworkThrottled) {
+        return Promise.reject(new Error("Network throttled due to previous 403s"));
+      }
+
       // If we already have this texture cached, return it immediately
       const cached = this.textureCache.get(url);
       if (cached) {
@@ -524,8 +536,20 @@ export class ImageSlideshowEffect implements VisualEffect {
               const response = await fetch(url);
               if (!response.ok) {
                   if (response.status === 403) {
-                      const msg = `Image access forbidden (403). The signed URL may have expired. This usually auto-corrects when the project assets refresh. URL: ${url.substring(0, 50)}...`;
-                      slideshowLog.warn(msg); // Warn instead of error to reduce console noise
+                      this.consecutiveErrors++;
+                      
+                      // If we hit 3 consecutive 403s, stop trying for 5 seconds
+                      if (this.consecutiveErrors >= 3) {
+                          this.isNetworkThrottled = true;
+                          slideshowLog.warn("⛔ [ImageSlideshow] Too many 403s. Pausing loading for 5s.");
+                          setTimeout(() => {
+                              this.isNetworkThrottled = false;
+                              this.consecutiveErrors = 0;
+                          }, 5000);
+                      }
+                      
+                      const msg = `403 Forbidden: ${url.substring(0, 30)}...`;
+                      slideshowLog.warn(msg);
                       throw new Error(msg);
                   } else if (response.status === 404) {
                       throw new Error(`Image not found (404). URL: ${url.substring(0, 100)}...`);
@@ -533,6 +557,9 @@ export class ImageSlideshowEffect implements VisualEffect {
                       throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
                   }
               }
+              
+              // On success, reset error counter
+              this.consecutiveErrors = 0;
               
               const blob = await response.blob();
               
