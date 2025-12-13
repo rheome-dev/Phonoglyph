@@ -613,7 +613,24 @@ export function EffectsLibrarySidebar({
     const settings = (overlayLayer as any).settings || {};
     const stemId = settings.stemId || settings.stem?.id || masterStemId;
     const stem = availableStems.find(s => s.id === stemId);
-    const stemName = stem?.stem_type || stem?.file_name || (stemId === masterStemId ? 'Master' : 'Unknown');
+    
+    // Determine stem name with better fallback logic
+    let stemName = 'Unknown';
+    if (stemId === masterStemId) {
+      stemName = 'Master';
+    } else if (stem) {
+      stemName = stem.stem_type || stem.file_name || 'Unknown';
+    } else if (stemId) {
+      // Stem ID exists but not found in availableStems - might be deleted or not loaded yet
+      // Try to get name from layer settings as fallback
+      const storedStemName = settings.stem?.name || settings.stem?.stemType;
+      if (storedStemName) {
+        stemName = storedStemName;
+      } else {
+        // Show the stem ID as a last resort so user knows which stem is referenced
+        stemName = `Stem ${stemId.slice(0, 8)}...`;
+      }
+    }
     
     // Group parameters: toggles with their related parameters
     const groupedParams: Array<{
