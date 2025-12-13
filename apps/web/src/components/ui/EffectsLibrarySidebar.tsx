@@ -343,6 +343,9 @@ export function EffectsLibrarySidebar({
     const slideshowLayer = layers.find(l => l.id === editingEffectId);
     const layerId = editingEffectId; // Always use the specific layer ID being edited
 
+    // FIX 1: Read collectionId from layer settings if available, falling back to prop
+    const currentCollectionId = slideshowLayer?.settings?.collectionId || activeCollectionId;
+
     return (
       <div className="h-full flex flex-col">
         {/* Header with Back button */}
@@ -370,11 +373,34 @@ export function EffectsLibrarySidebar({
               projectId={projectId}
               availableFiles={availableFiles}
               onSelectCollection={(imageUrls, collectionId) => {
-                console.log('🖼️ Collection selected, updating effect with layerId:', layerId, 'imageUrls count:', imageUrls.length);
+                console.log('🖼️ Collection selected:', { layerId, collectionId, count: imageUrls.length });
+                
+                // 1. Update Images (URLs) - Required for visualizer
                 onParameterChange?.(layerId, 'images', imageUrls);
+                
+                // FIX 2: Persist Collection ID so UI restores selection on reload
+                if (collectionId) {
+                  onParameterChange?.(layerId, 'collectionId', collectionId);
+                }
+                
+                // FIX 3: Persist File IDs so Asset Refresher can fix expired URLs
+                // Map the selected URLs back to File IDs using the availableFiles list
+                if (availableFiles && availableFiles.length > 0) {
+                  const imageIds = imageUrls.map(url => {
+                    // Match by downloadUrl to find the original file ID
+                    const file = availableFiles.find(f => f.downloadUrl === url);
+                    return file ? file.id : null;
+                  }).filter(Boolean);
+                  
+                  if (imageIds.length > 0) {
+                    console.log('🆔 Saving image IDs for refresh:', imageIds.length);
+                    onParameterChange?.(layerId, 'imageIds', imageIds);
+                  }
+                }
+
                 setActiveCollectionId?.(collectionId);
               }}
-              selectedCollectionId={activeCollectionId}
+              selectedCollectionId={currentCollectionId} // Use the resolved ID
             />
           )}
 
