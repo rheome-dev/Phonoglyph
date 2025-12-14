@@ -4,7 +4,7 @@ import type { Layer } from '@/types/video-composition';
 import type { AudioAnalysisData } from '@/types/audio-analysis-data'; // Use the cached type
 import type { VisualizationSettings } from 'phonoglyph-types';
 
-export interface RayboxCompositionProps {
+export interface RayboxCompositionProps extends Record<string, unknown> {
   layers: Layer[];
   // This contains the full timeline analysis for Master + all Stems
   audioAnalysisData: AudioAnalysisData[];
