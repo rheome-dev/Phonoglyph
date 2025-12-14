@@ -7,7 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Play, Pause, RotateCcw, Zap, Palette, Settings2, Eye, EyeOff, Info, Map as MapIcon } from 'lucide-react';
+import { Play, Pause, RotateCcw, Zap, Palette, Settings2, Eye, EyeOff, Info, Map as MapIcon, Download } from 'lucide-react';
 import { ThreeVisualizer } from '@/components/midi/three-visualizer';
 import { EffectsLibrarySidebar, EffectUIData } from '@/components/ui/EffectsLibrarySidebar';
 import { CollapsibleEffectsSidebar } from '@/components/layout/collapsible-effects-sidebar';
@@ -28,10 +28,8 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { MappingSourcesPanel } from '@/components/ui/MappingSourcesPanel';
 import { DroppableParameter } from '@/components/ui/droppable-parameter';
-import { LayerContainer } from '@/components/video-composition/LayerContainer';
 import { useTimelineStore } from '@/stores/timelineStore';
 import { UnifiedTimeline } from '@/components/video-composition/UnifiedTimeline';
-import { TestVideoComposition } from '@/components/video-composition/TestVideoComposition';
 import type { Layer } from '@/types/video-composition';
 import { useFeatureValue } from '@/hooks/use-feature-value';
 import { HudOverlayRenderer } from '@/components/hud/HudOverlayManager';
@@ -44,6 +42,7 @@ import { CollectionManager } from '@/components/assets/CollectionManager';
 import { AutoSaveProvider, useAutoSaveContext } from '@/components/auto-save/auto-save-provider';
 import { AutoSaveIndicator } from '@/components/auto-save/auto-save-indicator';
 import { AutoSaveTopBar } from '@/components/auto-save/auto-save-top-bar';
+import { getProjectExportPayload } from '@/lib/export-utils';
 
 // Derived boolean: are stem URLs ready?
 // const stemUrlsReady = Object.keys(asyncStemUrlMap).length > 0; // This line was moved
@@ -386,7 +385,6 @@ function CreativeVisualizerPage() {
   });
 
   // Effects timeline has been merged into layers via store
-  const [showVideoComposition, setShowVideoComposition] = useState(false);
 
   // Effects carousel state (now for timeline-based effects) - from store
   const { 
@@ -862,6 +860,34 @@ function CreativeVisualizerPage() {
     stemAudio.stop();
     setPlaying(false);
     setCurrentTime(0);
+  };
+
+  const handleExport = async () => {
+    if (!currentProjectId) {
+      alert('No project selected. Please select a project first.');
+      return;
+    }
+
+    if (!projectAudioFiles?.files) {
+      alert('No audio files found. Please ensure your project has audio files.');
+      return;
+    }
+
+    try {
+      const payload = getProjectExportPayload(
+        currentProjectId,
+        audioAnalysis.cachedAnalysis || [],
+        projectAudioFiles.files
+      );
+
+      console.log('Export Payload:', payload);
+      alert('Export configuration captured. Check console.');
+      
+      // TODO: Send payload to /api/render API endpoint
+    } catch (error) {
+      console.error('Export error:', error);
+      alert('Failed to generate export payload. Check console for details.');
+    }
   };
 
   const handleProjectSelect = (projectId: string) => {
@@ -2263,22 +2289,13 @@ function CreativeVisualizerPage() {
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  onClick={() => setShowVideoComposition(!showVideoComposition)} 
-                  className={`bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 font-mono text-xs uppercase tracking-wider px-2 py-1 ${
-                    showVideoComposition ? 'bg-emerald-900/20 border-emerald-600 text-emerald-300' : ''
-                  }`}
+                  onClick={handleExport}
+                  className="bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 font-mono text-xs uppercase tracking-wider px-2 py-1"
                   style={{ borderRadius: '6px' }}
                 >
-                    🎬 {showVideoComposition ? 'COMP' : 'VIDEO'}
+                  <Download className="h-3 w-3 mr-1" />
+                  EXPORT
                 </Button>
-                
-                {/* Test Video Composition Controls */}
-                {showVideoComposition && (
-                  <TestVideoComposition
-                    onAddLayer={addLayer}
-                    className="ml-2"
-                  />
-                )}
                   
                 </div>
               </div>
@@ -2336,33 +2353,6 @@ function CreativeVisualizerPage() {
                     </div>
                   </ThreeVisualizer>
 
-                  {/* Video Composition Layer Container */}
-                  {showVideoComposition && (
-                    <LayerContainer
-                      layers={layers}
-                      width={visualizerAspectRatio === 'mobile' ? 400 : 1280}
-                      height={visualizerAspectRatio === 'mobile' ? 711 : 720}
-                      currentTime={currentTime}
-                      isPlaying={isPlaying}
-                      audioFeatures={{
-                        frequencies: new Array(256).fill(0.5),
-                        timeData: new Array(256).fill(0.5),
-                        volume: 0.5,
-                        bass: 0.5,
-                        mid: 0.5,
-                        treble: 0.5
-                      }}
-                      midiData={{
-                        activeNotes: [],
-                        currentTime: currentTime,
-                        tempo: 120,
-                        totalNotes: 0,
-                        trackActivity: {}
-                      }}
-                      onLayerUpdate={updateLayer}
-                      onLayerDelete={deleteLayer}
-                    />
-                  )}
 
                       {/* Visualizer content only - no modals here */}
                 </div>
