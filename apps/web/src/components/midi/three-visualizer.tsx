@@ -88,12 +88,21 @@ export function ThreeVisualizer({
 
     const activeCount = Object.keys(activeSliderValues).length;
     const baseCount = Object.keys(baseParameterValues).length;
+    const effectCount = Object.keys(effectInstancesRef.current).length;
     console.log('[ThreeVisualizer] syncParameters start', {
       activeCount,
       baseCount,
       isInitialized,
-      effectCount: Object.keys(effectInstancesRef.current).length,
+      effectCount,
+      hasLayers: layers.length > 0,
+      effectLayerCount: layers.filter(l => l.type === 'effect').length,
     });
+    
+    // Early return if no effects to sync
+    if (effectCount === 0) {
+      debugLog.warn('[ThreeVisualizer] syncParameters: No effect instances to sync. This may indicate a timing issue with auto-save hydration.');
+      return;
+    }
 
     Object.entries(effectInstancesRef.current).forEach(([layerId, effect]) => {
       // IMPORTANT: Only look at params stored by the specific layer ID
@@ -271,12 +280,20 @@ export function ThreeVisualizer({
         debugLog.log(`[ThreeVisualizer] Removed effect instance (all cleared): ${id}`);
       }
     }
-  }, [layers, internalVisualizerRef.current]);
+  }, [layers, internalVisualizerRef.current, activeSliderValues, baseParameterValues]);
 
   // Sync parameters when store values or initialization/layers change
+  // This effect ensures parameters are synced when:
+  // 1. The visualizer is initialized
+  // 2. Layers change (effects are created/removed)
+  // 3. Parameter values are restored from auto-save (activeSliderValues/baseParameterValues change)
   useEffect(() => {
+    // Only sync if visualizer is initialized and we have effect instances
+    if (!isInitialized || Object.keys(effectInstancesRef.current).length === 0) {
+      return;
+    }
     syncParametersToEffects();
-  }, [syncParametersToEffects, layers, isInitialized]);
+  }, [syncParametersToEffects, layers, isInitialized, activeSliderValues, baseParameterValues]);
 
   // Expose visualizer ref to parent
   useEffect(() => {

@@ -210,10 +210,14 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
             visualizerStore.setAspectRatio(visualizationParams.aspectRatio)
           }
           if (visualizationParams.baseParameterValues) {
-            visualizerStore.setBaseParameterValues(toNestedParams(visualizationParams.baseParameterValues))
+            const nestedBase = toNestedParams(visualizationParams.baseParameterValues)
+            visualizerStore.setBaseParameterValues(nestedBase)
+            debugLog.log('✅ Restored baseParameterValues:', Object.keys(nestedBase).length, 'effect instances')
           }
           if (visualizationParams.activeSliderValues) {
-            visualizerStore.setActiveSliderValues(toNestedParams(visualizationParams.activeSliderValues))
+            const nestedActive = toNestedParams(visualizationParams.activeSliderValues)
+            visualizerStore.setActiveSliderValues(nestedActive)
+            debugLog.log('✅ Restored activeSliderValues:', Object.keys(nestedActive).length, 'effect instances')
           }
           if (visualizationParams.audioAnalysisSettings) {
             visualizerStore.setAudioAnalysisSettings(visualizationParams.audioAnalysisSettings)
@@ -393,10 +397,14 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
               visualizerStore.setAspectRatio(visualizationParams.aspectRatio)
             }
           if (visualizationParams.baseParameterValues) {
-            visualizerStore.setBaseParameterValues(toNestedParams(visualizationParams.baseParameterValues))
+            const nestedBase = toNestedParams(visualizationParams.baseParameterValues)
+            visualizerStore.setBaseParameterValues(nestedBase)
+            debugLog.log('✅ Restored baseParameterValues:', Object.keys(nestedBase).length, 'effect instances')
           }
           if (visualizationParams.activeSliderValues) {
-            visualizerStore.setActiveSliderValues(toNestedParams(visualizationParams.activeSliderValues))
+            const nestedActive = toNestedParams(visualizationParams.activeSliderValues)
+            visualizerStore.setActiveSliderValues(nestedActive)
+            debugLog.log('✅ Restored activeSliderValues:', Object.keys(nestedActive).length, 'effect instances')
           }
             if (visualizationParams.audioAnalysisSettings) {
               visualizerStore.setAudioAnalysisSettings(visualizationParams.audioAnalysisSettings)
