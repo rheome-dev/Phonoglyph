@@ -868,6 +868,7 @@ function CreativeVisualizerPage() {
   // State for rendering progress
   const [isRendering, setIsRendering] = useState(false);
   const [renderProgress, setRenderProgress] = useState(0);
+  const [isDownloadReady, setIsDownloadReady] = useState(false);
 
   const handleExport = async () => {
     if (!currentProjectId) {
@@ -901,34 +902,47 @@ function CreativeVisualizerPage() {
 
       // Poll for completion
       while (true) {
-        // Wait 2 seconds before checking status
-        await new Promise(r => setTimeout(r, 2000));
+        // Wait 5 seconds before checking status
+        await new Promise(r => setTimeout(r, 5000));
 
-        // Get render status
-        const status = await getStatus.mutateAsync({ renderId, bucketName });
+        try {
+          // Get render status
+          const status = await getStatus.mutateAsync({ renderId, bucketName });
 
-        // Update progress
-        const progressPercent = Math.round((status.overallProgress || 0) * 100);
-        setRenderProgress(progressPercent);
+          // Update progress
+          const progressPercent = Math.round((status.overallProgress || 0) * 100);
+          setRenderProgress(progressPercent);
 
-        // Check for fatal error
-        if (status.fatalErrorEncountered) {
-          throw new Error('Render failed with a fatal error');
-        }
+          // Check for fatal error
+          if (status.fatalErrorEncountered) {
+            throw new Error('Render failed with a fatal error');
+          }
 
-        // Check if done
-        if (status.done && status.outputFile) {
-          // Trigger download
-          const link = document.createElement('a');
-          link.href = status.outputFile;
-          link.download = 'render.mp4';
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          
-          setIsRendering(false);
-          setRenderProgress(0);
-          break;
+          // Check if done
+          if (status.done && status.outputFile) {
+            // Show download ready state
+            setIsDownloadReady(true);
+            
+            // Trigger download
+            const link = document.createElement('a');
+            link.href = status.outputFile;
+            link.download = 'render.mp4';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            // Reset after brief delay
+            await new Promise(r => setTimeout(r, 2000));
+            setIsRendering(false);
+            setRenderProgress(0);
+            setIsDownloadReady(false);
+            break;
+          }
+        } catch (error) {
+          // Handle rate limit errors and other polling errors
+          console.warn('Polling error, retrying...', error);
+          // Continue to next iteration (will wait 5s and try again)
+          continue;
         }
       }
     } catch (error) {
@@ -936,6 +950,7 @@ function CreativeVisualizerPage() {
       alert(`Failed to export: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setIsRendering(false);
       setRenderProgress(0);
+      setIsDownloadReady(false);
     }
   };
 
@@ -2346,7 +2361,11 @@ function CreativeVisualizerPage() {
                   style={{ borderRadius: '6px' }}
                 >
                   <Download className="h-3 w-3 mr-1" />
-                  {isRendering ? `RENDERING... ${renderProgress}%` : 'EXPORT'}
+                  {isDownloadReady 
+                    ? 'DOWNLOAD READY' 
+                    : isRendering 
+                      ? `RENDERING... ${renderProgress}%` 
+                      : 'EXPORT'}
                 </Button>
                   
                 </div>

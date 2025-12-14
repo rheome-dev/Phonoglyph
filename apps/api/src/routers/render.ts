@@ -122,7 +122,7 @@ export const renderRouter = router({
             compatibleOnly: true,
           });
           
-          if (functions.length > 0) {
+          if (functions.length > 0 && functions[0]) {
             // Use the first compatible function
             functionName = functions[0].functionName;
             logger.log(`Using Remotion function: ${functionName}`);
@@ -148,7 +148,9 @@ export const renderRouter = router({
           composition,
           inputProps: input,
           codec: 'h264',
-        });
+          concurrencyPerRender: 25,
+          logLevel: 'verbose',
+        } as any);
 
         logger.log('Render triggered successfully:', { renderId, bucketName });
 
@@ -185,7 +187,7 @@ export const renderRouter = router({
             compatibleOnly: true,
           });
           
-          if (functions.length > 0) {
+          if (functions.length > 0 && functions[0]) {
             // Use the first compatible function
             functionName = functions[0].functionName;
             logger.log(`Using Remotion function: ${functionName}`);
