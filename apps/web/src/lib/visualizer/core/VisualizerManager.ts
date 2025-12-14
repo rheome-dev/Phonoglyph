@@ -397,6 +397,72 @@ export class VisualizerManager {
     this.clock.elapsedTime = 0;
   }
   
+  /**
+   * Frame-based rendering method for Remotion compatibility.
+   * This method can be called explicitly with a specific time and deltaTime,
+   * decoupling rendering from the browser clock.
+   * @param time - Current time in milliseconds (replaces performance.now())
+   * @param deltaTime - Time delta in seconds (replaces clock.getDelta())
+   */
+  public renderFrame(time: number, deltaTime: number): void {
+    // CRITICAL FIX: Update internal timeline time to match the render frame time
+    // This ensures layer visibility (startTime/endTime) is calculated correctly for this specific frame
+    this.timelineCurrentTime = time / 1000;
+
+    // Update all enabled effects
+    let activeEffectCount = 0;
+    
+    this.effects.forEach((effect, layerId) => {
+      // Find the corresponding layer from the timeline state using the correct key
+      const effectLayer = this.timelineLayers.find(l => l.id === layerId);
+
+      // Determine if the layer should be active.
+      const isLayerActive = effect.enabled && effectLayer 
+        ? (this.timelineCurrentTime >= effectLayer.startTime && this.timelineCurrentTime <= effectLayer.endTime)
+        : false;
+
+      // Update the compositor's render state for this layer
+      this.multiLayerCompositor.updateLayer(layerId, { enabled: isLayerActive });
+
+      // Run the effect's update logic if it's active
+      if (isLayerActive) {
+          activeEffectCount++;
+          
+          try {
+            // Effects are updated via updateEffectParameter() from the UI mapping system
+            // The update() method only syncs parameters to uniforms (no implicit audio reactivity)
+            effect.update(deltaTime);
+          } catch (error) {
+            debugLog.error(`❌ Effect ${layerId} update failed:`, error);
+          }
+      }
+    });
+    
+    // Update GPU audio texture system
+    if (this.audioTextureManager && this.currentAudioData) {
+      // Convert audio analysis to GPU texture format using existing structure
+      const audioFeatureData: AudioFeatureData = {
+        features: {
+          'main': [this.currentAudioData.volume, this.currentAudioData.bass, this.currentAudioData.mid, this.currentAudioData.treble]
+        },
+        duration: 0, // Will be set when real audio is loaded
+        sampleRate: 44100,
+        stemTypes: ['main']
+      };
+      
+      // Update audio texture with passed time (convert milliseconds to seconds)
+      this.audioTextureManager.updateTime(time / 1000, 0); // Note: duration is 0 here, fine for now or pass actual duration if available
+    }
+    
+    // Update media layer textures (for video elements)
+    if (this.mediaLayerManager) {
+      this.mediaLayerManager.updateTextures();
+    }
+    
+    // Render all layers via compositor
+    this.multiLayerCompositor.render();
+  }
+
   private animate = () => {
     if (!this.isPlaying) return;
     
@@ -452,97 +518,11 @@ export class VisualizerManager {
       }
     }
     
-    // Update all enabled effects
-    // NOTE: Removed maxEffectsPerFrame limit - it was causing effects to stop animating
-    // when more than 3 were active. The update() methods are lightweight (just uniform updates),
-    // the real GPU work happens in rendering which occurs regardless.
-    let activeEffectCount = 0;
-    
-    this.effects.forEach((effect, layerId) => {
-      // Find the corresponding layer from the timeline state using the correct key
-      const effectLayer = this.timelineLayers.find(l => l.id === layerId);
-
-      // Determine if the layer should be active.
-      // If globally disabled OR no matching layer found, it's inactive.
-      // Otherwise, check the time.
-      const isLayerActive = effect.enabled && effectLayer 
-        ? (this.timelineCurrentTime >= effectLayer.startTime && this.timelineCurrentTime <= effectLayer.endTime)
-        : false;
-
-      // Update the compositor's render state for this layer
-      this.multiLayerCompositor.updateLayer(layerId, { enabled: isLayerActive });
-
-      // Run the effect's update logic if it's active
-      if (isLayerActive) {
-          activeEffectCount++;
-          
-          try {
-            const audioData: AudioAnalysisData = this.currentAudioData || this.createMockAudioData();
-            const midiData: LiveMIDIData = this.currentMidiData || this.createMockMidiData();
-            effect.update(deltaTime, audioData, midiData);
-          } catch (error) {
-            debugLog.error(`❌ Effect ${layerId} update failed:`, error);
-          }
-      }
-    });
-    
-    // Update GPU audio texture system
-    if (this.audioTextureManager && this.currentAudioData) {
-      // Convert audio analysis to GPU texture format using existing structure
-      const audioFeatureData: AudioFeatureData = {
-        features: {
-          'main': [this.currentAudioData.volume, this.currentAudioData.bass, this.currentAudioData.mid, this.currentAudioData.treble]
-        },
-        duration: 0, // Will be set when real audio is loaded
-        sampleRate: 44100,
-        stemTypes: ['main']
-      };
-      
-      // Update audio texture with current time
-      this.audioTextureManager.updateTime(currentTime / 1000, audioFeatureData.duration);
-    }
-    
-    // Update media layer textures (for video elements)
-    if (this.mediaLayerManager) {
-      this.mediaLayerManager.updateTextures();
-    }
-    
-    // Render all layers via compositor
-    this.multiLayerCompositor.render();
+    // Call renderFrame with calculated time and deltaTime
+    this.renderFrame(currentTime, deltaTime);
     
     this.lastTime = currentTime;
   };
-  
-  // Mock data generators (will be replaced with real data)
-  private createMockAudioData(): AudioAnalysisData {
-    const frequencies = new Array(256);
-    const timeData = new Array(256);
-    
-    // Generate more realistic frequency data
-    for (let i = 0; i < 256; i++) {
-      frequencies[i] = Math.sin(this.clock.elapsedTime * 2 + i * 0.1) * 0.5 + 0.5;
-      timeData[i] = Math.cos(this.clock.elapsedTime * 3 + i * 0.05) * 0.3 + 0.3;
-    }
-    
-    return {
-      frequencies,
-      timeData,
-      volume: (Math.sin(this.clock.elapsedTime * 1.5) + 1) * 0.5,
-      bass: (Math.sin(this.clock.elapsedTime * 0.8) + 1) * 0.5,
-      mid: (Math.sin(this.clock.elapsedTime * 1.2) + 1) * 0.5,
-      treble: (Math.sin(this.clock.elapsedTime * 2.0) + 1) * 0.5
-    };
-  }
-  
-  private createMockMidiData(): LiveMIDIData {
-    return {
-      activeNotes: [],
-      currentTime: this.clock.elapsedTime,
-      tempo: 120,
-      totalNotes: 0,
-      trackActivity: {}
-    };
-  }
   
   /**
    * FIX: Public method to synchronize the visualizer with the timeline's state.
@@ -574,6 +554,14 @@ export class VisualizerManager {
     // Store audio data to be used in next animation frame
     this.currentAudioData = audioData;
     debugLog.log('🎵 Audio data received:', audioData);
+  }
+
+  /**
+   * Public method to manually set audio data (for Remotion frame-based rendering)
+   * @param data - AudioAnalysisData to set
+   */
+  public setAudioData(data: AudioAnalysisData): void {
+    this.currentAudioData = data;
   }
   
   

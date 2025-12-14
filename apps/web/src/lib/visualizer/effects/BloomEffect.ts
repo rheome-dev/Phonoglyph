@@ -3,7 +3,6 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
-import { AudioAnalysisData, LiveMIDIData } from '@/types/visualizer';
 import { MultiLayerCompositor } from '../core/MultiLayerCompositor';
 import { debugLog } from '@/lib/utils';
 
@@ -130,17 +129,10 @@ export class BloomEffect {
     }
   }
 
-  update(deltaTime: number, audioData: AudioAnalysisData, midiData: LiveMIDIData): void {
-    // Keep bloom parameters more static for consistent white glow
-    const intensity = Math.max(0.3, Math.min(midiData.activeNotes.length / 5.0, 1.0));
-    
-    // Much more subtle dynamic bloom - less variation to avoid color shifts
-    this.bloomPass.strength = this.parameters.strength * (0.9 + intensity * 0.1);
-    
-    // Keep threshold more stable
-    this.bloomPass.threshold = this.parameters.threshold * (1.0 + intensity * 0.1);
-    
-    // Keep exposure stable for consistent white color
+  update(deltaTime: number): void {
+    // Bloom parameters are now static - controlled only by explicit parameter mappings
+    this.bloomPass.strength = this.parameters.strength;
+    this.bloomPass.threshold = this.parameters.threshold;
     this.finalPass.uniforms.uExposure.value = this.parameters.exposure;
   }
 

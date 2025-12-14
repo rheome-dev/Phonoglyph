@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { VisualEffect, AudioAnalysisData, LiveMIDIData } from '@/types/visualizer';
+import { VisualEffect } from '@/types/visualizer';
 import { debugLog } from '@/lib/utils';
 
 interface Particle {
@@ -71,7 +71,6 @@ export class ParticleNetworkEffect implements VisualEffect {
   // Audio spawning state
   private lastAudioSpawnTime: number = 0;
   private lastManualSpawnTime: number = 0;
-  private currentAudioData: AudioAnalysisData | null = null;
 
 
   constructor() {
@@ -294,21 +293,9 @@ export class ParticleNetworkEffect implements VisualEffect {
     }
   }
   
-  private updateParticles(deltaTime: number, midiData: LiveMIDIData, audioData?: AudioAnalysisData) {
-    // Add new particles for active MIDI notes
-    midiData.activeNotes.forEach(noteData => {
-      if (this.particles.length < this.parameters.maxParticles) {
-        // Check if we already have a recent particle for this note
-        const hasRecentParticle = this.particles.some(p => 
-          p.note === noteData.note && p.life > 0.8 && p.spawnType === 'midi'
-        );
-        
-        if (!hasRecentParticle) {
-          const particle = this.createParticle(noteData.note, noteData.velocity, noteData.track, 'midi');
-          this.particles.push(particle);
-        }
-      }
-    });
+  private updateParticles(deltaTime: number) {
+    // Particle spawning is now controlled only by explicit parameter mappings
+    // (via particleSpawning parameter and updateParameter())
     
     // Spawn particles based on particleSpawning parameter (manual or audio-modulated)
     if (this.parameters.particleSpawning >= this.parameters.spawnThreshold) {
@@ -512,14 +499,11 @@ export class ParticleNetworkEffect implements VisualEffect {
     }
   }
 
-  update(deltaTime: number, audioData: AudioAnalysisData, midiData: LiveMIDIData): void {
+  update(deltaTime: number): void {
     if (!this.uniforms) {
       debugLog.warn('⚠️ Uniforms not initialized in ParticleNetworkEffect.update()');
       return;
     }
-
-    // Store current audio data for particle spawning
-    this.currentAudioData = audioData;
 
     // Generic: sync all parameters to uniforms
     for (const key in this.parameters) {
@@ -531,7 +515,8 @@ export class ParticleNetworkEffect implements VisualEffect {
 
     // Always update time and uniforms for smooth animation
     this.uniforms.uTime.value += deltaTime;
-    this.uniforms.uIntensity.value = Math.max(0.5, Math.min(midiData.activeNotes.length / 3.0, 2.0));
+    // Intensity is now static - controlled only by explicit parameter mappings
+    this.uniforms.uIntensity.value = 1.0;
     this.uniforms.uGlowIntensity.value = this.parameters.glowIntensity;
     
     // Ensure the instanced mesh is visible
@@ -543,7 +528,7 @@ export class ParticleNetworkEffect implements VisualEffect {
     this.frameSkipCounter++;
     if (this.frameSkipCounter >= this.frameSkipInterval) {
       this.frameSkipCounter = 0;
-      this.updateParticles(deltaTime * this.frameSkipInterval, midiData, audioData);
+      this.updateParticles(deltaTime * this.frameSkipInterval);
     }
   }
 

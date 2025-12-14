@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { VisualEffect, AudioAnalysisData, LiveMIDIData } from '@/types/visualizer';
+import { VisualEffect } from '@/types/visualizer';
 import { debugLog } from '@/lib/utils';
 
 // Use standard debugLog for ImageSlideshowEffect to allow suppression
@@ -116,7 +116,7 @@ export class ImageSlideshowEffect implements VisualEffect {
       }
   }
 
-  update(deltaTime: number, audioData: AudioAnalysisData, midiData: LiveMIDIData): void {
+  update(deltaTime: number): void {
       if (!this.enabled) return;
 
       // STRICT CHECK: If network is throttled due to 403s, stop all operations

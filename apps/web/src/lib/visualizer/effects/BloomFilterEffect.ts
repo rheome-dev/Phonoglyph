@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { VisualEffect, AudioAnalysisData, LiveMIDIData } from '@/types/visualizer';
+import { VisualEffect } from '@/types/visualizer';
 import { MultiLayerCompositor } from '../core/MultiLayerCompositor';
 import { debugLog } from '@/lib/utils';
 
@@ -180,14 +180,11 @@ export class BloomFilterEffect implements VisualEffect {
     this.scene.add(this.mesh);
   }
 
-  update(deltaTime: number, audioData: AudioAnalysisData, midiData: LiveMIDIData): void {
+  update(deltaTime: number): void {
     if (!this.uniforms) return;
 
-    // Slight live boost to feel responsive to audio energy.
-    const midiEnergy = Math.min(1, midiData.activeNotes.length / 8);
-    const audioEnergy = Math.min(1, audioData.volume ?? 0);
-    const dynamicBoost = 1 + (audioEnergy * 0.25) + (midiEnergy * 0.15);
-    this.uniforms.uIntensity.value = this.parameters.intensity * dynamicBoost;
+    // Intensity is now static - controlled only by explicit parameter mappings
+    this.uniforms.uIntensity.value = this.parameters.intensity;
 
     this.uniforms.uThreshold.value = this.parameters.threshold;
     this.uniforms.uSoftness.value = this.parameters.softness;

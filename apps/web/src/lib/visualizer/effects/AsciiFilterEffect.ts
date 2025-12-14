@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { VisualEffect, AudioAnalysisData, LiveMIDIData } from '@/types/visualizer';
+import { VisualEffect } from '@/types/visualizer';
 import { debugLog } from '@/lib/utils';
 import { MultiLayerCompositor } from '../core/MultiLayerCompositor';
 
@@ -339,7 +339,7 @@ export class AsciiFilterEffect implements VisualEffect {
     debugLog.log('✅ ASCII Filter Effect initialized');
   }
 
-  update(deltaTime: number, audioData: AudioAnalysisData, midiData: LiveMIDIData): void {
+  update(deltaTime: number): void {
     if (!this.enabled || !this.uniforms) return;
 
     // Update resolution if renderer size changed

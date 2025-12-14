@@ -8,7 +8,7 @@ export interface VisualEffect {
   parameters: Record<string, any>;
   // Effects are now self-contained and manage their own scene and camera
   init(renderer: THREE.WebGLRenderer): void;
-  update(deltaTime: number, audioData: AudioAnalysisData, midiData: LiveMIDIData): void;
+  update(deltaTime: number): void;
   destroy(): void;
 
   // Expose internal scene and camera for the compositor
