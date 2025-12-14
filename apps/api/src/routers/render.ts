@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { router, protectedProcedure } from '../trpc';
 import { TRPCError } from '@trpc/server';
-import { renderMediaOnLambda, getFunctions } from '@remotion/lambda';
+import { renderMediaOnLambda, getFunctions, getRenderProgress } from '@remotion/lambda';
 import { logger } from '../lib/logger';
 
 // Zod schemas for the render payload
@@ -161,6 +161,67 @@ export const renderRouter = router({
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: error instanceof Error ? error.message : 'Failed to trigger render',
+        });
+      }
+    }),
+
+  getRenderStatus: protectedProcedure
+    .input(
+      z.object({
+        renderId: z.string(),
+        bucketName: z.string(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      try {
+        const region = 'us-east-1';
+
+        // Try to get the function name dynamically, fallback to standard name
+        let functionName = 'remotion-render-4-0-390-mem2048mb-disk2048mb-120sec';
+        
+        try {
+          const functions = await getFunctions({
+            region,
+            compatibleOnly: true,
+          });
+          
+          if (functions.length > 0) {
+            // Use the first compatible function
+            functionName = functions[0].functionName;
+            logger.log(`Using Remotion function: ${functionName}`);
+          } else {
+            logger.warn(`No compatible functions found, using default: ${functionName}`);
+          }
+        } catch (error) {
+          logger.warn(`Failed to get functions dynamically, using default: ${functionName}`, error);
+        }
+
+        logger.log('Getting render status:', {
+          region,
+          functionName,
+          renderId: input.renderId,
+          bucketName: input.bucketName,
+        });
+
+        const progress = await getRenderProgress({
+          renderId: input.renderId,
+          bucketName: input.bucketName,
+          functionName,
+          region,
+        });
+
+        logger.log('Render status retrieved:', {
+          renderId: input.renderId,
+          overallProgress: progress.overallProgress,
+          done: progress.done,
+        });
+
+        return progress;
+      } catch (error) {
+        logger.error('Failed to get render status:', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to get render status',
         });
       }
     }),

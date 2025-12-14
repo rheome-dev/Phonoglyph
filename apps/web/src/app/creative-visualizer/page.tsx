@@ -863,6 +863,11 @@ function CreativeVisualizerPage() {
   };
 
   const triggerRenderMutation = trpc.render.triggerRender.useMutation();
+  const getStatus = trpc.render.getRenderStatus.useMutation();
+
+  // State for rendering progress
+  const [isRendering, setIsRendering] = useState(false);
+  const [renderProgress, setRenderProgress] = useState(0);
 
   const handleExport = async () => {
     if (!currentProjectId) {
@@ -876,6 +881,9 @@ function CreativeVisualizerPage() {
     }
 
     try {
+      setIsRendering(true);
+      setRenderProgress(0);
+
       const payload = getProjectExportPayload(
         currentProjectId,
         audioAnalysis.cachedAnalysis || [],
@@ -888,11 +896,46 @@ function CreativeVisualizerPage() {
       // Trigger render on Lambda
       const result = await triggerRenderMutation.mutateAsync(payload);
       
-      alert(`Render triggered successfully!\nRender ID: ${result.renderId}\nBucket: ${result.bucketName}`);
       console.log('Render result:', result);
+      const { renderId, bucketName } = result;
+
+      // Poll for completion
+      while (true) {
+        // Wait 2 seconds before checking status
+        await new Promise(r => setTimeout(r, 2000));
+
+        // Get render status
+        const status = await getStatus.mutateAsync({ renderId, bucketName });
+
+        // Update progress
+        const progressPercent = Math.round((status.overallProgress || 0) * 100);
+        setRenderProgress(progressPercent);
+
+        // Check for fatal error
+        if (status.fatalErrorEncountered) {
+          throw new Error('Render failed with a fatal error');
+        }
+
+        // Check if done
+        if (status.done && status.outputFile) {
+          // Trigger download
+          const link = document.createElement('a');
+          link.href = status.outputFile;
+          link.download = 'render.mp4';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          
+          setIsRendering(false);
+          setRenderProgress(0);
+          break;
+        }
+      }
     } catch (error) {
       console.error('Export error:', error);
-      alert(`Failed to trigger render: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      alert(`Failed to export: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setIsRendering(false);
+      setRenderProgress(0);
     }
   };
 
@@ -2296,11 +2339,14 @@ function CreativeVisualizerPage() {
                   variant="outline" 
                   size="sm" 
                   onClick={handleExport}
-                  className="bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 font-mono text-xs uppercase tracking-wider px-2 py-1"
+                  disabled={isRendering}
+                  className={`bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 font-mono text-xs uppercase tracking-wider px-2 py-1 ${
+                    isRendering ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
                   style={{ borderRadius: '6px' }}
                 >
                   <Download className="h-3 w-3 mr-1" />
-                  EXPORT
+                  {isRendering ? `RENDERING... ${renderProgress}%` : 'EXPORT'}
                 </Button>
                   
                 </div>
