@@ -66,6 +66,8 @@
     "zustand": "4.5.2"
   },
   "devDependencies": {
+    "@remotion/cli": "^4.0.390",
+    "@remotion/lambda": "^4.0.390",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^14.1.2",
     "@types/node": "^20.11.5",

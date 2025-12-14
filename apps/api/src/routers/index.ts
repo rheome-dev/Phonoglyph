@@ -10,6 +10,7 @@ import { stemRouter } from './stem';
 import { autoSaveRouter } from './auto-save';
 import { audioAnalysisSandboxRouter } from './audio-analysis-sandbox';
 import { assetRouter } from './asset';
+import { renderRouter } from './render';
 
 export const appRouter = router({
   health: healthRouter,
@@ -23,6 +24,7 @@ export const appRouter = router({
   stem: stemRouter,
   autoSave: autoSaveRouter,
   audioAnalysisSandbox: audioAnalysisSandboxRouter,
+  render: renderRouter,
 });
 
 export type AppRouter = typeof appRouter; 

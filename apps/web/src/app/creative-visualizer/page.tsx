@@ -862,6 +862,8 @@ function CreativeVisualizerPage() {
     setCurrentTime(0);
   };
 
+  const triggerRenderMutation = trpc.render.triggerRender.useMutation();
+
   const handleExport = async () => {
     if (!currentProjectId) {
       alert('No project selected. Please select a project first.');
@@ -882,12 +884,15 @@ function CreativeVisualizerPage() {
       );
 
       console.log('Export Payload:', payload);
-      alert('Export configuration captured. Check console.');
       
-      // TODO: Send payload to /api/render API endpoint
+      // Trigger render on Lambda
+      const result = await triggerRenderMutation.mutateAsync(payload);
+      
+      alert(`Render triggered successfully!\nRender ID: ${result.renderId}\nBucket: ${result.bucketName}`);
+      console.log('Render result:', result);
     } catch (error) {
       console.error('Export error:', error);
-      alert('Failed to generate export payload. Check console for details.');
+      alert(`Failed to trigger render: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
