@@ -24,12 +24,14 @@ interface ProjectAudioFile {
  * @param projectId - The project ID (currently unused but included for future use)
  * @param cachedAnalysis - Array of audio analysis data from useAudioAnalysis hook
  * @param projectAudioFiles - Array of file objects containing downloadUrl, is_master flag, etc.
+ * @param stemUrlMap - Map of file IDs to their download URLs (preferred source for URLs)
  * @returns An object matching RayboxCompositionProps interface ready for Remotion export
  */
 export function getProjectExportPayload(
   projectId: string,
   cachedAnalysis: AudioAnalysisData[],
-  projectAudioFiles: ProjectAudioFile[]
+  projectAudioFiles: ProjectAudioFile[],
+  stemUrlMap: Record<string, string> = {}
 ): RayboxCompositionProps {
   // 1. Get Store State
   const timelineState = useTimelineStore.getState();
@@ -55,14 +57,26 @@ export function getProjectExportPayload(
   // First, try to find the file where is_master === true
   const masterFile = projectAudioFiles.find(file => file.is_master === true);
   
-  if (masterFile?.downloadUrl) {
-    masterAudioUrl = masterFile.downloadUrl;
+  if (masterFile?.id) {
+    // Priority 1: Look up URL in stemUrlMap using file ID
+    masterAudioUrl = stemUrlMap[masterFile.id] || '';
+    
+    // Priority 2: Fallback to file object's downloadUrl property
+    if (!masterAudioUrl && masterFile.downloadUrl) {
+      masterAudioUrl = masterFile.downloadUrl;
+    }
   } else if (projectAudioFiles.length > 0) {
     // Fallback to the first audio file's URL
     const firstAudioFile = projectAudioFiles.find(
       file => file.file_type === 'audio' || file.downloadUrl
     );
-    masterAudioUrl = firstAudioFile?.downloadUrl || '';
+    
+    if (firstAudioFile?.id) {
+      // Try stemUrlMap first, then downloadUrl property
+      masterAudioUrl = stemUrlMap[firstAudioFile.id] || firstAudioFile.downloadUrl || '';
+    } else if (firstAudioFile?.downloadUrl) {
+      masterAudioUrl = firstAudioFile.downloadUrl;
+    }
   }
 
   // 4. Return Object

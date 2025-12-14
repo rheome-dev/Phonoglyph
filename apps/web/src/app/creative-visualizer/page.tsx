@@ -877,7 +877,8 @@ function CreativeVisualizerPage() {
       const payload = getProjectExportPayload(
         currentProjectId,
         audioAnalysis.cachedAnalysis || [],
-        projectAudioFiles.files
+        projectAudioFiles.files,
+        asyncStemUrlMap
       );
 
       console.log('Export Payload:', payload);
