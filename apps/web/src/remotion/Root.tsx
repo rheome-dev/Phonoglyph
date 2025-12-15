@@ -43,10 +43,9 @@ const defaultProps: RayboxCompositionProps = {
 
 const calculateMetadata: CalculateMetadataFunction<RayboxCompositionProps> = ({
   props,
-  fps,
 }) => {
-  const safeFps =
-    typeof fps === 'number' && Number.isFinite(fps) && fps > 0 ? fps : 30;
+  // FPS is set on the Composition component (30), so we use that value here
+  const safeFps = 30;
 
   const layers = props?.layers ?? [];
 
