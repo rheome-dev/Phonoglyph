@@ -71,7 +71,13 @@ export const RemotionOverlayRenderer: React.FC<RemotionOverlayRendererProps> = (
       }
 
       // Find the analysis for this stem
-      const analysis = cachedAnalysis.find((a) => a.fileMetadataId === stemId);
+      let analysis = cachedAnalysis.find((a) => a.fileMetadataId === stemId);
+
+      // FALLBACK: If strict ID match fails, try matching by stemType
+      if (!analysis) {
+        const requestedStemType = settings.stemType || 'master';
+        analysis = cachedAnalysis.find(a => a.stemType === requestedStemType);
+      }
       if (!analysis || !analysis.analysisData) {
         return null;
       }
@@ -99,43 +105,55 @@ export const RemotionOverlayRenderer: React.FC<RemotionOverlayRendererProps> = (
 
       // For spectrum overlays
       if (overlayType === 'spectrogram' || overlayType === 'spectrumAnalyzer') {
-        if (
-          analysis.analysisData.fft &&
-          Array.isArray(analysis.analysisData.fft) &&
-          analysis.analysisData.fft.length > 0
-        ) {
-          const baseFft = analysis.analysisData.fft as number[];
+        // Use the shared extractor to get the FFT data for the current time
+        const extracted = extractAudioDataAtTime(
+          cachedAnalysis,
+          analysis.fileMetadataId,
+          currentTime,
+          analysis.stemType,
+        );
 
-          // Create a buffer of FFT frames with time-based variations
+        if (extracted?.frequencies?.length) {
+          // For spectrogram, we might want a buffer, but for now let's return the current frame
+          // If the overlay needs a buffer, it should manage it or we need to reconstruct it here
+          // properly. However, the issue described is "static" rendering, which usually means
+          // the data isn't updating. Returning the correct frame data fixes that.
+
+          // If the component expects a buffer (history), we can try to generate a small one
+          // by sampling previous frames, but for a single frame render, just the current
+          // FFT is the most critical part.
+
+          // Let's look at how HudOverlay uses this. It likely expects 'fft' to be the current frame.
+          // The previous code was generating a fake buffer.
+
+          // Let's reconstruct a small buffer by sampling backwards if needed, 
+          // but primarily ensure 'fft' is correct.
+
           const buffer: Array<Float32Array> = [];
-          const numFrames = 200;
-
-          for (let frameIdx = 0; frameIdx < numFrames; frameIdx++) {
-            const frameTime = currentTime - (numFrames - frameIdx) * 0.1;
-            const newFrame = new Float32Array(baseFft.length);
-
-            const timePhase = frameTime * 2 * Math.PI;
-            const frequencyPhase = frameTime * Math.PI;
-
-            for (let i = 0; i < baseFft.length; i++) {
-              const freqRatio = i / baseFft.length;
-              const baseValue = baseFft[i];
-
-              const amplitudeMod = 1 + 0.3 * Math.sin(timePhase + freqRatio * Math.PI * 4);
-              const frequencyMod = 1 + 0.2 * Math.sin(frequencyPhase + freqRatio * Math.PI * 2);
-              const noiseMod = 1 + 0.1 * Math.sin(timePhase * 3 + i * 0.1);
-
-              newFrame[i] = Math.max(0, baseValue * amplitudeMod * frequencyMod * noiseMod);
+          // Sample a few frames back to give some history if needed
+          const numHistoryFrames = 5;
+          for (let i = numHistoryFrames; i >= 0; i--) {
+            const t = currentTime - (i * 0.05); // 50ms steps
+            const histExtracted = extractAudioDataAtTime(
+              cachedAnalysis,
+              analysis.fileMetadataId,
+              Math.max(0, t),
+              analysis.stemType
+            );
+            if (histExtracted?.frequencies) {
+              buffer.push(new Float32Array(histExtracted.frequencies));
+            } else {
+              buffer.push(new Float32Array(extracted.frequencies.length).fill(0));
             }
-
-            buffer.push(newFrame);
           }
 
           return {
-            fft: buffer[buffer.length - 1],
+            fft: new Float32Array(extracted.frequencies),
             fftBuffer: buffer,
           };
         }
+
+        return null;
       }
 
       // For stereometer: Approximate stereo window using cached time-domain data
@@ -266,10 +284,10 @@ export const RemotionOverlayRenderer: React.FC<RemotionOverlayRendererProps> = (
             layer={layer}
             featureData={featureData}
             // No-op callbacks: overlays are not editable in Remotion render
-            onOpenModal={() => {}}
-            onUpdate={() => {}}
+            onOpenModal={() => { }}
+            onUpdate={() => { }}
             isSelected={false}
-            onSelect={() => {}}
+            onSelect={() => { }}
           />
         );
       })}

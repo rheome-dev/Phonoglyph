@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import { useCurrentFrame, useVideoConfig, Audio } from 'remotion';
+import React, { useEffect, useRef, useState } from 'react';
+import { useCurrentFrame, useVideoConfig, Audio, delayRender, continueRender } from 'remotion';
 import { VisualizerManager } from '@/lib/visualizer/core/VisualizerManager';
 import { EffectRegistry } from '@/lib/visualizer/effects/EffectRegistry';
 // Import EffectDefinitions to ensure effects are registered
@@ -25,9 +25,15 @@ function getFeatureValueFromCached(
 ): number {
   const featureParts = feature.includes('-') ? feature.split('-') : [feature];
   const parsedStem = featureParts.length > 1 ? featureParts[0] : (stemType ?? 'master');
-  const analysis = cachedAnalysis.find(
+  let analysis = cachedAnalysis.find(
     a => a.fileMetadataId === fileId && a.stemType === parsedStem
   );
+
+  // FALLBACK: If strict ID match fails, try matching by stemType only
+  // This handles cases where the debug payload has mismatched IDs
+  if (!analysis) {
+    analysis = cachedAnalysis.find(a => a.stemType === parsedStem);
+  }
 
   if (!analysis?.analysisData) {
     return 0;
@@ -84,7 +90,8 @@ function getFeatureValueFromCached(
     case 'rms':
       return getTimeSeriesValue(analysisData.rms);
     case 'volume':
-      return getTimeSeriesValue(analysisData.volume ?? analysisData.rms);
+      // FALLBACK FIX: Prefer RMS if available, as volume can be 0-filled in some analysis passes
+      return getTimeSeriesValue(analysisData.rms ?? analysisData.volume);
     case 'loudness':
       return getTimeSeriesValue(analysisData.loudness);
     case 'spectral-centroid':
@@ -126,9 +133,14 @@ export function extractAudioDataAtTime(
   const spectralCentroid = getFeatureValueFromCached(cachedAnalysis, fileId, 'spectral-centroid', time, stemType);
 
   // Get frequencies and timeData from the analysis
-  const analysis = cachedAnalysis.find(
+  let analysis = cachedAnalysis.find(
     a => a.fileMetadataId === fileId && a.stemType === (stemType ?? 'master')
   );
+
+  // FALLBACK: If strict ID match fails, try matching by stemType only
+  if (!analysis) {
+    analysis = cachedAnalysis.find(a => a.stemType === (stemType ?? 'master'));
+  }
 
   if (!analysis) {
     return null;
@@ -140,28 +152,33 @@ export function extractAudioDataAtTime(
   let frequencies: number[] = [];
   let timeData: number[] = [];
 
-  if (fft && frameTimes && Array.isArray(fft)) {
+  if (fft && frameTimes && Array.isArray(fft) && Array.isArray(frameTimes) && frameTimes.length > 0) {
     // Find the frame index closest to the current time
     let frameIndex = 0;
-    if (Array.isArray(frameTimes)) {
-      for (let i = 0; i < frameTimes.length; i++) {
-        if (frameTimes[i] <= time) {
-          frameIndex = i;
-        } else {
-          break;
-        }
+    for (let i = 0; i < frameTimes.length; i++) {
+      if (frameTimes[i] <= time) {
+        frameIndex = i;
+      } else {
+        break;
       }
     }
 
-    // Extract frequency bins (assuming fft is a flat array of frequency bins per frame)
-    // This is a simplified extraction - actual structure may vary
-    const binsPerFrame = 256; // Typical FFT size
-    const startIdx = frameIndex * binsPerFrame;
-    const endIdx = Math.min(startIdx + binsPerFrame, fft.length);
-    
-    if (startIdx < fft.length) {
+    // If FFT is a flat array (e.g., from older analysis or compressed payload)
+    if (fft.length === frameTimes.length * 256) { // Assuming 256 bins per frame
+      const startIdx = frameIndex * 256;
+      const endIdx = Math.min(startIdx + 256, fft.length);
       frequencies = Array.from(fft.slice(startIdx, endIdx));
-      timeData = frequencies.map((_, i) => fft[startIdx + i] || 0);
+      timeData = frequencies.map((_, i) => fft[startIdx + i] || 0); // Still approximate timeData from FFT
+    } else {
+      // Likely array of arrays
+      frequencies = fft[frameIndex] || [];
+      // If timeData is also an array of arrays, extract it similarly
+      if (Array.isArray(analysis.analysisData.timeData) && analysis.analysisData.timeData[frameIndex]) {
+        timeData = analysis.analysisData.timeData[frameIndex];
+      } else {
+        // Fallback: approximate timeData from frequencies if not available
+        timeData = frequencies.map((_, i) => frequencies[i] || 0);
+      }
     }
   }
 
@@ -188,13 +205,15 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const visualizerManagerRef = useRef<VisualizerManager | null>(null);
   const effectInstancesRef = useRef<Map<string, any>>(new Map());
+  const [handle] = useState(() => delayRender('Waiting for assets'));
+  const assetsLoadedRef = useRef(false);
 
   // DEBUG: If props are empty, try to load from global TEST_PAYLOAD
   // This is a fallback for local debugging when Remotion serialization fails
   let actualLayers = layers;
   let actualAudioAnalysisData = audioAnalysisData;
   let actualMasterAudioUrl = masterAudioUrl;
-  
+
   if ((!layers || layers.length === 0) && typeof window !== 'undefined') {
     try {
       // Try to import TEST_PAYLOAD dynamically
@@ -283,22 +302,27 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
     try {
       // Initialize layers
       const effectLayers = actualLayers.filter(layer => layer.type === 'effect' && layer.effectType);
-      
+
       console.log(`🎨 [RayboxComposition] Initializing ${effectLayers.length} effect layers from ${layers.length} total layers`);
 
       for (const layer of effectLayers) {
         if (!effectInstancesRef.current.has(layer.id) && layer.effectType) {
           console.log(`🎨 [RayboxComposition] Creating effect: ${layer.effectType} for layer ${layer.id}`);
           console.log(`🎨 [RayboxComposition] Available effects:`, EffectRegistry.getRegisteredEffectIds());
-          
+
           // Try to create the effect with better error handling
           let effect = null;
           try {
-            effect = EffectRegistry.createEffect(layer.effectType, layer.settings || {});
+            // [FIX] Merge baseParameterValues into settings to ensure we have the latest values
+            // This is crucial for arrays like 'images' which might be empty in layer.settings but present in baseParameterValues
+            const baseValues = baseParameterValues?.[layer.id] || {};
+            const mergedSettings = { ...layer.settings, ...baseValues };
+
+            effect = EffectRegistry.createEffect(layer.effectType, mergedSettings);
           } catch (error) {
             console.error(`❌ [RayboxComposition] Exception creating effect ${layer.effectType}:`, error);
           }
-          
+
           if (effect) {
             effectInstancesRef.current.set(layer.id, effect);
             visualizerManagerRef.current.addEffect(layer.id, effect);
@@ -353,75 +377,154 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
     // This mimics the mapping application logic from page.tsx
     // Mappings are now included in the payload via getProjectExportPayload
     if (mappings && Object.keys(mappings).length > 0) {
-        // Helper to get slider max value (same as page.tsx)
-        const getSliderMax = (paramName: string): number => {
-          if (paramName === 'baseRadius' || paramName === 'base-radius') return 1.0;
-          if (paramName === 'animationSpeed' || paramName === 'animation-speed') return 2.0;
-          if (paramName === 'opacity') return 1.0;
-          if (paramName === 'textSize') return 1.0;
-          if (paramName === 'gamma') return 2.2;
-          if (paramName === 'contrast') return 2.0;
-          return 100; // Default
-        };
+      // Helper to get slider max value (same as page.tsx)
+      const getSliderMax = (paramName: string): number => {
+        if (paramName === 'baseRadius' || paramName === 'base-radius') return 1.0;
+        if (paramName === 'animationSpeed' || paramName === 'animation-speed') return 2.0;
+        if (paramName === 'opacity') return 1.0;
+        if (paramName === 'textSize') return 1.0;
+        if (paramName === 'gamma') return 2.2;
+        if (paramName === 'contrast') return 2.0;
+        return 100; // Default
+      };
 
-        // Helper to get stem type from feature ID
-        const getStemTypeFromFeatureId = (featureId: string): string => {
-          const parts = featureId.split('-');
-          if (parts.length > 1) {
-            const stemType = parts[0];
-            if (['master', 'drums', 'bass', 'vocals', 'other'].includes(stemType)) {
-              return stemType;
-            }
+      // Helper to get stem type from feature ID
+      const getStemTypeFromFeatureId = (featureId: string): string => {
+        const parts = featureId.split('-');
+        if (parts.length > 1) {
+          const stemType = parts[0];
+          if (['master', 'drums', 'bass', 'vocals', 'other'].includes(stemType)) {
+            return stemType;
           }
-          return 'master'; // Default
-        };
+        }
+        return 'master'; // Default
+      };
 
-        // Apply each mapping
-        Object.entries(mappings).forEach(([paramKey, mapping]) => {
-          if (!mapping?.featureId) return;
+      // Apply each mapping
+      Object.entries(mappings).forEach(([paramKey, mapping]) => {
+        if (!mapping?.featureId) return;
 
-          const parsed = parseParamKey(paramKey);
-          if (!parsed) return;
+        const parsed = parseParamKey(paramKey);
+        if (!parsed) return;
 
-          const { effectInstanceId: layerId, paramName } = parsed;
-          const featureId = mapping.featureId;
-          const featureStemType = getStemTypeFromFeatureId(featureId);
+        const { effectInstanceId: layerId, paramName } = parsed;
+        const featureId = mapping.featureId;
+        const featureStemType = getStemTypeFromFeatureId(featureId);
 
-          // Find the stem analysis
-          const stemAnalysis = cachedAnalysis.find(a => a.stemType === featureStemType);
-          if (!stemAnalysis) return;
+        // Find the stem analysis
+        const stemAnalysis = cachedAnalysis.find(a => a.stemType === featureStemType);
+        if (!stemAnalysis) return;
 
-          // Get feature value at current time
-          const rawValue = getFeatureValueFromCached(
-            cachedAnalysis,
-            stemAnalysis.fileMetadataId,
-            featureId,
-            time,
-            featureStemType || undefined
-          );
+        // Get feature value at current time
+        const rawValue = getFeatureValueFromCached(
+          cachedAnalysis,
+          stemAnalysis.fileMetadataId,
+          featureId,
+          time,
+          featureStemType || undefined
+        );
 
-          if (rawValue === null || rawValue === undefined) return;
+        if (rawValue === null || rawValue === undefined) return;
 
-          // Calculate modulated value (same logic as page.tsx)
-          const maxValue = getSliderMax(paramName);
-          const knobFull = (mapping.modulationAmount ?? 0.5) * 2 - 1;
-          const knob = Math.max(-0.5, Math.min(0.5, knobFull));
-          const baseValue = baseParameterValues?.[layerId]?.[paramName] ?? 0;
-          const delta = rawValue * knob * maxValue;
-          const scaledValue = Math.max(0, Math.min(maxValue, baseValue + delta));
+        // Calculate modulated value (same logic as page.tsx)
+        const maxValue = getSliderMax(paramName);
+        const knobFull = (mapping.modulationAmount ?? 0.5) * 2 - 1;
+        const knob = Math.max(-0.5, Math.min(0.5, knobFull));
 
-          // Update effect parameter
-          if (visualizerManagerRef.current) {
-            visualizerManagerRef.current.updateEffectParameter(layerId, paramName, scaledValue);
+        // [CHANGE 3] Fix Base Value Lookup
+        // If baseParameterValues doesn't have the value, get it from the live effect instance
+        // This fixes the "Static" or "Off scale" issue where values defaulted to 0
+        let baseValue = baseParameterValues?.[layerId]?.[paramName];
+
+        if (baseValue === undefined) {
+          const effectInstance = effectInstancesRef.current.get(layerId);
+          // Retrieve internal parameter value if accessible
+          if (effectInstance && effectInstance.parameters) {
+            baseValue = effectInstance.parameters[paramName];
           }
-        });
-      }
+        }
+
+        // Final fallback if still undefined
+        if (baseValue === undefined) {
+          // Try to get default from slider max logic if applicable, or just 0
+          // But 0 might be wrong for things like opacity (default 1) or scale (default 1)
+          // So we should be careful.
+          if (paramName === 'opacity' || paramName === 'scale' || paramName === 'baseRadius') {
+            baseValue = 1.0;
+          } else {
+            baseValue = 0;
+          }
+        }
+
+        const delta = rawValue * knob * maxValue;
+        const scaledValue = Math.max(0, Math.min(maxValue, baseValue + delta));
+
+        // Update effect parameter
+        if (visualizerManagerRef.current) {
+          visualizerManagerRef.current.updateEffectParameter(layerId, paramName, scaledValue);
+        }
+      });
+    }
 
     // C. Inject Data & Render
     visualizerManagerRef.current.setAudioData(audioData);
     visualizerManagerRef.current.renderFrame(time * 1000, deltaTime);
 
   }, [frame, fps, actualLayers, actualAudioAnalysisData]);
+
+  // 4. Wait for assets (Images)
+  useEffect(() => {
+    if (assetsLoadedRef.current) return;
+
+    const waitForAssets = async () => {
+      try {
+        // Find all slideshow effects
+        const slideshowEffects = Array.from(effectInstancesRef.current.values())
+          .filter(effect => effect.id && effect.id.startsWith('imageSlideshow'));
+
+        // Also check by constructor name if possible, or just rely on the loop above
+        // The loop above relies on 'imageSlideshow' prefix in ID which might not be robust if ID is custom
+        // Better to check for waitForImages method
+
+        const asyncEffects = Array.from(effectInstancesRef.current.values())
+          .filter(effect => typeof (effect as any).waitForImages === 'function');
+
+        if (asyncEffects.length > 0) {
+          console.log(`⏳ [RayboxComposition] Waiting for ${asyncEffects.length} async effects...`);
+          await Promise.all(asyncEffects.map(effect => (effect as any).waitForImages()));
+          console.log(`✅ [RayboxComposition] All assets loaded`);
+        }
+      } catch (e) {
+        console.error('❌ [RayboxComposition] Error waiting for assets:', e);
+      } finally {
+        assetsLoadedRef.current = true;
+        continueRender(handle);
+      }
+    };
+
+    // We need to wait for effects to be initialized first
+    if (visualizerManagerRef.current && effectInstancesRef.current.size > 0) {
+      // Small timeout to ensure everything is settled
+      const t = setTimeout(() => {
+        waitForAssets();
+      }, 100);
+      return () => clearTimeout(t);
+    } else if (actualLayers && actualLayers.length === 0) {
+      // No layers, just continue
+      assetsLoadedRef.current = true;
+      continueRender(handle);
+    } else {
+      // If we have layers but effects aren't ready, we might be in the very first render cycle
+      // The effect init useEffect should run and populate effectInstancesRef
+      // We'll retry in a bit if we're still blocked
+      const t = setTimeout(() => {
+        if (!assetsLoadedRef.current) {
+          waitForAssets();
+        }
+      }, 1000); // 1s fallback
+      return () => clearTimeout(t);
+    }
+  }, [actualLayers, handle]);
 
   return (
     <div style={{ width, height, position: 'relative' }}>

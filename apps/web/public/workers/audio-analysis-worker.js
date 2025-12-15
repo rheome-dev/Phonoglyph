@@ -32,7 +32,7 @@ let meydaLoadingPromise = null;
 // Load Meyda asynchronously to avoid blocking worker initialization
 function loadMeyda() {
   if (meydaLoadingPromise) return meydaLoadingPromise;
-  
+
   meydaLoadingPromise = new Promise((resolve) => {
     const loadFromCDN = (url) => {
       try {
@@ -126,9 +126,9 @@ async function detectBpm(channelData, sampleRate) {
       try {
         const bpm = await BeatDetector.analyze(channelData, sampleRate);
         if (typeof bpm === 'number' && isFinite(bpm)) return bpm;
-      } catch (_) {}
+      } catch (_) { }
     }
-  } catch (_) {}
+  } catch (_) { }
 
   // Fallback: naive autocorrelation-based BPM estimate
   try {
@@ -150,7 +150,7 @@ async function detectBpm(channelData, sampleRate) {
     }
     const estimatedBpm = Math.round((60 * sampleRate) / bestLag);
     if (estimatedBpm >= minBpm && estimatedBpm <= maxBpm) return estimatedBpm;
-  } catch (_) {}
+  } catch (_) { }
   return 0;
 }
 
@@ -184,12 +184,12 @@ const QUALITY_PRESETS = {
 };
 
 // Message handlers
-self.onmessage = function(event) {
+self.onmessage = function (event) {
   try {
     console.log('🔧 Worker received message:', event.data);
-    
+
     const { type, data } = event.data;
-    
+
     switch (type) {
       case 'INIT_WORKER':
         // Worker is already initialized, just acknowledge
@@ -242,7 +242,7 @@ self.onmessage = function(event) {
 function initializeWorker(config) {
   try {
     console.log('🔧 Starting worker initialization...');
-    
+
     // Check what's available in the worker context
     const capabilities = {
       audioContext: false,
@@ -251,7 +251,7 @@ function initializeWorker(config) {
       console: typeof console !== 'undefined',
       postMessage: typeof self.postMessage !== 'undefined'
     };
-    
+
     // Try to initialize AudioContext (optional)
     try {
       if (typeof self.AudioContext !== 'undefined') {
@@ -269,9 +269,9 @@ function initializeWorker(config) {
       console.warn('⚠️ Failed to create AudioContext:', audioError);
       audioContext = null;
     }
-    
+
     console.log('🔧 Worker capabilities:', capabilities);
-    
+
     const readyMessage = {
       type: 'WORKER_READY',
       data: {
@@ -279,12 +279,12 @@ function initializeWorker(config) {
         timestamp: Date.now()
       }
     };
-    
+
     console.log('📤 Sending WORKER_READY message:', readyMessage);
     self.postMessage(readyMessage);
-    
+
     console.log('✅ Audio analysis worker initialized successfully');
-    
+
     // Update Meyda status after initialization
     meydaLoadingPromise.then((meydaLoaded) => {
       if (meydaLoaded) {
@@ -344,7 +344,7 @@ async function analyzeBuffer(data) {
       type: 'ANALYSIS_PROGRESS',
       data: { fileId, progress: 0.9, message: 'Generating waveform...' }
     });
-    
+
     const waveformData = generateWaveformData(channelData, duration, 1024);
     const bpm = await detectBpm(channelData, sampleRate);
 
@@ -382,29 +382,29 @@ async function analyzeBuffer(data) {
 }
 
 function generateWaveformData(channelData, duration, points = 1024) {
-    const totalSamples = channelData.length;
-    const samplesPerPoint = Math.floor(totalSamples / points);
-    const waveform = new Float32Array(points);
+  const totalSamples = channelData.length;
+  const samplesPerPoint = Math.floor(totalSamples / points);
+  const waveform = new Float32Array(points);
 
-    for (let i = 0; i < points; i++) {
-        const start = i * samplesPerPoint;
-        const end = start + samplesPerPoint;
-        let max = 0;
-        for (let j = start; j < end; j++) {
-            const sample = Math.abs(channelData[j]);
-            if (sample > max) {
-                max = sample;
-            }
-        }
-        waveform[i] = max;
+  for (let i = 0; i < points; i++) {
+    const start = i * samplesPerPoint;
+    const end = start + samplesPerPoint;
+    let max = 0;
+    for (let j = start; j < end; j++) {
+      const sample = Math.abs(channelData[j]);
+      if (sample > max) {
+        max = sample;
+      }
     }
-    
-    return {
-        points: Array.from(waveform),
-        duration: duration,
-        sampleRate: channelData.length / duration,
-        markers: [] 
-    };
+    waveform[i] = max;
+  }
+
+  return {
+    points: Array.from(waveform),
+    duration: duration,
+    sampleRate: channelData.length / duration,
+    markers: []
+  };
 }
 
 async function performFullAnalysis(channelData, sampleRate, stemType, onProgress) {
@@ -413,9 +413,9 @@ async function performFullAnalysis(channelData, sampleRate, stemType, onProgress
   const isSingleAudioFile = stemType !== 'master' && !['drums', 'bass', 'vocals'].includes(stemType);
   const effectiveStemType = isSingleAudioFile ? 'master' : stemType;
   const featuresToExtract = STEM_FEATURES[effectiveStemType] || STEM_FEATURES['other'];
-  
+
   console.log('🎵 Performing full analysis for stem type:', stemType, 'effective type:', effectiveStemType, 'with features:', featuresToExtract);
-  
+
   const featureFrames = {};
   const frameTimes = [];
   featuresToExtract.forEach(f => {
@@ -462,10 +462,10 @@ async function performFullAnalysis(channelData, sampleRate, stemType, onProgress
       fftFrequencies: [],
     };
   }
-  
+
   const bufferSize = 1024;
   const hopSize = 512;
-  
+
   let currentPosition = 0;
   const totalSteps = Math.floor((channelData.length - bufferSize) / hopSize);
 
@@ -475,7 +475,7 @@ async function performFullAnalysis(channelData, sampleRate, stemType, onProgress
 
   while (currentPosition + bufferSize <= channelData.length) {
     const buffer = channelData.slice(currentPosition, currentPosition + bufferSize);
-    
+
     // Using .extract is designed for offline, one-off analysis on a buffer
     let features = null;
     try {
@@ -502,54 +502,54 @@ async function performFullAnalysis(channelData, sampleRate, stemType, onProgress
               featureFrames.loudness.total.push(0);
             }
           } else if (feature === 'amplitudeSpectrum') {
-              // Process amplitude spectrum (Meyda returns an object with real/imaginary data)
-              const amplitudeData = features.amplitudeSpectrum;
-              // console.log('🎵 Amplitude spectrum extraction:', {
-              //   hasAmplitudeData: !!amplitudeData,
-              //   amplitudeDataType: typeof amplitudeData,
-              //   isArray: Array.isArray(amplitudeData),
-              //   amplitudeDataLength: amplitudeData ? (Array.isArray(amplitudeData) ? amplitudeData.length : 'not array') : 0,
-              //   sampleValues: amplitudeData && Array.isArray(amplitudeData) ? amplitudeData.slice(0, 10) : 'not array',
-              //   objectKeys: amplitudeData && typeof amplitudeData === 'object' ? Object.keys(amplitudeData) : 'not object'
+            // Process amplitude spectrum (Meyda returns an object with real/imaginary data)
+            const amplitudeData = features.amplitudeSpectrum;
+            // console.log('🎵 Amplitude spectrum extraction:', {
+            //   hasAmplitudeData: !!amplitudeData,
+            //   amplitudeDataType: typeof amplitudeData,
+            //   isArray: Array.isArray(amplitudeData),
+            //   amplitudeDataLength: amplitudeData ? (Array.isArray(amplitudeData) ? amplitudeData.length : 'not array') : 0,
+            //   sampleValues: amplitudeData && Array.isArray(amplitudeData) ? amplitudeData.slice(0, 10) : 'not array',
+            //   objectKeys: amplitudeData && typeof amplitudeData === 'object' ? Object.keys(amplitudeData) : 'not object'
+            // });
+
+            if (amplitudeData && Array.isArray(amplitudeData) && amplitudeData.length > 0) {
+              // If it's already an array, use it directly
+              featureFrames.amplitudeSpectrum.push([...amplitudeData]);
+              // console.log('🎵 Amplitude spectrum stored (array):', {
+              //   amplitudeLength: amplitudeData.length,
+              //   sampleAmplitudes: amplitudeData.slice(0, 5)
               // });
-              
-              if (amplitudeData && Array.isArray(amplitudeData) && amplitudeData.length > 0) {
-                // If it's already an array, use it directly
-                featureFrames.amplitudeSpectrum.push([...amplitudeData]);
-                // console.log('🎵 Amplitude spectrum stored (array):', {
-                //   amplitudeLength: amplitudeData.length,
-                //   sampleAmplitudes: amplitudeData.slice(0, 5)
-                // });
-              } else if (amplitudeData && typeof amplitudeData === 'object' && !Array.isArray(amplitudeData)) {
-                // Handle object format - Meyda returns { real: Float32Array, imag: Float32Array }
-                // console.log('🎵 Processing amplitude spectrum object:', amplitudeData);
-                
-                let magnitudes = [];
-                if (amplitudeData.real && amplitudeData.imag && Array.isArray(amplitudeData.real) && Array.isArray(amplitudeData.imag)) {
-                  // Convert complex spectrum to magnitude spectrum
-                  for (let i = 0; i < Math.min(amplitudeData.real.length, amplitudeData.imag.length); i++) {
-                    const real = amplitudeData.real[i];
-                    const imag = amplitudeData.imag[i];
-                    if (typeof real === 'number' && typeof imag === 'number') {
-                      const magnitude = Math.sqrt(real * real + imag * imag);
-                      magnitudes.push(magnitude);
-                    }
+            } else if (amplitudeData && typeof amplitudeData === 'object' && !Array.isArray(amplitudeData)) {
+              // Handle object format - Meyda returns { real: Float32Array, imag: Float32Array }
+              // console.log('🎵 Processing amplitude spectrum object:', amplitudeData);
+
+              let magnitudes = [];
+              if (amplitudeData.real && amplitudeData.imag && Array.isArray(amplitudeData.real) && Array.isArray(amplitudeData.imag)) {
+                // Convert complex spectrum to magnitude spectrum
+                for (let i = 0; i < Math.min(amplitudeData.real.length, amplitudeData.imag.length); i++) {
+                  const real = amplitudeData.real[i];
+                  const imag = amplitudeData.imag[i];
+                  if (typeof real === 'number' && typeof imag === 'number') {
+                    const magnitude = Math.sqrt(real * real + imag * imag);
+                    magnitudes.push(magnitude);
                   }
-                } else if (amplitudeData.length !== undefined) {
-                  // Handle case where it might be a TypedArray or similar
-                  magnitudes = Array.from(amplitudeData);
                 }
-                
-                featureFrames.amplitudeSpectrum.push(magnitudes);
-                // console.log('🎵 Amplitude spectrum stored (converted):', {
-                //   magnitudeLength: magnitudes.length,
-                //   sampleMagnitudes: magnitudes.slice(0, 5)
-                // });
-              } else {
-                // Fallback empty array
-                featureFrames.amplitudeSpectrum.push([]);
-                // console.log('🎵 No valid amplitude spectrum data, using empty array');
+              } else if (amplitudeData.length !== undefined) {
+                // Handle case where it might be a TypedArray or similar
+                magnitudes = Array.from(amplitudeData);
               }
+
+              featureFrames.amplitudeSpectrum.push(magnitudes);
+              // console.log('🎵 Amplitude spectrum stored (converted):', {
+              //   magnitudeLength: magnitudes.length,
+              //   sampleMagnitudes: magnitudes.slice(0, 5)
+              // });
+            } else {
+              // Fallback empty array
+              featureFrames.amplitudeSpectrum.push([]);
+              // console.log('🎵 No valid amplitude spectrum data, using empty array');
+            }
           } else {
             // Handle other features (numeric or array); push a value every frame
             const value = features[feature];
@@ -582,16 +582,16 @@ async function performFullAnalysis(channelData, sampleRate, stemType, onProgress
     if (features) {
       const rms = features.rms || 0;
       featureFrames.volume.push(rms);
-      
+
       // Calculate frequency band energies (simplified)
       const spectralCentroid = features.spectralCentroid || 0;
       const spectralRolloff = features.spectralRolloff || 0;
-      
+
       // Map spectral features to frequency bands
       featureFrames.bass.push(spectralCentroid < 200 ? rms : 0);
       featureFrames.mid.push(spectralCentroid >= 200 && spectralCentroid < 2000 ? rms : 0);
       featureFrames.treble.push(spectralCentroid >= 2000 ? rms : 0);
-      
+
       // Store all features as a combined array
       const allFeatures = Object.values(features).flat().filter(v => typeof v === 'number');
       featureFrames.features.push(allFeatures.length > 0 ? allFeatures[0] : 0);
@@ -605,7 +605,7 @@ async function performFullAnalysis(channelData, sampleRate, stemType, onProgress
     // For mono, provide both left and right as the same array
     featureFrames.stereoWindow_left = Array.from(leftWindow);
     featureFrames.stereoWindow_right = Array.from(leftWindow);
-    
+
     // Record frame start time for timestamped series
     const frameStartTime = currentPosition / sampleRate;
     frameTimes.push(frameStartTime);
@@ -625,45 +625,39 @@ async function performFullAnalysis(channelData, sampleRate, stemType, onProgress
     if (key === 'loudness') {
       flatFeatures.loudness = featureFrames.loudness.total;
     } else if (key === 'fft') {
+      // Note: This branch might not be hit since we're using amplitudeSpectrum
       flatFeatures.fft = featureFrames.fft.length > 0 ? featureFrames.fft[featureFrames.fft.length - 1] : [];
       flatFeatures.fftFrequencies = featureFrames.fftFrequencies;
     } else if (key === 'amplitudeSpectrum') {
-      // Use the latest amplitude spectrum frame as the FFT data
-      flatFeatures.fft = featureFrames.amplitudeSpectrum.length > 0 ? featureFrames.amplitudeSpectrum[featureFrames.amplitudeSpectrum.length - 1] : [];
-      // console.log('🎵 Final FFT data processing:', {
-      //   amplitudeSpectrumFrames: featureFrames.amplitudeSpectrum.length,
-      //   finalFftLength: flatFeatures.fft.length,
-      //   sampleFftValues: flatFeatures.fft.slice(0, 5)
-      // });
-      
-      // If we don't have amplitude spectrum data, generate a fallback FFT
-      if (flatFeatures.fft.length === 0) {
-        // console.log('🎵 No amplitude spectrum data, generating fallback FFT');
-        const fallbackFft = [];
-        const fftSize = 512; // Smaller FFT for fallback
-        for (let i = 0; i < fftSize; i++) {
-          // Generate some realistic-looking frequency data
-          const frequency = (i * sampleRate) / fftSize;
-          const magnitude = Math.random() * 0.1 + (frequency < 1000 ? 0.2 : 0.05);
-          fallbackFft.push(magnitude);
-        }
-        flatFeatures.fft = fallbackFft;
-        // console.log('🎵 Fallback FFT generated:', {
-        //   fallbackFftLength: fallbackFft.length,
-        //   sampleFallbackValues: fallbackFft.slice(0, 5)
-        // });
+      // FIXED: Flatten the full time-series FFT data instead of just using the last frame
+      // This creates a flat array where all frames are concatenated: [frame0_bin0, frame0_bin1, ..., frame1_bin0, frame1_bin1, ...]
+      // This format allows time-based extraction in Remotion/HudOverlay by slicing at frame positions
+      const allFrames = featureFrames.amplitudeSpectrum;
+      if (allFrames.length > 0) {
+        flatFeatures.fft = allFrames.flat(); // Concatenate all frames into one array
+        console.log('🎵 FFT time-series data flattened:', {
+          totalFrames: allFrames.length,
+          binsPerFrame: allFrames[0]?.length || 0,
+          totalFftValues: flatFeatures.fft.length,
+          sampleValues: flatFeatures.fft.slice(0, 5)
+        });
+      } else {
+        flatFeatures.fft = [];
       }
-      
+
       // Calculate frequency bins for amplitude spectrum
-      if (featureFrames.fftFrequencies.length === 0 && flatFeatures.fft.length > 0) {
+      if (allFrames.length > 0 && allFrames[0].length > 0) {
+        const binsPerFrame = allFrames[0].length;
         const fftFrequencies = [];
-        for (let i = 0; i < flatFeatures.fft.length; i++) {
+        for (let i = 0; i < binsPerFrame; i++) {
           const frequency = (i * sampleRate) / bufferSize;
           fftFrequencies.push(frequency);
         }
         flatFeatures.fftFrequencies = fftFrequencies;
       }
     } else if (key === 'stereoWindow_left' || key === 'stereoWindow_right') {
+      // Keep stereo window data (already extracted per-frame, use last frame for now)
+      // Note: Could be enhanced to save time-series stereo data similar to FFT
       flatFeatures[key] = featureFrames[key];
     } else if (key === 'volume' || key === 'bass' || key === 'mid' || key === 'treble' || key === 'features') {
       // Ensure these fields are arrays
@@ -763,20 +757,20 @@ function performEnhancedAnalysis(fullAnalysis, sampleRate, analysisParams) {
 
 function setupStemAnalysis(data) {
   const { stemType, audioBufferData, config } = data;
-  
+
   try {
     console.log(`🔧 Setting up stem analysis for ${stemType}`);
-    
+
     // Validate quality and provide fallback
     const quality = config.quality || 'medium';
     if (!QUALITY_PRESETS[quality]) {
       console.warn(`⚠️ Invalid quality "${quality}", falling back to "medium"`);
       config.quality = 'medium';
     }
-    
+
     const features = getStemFeatures(stemType, config.quality);
     const bufferSize = QUALITY_PRESETS[config.quality].bufferSize;
-    
+
     // Store analyzer configuration
     analyzers.set(stemType, {
       stemType,
@@ -786,7 +780,7 @@ function setupStemAnalysis(data) {
       lastAnalysis: null,
       meydaAvailable: !!Meyda
     });
-    
+
     // Update Meyda availability if it loads after setup
     if (!Meyda && meydaLoadingPromise) {
       meydaLoadingPromise.then((meydaLoaded) => {
@@ -796,9 +790,9 @@ function setupStemAnalysis(data) {
         }
       });
     }
-    
+
     console.log(`✅ Stem analysis setup complete for ${stemType} (Meyda: ${!!Meyda})`);
-    
+
     self.postMessage({
       type: 'STEM_SETUP_COMPLETE',
       stemType,
@@ -809,7 +803,7 @@ function setupStemAnalysis(data) {
         timestamp: Date.now()
       }
     });
-    
+
   } catch (error) {
     console.error(`❌ Stem setup error for ${stemType}:`, error);
     self.postMessage({
@@ -825,7 +819,7 @@ function setupStemAnalysis(data) {
 
 function getStemFeatures(stemType, quality) {
   const baseFeatures = STEM_FEATURES[stemType] || STEM_FEATURES.other;
-  
+
   switch (quality) {
     case 'high':
       return baseFeatures.concat(['spectralRolloff']); // Only add features we know exist
@@ -840,13 +834,13 @@ function getStemFeatures(stemType, quality) {
 
 function startAnalysis() {
   if (isRunning) return;
-  
+
   isRunning = true;
   performanceMetrics.lastFrameTime = performance.now();
-  
+
   // Start analysis loop
   analysisLoop();
-  
+
   self.postMessage({
     type: 'ANALYSIS_STARTED',
     data: {
@@ -858,7 +852,7 @@ function startAnalysis() {
 
 function stopAnalysis() {
   isRunning = false;
-  
+
   self.postMessage({
     type: 'ANALYSIS_STOPPED',
     data: {
@@ -869,15 +863,15 @@ function stopAnalysis() {
 
 function analysisLoop() {
   if (!isRunning) return;
-  
+
   const startTime = performance.now();
   const frameTime = startTime - performanceMetrics.lastFrameTime;
-  
+
   // Process each stem analyzer
   analyzers.forEach((analyzer, stemType) => {
     try {
       let analysisFeatures;
-      
+
       if (analyzer.meydaAvailable && Meyda) {
         // Use Meyda for real audio analysis
         analysisFeatures = performMeydaAnalysis(analyzer);
@@ -885,7 +879,7 @@ function analysisLoop() {
         // Fallback to mock analysis
         analysisFeatures = generateMockAnalysis(analyzer);
       }
-      
+
       // Convert to our format
       const stemAnalysis = {
         stemId: `${stemType}-${Date.now()}`,
@@ -905,14 +899,14 @@ function analysisLoop() {
         timestamp: startTime,
         analysisMethod: analyzer.meydaAvailable ? 'meyda' : 'mock'
       };
-      
+
       // Send result to main thread
       self.postMessage({
         type: 'STEM_ANALYSIS',
         stemType,
         analysis: stemAnalysis
       });
-      
+
     } catch (error) {
       console.error(`❌ Analysis error for ${stemType}:`, error);
       self.postMessage({
@@ -925,15 +919,15 @@ function analysisLoop() {
       });
     }
   });
-  
+
   // Update performance metrics
   const analysisTime = performance.now() - startTime;
   updatePerformanceMetrics(frameTime, analysisTime);
-  
+
   // Schedule next analysis frame
   const targetFrameTime = 1000 / getTargetFrameRate();
   const nextFrameDelay = Math.max(0, targetFrameTime - analysisTime);
-  
+
   setTimeout(analysisLoop, nextFrameDelay);
   performanceMetrics.lastFrameTime = performance.now();
 }
@@ -942,33 +936,33 @@ function performMeydaAnalysis(analyzer) {
   try {
     // This would be called with actual audio data in a real implementation
     // For now, we'll simulate Meyda analysis with realistic values
-    
+
     const time = performance.now() / 1000;
     const features = analyzer.features;
-    
+
     // Simulate Meyda feature extraction
     const meydaFeatures = {};
-    
+
     if (features.includes('rms')) {
       meydaFeatures.rms = Math.sin(time * 2) * 0.5 + 0.5;
     }
-    
+
     if (features.includes('spectralCentroid')) {
       meydaFeatures.spectralCentroid = Math.sin(time * 1.5) * 1000 + 2000;
     }
-    
+
     if (features.includes('spectralRolloff')) {
       meydaFeatures.spectralRolloff = Math.sin(time * 0.8) * 2000 + 4000;
     }
-    
+
     if (features.includes('spectralFlatness')) {
       meydaFeatures.spectralFlatness = Math.sin(time * 1.2) * 0.3 + 0.7;
     }
-    
+
     if (features.includes('zcr')) {
       meydaFeatures.zcr = Math.sin(time * 3) * 0.2 + 0.3;
     }
-    
+
     // Convert Meyda features to our format
     return {
       rms: meydaFeatures.rms || 0.5,
@@ -1002,7 +996,7 @@ function performMeydaAnalysis(analyzer) {
         timestamp: time
       }]
     };
-    
+
   } catch (error) {
     console.error('❌ Meyda analysis error:', error);
     // Fallback to mock analysis
@@ -1013,7 +1007,7 @@ function performMeydaAnalysis(analyzer) {
 function generateMockAnalysis(analyzer) {
   // Generate realistic mock data for demonstration
   const time = performance.now() / 1000;
-  
+
   return {
     rms: Math.sin(time * 2) * 0.5 + 0.5,
     spectralCentroid: Math.sin(time * 1.5) * 1000 + 2000,
@@ -1051,13 +1045,13 @@ function generateMockAnalysis(analyzer) {
 function updatePerformanceMetrics(frameTime, analysisTime) {
   performanceMetrics.analysisLatency = analysisTime;
   performanceMetrics.fps = frameTime > 0 ? Math.round(1000 / frameTime) : 0;
-  
+
   // Track frame drops
   const targetFrameTime = 1000 / getTargetFrameRate();
   if (frameTime > targetFrameTime * 1.5) {
     performanceMetrics.frameDrops++;
   }
-  
+
   // Estimate memory usage
   performanceMetrics.memoryUsage = analyzers.size * 5; // Simplified estimate
 }
@@ -1070,20 +1064,20 @@ function getTargetFrameRate() {
 
 function updateQuality(data) {
   const { quality } = data;
-  
+
   // Validate quality and provide fallback
   const validQuality = QUALITY_PRESETS[quality] ? quality : 'medium';
   if (quality !== validQuality) {
     console.warn(`⚠️ Invalid quality "${quality}", using "medium" instead`);
   }
-  
+
   // Update all analyzers with new quality settings
   analyzers.forEach((analyzer, stemType) => {
     analyzer.config.quality = validQuality;
     analyzer.features = getStemFeatures(stemType, validQuality);
     analyzer.bufferSize = QUALITY_PRESETS[validQuality].bufferSize;
   });
-  
+
   self.postMessage({
     type: 'QUALITY_UPDATED',
     data: {
@@ -1105,7 +1099,7 @@ function sendMetrics() {
 }
 
 // Error handling
-self.onerror = function(error) {
+self.onerror = function (error) {
   self.postMessage({
     type: 'WORKER_ERROR',
     error: error.message,
