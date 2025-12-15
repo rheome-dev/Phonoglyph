@@ -234,9 +234,7 @@ export const RemotionOverlayRenderer: React.FC<RemotionOverlayRendererProps> = (
 
       if (!featureArr) {
         // Fallback: try any available array feature
-        if (!analysis) {
-          return null;
-        }
+        // Note: analysis is already validated above (line 81), so it's guaranteed to be defined here
         const availableFeatures = Object.keys(analysis.analysisData).filter(
           (key) =>
             Array.isArray((analysis.analysisData as any)[key]) &&
