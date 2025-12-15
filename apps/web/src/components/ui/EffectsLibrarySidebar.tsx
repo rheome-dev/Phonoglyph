@@ -18,7 +18,7 @@ export interface EffectUIData {
   id: string;
   name: string;
   description: string;
-  category: 'Generative' | 'Overlays' | 'Filters';
+  category: 'Generative' | 'Overlays' | 'Filters' | 'Stylize' | 'Blur' | 'Distort' | 'Light' | 'Misc';
   rarity: 'Common' | 'Rare' | 'Mythic';
   parameters?: Record<string, any>;
   image?: string;
@@ -34,10 +34,10 @@ interface EffectsLibrarySidebarProps {
   // Inspector mode props
   editingEffectId?: string | null;
   editingEffect?: EffectUIData | null;
-  editingEffectInstance?: { 
-    id: string; 
-    name: string; 
-    description: string; 
+  editingEffectInstance?: {
+    id: string;
+    name: string;
+    description: string;
     parameters: Record<string, any>;
   } | null;
   activeSliderValues?: Record<string, Record<string, any>>;
@@ -166,7 +166,7 @@ const DraggableEffectCard: React.FC<{
   });
 
   return (
-    <div 
+    <div
       ref={drag as any}
       className="cursor-grab"
     >
@@ -190,21 +190,21 @@ const DraggableEffectCard: React.FC<{
         {/* Title - fixed height */}
         <div className="relative z-10 mb-1">
           <div className="flex items-center gap-1 font-mono text-[10px] font-bold tracking-wide text-white">
-            <div 
+            <div
               className="w-1 h-1 flex-shrink-0 border border-gray-600"
-              style={{ 
+              style={{
                 backgroundColor: '#71717a'
               }}
             />
             {effect.name.toUpperCase().replace(' EFFECT', '')}
           </div>
         </div>
-        
+
         {/* Card art area - square and fills width */}
         <div className="relative z-10 w-full aspect-square bg-neutral-800 border border-gray-600 overflow-hidden rounded p-1">
           {effect.image ? (
-            <img 
-              src={effect.image} 
+            <img
+              src={effect.image}
               alt={effect.name}
               className="absolute inset-0 w-full h-full object-cover"
             />
@@ -212,7 +212,14 @@ const DraggableEffectCard: React.FC<{
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="text-center">
                 <div className="text-xs">
-                  {effect.category === 'Generative' ? '🌊' : effect.category === 'Overlays' ? '📊' : '✨'}
+                  {effect.category === 'Generative' ? '🌊' :
+                    effect.category === 'Overlays' ? '📊' :
+                      effect.category === 'Filters' ? '✨' :
+                        effect.category === 'Stylize' ? '🎨' :
+                          effect.category === 'Blur' ? '〰️' :
+                            effect.category === 'Distort' ? '🌀' :
+                              effect.category === 'Light' ? '💡' :
+                                effect.category === 'Misc' ? '🔮' : '✨'}
                 </div>
                 <div className="text-xs font-mono text-gray-300 uppercase tracking-wider">
                   {effect.category.slice(0, 3)}
@@ -221,7 +228,7 @@ const DraggableEffectCard: React.FC<{
             </div>
           )}
         </div>
-        
+
         {/* Drag indicator */}
         <div className="absolute bottom-1 right-1 z-20">
           <div className="bg-gray-600 text-gray-900 text-xs font-bold px-1 py-0.5 border border-gray-700">
@@ -270,11 +277,16 @@ export function EffectsLibrarySidebar({
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({
     'Generative': true,
     'Overlays': true,
-    'Filters': true
+    'Filters': true,
+    'Stylize': true,
+    'Blur': true,
+    'Distort': true,
+    'Light': true,
+    'Misc': true
   });
 
   // Check if we're editing imageSlideshow (needs wider sidebar)
-  const isEditingSlideshow = editingEffectId === 'imageSlideshow' || 
+  const isEditingSlideshow = editingEffectId === 'imageSlideshow' ||
     (editingEffectInstance && layers.find(l => l.id === editingEffectId && l.effectType === 'imageSlideshow'));
 
   // Check if we're editing an overlay
@@ -284,9 +296,9 @@ export function EffectsLibrarySidebar({
   // Filter effects based on search query
   const filteredEffects = React.useMemo(() => {
     if (!searchQuery.trim()) return effects;
-    
+
     const query = searchQuery.toLowerCase();
-    return effects.filter(effect => 
+    return effects.filter(effect =>
       effect.name.toLowerCase().includes(query) ||
       effect.description.toLowerCase().includes(query) ||
       effect.category.toLowerCase().includes(query) ||
@@ -299,7 +311,12 @@ export function EffectsLibrarySidebar({
     const categories: Record<string, EffectUIData[]> = {
       'Generative': [],
       'Overlays': [],
-      'Filters': []
+      'Filters': [],
+      'Stylize': [],
+      'Blur': [],
+      'Distort': [],
+      'Light': [],
+      'Misc': []
     };
 
     filteredEffects.forEach(effect => {
@@ -374,15 +391,15 @@ export function EffectsLibrarySidebar({
               availableFiles={availableFiles}
               onSelectCollection={(imageUrls, collectionId) => {
                 console.log('🖼️ Collection selected:', { layerId, collectionId, count: imageUrls.length });
-                
+
                 // 1. Update Images (URLs) - Required for visualizer
                 onParameterChange?.(layerId, 'images', imageUrls);
-                
+
                 // FIX 2: Persist Collection ID so UI restores selection on reload
                 if (collectionId) {
                   onParameterChange?.(layerId, 'collectionId', collectionId);
                 }
-                
+
                 // FIX 3: Persist File IDs so Asset Refresher can fix expired URLs
                 // Map the selected URLs back to File IDs using the availableFiles list
                 if (availableFiles && availableFiles.length > 0) {
@@ -391,7 +408,7 @@ export function EffectsLibrarySidebar({
                     const file = availableFiles.find(f => f.downloadUrl === url);
                     return file ? file.id : null;
                   }).filter(Boolean);
-                  
+
                   if (imageIds.length > 0) {
                     console.log('🆔 Saving image IDs for refresh:', imageIds.length);
                     onParameterChange?.(layerId, 'imageIds', imageIds);
@@ -407,7 +424,7 @@ export function EffectsLibrarySidebar({
           {/* Playback Settings Section */}
           <div className="pt-4 border-t border-white/10">
             <Label className="text-xs uppercase text-stone-400 mb-3 block">Playback Settings</Label>
-            
+
             <div className="space-y-4">
               {/* Advance Trigger */}
               <DroppableParameter
@@ -415,30 +432,30 @@ export function EffectsLibrarySidebar({
                 label="Advance Trigger"
                 mappedFeatureId={slideshowLayer?.settings?.triggerSourceId || mappings[makeParamKey(layerId, 'triggerValue')]?.featureId}
                 mappedFeatureName={
-                  slideshowLayer?.settings?.triggerSourceId 
-                    ? featureNames[slideshowLayer.settings.triggerSourceId] 
-                    : (mappings[makeParamKey(layerId, 'triggerValue')]?.featureId 
-                        ? featureNames[mappings[makeParamKey(layerId, 'triggerValue')]?.featureId!] 
-                        : undefined)
+                  slideshowLayer?.settings?.triggerSourceId
+                    ? featureNames[slideshowLayer.settings.triggerSourceId]
+                    : (mappings[makeParamKey(layerId, 'triggerValue')]?.featureId
+                      ? featureNames[mappings[makeParamKey(layerId, 'triggerValue')]?.featureId!]
+                      : undefined)
                 }
                 modulationAmount={mappings[makeParamKey(layerId, 'triggerValue')]?.modulationAmount ?? 0.5}
                 baseValue={baseParameterValues[layerId]?.['triggerValue'] ?? 0}
                 modulatedValue={modulatedParameterValues[makeParamKey(layerId, 'triggerValue')] ?? 0}
                 sliderMax={1}
-                onFeatureDrop={onMapFeature || (() => {})}
-                onFeatureUnmap={onUnmapFeature || (() => {})}
+                onFeatureDrop={onMapFeature || (() => { })}
+                onFeatureUnmap={onUnmapFeature || (() => { })}
                 onModulationAmountChange={onModulationAmountChange}
                 dropZoneStyle="inlayed"
               >
                 <div className="h-2 bg-stone-800 rounded overflow-hidden mt-1">
-                  <div 
+                  <div
                     className="h-full bg-blue-500 transition-all duration-75"
                     style={{ width: `${(modulatedParameterValues[`${layerId}-triggerValue`] || 0) * 100}%` }}
                   />
                 </div>
                 <div className="text-[10px] text-stone-500 mt-1">
                   {(slideshowLayer?.settings?.triggerSourceId || mappings[`${layerId}-triggerValue`]?.featureId)
-                    ? "Mapped to audio analysis" 
+                    ? "Mapped to audio analysis"
                     : "Drag 'Transients' here to trigger slides"}
                 </div>
               </DroppableParameter>
@@ -479,8 +496,8 @@ export function EffectsLibrarySidebar({
                     baseValue={baseVal}
                     modulatedValue={modulatedVal}
                     sliderMax={1.0}
-                    onFeatureDrop={onMapFeature || (() => {})}
-                    onFeatureUnmap={onUnmapFeature || (() => {})}
+                    onFeatureDrop={onMapFeature || (() => { })}
+                    onFeatureUnmap={onUnmapFeature || (() => { })}
                     onModulationAmountChange={onModulationAmountChange}
                     className="mb-2"
                     dropZoneStyle="inlayed"
@@ -508,7 +525,7 @@ export function EffectsLibrarySidebar({
           {/* Position & Size Section */}
           <div className="pt-4 border-t border-white/10">
             <Label className="text-xs uppercase text-stone-400 mb-3 block">Position & Size</Label>
-            
+
             <div className="space-y-4">
               {/* Position X/Y */}
               <div className="grid grid-cols-2 gap-3">
@@ -529,7 +546,7 @@ export function EffectsLibrarySidebar({
                     {(activeSliderValues[layerId]?.['position']?.x ?? (slideshowLayer?.settings?.position?.x ?? 0.5)).toFixed(2)}
                   </div>
                 </div>
-                
+
                 <div className="space-y-1">
                   <Label className="text-xs text-white/80 font-mono">Position Y</Label>
                   <Slider
@@ -548,7 +565,7 @@ export function EffectsLibrarySidebar({
                   </div>
                 </div>
               </div>
-              
+
               {/* Width/Height */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
@@ -568,7 +585,7 @@ export function EffectsLibrarySidebar({
                     {(activeSliderValues[layerId]?.['size']?.width ?? (slideshowLayer?.settings?.size?.width ?? 1.0)).toFixed(2)}
                   </div>
                 </div>
-                
+
                 <div className="space-y-1">
                   <Label className="text-xs text-white/80 font-mono">Height</Label>
                   <Slider
@@ -594,7 +611,7 @@ export function EffectsLibrarySidebar({
           <div className="pt-4 border-t border-white/20">
             <div className="flex items-center justify-between">
               <Label className="text-white/80 text-xs font-mono">Effect Enabled</Label>
-              <Switch 
+              <Switch
                 checked={selectedEffects[editingEffectId] ?? selectedEffects['imageSlideshow']}
                 onCheckedChange={(checked) => onEffectToggle(editingEffectId)}
               />
@@ -625,7 +642,7 @@ export function EffectsLibrarySidebar({
       canDrop: monitor.canDrop(),
     }),
   });
-  
+
   const dropRef = React.useCallback((node: HTMLDivElement | null) => {
     drop(node);
   }, [drop]);
@@ -633,13 +650,13 @@ export function EffectsLibrarySidebar({
   // Render overlay inspector with stem mapping and grouped parameters
   const renderOverlayInspector = () => {
     if (!editingEffectId || !editingEffectInstance) return null;
-    
+
     if (!overlayLayer || overlayLayer.type !== 'overlay') return null;
-    
+
     const settings = (overlayLayer as any).settings || {};
     const stemId = settings.stemId || settings.stem?.id || masterStemId;
     const stem = availableStems.find(s => s.id === stemId);
-    
+
     // Determine stem name with better fallback logic
     let stemName = 'Unknown';
     if (stemId === masterStemId) {
@@ -657,17 +674,17 @@ export function EffectsLibrarySidebar({
         stemName = `Stem ${stemId.slice(0, 8)}...`;
       }
     }
-    
+
     // Group parameters: toggles with their related parameters
     const groupedParams: Array<{
       group: string;
       toggle?: { name: string; value: boolean };
       params: Array<{ name: string; value: any; type: 'number' | 'string' | 'select' | 'color' }>;
     }> = [];
-    
+
     const params = editingEffectInstance.parameters;
     const processedParams = new Set<string>();
-    
+
     // Group outline parameters
     if ('outline' in params || 'outlineWidth' in params || 'outlineColor' in params) {
       groupedParams.push({
@@ -682,7 +699,7 @@ export function EffectsLibrarySidebar({
       if ('outlineWidth' in params) processedParams.add('outlineWidth');
       if ('outlineColor' in params) processedParams.add('outlineColor');
     }
-    
+
     // Group drop shadow parameters
     if ('dropShadow' in params || 'shadowColor' in params || 'shadowBlur' in params) {
       groupedParams.push({
@@ -697,12 +714,12 @@ export function EffectsLibrarySidebar({
       if ('shadowColor' in params) processedParams.add('shadowColor');
       if ('shadowBlur' in params) processedParams.add('shadowBlur');
     }
-    
-    
+
+
     // Add remaining parameters that aren't grouped
     Object.entries(params).forEach(([name, value]) => {
       if (processedParams.has(name) || name === 'sourceTexture' || name === 'id') return;
-      
+
       let type: 'number' | 'string' | 'select' | 'color' = 'string';
       if (typeof value === 'number') type = 'number';
       else if (typeof value === 'boolean') {
@@ -719,14 +736,14 @@ export function EffectsLibrarySidebar({
       } else if (['color', 'shadowColor', 'outlineColor', 'peakColor', 'traceColor', 'gridColor', 'barColor', 'fontColor'].includes(name)) {
         type = 'color';
       }
-      
+
       groupedParams.push({
         group: name,
         params: [{ name, value, type }]
       });
       processedParams.add(name);
     });
-    
+
     const handleUnlinkStem = () => {
       if (overlayLayer && onLayerUpdate && editingEffectId) {
         const currentSettings = (overlayLayer as any).settings || {};
@@ -739,7 +756,7 @@ export function EffectsLibrarySidebar({
         });
       }
     };
-    
+
     return (
       <div className="h-full flex flex-col">
         {/* Header with Back button */}
@@ -807,7 +824,7 @@ export function EffectsLibrarySidebar({
               </div>
             )}
           </div>
-          
+
           {/* Grouped Parameters */}
           {groupedParams.map((group) => (
             <div key={group.group} className="space-y-2">
@@ -890,12 +907,12 @@ export function EffectsLibrarySidebar({
               })}
             </div>
           ))}
-          
+
           {/* Effect Enabled Toggle */}
           <div className="pt-4 border-t border-white/20">
             <div className="flex items-center justify-between">
               <Label className="text-white/80 text-xs font-mono">Effect Enabled</Label>
-              <Switch 
+              <Switch
                 checked={selectedEffects[editingEffectId]}
                 onCheckedChange={(checked) => onEffectToggle(editingEffectId)}
               />
@@ -925,7 +942,7 @@ export function EffectsLibrarySidebar({
     if (!editingEffectInstance) return null;
 
     const effectInstance = editingEffectInstance;
-    
+
     // Sort parameters: booleans first, then others
     const sortedParams = Object.entries(effectInstance.parameters)
       .filter(([paramName]) => paramName !== 'sourceTexture' && paramName !== 'id')
@@ -979,10 +996,10 @@ export function EffectsLibrarySidebar({
               if (typeof value === 'number') {
                 const paramKey = makeParamKey(editingEffectId, paramName);
                 let mapping = mappings[paramKey];
-                
+
                 // SAFEGUARD: Legacy mappings stored by effect TYPE (not instance ID) are ignored
                 // The audio loop also skips these legacy mappings to prevent cross-instance effects
-                
+
                 const mappedFeatureId = mapping?.featureId || null;
                 const mappedFeatureName = mappedFeatureId ? featureNames[mappedFeatureId] : undefined;
                 const modulationAmount = mapping?.modulationAmount ?? 0.5;
@@ -1001,8 +1018,8 @@ export function EffectsLibrarySidebar({
                     baseValue={baseValue}
                     modulatedValue={activeValue}
                     sliderMax={sliderMax}
-                    onFeatureDrop={onMapFeature || (() => {})}
-                    onFeatureUnmap={onUnmapFeature || (() => {})}
+                    onFeatureDrop={onMapFeature || (() => { })}
+                    onFeatureUnmap={onUnmapFeature || (() => { })}
                     onModulationAmountChange={onModulationAmountChange}
                     className="mb-2"
                     dropZoneStyle="inlayed"
@@ -1022,23 +1039,23 @@ export function EffectsLibrarySidebar({
 
               // Color parameters (arrays like highlightColor, particleColor, textColor)
               if ((paramName === 'highlightColor' || paramName === 'particleColor' || paramName === 'textColor') && Array.isArray(value)) {
-                const displayName = paramName === 'highlightColor' 
-                  ? 'Highlight Color' 
-                  : paramName === 'particleColor' 
-                    ? 'Particle Color' 
+                const displayName = paramName === 'highlightColor'
+                  ? 'Highlight Color'
+                  : paramName === 'particleColor'
+                    ? 'Particle Color'
                     : 'Text Color';
-                
+
                 const currentValue = activeSliderValues[editingEffectId]?.[paramName] ?? value;
-                
+
                 return (
                   <div key={paramName} className="space-y-2">
                     <Label className="text-white/90 text-sm font-medium flex items-center justify-between">
                       {displayName}
-                      <span 
-                        className="ml-2 w-6 h-6 rounded-full border border-white/40 inline-block" 
-                        style={{ 
-                          background: `rgb(${currentValue.map((v: number) => Math.round(v * 255)).join(',')})` 
-                        }} 
+                      <span
+                        className="ml-2 w-6 h-6 rounded-full border border-white/40 inline-block"
+                        style={{
+                          background: `rgb(${currentValue.map((v: number) => Math.round(v * 255)).join(',')})`
+                        }}
                       />
                     </Label>
                     <input
@@ -1058,20 +1075,20 @@ export function EffectsLibrarySidebar({
                   </div>
                 );
               }
-              
+
               // String color parameters (hex strings like '#4db3fa' for overlays)
               const colorParamNames = ['color', 'shadowColor', 'outlineColor', 'peakColor', 'traceColor', 'gridColor', 'barColor', 'fontColor'];
               if (colorParamNames.includes(paramName) && typeof value === 'string') {
                 const displayName = paramName.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase());
                 const currentValue = activeSliderValues[editingEffectId]?.[paramName] ?? value;
-                
+
                 return (
                   <div key={paramName} className="flex items-center justify-between">
                     <Label className="text-white/80 text-xs font-mono">{displayName}</Label>
                     <div className="flex items-center gap-2">
-                      <span 
-                        className="w-6 h-6 rounded border border-white/40 inline-block" 
-                        style={{ background: currentValue }} 
+                      <span
+                        className="w-6 h-6 rounded border border-white/40 inline-block"
+                        style={{ background: currentValue }}
                       />
                       <input
                         type="color"
@@ -1083,7 +1100,7 @@ export function EffectsLibrarySidebar({
                   </div>
                 );
               }
-              
+
               // Select/dropdown parameters for overlays
               const selectParamOptions: Record<string, string[]> = {
                 colorMap: ['Classic', 'Inferno', 'Viridis', 'Rainbow'],
@@ -1095,7 +1112,7 @@ export function EffectsLibrarySidebar({
               if (selectParamOptions[paramName] && typeof value === 'string') {
                 const displayName = paramName.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase());
                 const currentValue = activeSliderValues[editingEffectId]?.[paramName] ?? value;
-                
+
                 return (
                   <div key={paramName} className="flex items-center justify-between">
                     <Label className="text-white/80 text-xs font-mono">{displayName}</Label>
@@ -1120,7 +1137,7 @@ export function EffectsLibrarySidebar({
           <div className="pt-4 border-t border-white/20">
             <div className="flex items-center justify-between">
               <Label className="text-white/80 text-xs font-mono">Effect Enabled</Label>
-              <Switch 
+              <Switch
                 checked={selectedEffects[editingEffectId]}
                 onCheckedChange={(checked) => onEffectToggle(editingEffectId)}
               />
@@ -1139,7 +1156,7 @@ export function EffectsLibrarySidebar({
         <h2 className="font-mono text-sm font-bold text-gray-100 uppercase tracking-wider mb-2">
           Effects Library
         </h2>
-        
+
         {/* Search Input */}
         <div className="relative">
           <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-gray-400" />
@@ -1165,9 +1182,9 @@ export function EffectsLibrarySidebar({
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
         {Object.entries(categorizedEffects).map(([category, categoryEffects]) => {
           if (categoryEffects.length === 0) return null;
-          
+
           const isExpanded = expandedCategories[category];
-          
+
           return (
             <div key={category} className="space-y-1.5">
               {/* Category Header */}
@@ -1195,7 +1212,7 @@ export function EffectsLibrarySidebar({
                 <div className="grid grid-cols-2 gap-1.5 w-full">
                   {categoryEffects.map((effect, index) => {
                     const cardStyle = getCardStyle(effect.rarity, selectedEffects[effect.id]);
-                    
+
                     return (
                       <DraggableEffectCard
                         key={effect.id}
@@ -1217,9 +1234,9 @@ export function EffectsLibrarySidebar({
             <div className="text-gray-500 text-xs">
               No effects found matching "{searchQuery}"
             </div>
-            <Button 
-              variant="outline" 
-              size="sm" 
+            <Button
+              variant="outline"
+              size="sm"
               onClick={clearSearch}
               className="mt-2 text-xs text-gray-400 border-gray-700 hover:bg-gray-800"
             >

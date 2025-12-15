@@ -163,21 +163,18 @@ export function extractAudioDataAtTime(
       }
     }
 
-    // If FFT is a flat array (e.g., from older analysis or compressed payload)
-    if (fft.length === frameTimes.length * 256) { // Assuming 256 bins per frame
-      const startIdx = frameIndex * 256;
-      const endIdx = Math.min(startIdx + 256, fft.length);
-      frequencies = Array.from(fft.slice(startIdx, endIdx));
-      timeData = frequencies.map((_, i) => fft[startIdx + i] || 0); // Still approximate timeData from FFT
-    } else {
-      // Likely array of arrays
-      frequencies = fft[frameIndex] || [];
-      // If timeData is also an array of arrays, extract it similarly
-      if (Array.isArray(analysis.analysisData.timeData) && analysis.analysisData.timeData[frameIndex]) {
-        timeData = analysis.analysisData.timeData[frameIndex];
-      } else {
-        // Fallback: approximate timeData from frequencies if not available
-        timeData = frequencies.map((_, i) => frequencies[i] || 0);
+    // [CHANGE 2] Dynamically calculate bin size instead of hardcoding 256
+    // This prevents index out of bounds or misalignment if analysis uses 512/1024 bins
+    const binsPerFrame = Math.floor(fft.length / frameTimes.length);
+
+    if (binsPerFrame > 0) {
+      const startIdx = frameIndex * binsPerFrame;
+      const endIdx = Math.min(startIdx + binsPerFrame, fft.length);
+
+      if (startIdx < fft.length) {
+        frequencies = Array.from(fft.slice(startIdx, endIdx));
+        // Map FFT to Time Data approximation if TimeData is missing (common in compressed payloads)
+        timeData = frequencies.map((_, i) => fft[startIdx + i] || 0);
       }
     }
   }
