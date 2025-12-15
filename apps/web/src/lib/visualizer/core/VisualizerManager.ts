@@ -405,9 +405,10 @@ export class VisualizerManager {
    * @param deltaTime - Time delta in seconds (replaces clock.getDelta())
    */
   public renderFrame(time: number, deltaTime: number): void {
-    // CRITICAL FIX: Update internal timeline time to match the render frame time
-    // This ensures layer visibility (startTime/endTime) is calculated correctly for this specific frame
-    this.timelineCurrentTime = time / 1000;
+    // Note: timelineCurrentTime is managed by updateTimelineState() called from
+    // ThreeVisualizer.tsx (Live Mode) and RayboxComposition.tsx (Remotion).
+    // We should NOT override it here with system time, as that causes layers to
+    // disappear when the page has been open longer than the layer's duration.
 
     // Update all enabled effects
     let activeEffectCount = 0;
@@ -450,8 +451,9 @@ export class VisualizerManager {
         stemTypes: ['main']
       };
       
-      // Update audio texture with passed time (convert milliseconds to seconds)
-      this.audioTextureManager.updateTime(time / 1000, 0); // Note: duration is 0 here, fine for now or pass actual duration if available
+      // Update audio texture with timeline position (not system time)
+      // This ensures audio sampling matches the track position, not page uptime
+      this.audioTextureManager.updateTime(this.timelineCurrentTime, 0); // Note: duration is 0 here, fine for now or pass actual duration if available
     }
     
     // Update media layer textures (for video elements)
