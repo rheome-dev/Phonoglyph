@@ -10,6 +10,7 @@ import type { AudioAnalysisData as SimpleAudioAnalysisData } from '@/types/visua
 import type { AudioAnalysisData as CachedAudioAnalysisData } from '@/types/audio-analysis-data';
 import { debugLog } from '@/lib/utils';
 import { parseParamKey } from '@/lib/visualizer/paramKeys';
+import { RemotionOverlayRenderer } from './RemotionOverlayRenderer';
 
 /**
  * Helper function to extract audio feature values at a specific time from cached analysis data.
@@ -28,7 +29,28 @@ function getFeatureValueFromCached(
     a => a.fileMetadataId === fileId && a.stemType === parsedStem
   );
 
-  if (!analysis?.analysisData || time < 0 || time > analysis.metadata.duration) {
+  if (!analysis?.analysisData) {
+    return 0;
+  }
+
+  const frameTimes = analysis.analysisData.frameTimes as
+    | Float32Array
+    | number[]
+    | undefined;
+  const derivedDurationFromFrames =
+    frameTimes && frameTimes.length > 0
+      ? (frameTimes as any)[frameTimes.length - 1]
+      : undefined;
+  const metadataDuration = (analysis as any).metadata?.duration as
+    | number
+    | undefined;
+  const analysisDuration = (analysis.analysisData as any)
+    .analysisDuration as number | undefined;
+
+  const duration =
+    metadataDuration ?? derivedDurationFromFrames ?? analysisDuration ?? 0;
+
+  if (time < 0 || (duration > 0 && time > duration)) {
     return 0;
   }
 
@@ -36,7 +58,9 @@ function getFeatureValueFromCached(
   const featureName = featureParts.length > 1 ? featureParts.slice(1).join('-') : feature;
 
   // Time-series features - timestamp-based indexing using analysisData.frameTimes
-  const getTimeSeriesValue = (arr: Float32Array | number[] | undefined): number => {
+  const getTimeSeriesValue = (
+    arr: Float32Array | number[] | undefined
+  ): number => {
     if (!arr || arr.length === 0) return 0;
     const times = analysisData.frameTimes as Float32Array | number[] | undefined;
     if (!times || times.length === 0) return 0;
@@ -82,8 +106,9 @@ function getFeatureValueFromCached(
 
 /**
  * Convert cached audio analysis data to simple AudioAnalysisData format at a specific time.
+ * Exported so Remotion-specific overlay renderer can reuse audio sampling logic.
  */
-function extractAudioDataAtTime(
+export function extractAudioDataAtTime(
   cachedAnalysis: CachedAudioAnalysisData[] | undefined,
   fileId: string | undefined,
   time: number,
@@ -405,6 +430,12 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
         width={width}
         height={height}
         style={{ width: '100%', height: '100%', display: 'block' }}
+      />
+      <RemotionOverlayRenderer
+        layers={actualLayers}
+        audioAnalysisData={actualAudioAnalysisData as unknown as CachedAudioAnalysisData[]}
+        currentFrame={frame}
+        fps={fps}
       />
       {/* 4. Render Only Master Audio */}
       {actualMasterAudioUrl && <Audio src={actualMasterAudioUrl} />}

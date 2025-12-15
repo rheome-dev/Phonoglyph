@@ -876,8 +876,9 @@ function CreativeVisualizerPage() {
       return;
     }
 
-    if (!projectAudioFiles?.files) {
-      alert('No audio files found. Please ensure your project has audio files.');
+    // Check if we have any files at all
+    if (!projectFiles?.files) {
+      alert('No files found in project.');
       return;
     }
 
@@ -888,7 +889,7 @@ function CreativeVisualizerPage() {
       const payload = getProjectExportPayload(
         currentProjectId,
         audioAnalysis.cachedAnalysis || [],
-        projectAudioFiles.files,
+        projectFiles.files, // Pass all files, not just audio
         asyncStemUrlMap
       );
 

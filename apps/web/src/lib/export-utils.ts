@@ -1,83 +1,92 @@
 import { useTimelineStore } from '@/stores/timelineStore';
-import { useVisualizerStore } from '@/stores/visualizerStore';
+import {
+  type FeatureMapping,
+  useVisualizerStore,
+} from '@/stores/visualizerStore';
 import type { RayboxCompositionProps } from '@/remotion/Root';
 import type { AudioAnalysisData } from '@/types/audio-analysis-data';
 import { DEFAULT_VISUALIZATION_SETTINGS } from 'phonoglyph-types';
 import type { VisualizationSettings } from 'phonoglyph-types';
 
 /**
- * File object structure expected from project audio files.
- * Files should have at minimum: downloadUrl and is_master flag.
+ * File object structure expected from project files.
  */
-interface ProjectAudioFile {
+interface ProjectFile {
   id?: string;
   downloadUrl?: string;
   is_master?: boolean;
   file_name?: string;
   file_type?: string;
   upload_status?: string;
-  [key: string]: any; // Allow additional properties
+  [key: string]: any;
 }
 
 /**
  * Gathers all project data needed for Remotion export.
- * 
- * @param projectId - The project ID (currently unused but included for future use)
- * @param cachedAnalysis - Array of audio analysis data from useAudioAnalysis hook
- * @param projectAudioFiles - Array of file objects containing downloadUrl, is_master flag, etc.
- * @param stemUrlMap - Map of file IDs to their download URLs (preferred source for URLs)
- * @returns An object matching RayboxCompositionProps interface ready for Remotion export
+ * Actively hydrates layer assets with fresh URLs to ensure the export is self-healing.
  */
 export function getProjectExportPayload(
   projectId: string,
   cachedAnalysis: AudioAnalysisData[],
-  projectAudioFiles: ProjectAudioFile[],
-  stemUrlMap: Record<string, string> = {}
+  projectFiles: ProjectFile[],
+  stemUrlMap: Record<string, string> = {},
 ): RayboxCompositionProps {
   // 1. Get Store State
   const timelineState = useTimelineStore.getState();
   const visualizerState = useVisualizerStore.getState();
 
-  // 2. Extract Data
-  const layers = timelineState.layers;
-  const mappings = visualizerState.mappings;
-  const baseParameterValues = visualizerState.baseParameterValues;
+  // 2. Extract and Hydrate Layers
+  // Deep clone layers to avoid mutating the active store during hydration
+  const rawLayers = timelineState.layers;
+  const layers = JSON.parse(JSON.stringify(rawLayers)).map((layer: any) => {
+    // Hydrate Image Slideshows with fresh URLs from stemUrlMap
+    if (layer.effectType === 'imageSlideshow' && layer.settings) {
+      const imageIds = layer.settings.imageIds as string[];
 
-  // Map visualizer store settings to VisualizationSettings
-  // Since visualizer store doesn't directly store VisualizationSettings,
-  // we use the default settings. In the future, these could be stored
-  // in the project settings or passed as a parameter.
+      // If we have IDs and a URL map, attempt to resolve fresh URLs
+      if (Array.isArray(imageIds) && imageIds.length > 0) {
+        const freshImages = imageIds
+          .map((id) => stemUrlMap[id]) // Look up fresh signed URL
+          .filter(Boolean); // Remove any that failed to resolve
+
+        // Only update if we successfully resolved images
+        if (freshImages.length > 0) {
+          layer.settings.images = freshImages;
+        }
+      }
+    }
+    return layer;
+  });
+
+  const mappings: Record<string, FeatureMapping> = visualizerState.mappings;
+  const baseParameterValues: Record<string, Record<string, any>> =
+    visualizerState.baseParameterValues;
+
   const visualizationSettings: VisualizationSettings = {
     ...DEFAULT_VISUALIZATION_SETTINGS,
-    // Could potentially map from visualizerState.aspectRatio or other settings
-    // For now, using defaults as specified
   };
 
   const audioAnalysisData = cachedAnalysis;
 
   // 3. Find Master Audio
   let masterAudioUrl = '';
-  
-  // First, try to find the file where is_master === true
-  const masterFile = projectAudioFiles.find(file => file.is_master === true);
-  
+
+  const masterFile = projectFiles.find((file) => file.is_master === true);
+
   if (masterFile?.id) {
-    // Priority 1: Look up URL in stemUrlMap using file ID
     masterAudioUrl = stemUrlMap[masterFile.id] || '';
-    
-    // Priority 2: Fallback to file object's downloadUrl property
     if (!masterAudioUrl && masterFile.downloadUrl) {
       masterAudioUrl = masterFile.downloadUrl;
     }
-  } else if (projectAudioFiles.length > 0) {
-    // Fallback to the first audio file's URL
-    const firstAudioFile = projectAudioFiles.find(
-      file => file.file_type === 'audio' || file.downloadUrl
+  } else if (projectFiles.length > 0) {
+    // Fallback: look for audio files
+    const firstAudioFile = projectFiles.find(
+      (file) => file.file_type === 'audio' || file.downloadUrl,
     );
-    
+
     if (firstAudioFile?.id) {
-      // Try stemUrlMap first, then downloadUrl property
-      masterAudioUrl = stemUrlMap[firstAudioFile.id] || firstAudioFile.downloadUrl || '';
+      masterAudioUrl =
+        stemUrlMap[firstAudioFile.id] || firstAudioFile.downloadUrl || '';
     } else if (firstAudioFile?.downloadUrl) {
       masterAudioUrl = firstAudioFile.downloadUrl;
     }

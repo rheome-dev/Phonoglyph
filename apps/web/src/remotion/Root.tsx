@@ -1,4 +1,4 @@
-import { Composition } from 'remotion';
+import { type CalculateMetadataFunction, Composition } from 'remotion';
 import { RayboxComposition } from './RayboxComposition';
 import type { Layer } from '@/types/video-composition';
 import type { AudioAnalysisData } from '@/types/audio-analysis-data'; // Use the cached type
@@ -41,17 +41,53 @@ const defaultProps: RayboxCompositionProps = {
   masterAudioUrl: '',
 };
 
+const calculateMetadata: CalculateMetadataFunction<RayboxCompositionProps> = ({
+  props,
+  fps,
+}) => {
+  const safeFps =
+    typeof fps === 'number' && Number.isFinite(fps) && fps > 0 ? fps : 30;
+
+  const layers = props?.layers ?? [];
+
+  // Prefer explicit duration on the payload if provided
+  let duration = (props as any)?.duration as number | undefined;
+
+  // If no explicit duration, derive from the end of the last layer
+  if (duration == null || Number.isNaN(duration)) {
+    if (layers.length > 0) {
+      const layerEndTimes = layers
+        .map((l) => l.endTime)
+        .filter((t) => typeof t === 'number' && !Number.isNaN(t));
+
+      if (layerEndTimes.length > 0) {
+        duration = Math.max(...layerEndTimes);
+      }
+    }
+  }
+
+  // Default to 30 seconds if we couldn't determine duration
+  if (duration == null || !Number.isFinite(duration) || duration <= 0) {
+    duration = 30;
+  }
+
+  return {
+    durationInFrames: Math.ceil(duration * safeFps),
+    props,
+  };
+};
+
 export const RemotionRoot = () => {
   return (
     <>
       <Composition
         id="RayboxMain"
         component={RayboxComposition}
-        durationInFrames={300}
         fps={30}
         width={1080}
         height={1920}
         defaultProps={defaultProps}
+        calculateMetadata={calculateMetadata}
       />
       {TEST_PAYLOAD && (
         <Composition
@@ -60,8 +96,8 @@ export const RemotionRoot = () => {
           width={1080}
           height={1920}
           fps={30}
-          durationInFrames={300}
           defaultProps={TEST_PAYLOAD as unknown as RayboxCompositionProps}
+          calculateMetadata={calculateMetadata}
         />
       )}
     </>
