@@ -43,6 +43,7 @@ export class VisualizerManager {
   
   // Performance monitoring
   private frameCount = 0;
+  private debugFrameCount = 0; // Separate counter for debug logging
   private fps = 60;
   private lastFPSUpdate = 0;
   private consecutiveSlowFrames = 0;
@@ -254,6 +255,7 @@ export class VisualizerManager {
   
   // Effect management
   public addEffect(layerId: string, effect: VisualEffect) {
+    console.log(`➕ [VisualizerManager] Adding effect: ${layerId}, type: ${effect.constructor.name}`);
     try {
       debugLog.log(`🎨 Adding effect: ${effect.name} (for layer ${layerId})`);
       effect.init(this.renderer);
@@ -413,6 +415,15 @@ export class VisualizerManager {
     // Update all enabled effects
     let activeEffectCount = 0;
     
+    // Debug: Log effect and timeline state
+    if (this.effects.size === 0) {
+      console.warn('⚠️ [VisualizerManager] No effects registered. Effects count:', this.effects.size);
+    }
+    
+    if (this.timelineLayers.length === 0) {
+      console.warn('⚠️ [VisualizerManager] No timeline layers. Timeline layers count:', this.timelineLayers.length);
+    }
+    
     this.effects.forEach((effect, layerId) => {
       // Find the corresponding layer from the timeline state using the correct key
       const effectLayer = this.timelineLayers.find(l => l.id === layerId);
@@ -421,6 +432,17 @@ export class VisualizerManager {
       const isLayerActive = effect.enabled && effectLayer 
         ? (this.timelineCurrentTime >= effectLayer.startTime && this.timelineCurrentTime <= effectLayer.endTime)
         : false;
+
+      // Debug logging for first few frames
+      if (this.debugFrameCount < 5 && effectLayer) {
+        console.log(`🎬 [Frame ${this.debugFrameCount}] Layer ${layerId}:`, {
+          enabled: effect.enabled,
+          currentTime: this.timelineCurrentTime,
+          startTime: effectLayer.startTime,
+          endTime: effectLayer.endTime,
+          isActive: isLayerActive
+        });
+      }
 
       // Update the compositor's render state for this layer
       this.multiLayerCompositor.updateLayer(layerId, { enabled: isLayerActive });
@@ -438,6 +460,12 @@ export class VisualizerManager {
           }
       }
     });
+    
+    if (this.debugFrameCount < 5) {
+      console.log(`🎬 [Frame ${this.debugFrameCount}] Active effects: ${activeEffectCount}, Total effects: ${this.effects.size}, Timeline time: ${this.timelineCurrentTime.toFixed(3)}s`);
+    }
+    
+    this.debugFrameCount++;
     
     // Update GPU audio texture system
     if (this.audioTextureManager && this.currentAudioData) {

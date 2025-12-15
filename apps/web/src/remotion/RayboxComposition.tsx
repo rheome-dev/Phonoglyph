@@ -2,11 +2,14 @@ import React, { useEffect, useRef } from 'react';
 import { useCurrentFrame, useVideoConfig, Audio } from 'remotion';
 import { VisualizerManager } from '@/lib/visualizer/core/VisualizerManager';
 import { EffectRegistry } from '@/lib/visualizer/effects/EffectRegistry';
+// Import EffectDefinitions to ensure effects are registered
+import '@/lib/visualizer/effects/EffectDefinitions';
 import type { VisualizerConfig } from '@/types/visualizer';
 import type { RayboxCompositionProps } from './Root';
 import type { AudioAnalysisData as SimpleAudioAnalysisData } from '@/types/visualizer';
 import type { AudioAnalysisData as CachedAudioAnalysisData } from '@/types/audio-analysis-data';
 import { debugLog } from '@/lib/utils';
+import { parseParamKey } from '@/lib/visualizer/paramKeys';
 
 /**
  * Helper function to extract audio feature values at a specific time from cached analysis data.
@@ -152,12 +155,60 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
   audioAnalysisData, // This is the full cached analysis array
   visualizationSettings,
   masterAudioUrl,
+  mappings,
+  baseParameterValues,
 }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const visualizerManagerRef = useRef<VisualizerManager | null>(null);
   const effectInstancesRef = useRef<Map<string, any>>(new Map());
+
+  // DEBUG: If props are empty, try to load from global TEST_PAYLOAD
+  // This is a fallback for local debugging when Remotion serialization fails
+  let actualLayers = layers;
+  let actualAudioAnalysisData = audioAnalysisData;
+  let actualMasterAudioUrl = masterAudioUrl;
+  
+  if ((!layers || layers.length === 0) && typeof window !== 'undefined') {
+    try {
+      // Try to import TEST_PAYLOAD dynamically
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const debugModule = require('../remotion/Debug');
+      if (debugModule.TEST_PAYLOAD) {
+        console.log('🔧 [RayboxComposition] Using TEST_PAYLOAD fallback - props were empty');
+        actualLayers = debugModule.TEST_PAYLOAD.layers || [];
+        actualAudioAnalysisData = debugModule.TEST_PAYLOAD.audioAnalysisData || [];
+        actualMasterAudioUrl = debugModule.TEST_PAYLOAD.masterAudioUrl || '';
+        console.log('🔧 [RayboxComposition] Fallback loaded:', {
+          layersCount: actualLayers.length,
+          audioAnalysisCount: actualAudioAnalysisData.length,
+          hasMasterAudioUrl: !!actualMasterAudioUrl
+        });
+      }
+    } catch (e) {
+      console.warn('⚠️ [RayboxComposition] Could not load TEST_PAYLOAD fallback:', e);
+    }
+  }
+
+  // Debug: Log props on mount/update
+  useEffect(() => {
+    console.log('📦 [RayboxComposition] Props received:', {
+      layersCount: layers?.length || 0,
+      audioAnalysisDataCount: audioAnalysisData?.length || 0,
+      hasMasterAudioUrl: !!masterAudioUrl,
+      frame,
+      time: frame / fps
+    });
+    console.log('📦 [RayboxComposition] Using actual props:', {
+      layersCount: actualLayers?.length || 0,
+      audioAnalysisDataCount: actualAudioAnalysisData?.length || 0,
+      hasMasterAudioUrl: !!actualMasterAudioUrl
+    });
+    if (actualLayers && actualLayers.length > 0) {
+      console.log('📦 [RayboxComposition] Layer types:', actualLayers.map(l => ({ id: l.id, type: l.type, effectType: l.effectType })));
+    }
+  }, []);
 
   // 1. Initialize VisualizerManager (Once)
   useEffect(() => {
@@ -172,21 +223,8 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
 
       visualizerManagerRef.current = new VisualizerManager(canvasRef.current, config);
 
-      // Initialize layers
-      const effectLayers = layers.filter(layer => layer.type === 'effect' && layer.effectType);
-
-      for (const layer of effectLayers) {
-        if (!effectInstancesRef.current.has(layer.id) && layer.effectType) {
-          const effect = EffectRegistry.createEffect(layer.effectType, layer.settings || {});
-          if (effect) {
-            effectInstancesRef.current.set(layer.id, effect);
-            visualizerManagerRef.current.addEffect(layer.id, effect);
-          }
-        }
-      }
-
-      // Initial timeline sync
-      visualizerManagerRef.current.updateTimelineState(layers, 0);
+      // Initial timeline sync (even if layers are empty initially)
+      visualizerManagerRef.current.updateTimelineState(actualLayers, 0);
 
     } catch (error) {
       debugLog.error('❌ [RayboxComposition] Failed to initialize:', error);
@@ -199,11 +237,64 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
     };
   }, [width, height, fps]);
 
+  // 1b. Initialize effects when layers are available
+  useEffect(() => {
+    console.log('🔄 [RayboxComposition] Effect init useEffect triggered:', {
+      hasManager: !!visualizerManagerRef.current,
+      layersCount: actualLayers?.length || 0,
+      layers: actualLayers
+    });
+
+    if (!visualizerManagerRef.current) {
+      console.warn('⚠️ [RayboxComposition] VisualizerManager not initialized yet');
+      return;
+    }
+
+    if (!actualLayers || actualLayers.length === 0) {
+      console.warn('⚠️ [RayboxComposition] No layers provided');
+      return;
+    }
+
+    try {
+      // Initialize layers
+      const effectLayers = actualLayers.filter(layer => layer.type === 'effect' && layer.effectType);
+      
+      console.log(`🎨 [RayboxComposition] Initializing ${effectLayers.length} effect layers from ${layers.length} total layers`);
+
+      for (const layer of effectLayers) {
+        if (!effectInstancesRef.current.has(layer.id) && layer.effectType) {
+          console.log(`🎨 [RayboxComposition] Creating effect: ${layer.effectType} for layer ${layer.id}`);
+          console.log(`🎨 [RayboxComposition] Available effects:`, EffectRegistry.getRegisteredEffectIds());
+          
+          // Try to create the effect with better error handling
+          let effect = null;
+          try {
+            effect = EffectRegistry.createEffect(layer.effectType, layer.settings || {});
+          } catch (error) {
+            console.error(`❌ [RayboxComposition] Exception creating effect ${layer.effectType}:`, error);
+          }
+          
+          if (effect) {
+            effectInstancesRef.current.set(layer.id, effect);
+            visualizerManagerRef.current.addEffect(layer.id, effect);
+            console.log(`✅ [RayboxComposition] Added effect: ${layer.effectType} (${layer.id})`);
+          } else {
+            console.warn(`⚠️ [RayboxComposition] Failed to create effect: ${layer.effectType} for layer ${layer.id}`);
+            console.warn(`⚠️ [RayboxComposition] Effect might not be registered. Check EffectDefinitions import.`);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('❌ [RayboxComposition] Failed to initialize effects:', error);
+      debugLog.error('❌ [RayboxComposition] Failed to initialize effects:', error);
+    }
+  }, [actualLayers]);
+
   // 2. Handle Layer/Effect Updates (if props change during dev, or for structure)
   useEffect(() => {
     if (!visualizerManagerRef.current) return;
-    visualizerManagerRef.current.updateTimelineState(layers, frame / fps);
-  }, [layers, frame, fps]);
+    visualizerManagerRef.current.updateTimelineState(actualLayers, frame / fps);
+  }, [actualLayers, frame, fps]);
 
   // 3. Render Frame Loop
   useEffect(() => {
@@ -218,7 +309,7 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
     let audioData: SimpleAudioAnalysisData;
 
     // We assume the backend passes the cached analysis array
-    const cachedAnalysis = audioAnalysisData as unknown as CachedAudioAnalysisData[];
+    const cachedAnalysis = actualAudioAnalysisData as unknown as CachedAudioAnalysisData[];
 
     // Find the master analysis (usually indicated by stemType 'master' or isMaster flag in metadata)
     // If no explicit master, fallback to the first available analysis
@@ -233,11 +324,79 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
       audioData = { frequencies: [], timeData: [], volume: 0, bass: 0, mid: 0, treble: 0 };
     }
 
-    // B. Inject Data & Render
+    // B. Apply audio feature mappings to effect parameters
+    // This mimics the mapping application logic from page.tsx
+    // Mappings are now included in the payload via getProjectExportPayload
+    if (mappings && Object.keys(mappings).length > 0) {
+        // Helper to get slider max value (same as page.tsx)
+        const getSliderMax = (paramName: string): number => {
+          if (paramName === 'baseRadius' || paramName === 'base-radius') return 1.0;
+          if (paramName === 'animationSpeed' || paramName === 'animation-speed') return 2.0;
+          if (paramName === 'opacity') return 1.0;
+          if (paramName === 'textSize') return 1.0;
+          if (paramName === 'gamma') return 2.2;
+          if (paramName === 'contrast') return 2.0;
+          return 100; // Default
+        };
+
+        // Helper to get stem type from feature ID
+        const getStemTypeFromFeatureId = (featureId: string): string => {
+          const parts = featureId.split('-');
+          if (parts.length > 1) {
+            const stemType = parts[0];
+            if (['master', 'drums', 'bass', 'vocals', 'other'].includes(stemType)) {
+              return stemType;
+            }
+          }
+          return 'master'; // Default
+        };
+
+        // Apply each mapping
+        Object.entries(mappings).forEach(([paramKey, mapping]) => {
+          if (!mapping?.featureId) return;
+
+          const parsed = parseParamKey(paramKey);
+          if (!parsed) return;
+
+          const { effectInstanceId: layerId, paramName } = parsed;
+          const featureId = mapping.featureId;
+          const featureStemType = getStemTypeFromFeatureId(featureId);
+
+          // Find the stem analysis
+          const stemAnalysis = cachedAnalysis.find(a => a.stemType === featureStemType);
+          if (!stemAnalysis) return;
+
+          // Get feature value at current time
+          const rawValue = getFeatureValueFromCached(
+            cachedAnalysis,
+            stemAnalysis.fileMetadataId,
+            featureId,
+            time,
+            featureStemType || undefined
+          );
+
+          if (rawValue === null || rawValue === undefined) return;
+
+          // Calculate modulated value (same logic as page.tsx)
+          const maxValue = getSliderMax(paramName);
+          const knobFull = (mapping.modulationAmount ?? 0.5) * 2 - 1;
+          const knob = Math.max(-0.5, Math.min(0.5, knobFull));
+          const baseValue = baseParameterValues?.[layerId]?.[paramName] ?? 0;
+          const delta = rawValue * knob * maxValue;
+          const scaledValue = Math.max(0, Math.min(maxValue, baseValue + delta));
+
+          // Update effect parameter
+          if (visualizerManagerRef.current) {
+            visualizerManagerRef.current.updateEffectParameter(layerId, paramName, scaledValue);
+          }
+        });
+      }
+
+    // C. Inject Data & Render
     visualizerManagerRef.current.setAudioData(audioData);
     visualizerManagerRef.current.renderFrame(time * 1000, deltaTime);
 
-  }, [frame, fps, layers, audioAnalysisData]);
+  }, [frame, fps, actualLayers, actualAudioAnalysisData]);
 
   return (
     <div style={{ width, height, position: 'relative' }}>
@@ -248,8 +407,13 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
         style={{ width: '100%', height: '100%', display: 'block' }}
       />
       {/* 4. Render Only Master Audio */}
-      {masterAudioUrl && <Audio src={masterAudioUrl} />}
+      {actualMasterAudioUrl && <Audio src={actualMasterAudioUrl} />}
     </div>
   );
 };
+
+
+
+
+
 

@@ -1,4 +1,5 @@
 import { useTimelineStore } from '@/stores/timelineStore';
+import { useVisualizerStore } from '@/stores/visualizerStore';
 import type { RayboxCompositionProps } from '@/remotion/Root';
 import type { AudioAnalysisData } from '@/types/audio-analysis-data';
 import { DEFAULT_VISUALIZATION_SETTINGS } from 'phonoglyph-types';
@@ -35,9 +36,12 @@ export function getProjectExportPayload(
 ): RayboxCompositionProps {
   // 1. Get Store State
   const timelineState = useTimelineStore.getState();
+  const visualizerState = useVisualizerStore.getState();
 
   // 2. Extract Data
   const layers = timelineState.layers;
+  const mappings = visualizerState.mappings;
+  const baseParameterValues = visualizerState.baseParameterValues;
 
   // Map visualizer store settings to VisualizationSettings
   // Since visualizer store doesn't directly store VisualizationSettings,
@@ -85,6 +89,8 @@ export function getProjectExportPayload(
     audioAnalysisData,
     visualizationSettings,
     masterAudioUrl,
+    mappings,
+    baseParameterValues,
   };
 }
 

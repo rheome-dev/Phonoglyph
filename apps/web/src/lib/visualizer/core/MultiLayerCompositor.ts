@@ -204,14 +204,31 @@ export class MultiLayerCompositor {
    */
   public render(): void {
     // Step 1: Render each layer to its render target
+    let renderedLayers = 0;
     for (const layerId of this.layerOrder) {
       const layer = this.layers.get(layerId);
       if (!layer || !layer.enabled) continue;
+      
+      // Debug: Check if scene has objects
+      const objectCount = layer.scene.children.length;
+      if (renderedLayers < 10) { // Show more layers
+        console.log(`🎨 [MultiLayerCompositor] Rendering layer ${layerId}:`, {
+          enabled: layer.enabled,
+          objectCount,
+          children: layer.scene.children.map(c => c.type),
+          zIndex: layer.zIndex
+        });
+      }
       
       this.renderer.setRenderTarget(layer.renderTarget);
       // Clear color/depth/stencil with transparent background
       this.renderer.clear(true, true, true);
       this.renderer.render(layer.scene, layer.camera);
+      renderedLayers++;
+    }
+    
+    if (renderedLayers === 0) {
+      console.warn('⚠️ [MultiLayerCompositor] No layers rendered!');
     }
     
     // Step 2: Composite layers using GPU shaders
