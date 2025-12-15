@@ -599,6 +599,9 @@ export class VisualizerManager {
     // Try to get effect by layer ID first
     let effect = this.effects.get(effectId);
     
+    // Debug logging for metaballs specifically
+    const isMetaballs = effectId === 'layer-1765752490965';
+    
     // If not found, assume effectId is an effect type (like 'metaballs')
     // and update ALL instances of that effect type
     if (!effect) {
@@ -608,13 +611,34 @@ export class VisualizerManager {
         layerIds.forEach(layerId => {
           const effectInstance = this.effects.get(layerId);
           if (effectInstance && effectInstance.parameters.hasOwnProperty(paramName)) {
+            const oldValue = (effectInstance.parameters as any)[paramName];
             (effectInstance.parameters as any)[paramName] = value;
+            if (isMetaballs) {
+              console.log('🔧 [VisualizerManager] Updated effect parameter (by type):', {
+                effectId,
+                layerId,
+                paramName,
+                oldValue,
+                newValue: value,
+                hasUpdateMethod: typeof (effectInstance as any).updateParameter === 'function',
+              });
+            }
             if (typeof (effectInstance as any).updateParameter === 'function') {
               (effectInstance as any).updateParameter(paramName, value);
             }
+          } else if (isMetaballs) {
+            console.warn('🔧 [VisualizerManager] Parameter not found (by type):', {
+              effectId,
+              layerId,
+              paramName,
+              availableParams: effectInstance ? Object.keys(effectInstance.parameters) : [],
+            });
           }
         });
         return;
+      }
+      if (isMetaballs) {
+        console.warn(`🔧 [VisualizerManager] Effect ${effectId} not found (neither as layer ID nor effect type)`);
       }
       debugLog.warn(`⚠️ Effect ${effectId} not found (neither as layer ID nor effect type)`);
       return;
@@ -622,13 +646,35 @@ export class VisualizerManager {
     
     // Handle direct layer ID lookup
     if (effect.parameters.hasOwnProperty(paramName)) {
+      const oldValue = (effect.parameters as any)[paramName];
       (effect.parameters as any)[paramName] = value;
+      
+      if (isMetaballs) {
+        console.log('🔧 [VisualizerManager] Updated effect parameter (direct):', {
+          effectId,
+          paramName,
+          oldValue,
+          newValue: value,
+          hasUpdateMethod: typeof (effect as any).updateParameter === 'function',
+          currentParams: Object.keys(effect.parameters),
+        });
+      }
       
       // If the effect has an updateParameter method, call it for immediate updates
       if (typeof (effect as any).updateParameter === 'function') {
         (effect as any).updateParameter(paramName, value);
+        if (isMetaballs) {
+          console.log('🔧 [VisualizerManager] Called updateParameter method');
+        }
       }
     } else {
+      if (isMetaballs) {
+        console.warn('🔧 [VisualizerManager] Parameter not found (direct):', {
+          effectId,
+          paramName,
+          availableParams: Object.keys(effect.parameters),
+        });
+      }
       debugLog.warn(`⚠️ Parameter ${paramName} not found in effect ${effectId}`);
     }
   }
@@ -912,9 +958,15 @@ export class VisualizerManager {
         return mesh;
       },
       addImageLayer: (image: HTMLImageElement, position: {x: number, y: number}, scale: {x: number, y: number}) => {
-        const texture = new THREE.TextureLoader().load(image.src);
+        // [CHANGE 4] Enable CORS for textures
+        const loader = new THREE.TextureLoader();
+        loader.setCrossOrigin('anonymous'); 
+        
+        const texture = loader.load(image.src, undefined, undefined, (err) => {
+            console.error("Error loading texture:", image.src, err);
+        });
         const plane = new THREE.PlaneGeometry(1, 1);
-        const material = new THREE.MeshBasicMaterial({ map: texture });
+        const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true }); // Ensure transparent is true
         const mesh = new THREE.Mesh(plane, material);
         
         // Position in 2D space (orthographic camera)
