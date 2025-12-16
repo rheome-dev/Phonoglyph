@@ -1459,6 +1459,113 @@ function CreativeVisualizerPage() {
         speed: 1.0
       }
     },
+    // Light Category Effects
+    { 
+      id: 'light2d', 
+      name: '2D Light', 
+      description: 'Screen-space 2D point light with shadows',
+      category: 'Light',
+      rarity: 'Common',
+      parameters: {
+        intensity: 0.5,
+        lightX: 0.5,
+        lightY: 0.5,
+        color: '#fa1ee3'
+      }
+    },
+    { 
+      id: 'aurora', 
+      name: 'Aurora', 
+      description: 'Procedural Aurora Borealis effect',
+      category: 'Light',
+      rarity: 'Rare',
+      parameters: {
+        intensity: 0.8,
+        speed: 0.5,
+        color1: '#00ff00',
+        color2: '#8f00ff'
+      }
+    },
+    { 
+      id: 'beam', 
+      name: 'Beam', 
+      description: 'Animated scanning light beam',
+      category: 'Light',
+      rarity: 'Rare',
+      parameters: {
+        intensity: 1.0,
+        speed: 0.5,
+        width: 0.5,
+        angle: 0.0,
+        color: '#661aff'
+      }
+    },
+    { 
+      id: 'bloom', 
+      name: 'Bloom', 
+      description: 'High-quality bloom effect',
+      category: 'Light',
+      rarity: 'Mythic',
+      parameters: {
+        intensity: 1.0,
+        threshold: 0.5,
+        radius: 1.0
+      }
+    },
+    { 
+      id: 'godRays', 
+      name: 'God Rays', 
+      description: 'Volumetric light scattering',
+      category: 'Light',
+      rarity: 'Mythic',
+      parameters: {
+        intensity: 1.0,
+        decay: 0.96,
+        density: 0.5,
+        weight: 0.4,
+        lightX: 0.5,
+        lightY: 0.5
+      }
+    },
+    { 
+      id: 'lightTrail', 
+      name: 'Light Trail', 
+      description: 'Mouse/Touch light trail effect',
+      category: 'Light',
+      rarity: 'Rare',
+      parameters: {
+        intensity: 1.0,
+        trailLength: 0.8,
+        color: '#0082f7'
+      }
+    },
+    { 
+      id: 'spotLight', 
+      name: 'Spot Light', 
+      description: 'Screen-space spotlight with bump mapping',
+      category: 'Light',
+      rarity: 'Rare',
+      parameters: {
+        intensity: 1.5,
+        radius: 0.5,
+        lightX: 0.5,
+        lightY: 0.5,
+        color: '#fa1ee3'
+      }
+    },
+    { 
+      id: 'waterCaustics', 
+      name: 'Water Caustics', 
+      description: 'Water surface caustics simulation',
+      category: 'Light',
+      rarity: 'Rare',
+      parameters: {
+        intensity: 0.8,
+        speed: 0.5,
+        refraction: 0.5,
+        color: '#99b3e6'
+      }
+    },
     // Filter Category Effects
     { 
       id: 'bloomFilter', 
