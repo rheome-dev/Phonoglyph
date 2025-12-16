@@ -26,6 +26,25 @@ import { ProgressiveBlurEffect } from './ProgressiveBlurEffect';
 import { RadialBlurEffect } from './RadialBlurEffect';
 import { ZoomBlurEffect } from './ZoomBlurEffect';
 
+// Distort category imports
+import { BulgeEffect } from './BulgeEffect';
+import { ExtendEffect } from './ExtendEffect';
+import { FbmEffect } from './FbmEffect';
+import { FlowfieldEffect } from './FlowfieldEffect';
+import { LensDistortionEffect } from './LensDistortionEffect';
+import { LiquifyEffect } from './LiquifyEffect';
+import { NoiseEffect } from './NoiseEffect';
+import { PolarEffect } from './PolarEffect';
+import { RippleEffect } from './RippleEffect';
+import { ShatterEffect } from './ShatterEffect';
+import { SineWavesEffect } from './SineWavesEffect';
+import { SkyboxEffect } from './SkyboxEffect';
+import { StretchEffect } from './StretchEffect';
+import { SwirlEffect } from './SwirlEffect';
+import { TrailEffect } from './TrailEffect';
+import { WaterRipplesEffect } from './WaterRipplesEffect';
+import { WavesEffect } from './WavesEffect';
+
 // Register built-in effects at module import time
 EffectRegistry.register({
   id: 'metaballs',
@@ -320,6 +339,252 @@ EffectRegistry.register({
     intensity: 0.6,
     centerX: 0.5,
     centerY: 0.5
+  }
+});
+
+// DISTORT CATEGORY EFFECTS
+
+EffectRegistry.register({
+  id: 'bulge',
+  name: 'Bulge',
+  description: 'Bulge/pinch distortion effect',
+  category: 'distort',
+  version: '1.0.0',
+  constructor: BulgeEffect,
+  defaultConfig: {
+    intensity: 0.5,
+    centerX: 0.5,
+    centerY: 0.5,
+    radius: 0.4
+  }
+});
+
+EffectRegistry.register({
+  id: 'extend',
+  name: 'Extend',
+  description: 'Intersection-based linear stretch distortion',
+  category: 'distort',
+  version: '1.0.0',
+  constructor: ExtendEffect,
+  defaultConfig: {
+    intensity: 0.5,
+    angle1: 90.0,
+    angle2: 180.0
+  }
+});
+
+EffectRegistry.register({
+  id: 'fbm',
+  name: 'FBM Distortion',
+  description: 'Fluid marble-like distortion using Fractal Brownian Motion',
+  category: 'distort',
+  version: '1.0.0',
+  constructor: FbmEffect,
+  defaultConfig: {
+    intensity: 0.5,
+    speed: 0.5,
+    scale: 1.0
+  }
+});
+
+EffectRegistry.register({
+  id: 'flowfield',
+  name: 'Flowfield',
+  description: 'Fluid flow distortion using Perlin noise',
+  category: 'distort',
+  version: '1.0.0',
+  constructor: FlowfieldEffect,
+  defaultConfig: {
+    intensity: 0.5,
+    speed: 0.5,
+    scale: 1.0
+  }
+});
+
+EffectRegistry.register({
+  id: 'lensDistortion',
+  name: 'Lens Distortion',
+  description: 'Lens barrel/pincushion distortion with chromatic aberration',
+  category: 'distort',
+  version: '1.0.0',
+  constructor: LensDistortionEffect,
+  defaultConfig: {
+    distortion: 0.5,
+    type: 0,
+    chromaticAberration: 0.5
+  }
+});
+
+EffectRegistry.register({
+  id: 'liquify',
+  name: 'Liquify',
+  description: 'Sine-based liquid distortion effect',
+  category: 'distort',
+  version: '1.0.0',
+  constructor: LiquifyEffect,
+  defaultConfig: {
+    intensity: 0.5,
+    frequency: 1.0,
+    speed: 0.5
+  }
+});
+
+EffectRegistry.register({
+  id: 'noise',
+  name: 'BCC Noise',
+  description: 'Body-Centered Cubic noise distortion',
+  category: 'distort',
+  version: '1.0.0',
+  constructor: NoiseEffect,
+  defaultConfig: {
+    intensity: 0.5,
+    scale: 1.0,
+    speed: 0.5
+  }
+});
+
+EffectRegistry.register({
+  id: 'polar',
+  name: 'Polar',
+  description: 'Cartesian to polar coordinates transformation',
+  category: 'distort',
+  version: '1.0.0',
+  constructor: PolarEffect,
+  defaultConfig: {
+    intensity: 1.0,
+    rotation: 0.0,
+    centerX: 0.5,
+    centerY: 0.5
+  }
+});
+
+EffectRegistry.register({
+  id: 'ripple',
+  name: 'Ripple',
+  description: 'Concentric ripple distortion',
+  category: 'distort',
+  version: '1.0.0',
+  constructor: RippleEffect,
+  defaultConfig: {
+    intensity: 0.05,
+    frequency: 10.0,
+    speed: 1.0,
+    centerX: 0.5,
+    centerY: 0.5
+  }
+});
+
+EffectRegistry.register({
+  id: 'shatter',
+  name: 'Shatter',
+  description: 'Voronoi-based glass shatter distortion',
+  category: 'distort',
+  version: '1.0.0',
+  constructor: ShatterEffect,
+  defaultConfig: {
+    intensity: 0.5,
+    scale: 1.0,
+    speed: 0.5
+  }
+});
+
+EffectRegistry.register({
+  id: 'sineWaves',
+  name: 'Sine Waves',
+  description: 'Sinusoidal wave distortion',
+  category: 'distort',
+  version: '1.0.0',
+  constructor: SineWavesEffect,
+  defaultConfig: {
+    intensity: 0.5,
+    frequency: 20.0,
+    speed: 0.5,
+    waveX: true,
+    waveY: true
+  }
+});
+
+EffectRegistry.register({
+  id: 'skybox',
+  name: 'Skybox Projection',
+  description: 'Equirectangular 360 projection',
+  category: 'distort',
+  version: '1.0.0',
+  constructor: SkyboxEffect,
+  defaultConfig: {
+    fov: 90.0,
+    rotationX: 0.5,
+    rotationY: 0.5,
+    zoom: 1.0
+  }
+});
+
+EffectRegistry.register({
+  id: 'stretch',
+  name: 'Stretch',
+  description: 'Directional stretch/compression distortion',
+  category: 'distort',
+  version: '1.0.0',
+  constructor: StretchEffect,
+  defaultConfig: {
+    intensity: 0.5,
+    angle: 0.0,
+    centerX: 0.5,
+    centerY: 0.5
+  }
+});
+
+EffectRegistry.register({
+  id: 'swirl',
+  name: 'Swirl',
+  description: 'Swirl/twist distortion effect',
+  category: 'distort',
+  version: '1.0.0',
+  constructor: SwirlEffect,
+  defaultConfig: {
+    intensity: 0.8,
+    centerX: 0.5,
+    centerY: 0.5,
+    radius: 0.4
+  }
+});
+
+EffectRegistry.register({
+  id: 'trail',
+  name: 'Trail',
+  description: 'Motion trail / afterimage effect',
+  category: 'distort',
+  version: '1.0.0',
+  constructor: TrailEffect,
+  defaultConfig: {
+    intensity: 0.5,
+    decay: 0.9
+  }
+});
+
+EffectRegistry.register({
+  id: 'waterRipples',
+  name: 'Water Ripples',
+  description: 'Water surface ripple simulation',
+  category: 'distort',
+  version: '1.0.0',
+  constructor: WaterRipplesEffect,
+  defaultConfig: {
+    intensity: 0.5,
+    speed: 1.0
+  }
+});
+
+EffectRegistry.register({
+  id: 'waves',
+  name: 'Noise Waves',
+  description: 'Perlin noise wave distortion',
+  category: 'distort',
+  version: '1.0.0',
+  constructor: WavesEffect,
+  defaultConfig: {
+    intensity: 0.5,
+    speed: 1.0
   }
 });
 

@@ -210,20 +210,18 @@ const DraggableEffectCard: React.FC<{
             />
           ) : (
             <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-center">
-                <div className="text-xs">
-                  {effect.category === 'Generative' ? '🌊' :
-                    effect.category === 'Overlays' ? '📊' :
-                      effect.category === 'Filters' ? '✨' :
-                        effect.category === 'Stylize' ? '🎨' :
-                          effect.category === 'Blur' ? '〰️' :
-                            effect.category === 'Distort' ? '🌀' :
-                              effect.category === 'Light' ? '💡' :
-                                effect.category === 'Misc' ? '🔮' : '✨'}
-                </div>
-                <div className="text-xs font-mono text-gray-300 uppercase tracking-wider">
-                  {effect.category.slice(0, 3)}
-                </div>
+              <div className="text-xs">
+                {effect.category === 'Generative' ? '🌊' :
+                  effect.category === 'Overlays' ? '📊' :
+                    effect.category === 'Filters' ? '✨' :
+                      effect.category === 'Stylize' ? '🎨' :
+                        effect.category === 'Blur' ? '〰️' :
+                          effect.category === 'Distort' ? '🌀' :
+                            effect.category === 'Light' ? '💡' :
+                              effect.category === 'Misc' ? '🔮' : '✨'}
+              </div>
+              <div className="text-xs font-mono text-gray-300 uppercase tracking-wider">
+                {effect.category.slice(0, 3)}
               </div>
             </div>
           )}
