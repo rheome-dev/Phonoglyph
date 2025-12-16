@@ -1141,6 +1141,113 @@ function CreativeVisualizerPage() {
         gamma: 1.0
       }
     },
+    // Blur Category Effects
+    { 
+      id: 'blur', 
+      name: 'Gaussian Blur', 
+      description: 'Smooth Gaussian blur with configurable intensity',
+      category: 'Blur',
+      rarity: 'Common',
+      parameters: {
+        intensity: 0.5,
+        radius: 5.0,
+        quality: 1.0
+      }
+    },
+    { 
+      id: 'zoomBlur', 
+      name: 'Zoom Blur', 
+      description: 'Radial zoom blur from a center point',
+      category: 'Blur',
+      rarity: 'Rare',
+      parameters: {
+        intensity: 0.4,
+        centerX: 0.5,
+        centerY: 0.5,
+        samples: 8
+      }
+    },
+    { 
+      id: 'radialBlur', 
+      name: 'Radial Blur', 
+      description: 'Rotational blur around a center point',
+      category: 'Blur',
+      rarity: 'Rare',
+      parameters: {
+        intensity: 0.4,
+        centerX: 0.5,
+        centerY: 0.5,
+        angle: 10.0
+      }
+    },
+    { 
+      id: 'bokeh', 
+      name: 'Bokeh Blur', 
+      description: 'Depth-of-field bokeh blur effect',
+      category: 'Blur',
+      rarity: 'Mythic',
+      parameters: {
+        intensity: 0.5,
+        focalDepth: 0.5,
+        aperture: 0.8
+      }
+    },
+    { 
+      id: 'diffusion', 
+      name: 'Diffusion', 
+      description: 'Soft diffusion glow effect',
+      category: 'Blur',
+      rarity: 'Rare',
+      parameters: {
+        intensity: 0.5,
+        size: 1.5
+      }
+    },
+    { 
+      id: 'fog', 
+      name: 'Fog', 
+      description: 'Animated fog effect with noise',
+      category: 'Blur',
+      rarity: 'Rare',
+      parameters: {
+        density: 0.3,
+        speed: 0.5,
+        color: [1.0, 1.0, 1.0]
+      }
+    },
+    { 
+      id: 'miniBlur', 
+      name: 'Mini Blur', 
+      description: 'Fast lightweight blur',
+      category: 'Blur',
+      rarity: 'Common',
+      parameters: {
+        intensity: 0.5
+      }
+    },
+    { 
+      id: 'noiseBlur', 
+      name: 'Noise Blur', 
+      description: 'Noise-driven directional blur',
+      category: 'Blur',
+      rarity: 'Rare',
+      parameters: {
+        intensity: 0.5,
+        scale: 1.5
+      }
+    },
+    { 
+      id: 'progressiveBlur', 
+      name: 'Progressive Blur', 
+      description: 'Blur that increases with distance from center',
+      category: 'Blur',
+      rarity: 'Rare',
+      parameters: {
+        intensity: 0.6,
+        centerX: 0.5,
+        centerY: 0.5
+      }
+    },
     // Filter Category Effects
     { 
       id: 'bloomFilter', 
