@@ -1027,11 +1027,12 @@ function CreativeVisualizerPage() {
          images: [] 
       }
     },
+    // Stylize Category Effects
     { 
       id: 'asciiFilter', 
       name: 'ASCII Filter', 
-      description: 'Converts layers beneath to ASCII art with audio-reactive parameters',
-      category: 'Filters',
+      description: 'Converts input to ASCII art with audio-reactive parameters',
+      category: 'Stylize',
       rarity: 'Rare',
       parameters: {
         textSize: 0.4,
@@ -1039,13 +1040,112 @@ function CreativeVisualizerPage() {
         opacity: 0.87,
         contrast: 1.4,
         invert: 0.0,
-        hideBackground: false
+        hideBackground: false,
+        color: [1.0, 1.0, 1.0]
       }
     },
     { 
+      id: 'chromaticAbberation', 
+      name: 'Chromatic Abberation', 
+      description: 'RGB color channel offset for lens distortion effect',
+      category: 'Stylize',
+      rarity: 'Common',
+      parameters: {
+        amount: 0.2,
+        direction: 0.0
+      }
+    },
+    { 
+      id: 'crt', 
+      name: 'CRT Monitor', 
+      description: 'Vintage CRT monitor effect with phosphors and scanlines',
+      category: 'Stylize',
+      rarity: 'Rare',
+      parameters: {
+        curvature: 0.0,
+        scanlines: 0.5,
+        vignetteIntensity: 0.5,
+        noise: 0.5
+      }
+    },
+    { 
+      id: 'dither', 
+      name: 'Dither', 
+      description: 'Ordered dithering for retro pixelart look',
+      category: 'Stylize',
+      rarity: 'Common',
+      parameters: {
+        bayerMatrix: 4,
+        colors: 16,
+        scale: 1.0
+      }
+    },
+    { 
+      id: 'glitch', 
+      name: 'Digital Glitch', 
+      description: 'VHS-style digital glitch with corruption and aberration',
+      category: 'Stylize',
+      rarity: 'Rare',
+      parameters: {
+        blockSize: 0.5,
+        offset: 0.5,
+        chromatic: 0.5,
+        frequency: 0.5
+      }
+    },
+    { 
+      id: 'grain', 
+      name: 'Film Grain', 
+      description: 'Adds film grain noise for vintage look',
+      category: 'Stylize',
+      rarity: 'Common',
+      parameters: {
+        amount: 0.5,
+        size: 1.0,
+        colorized: false,
+        luminance: false
+      }
+    },
+    { 
+      id: 'halftone', 
+      name: 'Halftone', 
+      description: 'CMYK halftone printing effect',
+      category: 'Stylize',
+      rarity: 'Rare',
+      parameters: {
+        dotSize: 0.75,
+        angle: 0.0,
+        shape: 'circle',
+        smoothness: 0.75
+      }
+    },
+    { 
+      id: 'pixelate', 
+      name: 'Pixelate', 
+      description: 'Mosaic pixelation effect',
+      category: 'Stylize',
+      rarity: 'Common',
+      parameters: {
+        pixelSize: 0.5,
+        shape: 'square'
+      }
+    },
+    { 
+      id: 'posterize', 
+      name: 'Posterize', 
+      description: 'Reduces color levels for poster art effect',
+      category: 'Stylize',
+      rarity: 'Common',
+      parameters: {
+        levels: 8,
+        gamma: 1.0
+      }
+    },
+    // Filter Category Effects
+    { 
       id: 'bloomFilter', 
       name: 'Bloom Filter', 
-      description: 'Adds cinematic bloom glow to everything below this layer',
+      description: 'Post-processing bloom with adjustable threshold and softness',
       category: 'Filters',
       rarity: 'Rare',
       parameters: {
