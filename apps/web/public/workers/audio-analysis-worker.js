@@ -169,10 +169,10 @@ let performanceMetrics = {
 
 // Optimized feature sets for different stem types
 const STEM_FEATURES = {
-  drums: ['rms', 'zcr', 'spectralCentroid'],
-  bass: ['rms', 'loudness', 'spectralCentroid'],
-  vocals: ['rms', 'loudness', 'mfcc'],
-  other: ['rms', 'loudness', 'spectralCentroid', 'chroma'], // For synths, guitars, etc.
+  drums: ['rms', 'zcr', 'spectralCentroid', 'amplitudeSpectrum'],
+  bass: ['rms', 'loudness', 'spectralCentroid', 'amplitudeSpectrum'],
+  vocals: ['rms', 'loudness', 'mfcc', 'amplitudeSpectrum'],
+  other: ['rms', 'loudness', 'spectralCentroid', 'chroma', 'amplitudeSpectrum'], // For synths, guitars, etc.
   master: ['rms', 'loudness', 'spectralCentroid', 'spectralRolloff', 'spectralFlatness', 'zcr', 'perceptualSpread', 'amplitudeSpectrum', 'spectralFlux', 'perceptualSharpness', 'energy', 'chroma'] // Expanded for classification & pitch
 };
 
