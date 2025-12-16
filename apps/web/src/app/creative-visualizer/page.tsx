@@ -1248,6 +1248,217 @@ function CreativeVisualizerPage() {
         centerY: 0.5
       }
     },
+    // Distort Category Effects
+    { 
+      id: 'bulge', 
+      name: 'Bulge', 
+      description: 'Bulge/pinch distortion effect',
+      category: 'Distort',
+      rarity: 'Common',
+      parameters: {
+        intensity: 0.5,
+        centerX: 0.5,
+        centerY: 0.5,
+        radius: 0.4
+      }
+    },
+    { 
+      id: 'extend', 
+      name: 'Extend', 
+      description: 'Intersection-based linear stretch distortion',
+      category: 'Distort',
+      rarity: 'Rare',
+      parameters: {
+        intensity: 0.5,
+        angle1: 90.0,
+        angle2: 180.0
+      }
+    },
+    { 
+      id: 'fbm', 
+      name: 'FBM Distortion', 
+      description: 'Fluid marble-like distortion using Fractal Brownian Motion',
+      category: 'Distort',
+      rarity: 'Rare',
+      parameters: {
+        intensity: 0.5,
+        speed: 0.5,
+        scale: 1.0
+      }
+    },
+    { 
+      id: 'flowfield', 
+      name: 'Flowfield', 
+      description: 'Fluid flow distortion using Perlin noise',
+      category: 'Distort',
+      rarity: 'Rare',
+      parameters: {
+        intensity: 0.5,
+        speed: 0.5,
+        scale: 1.0
+      }
+    },
+    { 
+      id: 'lensDistortion', 
+      name: 'Lens Distortion', 
+      description: 'Lens barrel/pincushion distortion with chromatic aberration',
+      category: 'Distort',
+      rarity: 'Rare',
+      parameters: {
+        distortion: 0.5,
+        type: 0,
+        chromaticAberration: 0.5
+      }
+    },
+    { 
+      id: 'liquify', 
+      name: 'Liquify', 
+      description: 'Sine-based liquid distortion effect',
+      category: 'Distort',
+      rarity: 'Rare',
+      parameters: {
+        intensity: 0.5,
+        frequency: 1.0,
+        speed: 0.5
+      }
+    },
+    { 
+      id: 'noise', 
+      name: 'BCC Noise', 
+      description: 'Body-Centered Cubic noise distortion',
+      category: 'Distort',
+      rarity: 'Rare',
+      parameters: {
+        intensity: 0.5,
+        scale: 1.0,
+        speed: 0.5
+      }
+    },
+    { 
+      id: 'polar', 
+      name: 'Polar', 
+      description: 'Cartesian to polar coordinates transformation',
+      category: 'Distort',
+      rarity: 'Common',
+      parameters: {
+        intensity: 1.0,
+        rotation: 0.0,
+        centerX: 0.5,
+        centerY: 0.5
+      }
+    },
+    { 
+      id: 'ripple', 
+      name: 'Ripple', 
+      description: 'Concentric ripple distortion',
+      category: 'Distort',
+      rarity: 'Common',
+      parameters: {
+        intensity: 0.05,
+        frequency: 10.0,
+        speed: 1.0,
+        centerX: 0.5,
+        centerY: 0.5
+      }
+    },
+    { 
+      id: 'shatter', 
+      name: 'Shatter', 
+      description: 'Voronoi-based glass shatter distortion',
+      category: 'Distort',
+      rarity: 'Mythic',
+      parameters: {
+        intensity: 0.5,
+        scale: 1.0,
+        speed: 0.5
+      }
+    },
+    { 
+      id: 'sineWaves', 
+      name: 'Sine Waves', 
+      description: 'Sinusoidal wave distortion',
+      category: 'Distort',
+      rarity: 'Common',
+      parameters: {
+        intensity: 0.5,
+        frequency: 20.0,
+        speed: 0.5,
+        waveX: true,
+        waveY: true
+      }
+    },
+    { 
+      id: 'skybox', 
+      name: 'Skybox Projection', 
+      description: 'Equirectangular 360 projection',
+      category: 'Distort',
+      rarity: 'Rare',
+      parameters: {
+        fov: 90.0,
+        rotationX: 0.5,
+        rotationY: 0.5,
+        zoom: 1.0
+      }
+    },
+    { 
+      id: 'stretch', 
+      name: 'Stretch', 
+      description: 'Directional stretch/compression distortion',
+      category: 'Distort',
+      rarity: 'Common',
+      parameters: {
+        intensity: 0.5,
+        angle: 0.0,
+        centerX: 0.5,
+        centerY: 0.5
+      }
+    },
+    { 
+      id: 'swirl', 
+      name: 'Swirl', 
+      description: 'Swirl/twist distortion effect',
+      category: 'Distort',
+      rarity: 'Rare',
+      parameters: {
+        intensity: 0.8,
+        centerX: 0.5,
+        centerY: 0.5,
+        radius: 0.4
+      }
+    },
+    { 
+      id: 'trail', 
+      name: 'Trail', 
+      description: 'Motion trail / afterimage effect',
+      category: 'Distort',
+      rarity: 'Common',
+      parameters: {
+        intensity: 0.5,
+        decay: 0.9
+      }
+    },
+    { 
+      id: 'waterRipples', 
+      name: 'Water Ripples', 
+      description: 'Water surface ripple simulation',
+      category: 'Distort',
+      rarity: 'Common',
+      parameters: {
+        intensity: 0.5,
+        speed: 1.0
+      }
+    },
+    { 
+      id: 'waves', 
+      name: 'Noise Waves', 
+      description: 'Perlin noise wave distortion',
+      category: 'Distort',
+      rarity: 'Common',
+      parameters: {
+        intensity: 0.5,
+        speed: 1.0
+      }
+    },
     // Filter Category Effects
     { 
       id: 'bloomFilter', 
