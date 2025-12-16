@@ -42,7 +42,7 @@ export class MiniBlurEffect extends BaseShaderEffect {
   }
 
   protected syncParametersToUniforms(): void {
-    if (!this.uniforms) this.uniforms.uIntensity.value = this.parameters.intensity;
+    if (this.uniforms) this.uniforms.uIntensity.value = this.parameters.intensity;
   }
 
   updateParameter(paramName: string, value: any): void {
