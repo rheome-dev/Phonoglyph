@@ -1,188 +1,104 @@
 import * as THREE from 'three';
-import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
-import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
-import { MultiLayerCompositor } from '../core/MultiLayerCompositor';
-import { debugLog } from '@/lib/utils';
+import { BaseShaderEffect } from './BaseShaderEffect';
 
-// Note: BloomEffect is no longer used as a VisualEffect; keep for reference/testing
-export class BloomEffect {
+export interface BloomConfig {
+  intensity: number; // 0.0 to 2.0
+  threshold: number; // 0.0 to 1.0
+  radius: number; // 0.0 to 2.0
+}
+
+export class BloomEffect extends BaseShaderEffect {
   id = 'bloom';
-  name = 'Bloom Post-Processing';
-  description = 'Global bloom effect for all visualizations';
-  enabled = true;
-  parameters = {
-    threshold: 0.25,  // Increased threshold to make bloom less sensitive
-    strength: 0.1,    // Reduced strength for a softer glow
-    radius: 0.4,      // Tighter radius for the glow
-    exposure: 0.8     // Keep exposure neutral
-  };
+  name = 'Bloom';
+  description = 'High-quality bloom effect';
+  parameters: BloomConfig;
 
-  private scene!: THREE.Scene;
-  private camera!: THREE.Camera;
-  private renderer!: THREE.WebGLRenderer;
-  private composer!: EffectComposer;
-  private bloomPass!: UnrealBloomPass;
-  private finalPass!: ShaderPass;
-
-  private renderPass!: RenderPass;
-  
-  // GPU compositing integration
-  private useMultiLayerCompositing: boolean = false; // Disabled by default
-  private multiLayerCompositor: MultiLayerCompositor | null = null;
-
-  constructor() {
-    debugLog.log('✨ BloomEffect constructor called');
+  constructor(config: Partial<BloomConfig> = {}) {
+    super();
+    this.parameters = { intensity: 1.0, threshold: 0.5, radius: 1.0, ...config };
   }
 
-  init(scene: THREE.Scene, camera: THREE.Camera, renderer: THREE.WebGLRenderer): void {
-    debugLog.log('✨ BloomEffect.init() called');
-    this.scene = scene;
-    this.camera = camera;
-    this.renderer = renderer;
-
-    this.setupComposer();
-    this.setupMultiLayerCompositor();
-    debugLog.log('✨ Bloom effect initialized');
-  }
-
-  private setupComposer() {
-    // Create effect composer
-    this.composer = new EffectComposer(this.renderer);
-
-    // Add render pass
-    this.renderPass = new RenderPass(this.scene, this.camera);
-    this.composer.addPass(this.renderPass);
-
-    // Add bloom pass
-    const size = this.renderer.getSize(new THREE.Vector2());
-    this.bloomPass = new UnrealBloomPass(
-      new THREE.Vector2(size.x, size.y),
-      this.parameters.strength,
-      this.parameters.radius,
-      this.parameters.threshold
-    );
-    this.composer.addPass(this.bloomPass);
-
-    // Create final pass for exposure control
-    const finalPassShader = {
-      uniforms: {
-        tDiffuse: { value: null },
-        uExposure: { value: this.parameters.exposure }
-      },
-      vertexShader: `
-        varying vec2 vUv;
-        void main() {
-          vUv = uv;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-      `,
-      fragmentShader: `
-        uniform sampler2D tDiffuse;
-        uniform float uExposure;
-        varying vec2 vUv;
-        
-        void main() {
-          vec4 color = texture2D(tDiffuse, vUv);
-          
-          // Apply exposure
-          color.rgb *= uExposure;
-          
-          // Gamma correction
-          color.rgb = pow(color.rgb, vec3(1.0 / 2.2));
-          
-          gl_FragColor = color;
-        }
-      `
+  protected getCustomUniforms(): Record<string, THREE.IUniform> {
+    return {
+      uIntensity: { value: this.parameters.intensity },
+      uThreshold: { value: this.parameters.threshold },
+      uRadius: { value: this.parameters.radius }
     };
-
-    this.finalPass = new ShaderPass(finalPassShader);
-    this.composer.addPass(this.finalPass);
-
-    debugLog.log('🎭 Bloom composer setup complete');
   }
 
-  private setupMultiLayerCompositor(): void {
-    try {
-      const size = this.renderer.getSize(new THREE.Vector2());
-      this.multiLayerCompositor = new MultiLayerCompositor(this.renderer, {
-        width: size.x,
-        height: size.y,
-        enableBloom: true,
-        enableAntialiasing: true,
-        pixelRatio: window.devicePixelRatio || 1
-      });
+  protected getFragmentShader(): string {
+    return `
+      precision highp float;
+      uniform sampler2D uTexture;
+      uniform vec2 uResolution;
+      uniform float uIntensity;
+      uniform float uThreshold;
+      uniform float uRadius;
       
-      // Create main 3D effects layer
-      this.multiLayerCompositor.createLayer('main-3d', this.scene, this.camera, {
-        blendMode: 'normal',
-        opacity: 1.0,
-        zIndex: 100,
-        enabled: true
-      });
-      
-      debugLog.log('🎨 MultiLayerCompositor initialized (disabled by default)');
-    } catch (error) {
-      debugLog.error('Failed to initialize MultiLayerCompositor:', error);
-      this.useMultiLayerCompositing = false;
+      varying vec2 vUv;
+
+      float luma(vec3 color) {
+        return dot(color, vec3(0.299, 0.587, 0.114));
+      }
+
+      void main() {
+        vec4 color = texture2D(uTexture, vUv);
+        vec3 bloom = vec3(0.0);
+        
+        // Single-pass bloom approximation
+        // We sample a few points around the pixel to simulate a blur
+        // This is less expensive than a full multi-pass Gaussian blur but effective for a single shader
+        
+        float totalWeight = 0.0;
+        vec2 texelSize = 1.0 / uResolution;
+        
+        // 9-tap box/gaussian hybrid blur
+        for(float x = -2.0; x <= 2.0; x += 1.0) {
+            for(float y = -2.0; y <= 2.0; y += 1.0) {
+                vec2 offset = vec2(x, y) * uRadius * 2.0;
+                vec4 sampleColor = texture2D(uTexture, vUv + offset * texelSize);
+                
+                // Thresholding
+                float brightness = luma(sampleColor.rgb);
+                float contribution = smoothstep(uThreshold, uThreshold + 0.1, brightness);
+                
+                // Weight decreases with distance
+                float weight = 1.0 / (1.0 + length(vec2(x, y)));
+                
+                bloom += sampleColor.rgb * contribution * weight;
+                totalWeight += weight;
+            }
+        }
+        
+        bloom /= totalWeight;
+        
+        // Composite
+        gl_FragColor = vec4(color.rgb + bloom * uIntensity, color.a);
+      }
+    `;
+  }
+
+  protected syncParametersToUniforms(): void {
+    if (!this.uniforms) return;
+    this.uniforms.uIntensity.value = this.parameters.intensity;
+    this.uniforms.uThreshold.value = this.parameters.threshold;
+    this.uniforms.uRadius.value = this.parameters.radius;
+  }
+
+  updateParameter(paramName: string, value: any): void {
+    switch (paramName) {
+      case 'intensity':
+        this.parameters.intensity = typeof value === 'number' ? Math.max(0.0, Math.min(2.0, value)) : this.parameters.intensity;
+        if (this.uniforms) this.uniforms.uIntensity.value = this.parameters.intensity;
+        break;
+      case 'threshold':
+        this.parameters.threshold = typeof value === 'number' ? Math.max(0.0, Math.min(1.0, value)) : this.parameters.threshold;
+        if (this.uniforms) this.uniforms.uThreshold.value = this.parameters.threshold;
+        break;
+      case 'radius':
+        this.parameters.radius = typeof value === 'number' ? Math.max(0.0, Math.min(2.0, value)) : this.parameters.radius;
+        if (this.uniforms) this.uniforms.uRadius.value = this.parameters.radius;
+        break;
     }
   }
-
-  update(deltaTime: number): void {
-    // Bloom parameters are now static - controlled only by explicit parameter mappings
-    this.bloomPass.strength = this.parameters.strength;
-    this.bloomPass.threshold = this.parameters.threshold;
-    this.finalPass.uniforms.uExposure.value = this.parameters.exposure;
-  }
-
-  // Custom render method to replace the normal renderer.render call
-  render(): void {
-    if (this.useMultiLayerCompositing && this.multiLayerCompositor) {
-      // Use GPU-based multi-layer compositing
-      this.multiLayerCompositor.render();
-    } else if (this.composer) {
-      // Fallback to traditional composer
-      this.composer.render();
-    }
-  }
-
-  // Enable GPU compositing (for testing)
-  public enableMultiLayerCompositing(): void {
-    this.useMultiLayerCompositing = true;
-    debugLog.log('🎨 GPU compositing enabled');
-  }
-
-  // Disable GPU compositing (fallback to traditional)
-  public disableMultiLayerCompositing(): void {
-    this.useMultiLayerCompositing = false;
-    debugLog.log('🎨 GPU compositing disabled');
-  }
-
-  // Get the multi-layer compositor for external access
-  public getMultiLayerCompositor(): MultiLayerCompositor | null {
-    return this.multiLayerCompositor;
-  }
-
-  // Method to handle window resize
-  handleResize(width: number, height: number): void {
-    if (this.composer) {
-      this.composer.setSize(width, height);
-      this.bloomPass.setSize(width, height);
-    }
-    
-    if (this.multiLayerCompositor) {
-      this.multiLayerCompositor.resize(width, height);
-    }
-  }
-
-  destroy(): void {
-    if (this.composer) {
-      this.composer.dispose();
-    }
-    
-    if (this.multiLayerCompositor) {
-      this.multiLayerCompositor.dispose();
-    }
-  }
-} 
+}

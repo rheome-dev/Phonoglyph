@@ -45,6 +45,16 @@ import { TrailEffect } from './TrailEffect';
 import { WaterRipplesEffect } from './WaterRipplesEffect';
 import { WavesEffect } from './WavesEffect';
 
+// Light category imports
+import { Light2DEffect } from './Light2DEffect';
+import { AuroraEffect } from './AuroraEffect';
+import { BeamEffect } from './BeamEffect';
+import { BloomEffect } from './BloomEffect';
+import { GodRaysEffect } from './GodRaysEffect';
+import { LightTrailEffect } from './LightTrailEffect';
+import { SpotLightEffect } from './SpotLightEffect';
+import { WaterCausticsEffect } from './WaterCausticsEffect';
+
 // Register built-in effects at module import time
 EffectRegistry.register({
   id: 'metaballs',
@@ -588,7 +598,134 @@ EffectRegistry.register({
   }
 });
 
+// LIGHT CATEGORY EFFECTS
+
+EffectRegistry.register({
+  id: 'light2d',
+  name: '2D Light',
+  description: 'Screen-space 2D point light with shadows',
+  category: 'Light',
+  version: '1.0.0',
+  constructor: Light2DEffect,
+  defaultConfig: {
+    intensity: 0.5,
+    lightX: 0.5,
+    lightY: 0.5,
+    color: '#fa1ee3'
+  }
+});
+
+EffectRegistry.register({
+  id: 'aurora',
+  name: 'Aurora',
+  description: 'Procedural Aurora Borealis effect',
+  category: 'Light',
+  version: '1.0.0',
+  constructor: AuroraEffect,
+  defaultConfig: {
+    intensity: 0.8,
+    speed: 0.5,
+    color1: '#00ff00',
+    color2: '#8f00ff'
+  }
+});
+
+EffectRegistry.register({
+  id: 'beam',
+  name: 'Beam',
+  description: 'Animated scanning light beam',
+  category: 'Light',
+  version: '1.0.0',
+  constructor: BeamEffect,
+  defaultConfig: {
+    intensity: 1.0,
+    speed: 0.5,
+    width: 0.5,
+    angle: 0.0,
+    color: '#661aff'
+  }
+});
+
+EffectRegistry.register({
+  id: 'bloom',
+  name: 'Bloom',
+  description: 'High-quality bloom effect',
+  category: 'Light',
+  version: '1.0.0',
+  constructor: BloomEffect,
+  defaultConfig: {
+    intensity: 1.0,
+    threshold: 0.5,
+    radius: 1.0
+  }
+});
+
+EffectRegistry.register({
+  id: 'godRays',
+  name: 'God Rays',
+  description: 'Volumetric light scattering',
+  category: 'Light',
+  version: '1.0.0',
+  constructor: GodRaysEffect,
+  defaultConfig: {
+    intensity: 1.0,
+    decay: 0.96,
+    density: 0.5,
+    weight: 0.4,
+    lightX: 0.5,
+    lightY: 0.5
+  }
+});
+
+EffectRegistry.register({
+  id: 'lightTrail',
+  name: 'Light Trail',
+  description: 'Mouse/Touch light trail effect',
+  category: 'Light',
+  version: '1.0.0',
+  constructor: LightTrailEffect,
+  defaultConfig: {
+    intensity: 1.0,
+    trailLength: 0.8,
+    color: '#0082f7'
+  }
+});
+
+EffectRegistry.register({
+  id: 'spotLight',
+  name: 'Spot Light',
+  description: 'Screen-space spotlight with bump mapping',
+  category: 'Light',
+  version: '1.0.0',
+  constructor: SpotLightEffect,
+  defaultConfig: {
+    intensity: 1.5,
+    radius: 0.5,
+    lightX: 0.5,
+    lightY: 0.5,
+    color: '#fa1ee3'
+  }
+});
+
+EffectRegistry.register({
+  id: 'waterCaustics',
+  name: 'Water Caustics',
+  description: 'Water surface caustics simulation',
+  category: 'Light',
+  version: '1.0.0',
+  constructor: WaterCausticsEffect,
+  defaultConfig: {
+    intensity: 0.8,
+    speed: 0.5,
+    refraction: 0.5,
+    color: '#99b3e6'
+  }
+});
+
 // BLOOM FILTER (To be replaced by light category bloom later)
+// Keeping this for now as it might be used elsewhere, but 'bloom' ID is now taken by the new effect.
+// I should rename the old one or remove it if it conflicts.
+// The old one has ID 'bloomFilter'. The new one has ID 'bloom'. So they don't conflict.
 EffectRegistry.register({
   id: 'bloomFilter',
   name: 'Bloom Filter',
