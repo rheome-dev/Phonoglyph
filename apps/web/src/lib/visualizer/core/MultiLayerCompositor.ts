@@ -35,6 +35,7 @@ export class MultiLayerCompositor {
   // Render targets
   private mainRenderTarget: THREE.WebGLRenderTarget;
   private tempRenderTarget: THREE.WebGLRenderTarget;
+  private accumulationTargets: Map<string, THREE.WebGLRenderTarget> = new Map();
   
   // Shared geometry for full-screen rendering
   private quadGeometry: THREE.PlaneGeometry;
@@ -60,35 +61,8 @@ export class MultiLayerCompositor {
     this.renderer.setClearColor(0x000000, 0);
     this.renderer.setClearAlpha(0);
 
-    // Create render targets
-    // FIX: Use WebGLRenderTarget with samples: 4 for proper MSAA antialiasing
-    const RTClass: any = THREE.WebGLRenderTarget;
-
-    this.mainRenderTarget = new RTClass(
-      this.config.width,
-      this.config.height,
-      {
-        format: THREE.RGBAFormat,
-        type: THREE.UnsignedByteType,
-        minFilter: THREE.LinearFilter,
-        magFilter: THREE.LinearFilter,
-        generateMipmaps: false,
-        samples: 4 // FIX: Enable 4x MSAA
-      }
-    );
-    
-    this.tempRenderTarget = new RTClass(
-      this.config.width,
-      this.config.height,
-      {
-        format: THREE.RGBAFormat,
-        type: THREE.UnsignedByteType,
-        minFilter: THREE.LinearFilter,
-        magFilter: THREE.LinearFilter,
-        generateMipmaps: false,
-        samples: 4 // FIX: Enable 4x MSAA
-      }
-    );
+    this.mainRenderTarget = this.createRenderTarget();
+    this.tempRenderTarget = this.createRenderTarget();
     
     // Create shared geometry and camera
     this.quadGeometry = new THREE.PlaneGeometry(2, 2);
@@ -110,21 +84,7 @@ export class MultiLayerCompositor {
     camera: THREE.Camera,
     options: Partial<Omit<LayerRenderTarget, 'id' | 'scene' | 'camera'>> = {}
   ): LayerRenderTarget {
-    // FIX: Use WebGLRenderTarget with samples: 4 for proper MSAA antialiasing
-    const RTClass: any = THREE.WebGLRenderTarget;
-
-    const renderTarget = new RTClass(
-      this.config.width,
-      this.config.height,
-      {
-        format: THREE.RGBAFormat,
-        type: THREE.UnsignedByteType,
-        minFilter: THREE.LinearFilter,
-        magFilter: THREE.LinearFilter,
-        generateMipmaps: false,
-        samples: 4 // FIX: Enable 4x MSAA for each layer
-      }
-    );
+    const renderTarget = this.createRenderTarget();
     
     const layer: LayerRenderTarget = {
       id,
@@ -144,6 +104,25 @@ export class MultiLayerCompositor {
     
     return layer;
   }
+
+  /**
+   * Create a render target with standard configuration
+   */
+  private createRenderTarget(): THREE.WebGLRenderTarget {
+    const RTClass: any = THREE.WebGLRenderTarget;
+    return new RTClass(
+      this.config.width,
+      this.config.height,
+      {
+        format: THREE.RGBAFormat,
+        type: THREE.UnsignedByteType,
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.LinearFilter,
+        generateMipmaps: false,
+        samples: 4
+      }
+    );
+  }
   
   /**
    * Remove a layer
@@ -154,6 +133,12 @@ export class MultiLayerCompositor {
       layer.renderTarget.dispose();
       this.layers.delete(id);
       this.layerOrder = this.layerOrder.filter(layerId => layerId !== id);
+    }
+    
+    const accTarget = this.accumulationTargets.get(id);
+    if (accTarget) {
+      accTarget.dispose();
+      this.accumulationTargets.delete(id);
     }
   }
   
@@ -474,6 +459,10 @@ export class MultiLayerCompositor {
   /**
    * Get the accumulated texture from all layers before a specific layer
    * This composites all layers up to (but not including) the target layer
+   * 
+   * FIXED: Uses a unique render target for each requesting layer ID.
+   * This prevents feedback loops where multiple layers sharing 'tempRenderTarget'
+   * overwrite each other's input textures within the same frame.
    */
   public getAccumulatedTextureBeforeLayer(layerId: string): THREE.Texture | null {
     const targetIndex = this.layerOrder.indexOf(layerId);
@@ -482,28 +471,30 @@ export class MultiLayerCompositor {
       return null;
     }
 
-    // Save current render target
+    let accumulationTarget = this.accumulationTargets.get(layerId);
+    if (!accumulationTarget) {
+      accumulationTarget = this.createRenderTarget();
+      this.accumulationTargets.set(layerId, accumulationTarget);
+    }
+
     const previousRenderTarget = this.renderer.getRenderTarget();
     const autoClear = this.renderer.autoClear;
     this.renderer.autoClear = false;
 
-    // Use temp render target to accumulate layers before the target
-    this.renderer.setRenderTarget(this.tempRenderTarget);
+    this.renderer.setRenderTarget(accumulationTarget);
     this.renderer.clear(true, true, true);
 
-    // Composite layers up to (but not including) the target layer
     for (let i = 0; i < targetIndex; i++) {
-      const layerId = this.layerOrder[i];
-      const layer = this.layers.get(layerId);
+      const prevLayerId = this.layerOrder[i];
+      const layer = this.layers.get(prevLayerId);
       if (!layer || !layer.enabled) continue;
       this.renderLayerWithBlending(layer);
     }
 
-    // Restore previous render target
     this.renderer.setRenderTarget(previousRenderTarget);
     this.renderer.autoClear = autoClear;
 
-    return this.tempRenderTarget.texture;
+    return accumulationTarget.texture;
   }
   
   /**
@@ -516,6 +507,9 @@ export class MultiLayerCompositor {
     // Resize all render targets
     this.mainRenderTarget.setSize(width, height);
     this.tempRenderTarget.setSize(width, height);
+    for (const target of this.accumulationTargets.values()) {
+      target.setSize(width, height);
+    }
     
     // Resize layer render targets
     for (const layer of this.layers.values()) {
@@ -542,6 +536,11 @@ export class MultiLayerCompositor {
     for (const layer of this.layers.values()) {
       layer.renderTarget.dispose();
     }
+    
+    for (const target of this.accumulationTargets.values()) {
+      target.dispose();
+    }
+    this.accumulationTargets.clear();
     
     this.quadGeometry.dispose();
     this.layers.clear();
