@@ -423,38 +423,51 @@ function CreativeVisualizerPage() {
     const prevIds = previousLayerIdsRef.current;
     const currentIds = layers.map(l => l.id);
 
-    if (prevIds.length === 0) {
-      previousLayerIdsRef.current = currentIds;
-      return;
-    }
+    const removedIds =
+      prevIds.length === 0
+        ? currentIds.length === 0
+          ? []
+          : Object.keys(mappings)
+              .map(key => parseParamKey(key)?.effectInstanceId)
+              .filter((id): id is string => !!id && !currentIds.includes(id))
+        : prevIds.filter(id => !currentIds.includes(id));
 
-    const removedIds = prevIds.filter(id => !currentIds.includes(id));
     if (removedIds.length > 0) {
       setMappings(prev => {
+        let mutated = false;
         const next = { ...prev };
         Object.keys(next).forEach(key => {
           const parsed = parseParamKey(key);
           if (parsed && removedIds.includes(parsed.effectInstanceId)) {
             delete next[key];
+            mutated = true;
           }
         });
-        return next;
+        return mutated ? next : prev;
       });
 
       setBaseParameterValues(prev => {
+        let mutated = false;
         const next = { ...prev };
         removedIds.forEach(id => {
-          delete next[id];
+          if (id in next) {
+            delete next[id];
+            mutated = true;
+          }
         });
-        return next;
+        return mutated ? next : prev;
       });
 
       setActiveSliderValues(prev => {
+        let mutated = false;
         const next = { ...prev };
         removedIds.forEach(id => {
-          delete next[id];
+          if (id in next) {
+            delete next[id];
+            mutated = true;
+          }
         });
-        return next;
+        return mutated ? next : prev;
       });
     }
 
