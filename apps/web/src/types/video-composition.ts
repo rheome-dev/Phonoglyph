@@ -51,6 +51,7 @@ export type EffectType =
   | 'metaballs'
   | 'particles'
   | 'particleNetwork'
+  | 'bloom'
   | 'imageSlideshow'
   | OverlayType;
 

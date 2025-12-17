@@ -3,9 +3,10 @@ import { Composition } from 'remotion';
 import { RayboxComposition } from './RayboxComposition';
 import type { RayboxCompositionProps } from './Root';
 
-// Debug payload - loaded dynamically so the JSON file is optional and never required on main
+// Debug payload - loaded dynamically so the JSON file is optional and never required on main.
+// Exported so the Remotion root can optionally wire a Debug composition when available.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-require-imports
-let TEST_PAYLOAD: any = null;
+export let TEST_PAYLOAD: any = null;
 try {
   // This file is meant for local debugging only – it's fine if it doesn't exist in CI/main
   // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -57,7 +58,11 @@ const DebugComposition: React.FC<RayboxCompositionProps> = (remotionProps) => {
   const props = TEST_PAYLOAD as RayboxCompositionProps;
   console.log('🔍 [DebugComposition] Spreading TEST_PAYLOAD as props:', {
     layersCount: props.layers?.length || 0,
-    audioAnalysisCount: props.audioAnalysisData?.length || 0
+    audioAnalysisCount: props.audioAnalysisData?.length || 0,
+    hasMappings: !!props.mappings,
+    mappingsCount: props.mappings ? Object.keys(props.mappings).length : 0,
+    hasBaseParameterValues: !!props.baseParameterValues,
+    baseParamLayerCount: props.baseParameterValues ? Object.keys(props.baseParameterValues).length : 0,
   });
   
   return <RayboxComposition {...props} />;

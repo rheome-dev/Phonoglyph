@@ -42,7 +42,7 @@ interface ThreeVisualizerProps {
   onMapFeature?: (parameterId: string, featureId: string) => void;
   onUnmapFeature?: (parameterId: string) => void;
   onModulationAmountChange?: (parameterId: string, amount: number) => void;
-  // Children to render inside the canvas container
+  // Children to render inside the canvas container (for HUD overlays)
   children?: React.ReactNode;
 }
 
@@ -448,7 +448,7 @@ export function ThreeVisualizer({
             </span>
           </div>
         )}
-        {/* Overlays and other children rendered inside canvas container */}
+        {/* HUD overlays and other children rendered inside canvas container */}
         {children}
       </div>
     </div>

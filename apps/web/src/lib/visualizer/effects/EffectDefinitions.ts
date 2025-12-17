@@ -39,6 +39,7 @@ import { WavesEffect } from './WavesEffect';
 
 // Light category imports
 import { BeamEffect } from './BeamEffect';
+import { BloomEffect } from './BloomEffect';
 import { GodRaysEffect } from './GodRaysEffect';
 import { LightTrailEffect } from './LightTrailEffect';
 import { WaterCausticsEffect } from './WaterCausticsEffect';
@@ -515,6 +516,20 @@ EffectRegistry.register({
     width: 0.5,
     angle: 0.0,
     color: '#661aff'
+  }
+});
+
+EffectRegistry.register({
+  id: 'bloom',
+  name: 'Bloom',
+  description: 'High-quality bloom effect',
+  category: 'Light',
+  version: '1.0.0',
+  constructor: BloomEffect,
+  defaultConfig: {
+    intensity: 1.0,
+    threshold: 0.5,
+    radius: 1.0
   }
 });
 

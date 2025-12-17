@@ -32,6 +32,7 @@ import { useTimelineStore } from '@/stores/timelineStore';
 import { UnifiedTimeline } from '@/components/video-composition/UnifiedTimeline';
 import type { Layer } from '@/types/video-composition';
 import { useFeatureValue } from '@/hooks/use-feature-value';
+import { HudOverlayRenderer } from '@/components/hud/HudOverlayManager';
 import { AspectRatioSelector } from '@/components/ui/aspect-ratio-selector';
 import { getAspectRatioConfig } from '@/lib/visualizer/aspect-ratios';
 import { useProjectSettingsStore } from '@/stores/projectSettingsStore';
@@ -46,7 +47,7 @@ import { getProjectExportPayload } from '@/lib/export-utils';
 // Derived boolean: are stem URLs ready?
 // const stemUrlsReady = Object.keys(asyncStemUrlMap).length > 0; // This line was moved
 
-// Wrapper component that provides overlay functionality to the sidebar
+// Wrapper component that provides HUD overlay functionality to the sidebar
 const EffectsLibrarySidebarWithHud: React.FC<{
   effects: any[];
   selectedEffects: Record<string, boolean>;
@@ -144,9 +145,9 @@ const EffectsLibrarySidebarWithHud: React.FC<{
       
       const overlayType = overlayTypeMap[effectId];
       if (overlayType) {
-        debugLog.log('🎯 Adding overlay to timeline:', overlayType, 'with master stem:', masterStemId);
+        debugLog.log('🎯 Adding HUD overlay to timeline:', overlayType, 'with master stem:', masterStemId);
         
-        // Overlay uses scale.x/y as PERCENTAGES of parent container
+        // HudOverlay uses scale.x/y as PERCENTAGES of parent container
         // and position.x/y as PERCENTAGES for positioning
         // Default to 40% width, 25% height for a reasonable overlay size
         const overlayWidthPct = 40;
@@ -1485,6 +1486,18 @@ function CreativeVisualizerPage() {
       }
     },
     { 
+      id: 'bloom', 
+      name: 'Bloom', 
+      description: 'High-quality bloom effect',
+      category: 'Light',
+      rarity: 'Mythic',
+      parameters: {
+        intensity: 1.0,
+        threshold: 0.5,
+        radius: 1.0
+      }
+    },
+    { 
       id: 'godRays', 
       name: 'God Rays', 
       description: 'Volumetric light scattering',
@@ -1524,8 +1537,7 @@ function CreativeVisualizerPage() {
         color: '#99b3e6'
       }
     },
-    // Filter Category Effects
-    // Overlay Effects
+    // HUD Overlay Effects
     { 
       id: 'waveform', 
       name: 'Waveform Overlay', 
@@ -1685,7 +1697,7 @@ function CreativeVisualizerPage() {
     // Check if this is an overlay layer - overlays have their own parameter definitions
     const overlayLayer = layers.find(l => l.id === editingEffectId && l.type === 'overlay');
     if (overlayLayer) {
-      // Overlay parameter definitions
+      // Overlay parameter definitions - these match OVERLAY_SETTINGS in HudOverlayParameterModal.tsx
       const overlayParameters: Record<string, Record<string, any>> = {
         waveform: {
           color: overlayLayer.settings?.color || '#4db3fa',
@@ -2179,7 +2191,7 @@ function CreativeVisualizerPage() {
         }
         
         // Known effect TYPE names (not instance IDs) - these are legacy mappings that should be skipped
-        const effectTypeNames = ['metaballs', 'particleNetwork', 'imageSlideshow', 'asciiFilter', 'bloomFilter'];
+        const effectTypeNames = ['metaballs', 'particleNetwork', 'imageSlideshow', 'asciiFilter'];
         
         for (const [paramKey, featureId] of cachedMappings) {
           if (!featureId) continue;
@@ -2872,6 +2884,13 @@ function CreativeVisualizerPage() {
                       onSelectedEffectsChange={() => {}} // <-- Added no-op
                       visualizerRef={visualizerRef}
                   >
+                    {/* HUD Overlays rendered inside canvas container so they're constrained to canvas bounds */}
+                    <div className="absolute inset-0 pointer-events-none z-20 overflow-hidden">
+                      <HudOverlayRenderer 
+                        stemUrlMap={asyncStemUrlMap} 
+                        cachedAnalysis={audioAnalysis.cachedAnalysis || []}
+                      />
+                    </div>
                   </ThreeVisualizer>
 
 
