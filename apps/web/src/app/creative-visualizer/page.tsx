@@ -395,6 +395,7 @@ function CreativeVisualizerPage() {
     setMappings,
     baseParameterValues,
     activeSliderValues,
+    setBaseParameterValues,
     setActiveSliderValues,
     setBaseParam,
     setActiveParam
@@ -415,6 +416,50 @@ function CreativeVisualizerPage() {
   const [activeCollectionId, setActiveCollectionId] = useState<string | undefined>();
   // Base (user-set) parameter values from store, modulated values still local (transient)
   const [modulatedParameterValues, setModulatedParameterValues] = useState<Record<string, number>>({});
+  const previousLayerIdsRef = useRef<string[]>([]);
+
+  // Clean up mappings and cached parameter values when layers are removed
+  useEffect(() => {
+    const prevIds = previousLayerIdsRef.current;
+    const currentIds = layers.map(l => l.id);
+
+    if (prevIds.length === 0) {
+      previousLayerIdsRef.current = currentIds;
+      return;
+    }
+
+    const removedIds = prevIds.filter(id => !currentIds.includes(id));
+    if (removedIds.length > 0) {
+      setMappings(prev => {
+        const next = { ...prev };
+        Object.keys(next).forEach(key => {
+          const parsed = parseParamKey(key);
+          if (parsed && removedIds.includes(parsed.effectInstanceId)) {
+            delete next[key];
+          }
+        });
+        return next;
+      });
+
+      setBaseParameterValues(prev => {
+        const next = { ...prev };
+        removedIds.forEach(id => {
+          delete next[id];
+        });
+        return next;
+      });
+
+      setActiveSliderValues(prev => {
+        const next = { ...prev };
+        removedIds.forEach(id => {
+          delete next[id];
+        });
+        return next;
+      });
+    }
+
+    previousLayerIdsRef.current = currentIds;
+  }, [layers, setMappings, setBaseParameterValues, setActiveSliderValues]);
 
   // Real-time sync calibration offset in ms
   const [syncOffsetMs, setSyncOffsetMs] = useState(0);
