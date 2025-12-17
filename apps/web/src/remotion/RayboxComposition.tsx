@@ -258,7 +258,7 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
     try {
       const config: VisualizerConfig = {
         canvas: { width, height, pixelRatio: 1 }, // pixelRatio 1 ensures deterministic rendering
-        performance: { targetFPS: fps, enableBloom: true, enableShadows: false },
+        performance: { targetFPS: fps, enableShadows: false },
         midi: { velocitySensitivity: 1.0, noteTrailDuration: 2.0, trackColorMapping: {} },
       };
 

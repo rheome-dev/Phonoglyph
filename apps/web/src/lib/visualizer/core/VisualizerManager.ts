@@ -164,7 +164,6 @@ export class VisualizerManager {
     this.multiLayerCompositor = new MultiLayerCompositor(this.renderer, {
       width: config.canvas.width,
       height: config.canvas.height,
-      enableBloom: config.performance?.enableBloom ?? true,
       enableAntialiasing: true,
       pixelRatio: Math.min(window.devicePixelRatio, config.canvas.pixelRatio || 2)
     });

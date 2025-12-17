@@ -183,7 +183,6 @@ export function ThreeVisualizer({
         aspectRatio: aspectRatioConfig,
       performance: {
           targetFPS: 60,
-          enableBloom: true,
           enableShadows: false
       },
       midi: {

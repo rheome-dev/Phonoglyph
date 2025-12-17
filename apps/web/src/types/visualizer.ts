@@ -68,7 +68,6 @@ export interface VisualizerConfig {
   effects?: VisualEffect[];
   performance?: {
     targetFPS?: number;
-    enableBloom?: boolean;
     enableShadows?: boolean;
   };
   midi: {

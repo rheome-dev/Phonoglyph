@@ -1,7 +1,6 @@
 import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
 import { TexturePass } from 'three/examples/jsm/postprocessing/TexturePass.js';
@@ -21,7 +20,6 @@ export interface LayerRenderTarget {
 export interface CompositorConfig {
   width: number;
   height: number;
-  enableBloom?: boolean;
   enableAntialiasing?: boolean;
   pixelRatio?: number;
 }
@@ -36,7 +34,6 @@ export class MultiLayerCompositor {
   
   // Render targets
   private mainRenderTarget: THREE.WebGLRenderTarget;
-  private bloomRenderTarget: THREE.WebGLRenderTarget;
   private tempRenderTarget: THREE.WebGLRenderTarget;
   
   // Shared geometry for full-screen rendering
@@ -49,13 +46,11 @@ export class MultiLayerCompositor {
   // Post-processing
   private postProcessingComposer!: EffectComposer;
   private texturePass!: TexturePass;
-  private bloomPass?: UnrealBloomPass;
   private fxaaPass?: ShaderPass;
   
   constructor(renderer: THREE.WebGLRenderer, config: CompositorConfig) {
     this.renderer = renderer;
     this.config = {
-      enableBloom: false,
       enableAntialiasing: true,
       pixelRatio: window.devicePixelRatio || 1,
       ...config
@@ -70,19 +65,6 @@ export class MultiLayerCompositor {
     const RTClass: any = THREE.WebGLRenderTarget;
 
     this.mainRenderTarget = new RTClass(
-      this.config.width,
-      this.config.height,
-      {
-        format: THREE.RGBAFormat,
-        type: THREE.UnsignedByteType,
-        minFilter: THREE.LinearFilter,
-        magFilter: THREE.LinearFilter,
-        generateMipmaps: false,
-        samples: 4 // FIX: Enable 4x MSAA
-      }
-    );
-    
-    this.bloomRenderTarget = new RTClass(
       this.config.width,
       this.config.height,
       {
@@ -362,35 +344,6 @@ export class MultiLayerCompositor {
     
     this.postProcessingComposer.addPass(this.texturePass);
 
-    if (this.config.enableBloom) {
-      this.bloomPass = new UnrealBloomPass(
-        new THREE.Vector2(this.config.width, this.config.height),
-        0.6, // strength (tuned up for visible glow)
-        0.8, // radius
-        0.25 // threshold
-      );
-
-      // CRITICAL FIX FOR BLOOM ALPHA
-      // The default composite material in UnrealBloomPass discards the original alpha.
-      // We must replace its fragment shader with a version that preserves it by taking
-      // the alpha from the original scene texture (`baseTexture`).
-      const finalCompositeShader = (this.bloomPass as any).compositeMaterial.fragmentShader
-        .replace(
-          // Find the line that outputs the final color
-          'gl_FragColor = linearToOutputTexel( composite );',
-          // And replace it with a version that re-injects the original alpha
-          `
-          vec4 baseTex = texture2D( baseTexture, vUv );
-          gl_FragColor = vec4(composite.rgb, baseTex.a);
-          `
-        );
-      
-      // Apply the modified shader to the bloom pass
-      (this.bloomPass as any).compositeMaterial.fragmentShader = finalCompositeShader;
-      
-      this.postProcessingComposer.addPass(this.bloomPass);
-    }
-
     // FXAA to reduce aliasing on lines and sprite edges
     // CRITICAL FIX: Create alpha-preserving version of FXAAShader
     const AlphaPreservingFXAAShader = {
@@ -562,7 +515,6 @@ export class MultiLayerCompositor {
     
     // Resize all render targets
     this.mainRenderTarget.setSize(width, height);
-    this.bloomRenderTarget.setSize(width, height);
     this.tempRenderTarget.setSize(width, height);
     
     // Resize layer render targets
@@ -573,9 +525,6 @@ export class MultiLayerCompositor {
     // Resize post-processing
     if (this.postProcessingComposer) {
       this.postProcessingComposer.setSize(width, height);
-    }
-    if (this.bloomPass) {
-      this.bloomPass.setSize(width, height);
     }
     if (this.fxaaPass) {
       const pixelRatio = this.renderer.getPixelRatio();
@@ -588,7 +537,6 @@ export class MultiLayerCompositor {
    */
   public dispose(): void {
     this.mainRenderTarget.dispose();
-    this.bloomRenderTarget.dispose();
     this.tempRenderTarget.dispose();
     
     for (const layer of this.layers.values()) {
