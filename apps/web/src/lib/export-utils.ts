@@ -62,8 +62,29 @@ export function getProjectExportPayload(
   const baseParameterValues: Record<string, Record<string, any>> =
     visualizerState.baseParameterValues;
 
-  const visualizationSettings: VisualizationSettings = {
+  type VisualizationSettingsWithAspect = VisualizationSettings & {
+    aspectRatio?: string;
+  };
+
+  const visualizerSettings = (visualizerState as {
+    settings?: Partial<VisualizationSettingsWithAspect>;
+    aspectRatio?: string;
+  }).settings;
+
+  const defaultAspectRatio =
+    (DEFAULT_VISUALIZATION_SETTINGS as VisualizationSettingsWithAspect)
+      .aspectRatio ?? '9:16';
+
+  // Prefer the live store aspectRatio (driven by the UI) over anything cached
+  const resolvedAspectRatio =
+    visualizerState.aspectRatio ??
+    visualizerSettings?.aspectRatio ??
+    defaultAspectRatio;
+
+  const visualizationSettings: VisualizationSettingsWithAspect = {
     ...DEFAULT_VISUALIZATION_SETTINGS,
+    ...visualizerSettings,
+    aspectRatio: resolvedAspectRatio,
   };
 
   const audioAnalysisData = cachedAnalysis;
