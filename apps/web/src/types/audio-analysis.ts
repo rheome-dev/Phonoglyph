@@ -33,6 +33,6 @@ export type AnalysisMethod = 'original' | 'enhanced' | 'both';
 export interface FullAudioAnalysis {
   bpm: number;
   transients: TransientData[];
-  // ... plus all other features needed for HUDs (rms, chroma, etc.)
+  // ... plus other features like rms, chroma, etc.
 }
 

@@ -32,7 +32,6 @@ import { useTimelineStore } from '@/stores/timelineStore';
 import { UnifiedTimeline } from '@/components/video-composition/UnifiedTimeline';
 import type { Layer } from '@/types/video-composition';
 import { useFeatureValue } from '@/hooks/use-feature-value';
-import { HudOverlayRenderer } from '@/components/hud/HudOverlayManager';
 import { AspectRatioSelector } from '@/components/ui/aspect-ratio-selector';
 import { getAspectRatioConfig } from '@/lib/visualizer/aspect-ratios';
 import { useProjectSettingsStore } from '@/stores/projectSettingsStore';
@@ -47,7 +46,7 @@ import { getProjectExportPayload } from '@/lib/export-utils';
 // Derived boolean: are stem URLs ready?
 // const stemUrlsReady = Object.keys(asyncStemUrlMap).length > 0; // This line was moved
 
-// Wrapper component that provides HUD overlay functionality to the sidebar
+// Wrapper component that provides overlay functionality to the sidebar
 const EffectsLibrarySidebarWithHud: React.FC<{
   effects: any[];
   selectedEffects: Record<string, boolean>;
@@ -138,7 +137,6 @@ const EffectsLibrarySidebarWithHud: React.FC<{
         'stereometer': 'stereometer',
         'oscilloscope': 'oscilloscope',
         'spectrumAnalyzer': 'spectrumAnalyzer',
-        'midiMeter': 'midiMeter',
         'vuMeter': 'vuMeter',
         'chromaWheel': 'chromaWheel',
         'consoleFeed': 'consoleFeed',
@@ -146,9 +144,9 @@ const EffectsLibrarySidebarWithHud: React.FC<{
       
       const overlayType = overlayTypeMap[effectId];
       if (overlayType) {
-        debugLog.log('🎯 Adding HUD overlay to timeline:', overlayType, 'with master stem:', masterStemId);
+        debugLog.log('🎯 Adding overlay to timeline:', overlayType, 'with master stem:', masterStemId);
         
-        // HudOverlay uses scale.x/y as PERCENTAGES of parent container
+        // Overlay uses scale.x/y as PERCENTAGES of parent container
         // and position.x/y as PERCENTAGES for positioning
         // Default to 40% width, 25% height for a reasonable overlay size
         const overlayWidthPct = 40;
@@ -404,7 +402,6 @@ function CreativeVisualizerPage() {
   // Effect parameter modal state (kept for imageSlideshow special handling)
   const [openEffectModals, setOpenEffectModals] = useState<Record<string, boolean>>({
     'metaballs': false,
-    'midiHud': false,
     'particleNetwork': false
   });
   
@@ -995,14 +992,6 @@ function CreativeVisualizerPage() {
       parameters: {} // <-- Added
     },
     { 
-      id: 'midiHud', 
-      name: 'HUD Effect', 
-      description: 'Technical overlay displaying real-time audio analysis and MIDI data',
-      category: 'Overlays',
-      rarity: 'Common',
-      parameters: {} // <-- Added
-    },
-    { 
       id: 'particleNetwork', 
       name: 'Particle Effect', 
       description: 'Dynamic particle systems that react to rhythm and pitch',
@@ -1155,19 +1144,6 @@ function CreativeVisualizerPage() {
       }
     },
     { 
-      id: 'zoomBlur', 
-      name: 'Zoom Blur', 
-      description: 'Radial zoom blur from a center point',
-      category: 'Blur',
-      rarity: 'Rare',
-      parameters: {
-        intensity: 0.4,
-        centerX: 0.5,
-        centerY: 0.5,
-        samples: 8
-      }
-    },
-    { 
       id: 'radialBlur', 
       name: 'Radial Blur', 
       description: 'Rotational blur around a center point',
@@ -1216,27 +1192,6 @@ function CreativeVisualizerPage() {
       }
     },
     { 
-      id: 'miniBlur', 
-      name: 'Mini Blur', 
-      description: 'Fast lightweight blur',
-      category: 'Blur',
-      rarity: 'Common',
-      parameters: {
-        intensity: 0.5
-      }
-    },
-    { 
-      id: 'noiseBlur', 
-      name: 'Noise Blur', 
-      description: 'Noise-driven directional blur',
-      category: 'Blur',
-      rarity: 'Rare',
-      parameters: {
-        intensity: 0.5,
-        scale: 1.5
-      }
-    },
-    { 
       id: 'progressiveBlur', 
       name: 'Progressive Blur', 
       description: 'Blur that increases with distance from center',
@@ -1263,18 +1218,6 @@ function CreativeVisualizerPage() {
       }
     },
     { 
-      id: 'extend', 
-      name: 'Extend', 
-      description: 'Intersection-based linear stretch distortion',
-      category: 'Distort',
-      rarity: 'Rare',
-      parameters: {
-        intensity: 0.5,
-        angle1: 90.0,
-        angle2: 180.0
-      }
-    },
-    { 
       id: 'fbm', 
       name: 'FBM Distortion', 
       description: 'Fluid marble-like distortion using Fractal Brownian Motion',
@@ -1284,30 +1227,6 @@ function CreativeVisualizerPage() {
         intensity: 0.5,
         speed: 0.5,
         scale: 1.0
-      }
-    },
-    { 
-      id: 'flowfield', 
-      name: 'Flowfield', 
-      description: 'Fluid flow distortion using Perlin noise',
-      category: 'Distort',
-      rarity: 'Rare',
-      parameters: {
-        intensity: 0.5,
-        speed: 0.5,
-        scale: 1.0
-      }
-    },
-    { 
-      id: 'lensDistortion', 
-      name: 'Lens Distortion', 
-      description: 'Lens barrel/pincushion distortion with chromatic aberration',
-      category: 'Distort',
-      rarity: 'Rare',
-      parameters: {
-        distortion: 0.5,
-        type: 0,
-        chromaticAberration: 0.5
       }
     },
     { 
@@ -1359,18 +1278,6 @@ function CreativeVisualizerPage() {
         speed: 1.0,
         centerX: 0.5,
         centerY: 0.5
-      }
-    },
-    { 
-      id: 'shatter', 
-      name: 'Shatter', 
-      description: 'Voronoi-based glass shatter distortion',
-      category: 'Distort',
-      rarity: 'Mythic',
-      parameters: {
-        intensity: 0.5,
-        scale: 1.0,
-        speed: 0.5
       }
     },
     { 
@@ -1527,19 +1434,6 @@ function CreativeVisualizerPage() {
       }
     },
     { 
-      id: 'reflectiveSurface', 
-      name: 'Reflective Surface', 
-      description: 'Planar reflective surface',
-      category: 'Misc',
-      rarity: 'Rare',
-      parameters: {
-        reflectivity: 0.8,
-        roughness: 0.2,
-        tint: '#ffffff',
-        opacity: 1.0
-      }
-    },
-    { 
       id: 'replicate', 
       name: 'Replicate', 
       description: 'Trail and aberration effect',
@@ -1577,32 +1471,6 @@ function CreativeVisualizerPage() {
     },
     // Light Category Effects
     { 
-      id: 'light2d', 
-      name: '2D Light', 
-      description: 'Screen-space 2D point light with shadows',
-      category: 'Light',
-      rarity: 'Common',
-      parameters: {
-        intensity: 0.5,
-        lightX: 0.5,
-        lightY: 0.5,
-        color: '#fa1ee3'
-      }
-    },
-    { 
-      id: 'aurora', 
-      name: 'Aurora', 
-      description: 'Procedural Aurora Borealis effect',
-      category: 'Light',
-      rarity: 'Rare',
-      parameters: {
-        intensity: 0.8,
-        speed: 0.5,
-        color1: '#00ff00',
-        color2: '#8f00ff'
-      }
-    },
-    { 
       id: 'beam', 
       name: 'Beam', 
       description: 'Animated scanning light beam',
@@ -1614,18 +1482,6 @@ function CreativeVisualizerPage() {
         width: 0.5,
         angle: 0.0,
         color: '#661aff'
-      }
-    },
-    { 
-      id: 'bloom', 
-      name: 'Bloom', 
-      description: 'High-quality bloom effect',
-      category: 'Light',
-      rarity: 'Mythic',
-      parameters: {
-        intensity: 1.0,
-        threshold: 0.5,
-        radius: 1.0
       }
     },
     { 
@@ -1656,20 +1512,6 @@ function CreativeVisualizerPage() {
       }
     },
     { 
-      id: 'spotLight', 
-      name: 'Spot Light', 
-      description: 'Screen-space spotlight with bump mapping',
-      category: 'Light',
-      rarity: 'Rare',
-      parameters: {
-        intensity: 1.5,
-        radius: 0.5,
-        lightX: 0.5,
-        lightY: 0.5,
-        color: '#fa1ee3'
-      }
-    },
-    { 
       id: 'waterCaustics', 
       name: 'Water Caustics', 
       description: 'Water surface caustics simulation',
@@ -1683,20 +1525,7 @@ function CreativeVisualizerPage() {
       }
     },
     // Filter Category Effects
-    { 
-      id: 'bloomFilter', 
-      name: 'Bloom Filter', 
-      description: 'Post-processing bloom with adjustable threshold and softness',
-      category: 'Filters',
-      rarity: 'Rare',
-      parameters: {
-        intensity: 0.75,
-        threshold: 0.55,
-        softness: 0.35,
-        radius: 0.35
-      }
-    },
-    // HUD Overlay Effects
+    // Overlay Effects
     { 
       id: 'waveform', 
       name: 'Waveform Overlay', 
@@ -1743,14 +1572,6 @@ function CreativeVisualizerPage() {
       description: 'FFT-based frequency spectrum visualization',
       category: 'Overlays',
       rarity: 'Rare',
-      parameters: {}
-    },
-    { 
-      id: 'midiMeter', 
-      name: 'MIDI Activity Meter', 
-      description: 'Real-time MIDI note and velocity visualization',
-      category: 'Overlays',
-      rarity: 'Common',
       parameters: {}
     },
     { 
@@ -1864,7 +1685,7 @@ function CreativeVisualizerPage() {
     // Check if this is an overlay layer - overlays have their own parameter definitions
     const overlayLayer = layers.find(l => l.id === editingEffectId && l.type === 'overlay');
     if (overlayLayer) {
-      // Overlay parameter definitions - these match OVERLAY_SETTINGS in HudOverlayParameterModal.tsx
+      // Overlay parameter definitions
       const overlayParameters: Record<string, Record<string, any>> = {
         waveform: {
           color: overlayLayer.settings?.color || '#4db3fa',
@@ -1919,12 +1740,6 @@ function CreativeVisualizerPage() {
           barColor: overlayLayer.settings?.barColor || '#00ffff',
           showFrequencyLabels: overlayLayer.settings?.showFrequencyLabels || false,
           fftSize: overlayLayer.settings?.fftSize || 2048,
-          cornerRadius: overlayLayer.settings?.cornerRadius ?? 0,
-          glassmorphism: overlayLayer.settings?.glassmorphism || false,
-        },
-        midiMeter: {
-          showNoteNames: overlayLayer.settings?.showNoteNames || false,
-          color: overlayLayer.settings?.color || '#ff00ff',
           cornerRadius: overlayLayer.settings?.cornerRadius ?? 0,
           glassmorphism: overlayLayer.settings?.glassmorphism || false,
         },
@@ -3057,13 +2872,6 @@ function CreativeVisualizerPage() {
                       onSelectedEffectsChange={() => {}} // <-- Added no-op
                       visualizerRef={visualizerRef}
                   >
-                    {/* HUD Overlays rendered inside canvas container so they're constrained to canvas bounds */}
-                    <div className="absolute inset-0 pointer-events-none z-20 overflow-hidden">
-                      <HudOverlayRenderer 
-                        stemUrlMap={asyncStemUrlMap} 
-                        cachedAnalysis={audioAnalysis.cachedAnalysis || []}
-                      />
-                    </div>
                   </ThreeVisualizer>
 
 

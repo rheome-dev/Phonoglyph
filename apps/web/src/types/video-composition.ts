@@ -43,7 +43,6 @@ export type OverlayType =
   | 'stereometer'
   | 'oscilloscope'
   | 'spectrumAnalyzer'
-  | 'midiMeter'
   | 'vuMeter'
   | 'chromaWheel'
   | 'consoleFeed';
@@ -52,8 +51,6 @@ export type EffectType =
   | 'metaballs'
   | 'particles'
   | 'particleNetwork'
-  | 'midihud'
-  | 'bloom'
   | 'imageSlideshow'
   | OverlayType;
 

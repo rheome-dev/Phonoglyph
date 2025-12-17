@@ -3,7 +3,6 @@ import { MetaballsEffect } from './MetaballsEffect';
 import { ParticleNetworkEffect } from './ParticleNetworkEffect';
 import { ImageSlideshowEffect } from './ImageSlideshowEffect';
 import { AsciiFilterEffect } from './AsciiFilterEffect';
-import { BloomFilterEffect } from './BloomFilterEffect';
 
 // Stylize category imports
 import { ChromaticAbberationEffect } from './ChromaticAbberationEffect';
@@ -20,23 +19,16 @@ import { BlurEffect } from './BlurEffect';
 import { BokehEffect } from './BokehEffect';
 import { DiffusionEffect } from './DiffusionEffect';
 import { FogEffect } from './FogEffect';
-import { MiniBlurEffect } from './MiniBlurEffect';
-import { NoiseBlurEffect } from './NoiseBlurEffect';
 import { ProgressiveBlurEffect } from './ProgressiveBlurEffect';
 import { RadialBlurEffect } from './RadialBlurEffect';
-import { ZoomBlurEffect } from './ZoomBlurEffect';
 
 // Distort category imports
 import { BulgeEffect } from './BulgeEffect';
-import { ExtendEffect } from './ExtendEffect';
 import { FbmEffect } from './FbmEffect';
-import { FlowfieldEffect } from './FlowfieldEffect';
-import { LensDistortionEffect } from './LensDistortionEffect';
 import { LiquifyEffect } from './LiquifyEffect';
 import { NoiseEffect } from './NoiseEffect';
 import { PolarEffect } from './PolarEffect';
 import { RippleEffect } from './RippleEffect';
-import { ShatterEffect } from './ShatterEffect';
 import { SineWavesEffect } from './SineWavesEffect';
 import { SkyboxEffect } from './SkyboxEffect';
 import { StretchEffect } from './StretchEffect';
@@ -46,13 +38,9 @@ import { WaterRipplesEffect } from './WaterRipplesEffect';
 import { WavesEffect } from './WavesEffect';
 
 // Light category imports
-import { Light2DEffect } from './Light2DEffect';
-import { AuroraEffect } from './AuroraEffect';
 import { BeamEffect } from './BeamEffect';
-import { BloomEffect } from './BloomEffect';
 import { GodRaysEffect } from './GodRaysEffect';
 import { LightTrailEffect } from './LightTrailEffect';
-import { SpotLightEffect } from './SpotLightEffect';
 import { WaterCausticsEffect } from './WaterCausticsEffect';
 
 // Misc category imports
@@ -61,7 +49,6 @@ import { GlitterEffect } from './GlitterEffect';
 import { GradientFillEffect } from './GradientFillEffect';
 import { NoiseFillEffect } from './NoiseFillEffect';
 import { PatternEffect } from './PatternEffect';
-import { ReflectiveSurfaceEffect } from './ReflectiveSurfaceEffect';
 import { ReplicateEffect } from './ReplicateEffect';
 import { VideoEffect } from './VideoEffect';
 import { WispsEffect } from './WispsEffect';
@@ -254,21 +241,6 @@ EffectRegistry.register({
 });
 
 EffectRegistry.register({
-  id: 'zoomBlur',
-  name: 'Zoom Blur',
-  description: 'Radial zoom blur from a center point',
-  category: 'blur',
-  version: '1.0.0',
-  constructor: ZoomBlurEffect,
-  defaultConfig: {
-    intensity: 0.4,
-    centerX: 0.5,
-    centerY: 0.5,
-    samples: 8
-  }
-});
-
-EffectRegistry.register({
   id: 'radialBlur',
   name: 'Radial Blur',
   description: 'Rotational blur around a center point',
@@ -325,31 +297,6 @@ EffectRegistry.register({
 });
 
 EffectRegistry.register({
-  id: 'miniBlur',
-  name: 'Mini Blur',
-  description: 'Fast lightweight blur',
-  category: 'blur',
-  version: '1.0.0',
-  constructor: MiniBlurEffect,
-  defaultConfig: {
-    intensity: 0.5
-  }
-});
-
-EffectRegistry.register({
-  id: 'noiseBlur',
-  name: 'Noise Blur',
-  description: 'Noise-driven directional blur',
-  category: 'blur',
-  version: '1.0.0',
-  constructor: NoiseBlurEffect,
-  defaultConfig: {
-    intensity: 0.5,
-    scale: 1.5
-  }
-});
-
-EffectRegistry.register({
   id: 'progressiveBlur',
   name: 'Progressive Blur',
   description: 'Blur that increases with distance from center',
@@ -381,20 +328,6 @@ EffectRegistry.register({
 });
 
 EffectRegistry.register({
-  id: 'extend',
-  name: 'Extend',
-  description: 'Intersection-based linear stretch distortion',
-  category: 'distort',
-  version: '1.0.0',
-  constructor: ExtendEffect,
-  defaultConfig: {
-    intensity: 0.5,
-    angle1: 90.0,
-    angle2: 180.0
-  }
-});
-
-EffectRegistry.register({
   id: 'fbm',
   name: 'FBM Distortion',
   description: 'Fluid marble-like distortion using Fractal Brownian Motion',
@@ -405,34 +338,6 @@ EffectRegistry.register({
     intensity: 0.5,
     speed: 0.5,
     scale: 1.0
-  }
-});
-
-EffectRegistry.register({
-  id: 'flowfield',
-  name: 'Flowfield',
-  description: 'Fluid flow distortion using Perlin noise',
-  category: 'distort',
-  version: '1.0.0',
-  constructor: FlowfieldEffect,
-  defaultConfig: {
-    intensity: 0.5,
-    speed: 0.5,
-    scale: 1.0
-  }
-});
-
-EffectRegistry.register({
-  id: 'lensDistortion',
-  name: 'Lens Distortion',
-  description: 'Lens barrel/pincushion distortion with chromatic aberration',
-  category: 'distort',
-  version: '1.0.0',
-  constructor: LensDistortionEffect,
-  defaultConfig: {
-    distortion: 0.5,
-    type: 0,
-    chromaticAberration: 0.5
   }
 });
 
@@ -492,20 +397,6 @@ EffectRegistry.register({
     speed: 1.0,
     centerX: 0.5,
     centerY: 0.5
-  }
-});
-
-EffectRegistry.register({
-  id: 'shatter',
-  name: 'Shatter',
-  description: 'Voronoi-based glass shatter distortion',
-  category: 'distort',
-  version: '1.0.0',
-  constructor: ShatterEffect,
-  defaultConfig: {
-    intensity: 0.5,
-    scale: 1.0,
-    speed: 0.5
   }
 });
 
@@ -612,36 +503,6 @@ EffectRegistry.register({
 // LIGHT CATEGORY EFFECTS
 
 EffectRegistry.register({
-  id: 'light2d',
-  name: '2D Light',
-  description: 'Screen-space 2D point light with shadows',
-  category: 'Light',
-  version: '1.0.0',
-  constructor: Light2DEffect,
-  defaultConfig: {
-    intensity: 0.5,
-    lightX: 0.5,
-    lightY: 0.5,
-    color: '#fa1ee3'
-  }
-});
-
-EffectRegistry.register({
-  id: 'aurora',
-  name: 'Aurora',
-  description: 'Procedural Aurora Borealis effect',
-  category: 'Light',
-  version: '1.0.0',
-  constructor: AuroraEffect,
-  defaultConfig: {
-    intensity: 0.8,
-    speed: 0.5,
-    color1: '#00ff00',
-    color2: '#8f00ff'
-  }
-});
-
-EffectRegistry.register({
   id: 'beam',
   name: 'Beam',
   description: 'Animated scanning light beam',
@@ -654,20 +515,6 @@ EffectRegistry.register({
     width: 0.5,
     angle: 0.0,
     color: '#661aff'
-  }
-});
-
-EffectRegistry.register({
-  id: 'bloom',
-  name: 'Bloom',
-  description: 'High-quality bloom effect',
-  category: 'Light',
-  version: '1.0.0',
-  constructor: BloomEffect,
-  defaultConfig: {
-    intensity: 1.0,
-    threshold: 0.5,
-    radius: 1.0
   }
 });
 
@@ -699,22 +546,6 @@ EffectRegistry.register({
     intensity: 1.0,
     trailLength: 0.8,
     color: '#0082f7'
-  }
-});
-
-EffectRegistry.register({
-  id: 'spotLight',
-  name: 'Spot Light',
-  description: 'Screen-space spotlight with bump mapping',
-  category: 'Light',
-  version: '1.0.0',
-  constructor: SpotLightEffect,
-  defaultConfig: {
-    intensity: 1.5,
-    radius: 0.5,
-    lightX: 0.5,
-    lightY: 0.5,
-    color: '#fa1ee3'
   }
 });
 
@@ -814,20 +645,6 @@ EffectRegistry.register({
 });
 
 EffectRegistry.register({
-  id: 'reflectiveSurface',
-  name: 'Reflective Surface',
-  description: 'Floor reflection effect',
-  category: 'Misc',
-  version: '1.0.0',
-  constructor: ReflectiveSurfaceEffect,
-  defaultConfig: {
-    intensity: 0.5,
-    blur: 0.5,
-    threshold: 0.5
-  }
-});
-
-EffectRegistry.register({
   id: 'replicate',
   name: 'Replicate',
   description: 'Trail and aberration effect',
@@ -870,24 +687,5 @@ EffectRegistry.register({
     scale: 1.0,
     intensity: 1.0,
     color: '#ffffff'
-  }
-});
-
-// BLOOM FILTER (To be replaced by light category bloom later)
-// Keeping this for now as it might be used elsewhere, but 'bloom' ID is now taken by the new effect.
-// I should rename the old one or remove it if it conflicts.
-// The old one has ID 'bloomFilter'. The new one has ID 'bloom'. So they don't conflict.
-EffectRegistry.register({
-  id: 'bloomFilter',
-  name: 'Bloom Filter',
-  description: 'Post-processing bloom with adjustable threshold and softness',
-  category: 'filter',
-  version: '1.0.0',
-  constructor: BloomFilterEffect,
-  defaultConfig: {
-    intensity: 0.75,
-    threshold: 0.55,
-    softness: 0.35,
-    radius: 0.35
   }
 });

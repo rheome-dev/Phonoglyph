@@ -10,7 +10,6 @@ import type { AudioAnalysisData as SimpleAudioAnalysisData } from '@/types/visua
 import type { AudioAnalysisData as CachedAudioAnalysisData } from '@/types/audio-analysis-data';
 import { debugLog } from '@/lib/utils';
 import { parseParamKey } from '@/lib/visualizer/paramKeys';
-import { RemotionOverlayRenderer } from './RemotionOverlayRenderer';
 
 /**
  * Helper function to extract audio feature values at a specific time from cached analysis data.
@@ -530,12 +529,6 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
         width={width}
         height={height}
         style={{ width: '100%', height: '100%', display: 'block' }}
-      />
-      <RemotionOverlayRenderer
-        layers={actualLayers}
-        audioAnalysisData={actualAudioAnalysisData as unknown as CachedAudioAnalysisData[]}
-        currentFrame={frame}
-        fps={fps}
       />
       {/* 4. Render Only Master Audio */}
       {actualMasterAudioUrl && <Audio src={actualMasterAudioUrl} />}
