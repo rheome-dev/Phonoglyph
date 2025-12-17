@@ -1459,6 +1459,122 @@ function CreativeVisualizerPage() {
         speed: 1.0
       }
     },
+    // Misc Category Effects
+    { 
+      id: 'circle', 
+      name: 'Circle', 
+      description: 'Circular mask overlay',
+      category: 'Misc',
+      rarity: 'Common',
+      parameters: {
+        radius: 0.25,
+        feather: 0.1,
+        centerX: 0.5,
+        centerY: 0.5,
+        color: '#661aff',
+        opacity: 1.0
+      }
+    },
+    { 
+      id: 'glitter', 
+      name: 'Glitter', 
+      description: 'Voronoi-based sparkle effect',
+      category: 'Misc',
+      rarity: 'Rare',
+      parameters: {
+        intensity: 1.0,
+        scale: 1.0,
+        speed: 0.5
+      }
+    },
+    { 
+      id: 'gradientFill', 
+      name: 'Gradient Fill', 
+      description: 'Two-color gradient fill overlay',
+      category: 'Misc',
+      rarity: 'Common',
+      parameters: {
+        color1: '#ff00ff',
+        color2: '#00ffff',
+        angle: 45.0,
+        opacity: 1.0
+      }
+    },
+    { 
+      id: 'noiseFill', 
+      name: 'Noise Fill', 
+      description: 'Procedural noise fill overlay',
+      category: 'Misc',
+      rarity: 'Common',
+      parameters: {
+        scale: 2.0,
+        speed: 0.5,
+        contrast: 1.0,
+        opacity: 1.0
+      }
+    },
+    { 
+      id: 'pattern', 
+      name: 'Pattern', 
+      description: 'Procedural pattern generator',
+      category: 'Misc',
+      rarity: 'Common',
+      parameters: {
+        scale: 1.0,
+        speed: 0.5,
+        contrast: 1.0,
+        opacity: 1.0
+      }
+    },
+    { 
+      id: 'reflectiveSurface', 
+      name: 'Reflective Surface', 
+      description: 'Planar reflective surface',
+      category: 'Misc',
+      rarity: 'Rare',
+      parameters: {
+        reflectivity: 0.8,
+        roughness: 0.2,
+        tint: '#ffffff',
+        opacity: 1.0
+      }
+    },
+    { 
+      id: 'replicate', 
+      name: 'Replicate', 
+      description: 'Trail and aberration effect',
+      category: 'Misc',
+      rarity: 'Rare',
+      parameters: {
+        spacing: 0.35,
+        speed: 0.5,
+        rotation: 0.0,
+        opacity: 1.0
+      }
+    },
+    { 
+      id: 'video', 
+      name: 'Video Overlay', 
+      description: 'Video texture overlay (requires video assignment)',
+      category: 'Misc',
+      rarity: 'Rare',
+      parameters: {
+        opacity: 1.0
+      }
+    },
+    { 
+      id: 'wisps', 
+      name: 'Wisps', 
+      description: 'Flowing smoke/wisp effect',
+      category: 'Misc',
+      rarity: 'Common',
+      parameters: {
+        speed: 0.5,
+        scale: 1.0,
+        intensity: 1.0,
+        color: '#ffffff'
+      }
+    },
     // Light Category Effects
     { 
       id: 'light2d', 
