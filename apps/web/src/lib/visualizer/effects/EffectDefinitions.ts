@@ -55,6 +55,17 @@ import { LightTrailEffect } from './LightTrailEffect';
 import { SpotLightEffect } from './SpotLightEffect';
 import { WaterCausticsEffect } from './WaterCausticsEffect';
 
+// Misc category imports
+import { CircleEffect } from './CircleEffect';
+import { GlitterEffect } from './GlitterEffect';
+import { GradientFillEffect } from './GradientFillEffect';
+import { NoiseFillEffect } from './NoiseFillEffect';
+import { PatternEffect } from './PatternEffect';
+import { ReflectiveSurfaceEffect } from './ReflectiveSurfaceEffect';
+import { ReplicateEffect } from './ReplicateEffect';
+import { VideoEffect } from './VideoEffect';
+import { WispsEffect } from './WispsEffect';
+
 // Register built-in effects at module import time
 EffectRegistry.register({
   id: 'metaballs',
@@ -719,6 +730,146 @@ EffectRegistry.register({
     speed: 0.5,
     refraction: 0.5,
     color: '#99b3e6'
+  }
+});
+
+// MISC CATEGORY EFFECTS
+
+EffectRegistry.register({
+  id: 'circle',
+  name: 'Circle',
+  description: 'Circular mask overlay',
+  category: 'Misc',
+  version: '1.0.0',
+  constructor: CircleEffect,
+  defaultConfig: {
+    radius: 0.25,
+    feather: 0.1,
+    centerX: 0.5,
+    centerY: 0.5,
+    color: '#661aff',
+    opacity: 1.0
+  }
+});
+
+EffectRegistry.register({
+  id: 'glitter',
+  name: 'Glitter',
+  description: 'Voronoi-based sparkle effect',
+  category: 'Misc',
+  version: '1.0.0',
+  constructor: GlitterEffect,
+  defaultConfig: {
+    intensity: 1.0,
+    scale: 1.0,
+    speed: 0.5
+  }
+});
+
+EffectRegistry.register({
+  id: 'gradientFill',
+  name: 'Gradient Fill',
+  description: 'Procedural linear gradient with OKLab mixing',
+  category: 'Misc',
+  version: '1.0.0',
+  constructor: GradientFillEffect,
+  defaultConfig: {
+    color1: '#000000',
+    color2: '#ffffff',
+    angle: 0.0,
+    speed: 0.0,
+    opacity: 1.0
+  }
+});
+
+EffectRegistry.register({
+  id: 'noiseFill',
+  name: 'Noise Fill',
+  description: 'Procedural BCC noise pattern',
+  category: 'Misc',
+  version: '1.0.0',
+  constructor: NoiseFillEffect,
+  defaultConfig: {
+    color1: '#ffd198',
+    color2: '#9600e6',
+    scale: 1.0,
+    speed: 0.5,
+    opacity: 1.0
+  }
+});
+
+EffectRegistry.register({
+  id: 'pattern',
+  name: 'Pattern',
+  description: 'Procedural geometric patterns',
+  category: 'Misc',
+  version: '1.0.0',
+  constructor: PatternEffect,
+  defaultConfig: {
+    patternType: 0,
+    scale: 1.0,
+    color: '#fa1ee3',
+    opacity: 1.0
+  }
+});
+
+EffectRegistry.register({
+  id: 'reflectiveSurface',
+  name: 'Reflective Surface',
+  description: 'Floor reflection effect',
+  category: 'Misc',
+  version: '1.0.0',
+  constructor: ReflectiveSurfaceEffect,
+  defaultConfig: {
+    intensity: 0.5,
+    blur: 0.5,
+    threshold: 0.5
+  }
+});
+
+EffectRegistry.register({
+  id: 'replicate',
+  name: 'Replicate',
+  description: 'Trail and aberration effect',
+  category: 'Misc',
+  version: '1.0.0',
+  constructor: ReplicateEffect,
+  defaultConfig: {
+    spacing: 0.35,
+    speed: 0.5,
+    rotation: 0.0,
+    opacity: 1.0
+  }
+});
+
+EffectRegistry.register({
+  id: 'video',
+  name: 'Video Overlay',
+  description: 'Video texture overlay (requires video source)',
+  category: 'Misc',
+  version: '1.0.0',
+  constructor: VideoEffect,
+  defaultConfig: {
+    scale: 1.0,
+    rotation: 0.0,
+    posX: 0.5,
+    posY: 0.5,
+    opacity: 1.0
+  }
+});
+
+EffectRegistry.register({
+  id: 'wisps',
+  name: 'Wisps',
+  description: 'Flowing smoke/wisp effect',
+  category: 'Misc',
+  version: '1.0.0',
+  constructor: WispsEffect,
+  defaultConfig: {
+    speed: 0.5,
+    scale: 1.0,
+    intensity: 1.0,
+    color: '#ffffff'
   }
 });
 
