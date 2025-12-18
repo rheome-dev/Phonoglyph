@@ -102,6 +102,19 @@ const triggerRenderSchema = z.object({
   audioAnalysisData: z.array(audioAnalysisDataSchema),
   visualizationSettings: visualizationSettingsSchema,
   masterAudioUrl: z.string(),
+  // Audio feature mappings for effect parameters (optional)
+  mappings: z.record(
+    z.string(),
+    z.object({
+      featureId: z.string().nullable(),
+      modulationAmount: z.number(),
+    })
+  ).optional(),
+  // Base parameter values before modulation (optional)
+  baseParameterValues: z.record(
+    z.string(),
+    z.record(z.string(), z.any())
+  ).optional(),
 });
 
 export const renderRouter = router({
@@ -150,6 +163,9 @@ export const renderRouter = router({
           codec: 'h264',
           concurrencyPerRender: 25,
           logLevel: 'verbose',
+          chromiumOptions: {
+            gl: 'swangle', // Force software rendering for Lambda (no GPU available)
+          },
         } as any);
 
         logger.log('Render triggered successfully:', { renderId, bucketName });

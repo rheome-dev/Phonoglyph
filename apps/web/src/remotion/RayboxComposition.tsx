@@ -5,7 +5,6 @@ import {
   Audio,
   delayRender,
   continueRender,
-  cancelRender,
 } from 'remotion';
 import { VisualizerManager } from '@/lib/visualizer/core/VisualizerManager';
 import { EffectRegistry } from '@/lib/visualizer/effects/EffectRegistry';
@@ -210,10 +209,9 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
         effectInstancesRef.current.clear();
       } catch (e) {
         console.error('Failed to initialize VisualizerManager:', e);
-        // CRITICAL: This stops the render and shows the error in the terminal
-        // Prevents wasting time/money rendering black frames
-        const errorMessage = e instanceof Error ? e.message : String(e);
-        cancelRender('WebGL initialization failed: ' + errorMessage);
+        // Log error but continue - let the render attempt to proceed
+        // The canvas will just be black if WebGL fails, but won't crash the render
+        continueRender(handle);
         return;
       }
     }

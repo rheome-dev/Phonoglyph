@@ -14,12 +14,9 @@ Config.overrideWebpackConfig((config) => {
   return config;
 });
 
-// Force software rendering for stability in headless mode
+// Force software rendering for stability in headless mode (CLI commands only)
 // swangle is the most stable for environments where hardware acceleration is finicky
+// Note: This only affects CLI commands. For Lambda, set chromiumOptions.gl in renderMediaOnLambda
+// For preview, use --gl flag or CHROMIUM_OPENGL_RENDERER environment variable
 Config.setChromiumOpenGlRenderer('swangle');
-
-// Disable hardware acceleration in headless mode to prevent GPU issues
-Config.setChromiumOptions({
-  args: ['--disable-gpu', '--disable-software-rasterizer'],
-});
 
