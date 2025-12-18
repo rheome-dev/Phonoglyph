@@ -3,6 +3,8 @@ import { router, protectedProcedure } from '../trpc';
 import { TRPCError } from '@trpc/server';
 import { renderMediaOnLambda, getFunctions, getRenderProgress } from '@remotion/lambda';
 import { logger } from '../lib/logger';
+import { r2Client, BUCKET_NAME } from '../services/r2-storage';
+import { PutObjectCommand } from '@aws-sdk/client-s3';
 
 // Zod schemas for the render payload
 const audioBindingSchema = z.object({
@@ -126,6 +128,26 @@ export const renderRouter = router({
         const serveUrl = 'https://remotionlambda-useast1-zq6uoa8xhi.s3.us-east-1.amazonaws.com/sites/raybox-renderer/index.html';
         const composition = 'RayboxMain';
 
+        // 1. Generate a unique key for this render's analysis
+        const analysisKey = `analysis-cache/${ctx.user.id}-${Date.now()}.json`;
+
+        // 2. Upload the heavy audioAnalysisData to R2 as a static file
+        // We do this here so the Lambda doesn't have to talk to Supabase
+        await r2Client.send(new PutObjectCommand({
+          Bucket: BUCKET_NAME,
+          Key: analysisKey,
+          Body: JSON.stringify(input.audioAnalysisData),
+          ContentType: 'application/json',
+        }));
+
+        const analysisUrl = `https://assets.raybox.fm/${analysisKey}`;
+
+        logger.log('Uploaded analysis data to R2:', {
+          key: analysisKey,
+          url: analysisUrl,
+          dataSize: JSON.stringify(input.audioAnalysisData).length,
+        });
+
         // Try to get the function name dynamically, fallback to standard name
         let functionName = 'remotion-render-4-0-390-mem2048mb-disk2048mb-120sec';
         
@@ -152,14 +174,20 @@ export const renderRouter = router({
           serveUrl,
           composition,
           userId: ctx.user.id,
+          analysisUrl,
         });
 
+        // 3. Trigger Lambda with SLIM props
         const { renderId, bucketName } = await renderMediaOnLambda({
           region,
           functionName,
           serveUrl,
           composition,
-          inputProps: input,
+          inputProps: {
+            ...input,
+            audioAnalysisData: [], // EMPTY THIS OUT to keep payload small
+            analysisUrl: analysisUrl, // PASS THE LINK INSTEAD
+          },
           codec: 'h264',
           concurrencyPerRender: 25,
           logLevel: 'verbose',

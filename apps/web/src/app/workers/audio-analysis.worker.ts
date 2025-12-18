@@ -46,6 +46,38 @@ function toArray(value: any): number[] | null {
   return null;
 }
 
+/**
+ * Recursively sanitize an object to ensure all TypedArrays are converted to regular arrays.
+ * This is critical for JSON.stringify to work properly in the API step.
+ */
+function sanitizeForJSON(obj: any): any {
+  if (obj === null || obj === undefined) return obj;
+  
+  // Convert TypedArrays to regular arrays
+  if (ArrayBuffer.isView(obj) && !(obj instanceof DataView)) {
+    return Array.from(obj as unknown as ArrayLike<number>);
+  }
+  
+  // Handle arrays
+  if (Array.isArray(obj)) {
+    return obj.map(sanitizeForJSON);
+  }
+  
+  // Handle objects
+  if (typeof obj === 'object') {
+    const sanitized: any = {};
+    for (const key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        sanitized[key] = sanitizeForJSON(obj[key]);
+      }
+    }
+    return sanitized;
+  }
+  
+  // Primitives pass through
+  return obj;
+}
+
 function generateWaveformData(channelData: Float32Array, duration: number, points = 1024) {
   const totalSamples = channelData.length;
   const samplesPerPoint = Math.max(1, Math.floor(totalSamples / points));
@@ -132,15 +164,34 @@ function performFullAnalysis(
     if (features) {
       for (const feature of featuresToExtract) {
         const value = features[feature];
-        if (Array.isArray(value)) {
+        // Convert TypedArrays (like Float32Array from amplitudeSpectrum) to regular arrays
+        const arrayValue = toArray(value);
+        
+        if (arrayValue !== null) {
+          // It's an array (regular or converted from TypedArray)
+          const sanitizedArray = arrayValue.map(v => (typeof v === 'number' && isFinite(v) ? v : 0));
+          if (feature === 'chroma') {
+            const dominantChromaIndex = sanitizedArray.indexOf(Math.max(...sanitizedArray));
+            featureFrames[feature].push(dominantChromaIndex);
+          } else if (feature === 'amplitudeSpectrum') {
+            // For amplitudeSpectrum, we need to store the full array, not just the first value
+            // But since we're storing per-frame, we'll store the first value for now
+            // If full spectrum is needed, it should be stored differently
+            featureFrames[feature].push(sanitizedArray[0] || 0);
+          } else {
+            featureFrames[feature].push(sanitizedArray[0] || 0); // e.g., for mfcc
+          }
+        } else if (Array.isArray(value)) {
+          // Fallback: regular array that toArray didn't catch (shouldn't happen, but safe)
           const sanitizedArray = value.map(v => (typeof v === 'number' && isFinite(v) ? v : 0));
           if (feature === 'chroma') {
             const dominantChromaIndex = sanitizedArray.indexOf(Math.max(...sanitizedArray));
             featureFrames[feature].push(dominantChromaIndex);
           } else {
-            featureFrames[feature].push(sanitizedArray[0] || 0); // e.g., for mfcc
+            featureFrames[feature].push(sanitizedArray[0] || 0);
           }
         } else {
+          // Single numeric value
           const sanitizedValue = (typeof value === 'number' && isFinite(value)) ? value : 0;
           featureFrames[feature].push(sanitizedValue);
         }
@@ -167,9 +218,12 @@ function performFullAnalysis(
     if (onProgress) onProgress(currentPosition / channelData.length);
   }
 
-  // Final cleanup and shaping
+  // Final cleanup and shaping - ensure all TypedArrays are converted to regular arrays
   const flatFeatures: Record<string, any> = { ...featureFrames, frameTimes };
-  return flatFeatures as Record<string, number[] | number>;
+  
+  // Recursively convert any remaining TypedArrays to regular arrays
+  const sanitizedFeatures = sanitizeForJSON(flatFeatures);
+  return sanitizedFeatures as Record<string, number[] | number>;
 }
 
 function performEnhancedAnalysis(
@@ -324,7 +378,10 @@ self.onmessage = function (event: MessageEvent<WorkerMessage>) {
           analysisDuration: 0,
         },
       };
-      (self as any).postMessage({ type: 'ANALYSIS_COMPLETE', data: { fileId, result } });
+      
+      // Final sanitization pass to ensure no TypedArrays remain
+      const sanitizedResult = sanitizeForJSON(result);
+      (self as any).postMessage({ type: 'ANALYSIS_COMPLETE', data: { fileId, result: sanitizedResult } });
     } catch (error: any) {
       (self as any).postMessage({ type: 'ANALYSIS_ERROR', data: { fileId, error: error?.message || 'Analysis failed' } });
     }

@@ -54,6 +54,8 @@ export interface RayboxCompositionProps extends Record<string, unknown> {
   mappings?: Record<string, { featureId: string | null; modulationAmount: number }>;
   // Base parameter values before modulation
   baseParameterValues?: Record<string, Record<string, any>>;
+  // URL to fetch analysis data from R2 (used when payload is too large for Lambda)
+  analysisUrl?: string;
 }
 
 const defaultProps: RayboxCompositionProps = {
@@ -106,11 +108,30 @@ const resolveAspectRatioDimensions = (
   return ASPECT_RATIO_DIMENSIONS['9:16'];
 };
 
-const calculateMetadata: CalculateMetadataFunction<RayboxCompositionProps> = ({
+const calculateMetadata: CalculateMetadataFunction<RayboxCompositionProps> = async ({
   props,
 }) => {
   // FPS is set on the Composition component (30), so we use that value here
   const safeFps = 30;
+
+  let finalAudioData = props.audioAnalysisData;
+
+  // If the API gave us a URL because the data was too big for the trigger payload:
+  if (props.analysisUrl) {
+    console.log('☁️ Fetching heavy analysis from R2...');
+    try {
+      const res = await fetch(props.analysisUrl);
+      if (!res.ok) {
+        throw new Error(`Failed to fetch analysis data: ${res.status} ${res.statusText}`);
+      }
+      finalAudioData = await res.json();
+      console.log(`✅ Fetched ${finalAudioData.length} analysis entries from R2`);
+    } catch (error) {
+      console.error('❌ Failed to fetch analysis data from R2:', error);
+      // Fall back to empty array if fetch fails
+      finalAudioData = [];
+    }
+  }
 
   // Debug logging for payload visibility in the terminal
   if (!props.layers || props.layers.length === 0) {
@@ -148,6 +169,11 @@ const calculateMetadata: CalculateMetadataFunction<RayboxCompositionProps> = ({
     }
   }
 
+  // Calculate duration based on the actual data we just fetched
+  if ((duration == null || !Number.isFinite(duration) || duration <= 0) && finalAudioData.length > 0) {
+    duration = finalAudioData[0]?.metadata?.duration || 30;
+  }
+
   // Default to 30 seconds if we couldn't determine duration
   if (duration == null || !Number.isFinite(duration) || duration <= 0) {
     duration = 30;
@@ -157,7 +183,10 @@ const calculateMetadata: CalculateMetadataFunction<RayboxCompositionProps> = ({
     durationInFrames: Math.ceil(duration * safeFps),
     width,
     height,
-    props,
+    props: {
+      ...props,
+      audioAnalysisData: finalAudioData, // Inject the data into the component props
+    },
   };
 };
 
