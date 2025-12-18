@@ -5,6 +5,7 @@ import {
   Audio,
   delayRender,
   continueRender,
+  cancelRender,
 } from 'remotion';
 import { VisualizerManager } from '@/lib/visualizer/core/VisualizerManager';
 import { EffectRegistry } from '@/lib/visualizer/effects/EffectRegistry';
@@ -14,6 +15,7 @@ import type { RayboxCompositionProps } from './Root';
 import type { AudioAnalysisData as SimpleAudioAnalysisData } from '@/types/visualizer';
 import type { AudioAnalysisData as CachedAudioAnalysisData } from '@/types/audio-analysis-data';
 import { parseParamKey } from '@/lib/visualizer/paramKeys';
+import { debugLog } from '@/lib/utils';
 
 const VALID_STEMS = new Set(['master', 'drums', 'bass', 'vocals', 'other']);
 
@@ -185,13 +187,15 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
   const visualizerManagerRef = useRef<VisualizerManager | null>(null);
   const effectInstancesRef = useRef<Map<string, any>>(new Map());
   const [handle] = useState(() => delayRender('Initializing Visualizer'));
+  const isInitializedRef = useRef(false);
 
   const actualLayers = layers || [];
   const actualAudioAnalysisData = audioAnalysisData || [];
 
-  // 1. Initialize Visualizer (useLayoutEffect)
+  // 1. Initialize Visualizer (useLayoutEffect) - runs once on mount
   useLayoutEffect(() => {
-    if (!canvasRef.current) return;
+    if (!canvasRef.current || isInitializedRef.current) return;
+    
     let isNewManager = false;
 
     if (!visualizerManagerRef.current) {
@@ -205,7 +209,12 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
         // If a new manager is created, any cached effect refs are stale.
         effectInstancesRef.current.clear();
       } catch (e) {
-        console.error(e);
+        console.error('Failed to initialize VisualizerManager:', e);
+        // CRITICAL: This stops the render and shows the error in the terminal
+        // Prevents wasting time/money rendering black frames
+        const errorMessage = e instanceof Error ? e.message : String(e);
+        cancelRender('WebGL initialization failed: ' + errorMessage);
+        return;
       }
     }
 
@@ -236,13 +245,49 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
         }
       }
     }
-  }, [width, height, fps, actualLayers]);
 
-  // 2. Render Loop (useLayoutEffect)
+    // Wait for assets to load before continuing
+    const waitForAssets = async () => {
+      try {
+        const asyncEffects = Array.from(effectInstancesRef.current.values()).filter(
+          (effect) => typeof (effect as any).waitForImages === 'function',
+        );
+
+        if (asyncEffects.length > 0) {
+          // 10s timeout safety to prevent hanging forever on bad URLs
+          await Promise.race([
+            Promise.all(asyncEffects.map((effect) => (effect as any).waitForImages())),
+            new Promise((r) => setTimeout(r, 10000)),
+          ]);
+        }
+      } catch (e) {
+        console.warn('⚠️ Asset waiting warning:', e);
+      } finally {
+        isInitializedRef.current = true;
+        continueRender(handle);
+      }
+    };
+
+    waitForAssets();
+  }, [width, height, fps, actualLayers]); // Include actualLayers to update effects on change
+
+  // 2. Render Loop (useLayoutEffect) - runs on every frame
   useLayoutEffect(() => {
-    if (!visualizerManagerRef.current) return;
+    if (!visualizerManagerRef.current || !isInitializedRef.current) return;
+    
     const time = frame / fps;
     const deltaTime = 1 / fps;
+    const shouldLogMapping = frame < 3 || frame % Math.max(1, Math.round(fps)) === 0;
+    const mappingLogEntries: Array<{
+      paramKey: string;
+      layerId: string;
+      paramName: string;
+      baseValue: number;
+      rawValue: number;
+      knob: number;
+      delta: number;
+      finalValue: number;
+    }> = [];
 
     const fileId = actualAudioAnalysisData.find((a) => a.stemType === 'master')?.fileMetadataId;
     const audioData = extractAudioDataAtTime(
@@ -283,37 +328,46 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
 
         if (!Number.isNaN(finalValue)) {
           visualizerManagerRef.current?.updateEffectParameter(layerId, paramName, finalValue);
+          if (shouldLogMapping) {
+            mappingLogEntries.push({
+              paramKey,
+              layerId,
+              paramName,
+              baseValue,
+              rawValue,
+              knob,
+              delta,
+              finalValue,
+            });
+          }
         }
+      });
+    }
+
+    if (shouldLogMapping && mappingLogEntries.length > 0) {
+      debugLog.log('🎚️ Audio mapping frame snapshot', {
+        frame,
+        time: Number(time.toFixed(3)),
+        entries: mappingLogEntries,
       });
     }
 
     visualizerManagerRef.current.updateTimelineState(actualLayers, time);
     if (audioData) visualizerManagerRef.current.setAudioData(audioData);
+    
+    // Render the frame - ensure this completes before proceeding
     visualizerManagerRef.current.renderFrame(time * 1000, deltaTime);
-  }, [frame, fps, actualLayers, actualAudioAnalysisData, mappings, baseParameterValues, visualizationSettings]);
-
-  // 3. Asset Waiter (Safety)
-  useLayoutEffect(() => {
-    const effectLayers = actualLayers.filter((l) => l.type === 'effect');
-    if (effectLayers.length > 0 && effectInstancesRef.current.size === 0) return;
-
-    const waitForAssets = async () => {
-      try {
-        const asyncEffects = Array.from(effectInstancesRef.current.values()).filter(
-          (effect) => typeof (effect as any).waitForImages === 'function',
-        );
-        if (asyncEffects.length > 0) {
-          await Promise.race([
-            Promise.all(asyncEffects.map((effect) => (effect as any).waitForImages())),
-            new Promise((r) => setTimeout(r, 10000)),
-          ]);
-        }
-      } finally {
-        continueRender(handle);
+    
+    // CRITICAL: Force WebGL context to flush and finish commands to ensure canvas is ready for capture
+    // This ensures Remotion can properly read the canvas content before taking the screenshot
+    if (canvasRef.current) {
+      const gl = canvasRef.current.getContext('webgl2') || canvasRef.current.getContext('webgl');
+      if (gl) {
+        gl.flush(); // Flush all pending commands to the GPU
+        gl.finish(); // Force all WebGL commands to complete before returning
       }
-    };
-    waitForAssets();
-  }, [handle, actualLayers, effectInstancesRef.current.size]);
+    }
+  }, [frame, fps, actualLayers, actualAudioAnalysisData, mappings, baseParameterValues, visualizationSettings]);
 
   return (
     <div style={{ width, height, position: 'relative' }}>

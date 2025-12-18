@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { getRemotionEnvironment } from 'remotion';
 import { VisualEffect, VisualizerConfig, LiveMIDIData, AudioAnalysisData, VisualizerControls } from '@/types/visualizer';
 import { MultiLayerCompositor } from './MultiLayerCompositor';
 import { VisualizationPreset } from '@/types/stem-visualization';
@@ -100,6 +101,9 @@ export class VisualizerManager {
     this.camera.position.set(0, 0, 5);
     
     // Renderer setup with error handling and fallbacks
+    // Detect if we are currently rendering a video or still
+    const isRendering = getRemotionEnvironment().isRendering;
+    
     try {
       // First, check if canvas already has a context to avoid conflicts
       const existingContext = this.canvas.getContext('webgl2') || this.canvas.getContext('webgl');
@@ -109,14 +113,25 @@ export class VisualizerManager {
       
       this.renderer = new THREE.WebGLRenderer({
         canvas: this.canvas,
-        antialias: true,
+        antialias: !isRendering, // Disable AA during software render for speed
         alpha: true,
-        powerPreference: 'default', // Changed from high-performance to reduce resource usage
+        // CRITICAL: Only true during Remotion rendering
+        preserveDrawingBuffer: isRendering,
+        powerPreference: isRendering ? 'high-performance' : 'default',
         failIfMajorPerformanceCaveat: false // Allow software rendering
       });
       
+      // Verify WebGL context was created successfully
+      const gl = this.renderer.getContext();
+      if (!gl) {
+        throw new Error('Failed to create WebGL context. WebGL may not be supported in this environment.');
+      }
+      
+      // Log context version for debugging
+      const isWebGL2 = gl instanceof WebGL2RenderingContext;
       debugLog.log('✅ WebGL Renderer created successfully');
-      debugLog.log('🔧 WebGL Context:', this.renderer.getContext());
+      debugLog.log('🔧 WebGL Context:', isWebGL2 ? 'WebGL 2' : 'WebGL 1');
+      debugLog.log('🎬 Remotion rendering mode:', isRendering);
     } catch (error) {
       debugLog.error('❌ Primary WebGL renderer failed:', error);
       
@@ -125,26 +140,43 @@ export class VisualizerManager {
         debugLog.log('🔄 Attempting fallback renderer with minimal settings...');
         this.renderer = new THREE.WebGLRenderer({
           canvas: this.canvas,
-          antialias: false,
+          antialias: !isRendering,
           alpha: true,
-          powerPreference: 'low-power',
+          preserveDrawingBuffer: isRendering,
+          powerPreference: isRendering ? 'high-performance' : 'low-power',
           failIfMajorPerformanceCaveat: false
         });
+        
+        // Verify fallback context was created
+        const fallbackGl = this.renderer.getContext();
+        if (!fallbackGl) {
+          throw new Error('Fallback renderer failed to create WebGL context');
+        }
+        
+        const isWebGL2 = fallbackGl instanceof WebGL2RenderingContext;
         debugLog.log('✅ Fallback renderer created successfully');
+        debugLog.log('🔧 Fallback WebGL Context:', isWebGL2 ? 'WebGL 2' : 'WebGL 1');
       } catch (fallbackError) {
         debugLog.error('❌ Fallback renderer also failed:', fallbackError);
-        throw new Error('WebGL is not available. Please refresh the page and try again. If the problem persists, try closing other browser tabs or restarting your browser.');
+        const errorMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+        throw new Error(`WebGL initialization failed: ${errorMessage}. This may indicate a headless rendering environment issue. Check remotion.config.ts for GL backend settings.`);
       }
     }
     
     this.renderer.setSize(config.canvas.width, config.canvas.height);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, config.canvas.pixelRatio || 2));
-    this.renderer.setClearColor(0x000000, 0); // Transparent background for layer compositing
+    // Fix: Handle headless/server environments where window.devicePixelRatio doesn't exist
+    const devicePixelRatio = typeof window !== 'undefined' && window.devicePixelRatio 
+      ? window.devicePixelRatio 
+      : 1;
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, config.canvas.pixelRatio || 1));
+    // Fix: Use opaque background for Remotion rendering
+    // Transparent backgrounds can appear black in video output if not composited properly
+    // Use a dark background that will show content properly
+    this.renderer.setClearColor(0x000000, 1); // Opaque black background for video rendering
     
     const clearColor = this.renderer.getClearColor(new THREE.Color());
     const clearAlpha = this.renderer.getClearAlpha();
-    console.log('🎮 VisualizerManager: Renderer clear color =', clearColor.getHex().toString(16), 'alpha =', clearAlpha);
-    
+    debugLog.log('🎮 VisualizerManager: Renderer clear color =', clearColor.getHex().toString(16), 'alpha =', clearAlpha);
     debugLog.log('🎮 Renderer configured with size:', config.canvas.width, 'x', config.canvas.height);
     
     // Performance optimizations for 30fps
@@ -254,7 +286,7 @@ export class VisualizerManager {
   
   // Effect management
   public addEffect(layerId: string, effect: VisualEffect) {
-    console.log(`➕ [VisualizerManager] Adding effect: ${layerId}, type: ${effect.constructor.name}`);
+    debugLog.log(`➕ [VisualizerManager] Adding effect: ${layerId}, type: ${effect.constructor.name}`);
     try {
       debugLog.log(`🎨 Adding effect: ${effect.name} (for layer ${layerId})`);
       effect.init(this.renderer);
@@ -416,11 +448,11 @@ export class VisualizerManager {
     
     // Debug: Log effect and timeline state
     if (this.effects.size === 0) {
-      console.warn('⚠️ [VisualizerManager] No effects registered. Effects count:', this.effects.size);
+      debugLog.warn('⚠️ [VisualizerManager] No effects registered. Effects count:', this.effects.size);
     }
     
     if (this.timelineLayers.length === 0) {
-      console.warn('⚠️ [VisualizerManager] No timeline layers. Timeline layers count:', this.timelineLayers.length);
+      debugLog.warn('⚠️ [VisualizerManager] No timeline layers. Timeline layers count:', this.timelineLayers.length);
     }
     
     this.effects.forEach((effect, layerId) => {
@@ -434,7 +466,7 @@ export class VisualizerManager {
 
       // Debug logging for first few frames
       if (this.debugFrameCount < 5 && effectLayer) {
-        console.log(`🎬 [Frame ${this.debugFrameCount}] Layer ${layerId}:`, {
+        debugLog.log(`🎬 [Frame ${this.debugFrameCount}] Layer ${layerId}:`, {
           enabled: effect.enabled,
           currentTime: this.timelineCurrentTime,
           startTime: effectLayer.startTime,
@@ -461,7 +493,7 @@ export class VisualizerManager {
     });
     
     if (this.debugFrameCount < 5) {
-      console.log(`🎬 [Frame ${this.debugFrameCount}] Active effects: ${activeEffectCount}, Total effects: ${this.effects.size}, Timeline time: ${this.timelineCurrentTime.toFixed(3)}s`);
+      debugLog.log(`🎬 [Frame ${this.debugFrameCount}] Active effects: ${activeEffectCount}, Total effects: ${this.effects.size}, Timeline time: ${this.timelineCurrentTime.toFixed(3)}s`);
     }
     
     this.debugFrameCount++;
@@ -613,7 +645,7 @@ export class VisualizerManager {
             const oldValue = (effectInstance.parameters as any)[paramName];
             (effectInstance.parameters as any)[paramName] = value;
             if (isMetaballs) {
-              console.log('🔧 [VisualizerManager] Updated effect parameter (by type):', {
+              debugLog.log('🔧 [VisualizerManager] Updated effect parameter (by type):', {
                 effectId,
                 layerId,
                 paramName,
@@ -626,7 +658,7 @@ export class VisualizerManager {
               (effectInstance as any).updateParameter(paramName, value);
             }
           } else if (isMetaballs) {
-            console.warn('🔧 [VisualizerManager] Parameter not found (by type):', {
+            debugLog.warn('🔧 [VisualizerManager] Parameter not found (by type):', {
               effectId,
               layerId,
               paramName,
@@ -637,7 +669,7 @@ export class VisualizerManager {
         return;
       }
       if (isMetaballs) {
-        console.warn(`🔧 [VisualizerManager] Effect ${effectId} not found (neither as layer ID nor effect type)`);
+        debugLog.warn(`🔧 [VisualizerManager] Effect ${effectId} not found (neither as layer ID nor effect type)`);
       }
       debugLog.warn(`⚠️ Effect ${effectId} not found (neither as layer ID nor effect type)`);
       return;
@@ -649,7 +681,7 @@ export class VisualizerManager {
       (effect.parameters as any)[paramName] = value;
       
       if (isMetaballs) {
-        console.log('🔧 [VisualizerManager] Updated effect parameter (direct):', {
+        debugLog.log('🔧 [VisualizerManager] Updated effect parameter (direct):', {
           effectId,
           paramName,
           oldValue,
@@ -663,12 +695,12 @@ export class VisualizerManager {
       if (typeof (effect as any).updateParameter === 'function') {
         (effect as any).updateParameter(paramName, value);
         if (isMetaballs) {
-          console.log('🔧 [VisualizerManager] Called updateParameter method');
+          debugLog.log('🔧 [VisualizerManager] Called updateParameter method');
         }
       }
     } else {
       if (isMetaballs) {
-        console.warn('🔧 [VisualizerManager] Parameter not found (direct):', {
+        debugLog.warn('🔧 [VisualizerManager] Parameter not found (direct):', {
           effectId,
           paramName,
           availableParams: Object.keys(effect.parameters),
