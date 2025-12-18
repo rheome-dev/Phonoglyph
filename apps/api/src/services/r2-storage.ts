@@ -16,7 +16,7 @@ const r2Config = {
 };
 
 export const r2Client = new S3Client(r2Config);
-export const BUCKET_NAME = process.env.CLOUDFLARE_R2_BUCKET || 'phonoglyph-uploads';
+export const BUCKET_NAME = process.env.CLOUDFLARE_R2_BUCKET || 'raybox-uploads';
 
 // Validate required environment variables
 export function validateR2Config(): void {
@@ -137,23 +137,16 @@ export async function generateUploadUrl(
   }
 }
 
-// Generate pre-signed URL for file download
+// Generate direct URL for file download (for Remotion/reading)
+// Uses assets.raybox.fm custom domain instead of signed URLs for stability
 export async function generateDownloadUrl(
   key: string,
   expiresIn: number = 3600
 ): Promise<string> {
-  const command = new GetObjectCommand({
-    Bucket: BUCKET_NAME,
-    Key: key,
-  });
-
-  try {
-    const url = await getSignedUrl(r2Client, command, { expiresIn });
-    return url;
-  } catch (error) {
-    logger.error('❌ Failed to generate download URL:', error);
-    throw error;
-  }
+  // For reading (GET requests from Remotion), use direct URL via custom domain
+  // This is more stable than signed URLs and works better with bots/Remotion
+  const directUrl = `https://assets.raybox.fm/${key}`;
+  return directUrl;
 }
 
 // Get file data as Buffer for processing
@@ -244,11 +237,13 @@ export async function uploadThumbnail(
 }
 
 // Generate download URL for thumbnails
+// Uses direct URL via assets.raybox.fm custom domain
 export async function generateThumbnailUrl(
   thumbnailKey: string,
   expiresIn: number = 3600
 ): Promise<string> {
   try {
+    // Use direct URL for thumbnails as well
     const url = await generateDownloadUrl(thumbnailKey, expiresIn);
     return url;
   } catch (error) {
