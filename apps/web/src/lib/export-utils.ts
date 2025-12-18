@@ -45,13 +45,22 @@ export function getProjectExportPayload(
 
       // If we have IDs and a URL map, attempt to resolve fresh URLs
       if (Array.isArray(imageIds) && imageIds.length > 0) {
+        const currentImages = layer.settings.images as string[] | undefined;
+        // Check if current URLs are old signed URLs (need refresh)
+        const hasOldUrls = currentImages?.some(url => 
+          url.includes('cloudflarestorage') || 
+          url.includes('phonoglyph-uploads') ||
+          url.includes('X-Amz-Signature')
+        );
+        
         const freshImages = imageIds
-          .map((id) => stemUrlMap[id]) // Look up fresh signed URL
+          .map((id) => stemUrlMap[id]) // Look up fresh direct URL
           .filter(Boolean); // Remove any that failed to resolve
 
-        // Only update if we successfully resolved images
-        if (freshImages.length > 0) {
-          layer.settings.images = freshImages;
+        // Always update if we have fresh URLs, or if current URLs are old signed URLs
+        if (freshImages.length > 0 || hasOldUrls) {
+          // Prefer fresh URLs, but keep existing if fresh ones aren't available yet
+          layer.settings.images = freshImages.length > 0 ? freshImages : currentImages;
         }
       }
     }

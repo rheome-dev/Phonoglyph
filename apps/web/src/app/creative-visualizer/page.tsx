@@ -2608,19 +2608,29 @@ function CreativeVisualizerPage() {
           const stemId = s?.stemId || s?.stem?.id;
           // If we don't have a URL in our map, or the URL in settings is expired/R2-signed
           const currentUrl = asyncStemUrlMap[stemId] || s?.stem?.url;
-          const isExpired = currentUrl && currentUrl.includes('cloudflarestorage') && !asyncStemUrlMap[stemId];
+          // Refresh if: contains signed URL (cloudflarestorage), old bucket name, or signature params
+          const isExpired = currentUrl && (
+            (currentUrl.includes('cloudflarestorage') && !asyncStemUrlMap[stemId]) ||
+            currentUrl.includes('phonoglyph-uploads') ||
+            currentUrl.includes('X-Amz-Signature')
+          );
 
           if (stemId && (!currentUrl || isExpired)) {
             neededIds.add(stemId);
           }
         }
 
-        // C. Image Slideshows (Refresh expired images)
+        // C. Image Slideshows (Refresh expired images or old signed URLs)
         if (layer.effectType === 'imageSlideshow' && layer.settings?.imageIds) {
           layer.settings.imageIds.forEach((id: string) => {
             // Check if we need this ID (similar logic to overlay stems)
             const currentUrl = layer.settings?.images?.[layer.settings.imageIds.indexOf(id)];
-            const isExpired = currentUrl && currentUrl.includes('cloudflarestorage');
+            // Refresh if: no URL, contains signed URL (cloudflarestorage), or old bucket name
+            const isExpired = currentUrl && (
+              currentUrl.includes('cloudflarestorage') || 
+              currentUrl.includes('phonoglyph-uploads') ||
+              currentUrl.includes('X-Amz-Signature')
+            );
             if (id && (!currentUrl || isExpired)) {
               neededIds.add(id);
             }
