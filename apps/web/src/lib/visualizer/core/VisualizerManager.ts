@@ -26,6 +26,11 @@ export class VisualizerManager {
   private timelineLayers: any[] = [];
   private timelineCurrentTime: number = 0;
   
+  // Deterministic rendering state
+  private currentFrame: number = 0;
+  private currentFPS: number = 60;
+  private deterministicTime: number = 0;
+  
   // Audio analysis
   private audioContext: AudioContext | null = null;
   private audioSources: AudioBufferSourceNode[] = [];
@@ -387,6 +392,14 @@ export class VisualizerManager {
   
   // Playback control
   play(): void {
+    // Don't start animation loop if we're in Remotion rendering mode
+    // Remotion handles frame-by-frame rendering, we don't need RAF loop
+    const isRendering = getRemotionEnvironment().isRendering;
+    if (isRendering) {
+      debugLog.log(`🎬 Play() called during Remotion rendering - animation loop disabled`);
+      return;
+    }
+    
     debugLog.log(`🎬 Play() called. Current state: isPlaying=${this.isPlaying}, effects=${this.effects.size}`);
     if (!this.isPlaying) {
       this.isPlaying = true;
@@ -431,11 +444,63 @@ export class VisualizerManager {
   }
   
   /**
+   * Frame-based update method for Remotion compatibility.
+   * This is the "Single Source of Truth" for time and seeds.
+   * Calculates deterministic time from frame number and FPS.
+   * @param frame - Current frame number from Remotion
+   * @param fps - Frames per second from Remotion
+   */
+  public update(frame: number, fps: number): void {
+    this.currentFrame = frame;
+    this.currentFPS = fps;
+    
+    // Calculate deterministic time: frame / fps
+    // This ensures the same frame always produces the same time, regardless of environment
+    const timeInSeconds = frame / fps;
+    this.deterministicTime = timeInSeconds;
+    
+    // Update timeline current time to match
+    this.timelineCurrentTime = timeInSeconds;
+    
+    // 1. Sync all shaders to the EXACT frame-time
+    this.effects.forEach((effect, layerId) => {
+      // Set uTime directly (not incrementing) for deterministic behavior
+      // Check if effect has uniforms property (BaseShaderEffect and custom effects)
+      if ('uniforms' in effect && effect.uniforms && (effect as any).uniforms.uTime) {
+        (effect as any).uniforms.uTime.value = timeInSeconds;
+      }
+      
+      // Use the frame number as a seed for any CPU-side randomness
+      if ('setSeed' in effect && typeof (effect as any).setSeed === 'function') {
+        (effect as any).setSeed(frame);
+      }
+      
+      // Update effect with deterministic time
+      // Pass absolute time instead of deltaTime for deterministic updates
+      if (typeof (effect as any).updateWithTime === 'function') {
+        (effect as any).updateWithTime(timeInSeconds);
+      } else {
+        // Fallback: use deltaTime of 1/fps for effects that haven't been updated yet
+        effect.update(1 / fps);
+      }
+    });
+    
+    // 2. Handle stateful/ping-pong effects that need warm-up
+    if (getRemotionEnvironment().isRendering && frame > 0) {
+      // For effects that depend on previous frames (like water ripples simulation),
+      // we may need to warm up the simulation by running previous frames
+      // This is only needed for effects that maintain state between frames
+      // Most shader effects are stateless and don't need this
+    }
+  }
+
+  /**
    * Frame-based rendering method for Remotion compatibility.
    * This method can be called explicitly with a specific time and deltaTime,
    * decoupling rendering from the browser clock.
    * @param time - Current time in milliseconds (replaces performance.now())
    * @param deltaTime - Time delta in seconds (replaces clock.getDelta())
+   * @deprecated Use update(frame, fps) for deterministic rendering. This method is kept for backward compatibility.
    */
   public renderFrame(time: number, deltaTime: number): void {
     // Note: timelineCurrentTime is managed by updateTimelineState() called from
@@ -443,6 +508,11 @@ export class VisualizerManager {
     // We should NOT override it here with system time, as that causes layers to
     // disappear when the page has been open longer than the layer's duration.
 
+    // In live editor mode, use the provided time/deltaTime
+    // In Remotion mode, use the deterministic time from update()
+    const isRendering = getRemotionEnvironment().isRendering;
+    const effectiveTime = isRendering ? this.deterministicTime : time / 1000;
+    
     // Update all enabled effects
     let activeEffectCount = 0;
     
@@ -483,9 +553,24 @@ export class VisualizerManager {
           activeEffectCount++;
           
           try {
-            // Effects are updated via updateEffectParameter() from the UI mapping system
-            // The update() method only syncs parameters to uniforms (no implicit audio reactivity)
-            effect.update(deltaTime);
+            // In Remotion mode, use deterministic time
+            // In live editor mode, use deltaTime for smooth animation
+            if (isRendering && this.deterministicTime !== undefined) {
+              // Set uTime directly for deterministic behavior
+              // Check if effect has uniforms property
+              if ('uniforms' in effect && effect.uniforms && (effect as any).uniforms.uTime) {
+                (effect as any).uniforms.uTime.value = this.deterministicTime;
+              }
+              // Use updateWithTime if available, otherwise fallback to update
+              if (typeof (effect as any).updateWithTime === 'function') {
+                (effect as any).updateWithTime(this.deterministicTime);
+              } else {
+                effect.update(deltaTime);
+              }
+            } else {
+              // Live editor: use deltaTime for smooth animation
+              effect.update(deltaTime);
+            }
           } catch (error) {
             debugLog.error(`❌ Effect ${layerId} update failed:`, error);
           }
@@ -1018,6 +1103,14 @@ export class VisualizerManager {
 
   public getMediaLayerManager(): MediaLayerManager | null {
     return this.mediaLayerManager;
+  }
+
+  /**
+   * Get the multi-layer compositor for direct rendering access
+   * Used by Remotion to render after deterministic update
+   */
+  public getCompositor(): MultiLayerCompositor {
+    return this.multiLayerCompositor;
   }
 
   // GPU compositing always on via MultiLayerCompositor

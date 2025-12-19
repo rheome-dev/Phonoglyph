@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { random } from 'remotion';
+import { getRemotionEnvironment } from 'remotion';
 import { VisualEffect } from '@/types/visualizer';
 import { debugLog } from '@/lib/utils';
 
@@ -219,29 +221,32 @@ export class ParticleNetworkEffect implements VisualEffect {
   private initializeDefaultParticles() {
     // Add a few default particles to ensure the system renders
     for (let i = 0; i < 5; i++) {
-      const particle = this.createParticle(60 + i, 64, 'default');
+      const particle = this.createParticle(60 + i, 64, 'default', 'midi', undefined, undefined, i);
       this.particles.push(particle);
     }
     this.updateBuffers();
   }
   
-  private getRandomSpawnPosition(): THREE.Vector3 {
-    // Spawn across entire viewport in world coordinates
-    const x = (Math.random() - 0.5) * 4; // -2 to +2 in world space
-    const y = (Math.random() - 0.5) * 4; // -2 to +2 in world space
-    const z = 0;
-    return new THREE.Vector3(x, y, z);
+  private getRandomSpawnPosition(index: number): THREE.Vector3 {
+    // Always use Remotion's deterministic random() function for WYSIWYG consistency
+    // This ensures the editor preview matches the rendered output exactly
+    // The same particle index always spawns at the same position in both modes
+    const x = (random(`particle-x-${index}`) - 0.5) * 4;
+    const y = (random(`particle-y-${index}`) - 0.5) * 4;
+    return new THREE.Vector3(x, y, 0);
   }
   
-  private createParticle(note: number, velocity: number, track: string, spawnType: 'midi' | 'audio' = 'midi', audioFeature?: string, audioValue?: number): Particle {
-    // Spawn inside current viewport bounds
-    const position = this.getRandomSpawnPosition();
+  private createParticle(note: number, velocity: number, track: string, spawnType: 'midi' | 'audio' = 'midi', audioFeature?: string, audioValue?: number, particleIndex?: number): Particle {
+    // Use particleIndex for deterministic spawning, fallback to note if not provided
+    const index = particleIndex !== undefined ? particleIndex : note;
+    const position = this.getRandomSpawnPosition(index);
     
-    // Give them a random direction to drift in
+    // Always use Remotion's deterministic random() function for WYSIWYG consistency
+    // This ensures the editor preview matches the rendered output exactly
     const vel = new THREE.Vector3(
-      (Math.random() - 0.5) * 0.02,
-      (Math.random() - 0.5) * 0.02,
-      (Math.random() - 0.5) * 0.02
+      (random(`particle-vel-x-${index}`) - 0.5) * 0.02,
+      (random(`particle-vel-y-${index}`) - 0.5) * 0.02,
+      (random(`particle-vel-z-${index}`) - 0.5) * 0.02
     );
     
     // Calculate size based on spawn type
@@ -328,7 +333,9 @@ export class ParticleNetworkEffect implements VisualEffect {
   
   
   private spawnManualParticles(deltaTime: number) {
-    const currentTime = performance.now() / 1000;
+    // Use uTime for deterministic time, fallback to performance.now() for live editor
+    const isRendering = getRemotionEnvironment().isRendering;
+    const currentTime = isRendering ? this.uniforms.uTime.value : performance.now() / 1000;
     
     // Check cooldown for manual spawning
     if (currentTime - this.lastManualSpawnTime < 0.1) { // 100ms cooldown for manual testing
@@ -339,14 +346,20 @@ export class ParticleNetworkEffect implements VisualEffect {
     const excessAmount = this.parameters.particleSpawning - this.parameters.spawnThreshold;
     const spawnProbability = Math.min(excessAmount * 2.0, 0.5); // Max 50% chance per frame
     
-    if (Math.random() < spawnProbability && this.particles.length < this.parameters.maxParticles) {
-      // Create manual test particle
+    // Always use deterministic random for WYSIWYG consistency
+    const randomValue = random(`particle-spawn-${Math.floor(currentTime * 10)}`);
+    
+    if (randomValue < spawnProbability && this.particles.length < this.parameters.maxParticles) {
+      // Create manual test particle with deterministic index
+      const particleIndex = this.particles.length; // Use current particle count as index
       const particle = this.createParticle(
         60, // Default note
         Math.floor(this.parameters.particleSpawning * 127), // Use slider value as velocity
         'manual',
         'audio', // Use audio spawn type for visual distinction
         'manual',
+        undefined,
+        particleIndex,
         this.parameters.particleSpawning
       );
       
@@ -529,6 +542,45 @@ export class ParticleNetworkEffect implements VisualEffect {
     if (this.frameSkipCounter >= this.frameSkipInterval) {
       this.frameSkipCounter = 0;
       this.updateParticles(deltaTime * this.frameSkipInterval);
+    }
+  }
+
+  /**
+   * Update with absolute time for deterministic Remotion rendering
+   * @param absoluteTime - Absolute time in seconds (frame / fps)
+   */
+  updateWithTime(absoluteTime: number): void {
+    if (!this.uniforms) {
+      debugLog.warn('⚠️ Uniforms not initialized in ParticleNetworkEffect.updateWithTime()');
+      return;
+    }
+
+    // Generic: sync all parameters to uniforms
+    for (const key in this.parameters) {
+      const uniformKey = 'u' + key.charAt(0).toUpperCase() + key.slice(1);
+      if (this.uniforms[uniformKey]) {
+        this.uniforms[uniformKey].value = this.parameters[key as keyof typeof this.parameters];
+      }
+    }
+
+    // Set time directly for deterministic behavior
+    this.uniforms.uTime.value = absoluteTime;
+    // Intensity is now static - controlled only by explicit parameter mappings
+    this.uniforms.uIntensity.value = 1.0;
+    this.uniforms.uGlowIntensity.value = this.parameters.glowIntensity;
+    
+    // Ensure the instanced mesh is visible
+    if (this.instancedMesh) {
+      this.instancedMesh.visible = true;
+    }
+    
+    // For deterministic rendering, update particles based on absolute time
+    // Calculate approximate deltaTime for particle physics (use fixed 1/60 for consistency)
+    const approximateDeltaTime = 1 / 60;
+    this.frameSkipCounter++;
+    if (this.frameSkipCounter >= this.frameSkipInterval) {
+      this.frameSkipCounter = 0;
+      this.updateParticles(approximateDeltaTime * this.frameSkipInterval);
     }
   }
 

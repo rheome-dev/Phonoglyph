@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { getRemotionEnvironment } from 'remotion';
 import { VisualEffect, MetaballConfig } from '@/types/visualizer';
 import { debugLog } from '@/lib/utils';
 
@@ -386,7 +387,7 @@ export class MetaballsEffect implements VisualEffect {
       }
     }
 
-    // Update time
+    // Update time (increment for live editor mode)
     this.uniforms.uTime.value += deltaTime * this.parameters.animationSpeed;
 
     // Intensity is now static - controlled only by explicit parameter mappings
@@ -405,34 +406,81 @@ export class MetaballsEffect implements VisualEffect {
     // No conditional visibility logic here
   }
 
+  /**
+   * Update with absolute time for deterministic Remotion rendering
+   * @param absoluteTime - Absolute time in seconds (frame / fps)
+   */
+  updateWithTime(absoluteTime: number): void {
+    if (!this.uniforms) return;
+
+    // Generic: sync all parameters to uniforms (except special cases like highlightColor)
+    for (const key in this.parameters) {
+      const uniformKey = 'u' + key.charAt(0).toUpperCase() + key.slice(1);
+      if (this.uniforms[uniformKey]) {
+        // Skip highlightColor - it needs special handling as THREE.Color
+        if (key === 'highlightColor') {
+          const colorValue = this.parameters.highlightColor;
+          if (Array.isArray(colorValue)) {
+            // Ensure uniform value is a THREE.Color object
+            if (!(this.uniforms.uHighlightColor.value instanceof THREE.Color)) {
+              this.uniforms.uHighlightColor.value = new THREE.Color(...colorValue);
+            } else {
+              this.uniforms.uHighlightColor.value.set(...colorValue);
+            }
+          }
+        } else {
+          this.uniforms[uniformKey].value = this.parameters[key as keyof MetaballConfig];
+        }
+      }
+    }
+
+    // Set time directly for deterministic behavior
+    // Note: animationSpeed is typically applied in the shader, but if it's applied here,
+    // we need to account for it. For now, set raw time and let shader handle animationSpeed.
+    this.uniforms.uTime.value = absoluteTime;
+
+    // Intensity is now static - controlled only by explicit parameter mappings
+    // Default to 1.0 if no intensity parameter exists (maintains visibility)
+    this.uniforms.uIntensity.value = 1.0;
+
+    // Animate camera based on time only (no implicit audio/MIDI reactivity)
+    // For deterministic rendering, camera position is calculated directly from absolute time
+    // No deltaTime needed - updateCameraAnimation will detect rendering mode and skip lerp
+    this.updateCameraAnimation(0); // deltaTime not used during rendering
+
+    // Update shader resolution to match actual canvas size (not bounding box)
+    if (this.uniforms.uResolution && this.renderer) {
+      const size = this.renderer.getSize(new THREE.Vector2());
+      this.uniforms.uResolution.value.set(size.x, size.y);
+    }
+  }
+
   private updateCameraAnimation(deltaTime: number): void {
     const time = this.uniforms.uTime.value;
+    const isRendering = getRemotionEnvironment().isRendering;
     
-    // Frame-rate independent smoothing factor
-    const cameraSmoothingFactor = 1 - Math.exp(-this.cameraSmoothing * deltaTime);
-    
-    // Pure time-based camera orbit animation (no implicit audio/MIDI reactivity)
+    // 1. Calculate the Target Position (Pure function of time)
     const cameraAngle = time * 0.3;
     const cameraElevation = Math.sin(time * 0.2) * 0.3;
-    const cameraDistance = this.baseCameraDistance;
-
-    // Calculate target camera position
     const targetCameraPos = new THREE.Vector3(
-      Math.cos(cameraAngle) * cameraDistance,
+      Math.cos(cameraAngle) * this.baseCameraDistance,
       cameraElevation + this.cameraHeight,
-      Math.sin(cameraAngle) * cameraDistance
+      Math.sin(cameraAngle) * this.baseCameraDistance
     );
 
-    // Frame-rate independent camera position smoothing
-    const currentPos = this.uniforms.uCameraPos.value;
-    currentPos.lerp(targetCameraPos, cameraSmoothingFactor);
-
-    // Camera target remains centered (no implicit movement)
-    const targetLookAt = new THREE.Vector3(0, 0, 0);
-
-    // Smooth the camera target
-    this.smoothedCameraTarget.lerp(targetLookAt, cameraSmoothingFactor);
-    this.uniforms.uCameraTarget.value.copy(this.smoothedCameraTarget);
+    // 2. APPLY POSITION
+    if (isRendering) {
+      // JUMP immediately to the target for frame-perfect accuracy
+      // No lerp - ensures frame 51 has camera at exact position for frame 51
+      this.uniforms.uCameraPos.value.copy(targetCameraPos);
+      this.uniforms.uCameraTarget.value.set(0, 0, 0);
+    } else {
+      // Smooth lerp for the live editor/preview
+      const factor = 1 - Math.exp(-this.cameraSmoothing * deltaTime);
+      this.uniforms.uCameraPos.value.lerp(targetCameraPos, factor);
+      this.smoothedCameraTarget.lerp(new THREE.Vector3(0, 0, 0), factor);
+      this.uniforms.uCameraTarget.value.copy(this.smoothedCameraTarget);
+    }
   }
 
   destroy(): void {

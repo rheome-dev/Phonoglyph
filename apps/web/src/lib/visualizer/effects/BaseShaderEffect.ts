@@ -126,12 +126,43 @@ export abstract class BaseShaderEffect implements VisualEffect {
 
     /**
      * Update effect - syncs parameters to uniforms and updates source texture
+     * @param deltaTime - Time delta in seconds (for live editor mode, increments uTime)
      */
     update(deltaTime: number): void {
         if (!this.enabled || !this.uniforms) return;
 
         // Update standard uniforms
+        // In live editor mode, increment time for smooth animation
         this.uniforms.uTime.value += deltaTime;
+
+        if (this.renderer) {
+            const size = this.renderer.getSize(new THREE.Vector2());
+            this.uniforms.uResolution.value.set(size.x, size.y);
+        }
+
+        // Get source texture from compositor (layers beneath)
+        if (this.compositor && this.layerId) {
+            const sourceTexture = this.compositor.getAccumulatedTextureBeforeLayer(this.layerId);
+            if (sourceTexture && this.uniforms.uTexture.value !== sourceTexture) {
+                this.uniforms.uTexture.value = sourceTexture;
+            }
+        }
+
+        // Sync parameters to uniforms (to be implemented by subclasses)
+        this.syncParametersToUniforms();
+    }
+
+    /**
+     * Update effect with absolute time (for deterministic Remotion rendering)
+     * This method sets uTime directly instead of incrementing it.
+     * @param absoluteTime - Absolute time in seconds (frame / fps)
+     */
+    updateWithTime(absoluteTime: number): void {
+        if (!this.enabled || !this.uniforms) return;
+
+        // Set time directly for deterministic behavior
+        // This ensures the same frame always produces the same visual output
+        this.uniforms.uTime.value = absoluteTime;
 
         if (this.renderer) {
             const size = this.renderer.getSize(new THREE.Vector2());

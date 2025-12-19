@@ -287,6 +287,9 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
       finalValue: number;
     }> = [];
 
+    // 1. Map StemTypes to IDs for lookup
+    const stemMap = new Map(actualAudioAnalysisData.map(a => [a.stemType, a.fileMetadataId]));
+    
     const fileId = actualAudioAnalysisData.find((a) => a.stemType === 'master')?.fileMetadataId;
     const audioData = extractAudioDataAtTime(
       actualAudioAnalysisData as unknown as CachedAudioAnalysisData[],
@@ -312,9 +315,13 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
           baseValue = effectInstancesRef.current.get(layerId)?.parameters?.[paramName];
         if (baseValue === undefined) baseValue = 0;
 
+        // FIX: Find the correct fileId based on the feature prefix (e.g. "bass-rms")
+        const featureStemType = mapping.featureId.split('-')[0] || 'master';
+        const targetFileId = stemMap.get(featureStemType) || fileId || 'unknown';
+
         const rawValue = getFeatureValueFromCached(
           actualAudioAnalysisData as unknown as CachedAudioAnalysisData[],
-          'ignored-file-id',
+          targetFileId, // Pass real ID!
           mapping.featureId,
           time,
         );
@@ -353,11 +360,14 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
     visualizerManagerRef.current.updateTimelineState(actualLayers, time);
     if (audioData) visualizerManagerRef.current.setAudioData(audioData);
     
-    // Render the frame - ensure this completes before proceeding
-    visualizerManagerRef.current.renderFrame(time * 1000, deltaTime);
+    // 2. Deterministic Update - sets uTime and all effect states based on frame/fps
+    // This ensures frame 100 looks identical whether rendered on laptop, AWS Lambda in Virginia, or Oregon
+    visualizerManagerRef.current.update(frame, fps);
     
-    // CRITICAL: Force WebGL context to flush and finish commands to ensure canvas is ready for capture
-    // This ensures Remotion can properly read the canvas content before taking the screenshot
+    // 3. Final Draw - render all layers via compositor (don't use deprecated renderFrame)
+    visualizerManagerRef.current.getCompositor().render();
+    
+    // 4. Flush WebGL - ensure canvas is ready for Remotion capture
     if (canvasRef.current) {
       const gl = canvasRef.current.getContext('webgl2') || canvasRef.current.getContext('webgl');
       if (gl) {
