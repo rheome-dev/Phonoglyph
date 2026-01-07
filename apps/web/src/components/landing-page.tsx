@@ -67,18 +67,44 @@ const LandingPage = React.forwardRef<HTMLDivElement, LandingPageProps>(
       }
     ]
 
+    // Load Unicorn Studio script on mount
+    React.useEffect(() => {
+      if (typeof window !== 'undefined' && !(window as any).UnicornStudio) {
+        (window as any).UnicornStudio = { isInitialized: false };
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/gh/hiunicornstudio/unicornstudio.js@v2.0.0/dist/unicornStudio.umd.js';
+        script.onload = () => {
+          if (!(window as any).UnicornStudio.isInitialized) {
+            (window as any).UnicornStudio.init();
+            (window as any).UnicornStudio.isInitialized = true;
+          }
+        };
+        document.body.appendChild(script);
+      }
+    }, []);
+
     return (
       <div ref={ref} className="min-h-screen bg-gradient-mesh">
         {/* Hero Section */}
-        <section className="relative py-24 lg:py-40 overflow-hidden">
-          {/* Ambient glow */}
-          <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-purple-500/20 rounded-full blur-[120px]" />
+        <section className="relative min-h-screen overflow-hidden">
+          {/* Unicorn Studio Embed Background */}
+          <div className="absolute inset-0 z-0">
+            <div
+              data-us-project="VVD55LuzRG0rB9MdZAq7"
+              className="w-full h-full"
+              style={{ minWidth: '100%', minHeight: '100%' }}
+            />
           </div>
 
-          <div className="container mx-auto px-4 lg:px-8 relative z-10">
+          {/* Ambient glow overlay */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none z-[1]">
+            <div className="absolute top-1/4 left-0 w-[400px] h-[400px] bg-purple-500/10 rounded-full blur-[120px]" />
+          </div>
+
+          {/* Hero Content - Left Aligned */}
+          <div className="container mx-auto px-4 lg:px-8 relative z-10 min-h-screen flex items-center">
             <motion.div
-              className="text-center max-w-4xl mx-auto"
+              className="text-left max-w-2xl py-24 lg:py-32"
               initial={{ opacity: 0, y: 50 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, ease: "easeOut" }}
@@ -106,7 +132,7 @@ const LandingPage = React.forwardRef<HTMLDivElement, LandingPageProps>(
               </motion.h1>
 
               <motion.p
-                className="text-xl lg:text-2xl text-gray-400 mb-10 max-w-2xl mx-auto font-sans leading-relaxed"
+                className="text-xl lg:text-2xl text-gray-400 mb-10 max-w-xl font-sans leading-relaxed"
                 initial={{ opacity: 0, y: 30 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, delay: 0.4 }}
@@ -116,7 +142,7 @@ const LandingPage = React.forwardRef<HTMLDivElement, LandingPageProps>(
               </motion.p>
 
               <motion.div
-                className="flex flex-col sm:flex-row gap-4 justify-center items-center"
+                className="flex flex-col sm:flex-row gap-4 items-start"
                 initial={{ opacity: 0, y: 30 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, delay: 0.6 }}
@@ -145,28 +171,6 @@ const LandingPage = React.forwardRef<HTMLDivElement, LandingPageProps>(
                   </>
                 )}
               </motion.div>
-            </motion.div>
-
-            {/* Hero Visual Preview */}
-            <motion.div
-              className="mt-20 max-w-5xl mx-auto"
-              initial={{ opacity: 0, y: 60 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 1, delay: 0.8 }}
-            >
-              <div className="relative aspect-video rounded-2xl overflow-hidden glass-dark-strong glow-purple">
-                <div className="absolute inset-0 bg-gradient-to-br from-purple-900/30 to-indigo-900/30" />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="w-20 h-20 rounded-full bg-white/10 flex items-center justify-center mb-4 mx-auto cursor-pointer hover:bg-white/20 transition-colors">
-                      <Play className="w-8 h-8 text-white ml-1" />
-                    </div>
-                    <p className="text-gray-400 font-mono text-sm uppercase tracking-wider">
-                      Visualizer Preview
-                    </p>
-                  </div>
-                </div>
-              </div>
             </motion.div>
           </div>
         </section>
