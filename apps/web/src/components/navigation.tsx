@@ -30,15 +30,24 @@ const Navigation = React.forwardRef<HTMLElement, NavigationProps>(
       <motion.nav
         ref={ref}
         className={cn(
-          "sticky top-0 z-40 w-full border-b",
+          "fixed top-0 z-50 w-full",
           isDark
-            ? "bg-black/50 backdrop-blur-xl border-white/5"
-            : "glass-strong border-white/20"
+            ? "bg-transparent"
+            : "glass-strong border-b border-white/20"
         )}
         initial={{ y: -100, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.5, ease: "easeOut" }}
       >
+        {/* Blurred bottom edge for dark mode */}
+        {isDark && (
+          <div
+            className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent"
+            style={{
+              boxShadow: '0 1px 20px 0 rgba(139, 92, 246, 0.15)'
+            }}
+          />
+        )}
         <div className="container mx-auto px-4 lg:px-8">
           <div className="flex h-16 items-center justify-between">
             {/* Logo */}
