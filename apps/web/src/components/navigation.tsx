@@ -2,7 +2,6 @@ import * as React from "react"
 import Link from "next/link"
 import { motion } from "framer-motion"
 import { cn } from "@/lib/utils"
-import { TechnicalButton } from "@/components/ui/technical-button"
 import { ProfileMenu } from "@/components/auth/profile-menu"
 import { EnhancedBreadcrumbNav } from "@/components/layout/breadcrumb-nav"
 import { RayboxLogo } from "@/components/ui/phonoglyph-logo"
@@ -13,10 +12,11 @@ export interface NavigationProps {
   currentProject?: any
   recentProjects?: any[]
   showBreadcrumbs?: boolean
+  variant?: 'light' | 'dark'
 }
 
 const Navigation = React.forwardRef<HTMLElement, NavigationProps>(
-  ({ user, currentPath, currentProject, recentProjects = [], showBreadcrumbs = true }, ref) => {
+  ({ user, currentPath, currentProject, recentProjects = [], showBreadcrumbs = true, variant = 'light' }, ref) => {
     const navItems = [
       { href: "/", label: "Home" },
       { href: "/creative-visualizer", label: "Visualizer" },
@@ -24,10 +24,17 @@ const Navigation = React.forwardRef<HTMLElement, NavigationProps>(
       { href: "/dashboard", label: "Dashboard" },
     ]
 
+    const isDark = variant === 'dark' || currentPath === '/'
+
     return (
       <motion.nav
         ref={ref}
-        className="sticky top-0 z-40 w-full glass-strong border-b border-white/20"
+        className={cn(
+          "sticky top-0 z-40 w-full border-b",
+          isDark
+            ? "bg-black/50 backdrop-blur-xl border-white/5"
+            : "glass-strong border-white/20"
+        )}
         initial={{ y: -100, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.5, ease: "easeOut" }}
@@ -41,7 +48,7 @@ const Navigation = React.forwardRef<HTMLElement, NavigationProps>(
                 whileHover={{ scale: 1.05 }}
                 transition={{ type: "spring", stiffness: 400, damping: 10 }}
               >
-                <RayboxLogo size="md" className="text-stone-700" />
+                <RayboxLogo size="md" className={isDark ? "text-white" : "text-stone-700"} />
               </motion.div>
             </Link>
 
@@ -54,8 +61,12 @@ const Navigation = React.forwardRef<HTMLElement, NavigationProps>(
                   className={cn(
                     "text-sm font-sans font-medium transition-colors duration-200",
                     currentPath === item.href
-                      ? "text-stone-700 border-b-2 border-stone-600"
-                      : "text-stone-600 hover:text-stone-700"
+                      ? isDark
+                        ? "text-white border-b-2 border-purple-400"
+                        : "text-stone-700 border-b-2 border-stone-600"
+                      : isDark
+                        ? "text-gray-400 hover:text-white"
+                        : "text-stone-600 hover:text-stone-700"
                   )}
                 >
                   {item.label}
@@ -70,22 +81,32 @@ const Navigation = React.forwardRef<HTMLElement, NavigationProps>(
               ) : (
                 <div className="flex items-center space-x-3">
                   <Link href="/login">
-                    <TechnicalButton variant="secondary" size="sm">
+                    <button className={cn(
+                      "px-4 py-2 text-sm font-medium rounded-lg transition-colors",
+                      isDark
+                        ? "text-gray-300 hover:text-white hover:bg-white/10"
+                        : "text-stone-600 hover:text-stone-700 hover:bg-stone-100"
+                    )}>
                       Sign In
-                    </TechnicalButton>
+                    </button>
                   </Link>
                   <Link href="/signup">
-                    <TechnicalButton variant="primary" size="sm">
+                    <button className={cn(
+                      "px-4 py-2 text-sm font-medium rounded-lg transition-all",
+                      isDark
+                        ? "btn-gradient"
+                        : "technical-button-primary"
+                    )}>
                       Sign Up
-                    </TechnicalButton>
+                    </button>
                   </Link>
                 </div>
               )}
             </div>
           </div>
-          
+
           {/* Breadcrumb Navigation */}
-          {showBreadcrumbs && (
+          {showBreadcrumbs && !isDark && (
             <div className="border-t border-white/10 px-0 py-2">
               <EnhancedBreadcrumbNav
                 currentProject={currentProject}
@@ -101,4 +122,4 @@ const Navigation = React.forwardRef<HTMLElement, NavigationProps>(
 )
 Navigation.displayName = "Navigation"
 
-export { Navigation } 
+export { Navigation }
