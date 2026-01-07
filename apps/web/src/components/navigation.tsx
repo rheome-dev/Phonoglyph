@@ -32,7 +32,7 @@ const Navigation = React.forwardRef<HTMLElement, NavigationProps>(
         className={cn(
           "fixed top-0 z-50 w-full",
           isDark
-            ? "bg-transparent"
+            ? "bg-black/30 backdrop-blur-xl"
             : "glass-strong border-b border-white/20"
         )}
         initial={{ y: -100, opacity: 0 }}
