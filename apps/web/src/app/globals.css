@@ -17,7 +17,8 @@
   font-display: swap;
 }
 
-body, .font-mono {
+body,
+.font-mono {
   font-family: 'VT323', 'Fira Mono', 'Menlo', 'monospace';
   letter-spacing: 0.04em;
 }
@@ -27,16 +28,21 @@ body, .font-mono {
   font-family: 'Doto', 'VT323', 'Fira Mono', 'Menlo', 'monospace';
   letter-spacing: 0.04em;
   font-weight: 100;
-  color: #fcf803; /* White color for Doto font instances */
-  font-size: 1.25em; /* Make Doto font slightly larger to match other fonts */
-  line-height: 1; /* Ensure consistent line height */
-  vertical-align: baseline; /* Align with the baseline of surrounding text */
+  color: #fcf803;
+  /* White color for Doto font instances */
+  font-size: 1.25em;
+  /* Make Doto font slightly larger to match other fonts */
+  line-height: 1;
+  /* Ensure consistent line height */
+  vertical-align: baseline;
+  /* Align with the baseline of surrounding text */
   position: relative;
-  top: .05em; /* Slightly lower the Doto text to match baseline */
-  text-shadow: 
-    0 0 3px hsla(59, 70%, 53%, 0.6)
-    0 0 6px rgba(255, 255, 255, 0.3),
-    0 0 9px rgba(255, 255, 255, 0.1); /* Subtle white glow effect */
+  top: .05em;
+  /* Slightly lower the Doto text to match baseline */
+  text-shadow:
+    0 0 3px hsla(59, 70%, 53%, 0.6) 0 0 6px rgba(255, 255, 255, 0.3),
+    0 0 9px rgba(255, 255, 255, 0.1);
+  /* Subtle white glow effect */
 }
 
 
@@ -46,29 +52,40 @@ body, .font-mono {
 @tailwind utilities;
 
 @layer base {
+
   /* Creative visualizer text scaling - makes text 90% of normal size */
   .creative-visualizer-text {
     font-size: 90%;
   }
-  
+
   :root {
     /* Typography System */
     --font-mono: 'RayboxJetMono', 'JetBrains Mono', 'Fira Code', 'Monaco', 'Consolas', monospace;
     --font-sans: 'Inter', 'Helvetica Neue', 'Arial', sans-serif;
     --font-display: 'Space Grotesk', 'Inter', sans-serif;
     --font-logo: 'InstrumentSerif', serif;
-    
+
     /* Typography Scale */
-    --text-xs: 0.75rem;    /* 12px - Metadata, captions */
-    --text-sm: 0.875rem;   /* 14px - Body small, labels */
-    --text-base: 1rem;     /* 16px - Body text */
-    --text-lg: 1.125rem;   /* 18px - Emphasized body */
-    --text-xl: 1.25rem;    /* 20px - Small headings */
-    --text-2xl: 1.5rem;    /* 24px - Section headings */
-    --text-3xl: 1.875rem;  /* 30px - Page headings */
-    --text-4xl: 2.25rem;   /* 36px - Display headings */
-    --text-5xl: 3rem;      /* 48px - Hero text */
-    --text-6xl: 3.75rem;   /* 60px - Large display */
+    --text-xs: 0.75rem;
+    /* 12px - Metadata, captions */
+    --text-sm: 0.875rem;
+    /* 14px - Body small, labels */
+    --text-base: 1rem;
+    /* 16px - Body text */
+    --text-lg: 1.125rem;
+    /* 18px - Emphasized body */
+    --text-xl: 1.25rem;
+    /* 20px - Small headings */
+    --text-2xl: 1.5rem;
+    /* 24px - Section headings */
+    --text-3xl: 1.875rem;
+    /* 30px - Page headings */
+    --text-4xl: 2.25rem;
+    /* 36px - Display headings */
+    --text-5xl: 3rem;
+    /* 48px - Hero text */
+    --text-6xl: 3.75rem;
+    /* 60px - Large display */
 
     /* Monochromatic Foundation */
     --color-black: #000000;
@@ -84,31 +101,52 @@ body, .font-mono {
     --color-white: #ffffff;
 
     /* Technical Brutalist Stone Palette */
-    --stone-50: #fafaf9;       /* Lightest stone */
-    --stone-100: #f5f5f4;      /* Very light stone */
-    --stone-200: #e7e5e4;      /* Light stone - control backgrounds */
-    --stone-300: #d6d3d1;      /* Medium light stone - panels */
-    --stone-400: #a8a29e;      /* Medium stone - borders */
-    --stone-500: #78716c;      /* Primary stone - backgrounds */
-    --stone-600: #57534e;      /* Dark stone - buttons */
-    --stone-700: #44403c;      /* Darker stone */
-    --stone-800: #292524;      /* Very dark stone */
-    --stone-900: #1c1917;      /* Darkest stone */
+    --stone-50: #fafaf9;
+    /* Lightest stone */
+    --stone-100: #f5f5f4;
+    /* Very light stone */
+    --stone-200: #e7e5e4;
+    /* Light stone - control backgrounds */
+    --stone-300: #d6d3d1;
+    /* Medium light stone - panels */
+    --stone-400: #a8a29e;
+    /* Medium stone - borders */
+    --stone-500: #78716c;
+    /* Primary stone - backgrounds */
+    --stone-600: #57534e;
+    /* Dark stone - buttons */
+    --stone-700: #44403c;
+    /* Darker stone */
+    --stone-800: #292524;
+    /* Very dark stone */
+    --stone-900: #1c1917;
+    /* Darkest stone */
 
     /* Sophisticated Muted Accents */
-    --color-slate-primary: #475569;   /* Interactive elements */
-    --color-slate-light: #64748b;     /* Hover states */
-    --color-sage-accent: #84a98c;     /* Success, upload */
-    --color-terracotta-accent: #a8756b; /* Errors, delete */
-    --color-amber-muted: #b8936d;     /* Warnings, processing */
-    --color-lavender-accent: #9b8db5; /* Secondary actions */
+    --color-slate-primary: #475569;
+    /* Interactive elements */
+    --color-slate-light: #64748b;
+    /* Hover states */
+    --color-sage-accent: #84a98c;
+    /* Success, upload */
+    --color-terracotta-accent: #a8756b;
+    /* Errors, delete */
+    --color-amber-muted: #b8936d;
+    /* Warnings, processing */
+    --color-lavender-accent: #9b8db5;
+    /* Secondary actions */
 
     /* Muted Visualization Colors */
-    --color-sage-viz: #84a98c;        /* Audio waveforms */
-    --color-slate-viz: #6b7c93;       /* MIDI data */
-    --color-dusty-rose-viz: #b08a8a;  /* Accent elements */
-    --color-warm-gray-viz: #a8a29e;   /* Background elements */
-    --color-soft-blue-viz: #8da3b0;   /* Timeline markers */
+    --color-sage-viz: #84a98c;
+    /* Audio waveforms */
+    --color-slate-viz: #6b7c93;
+    /* MIDI data */
+    --color-dusty-rose-viz: #b08a8a;
+    /* Accent elements */
+    --color-warm-gray-viz: #a8a29e;
+    /* Background elements */
+    --color-soft-blue-viz: #8da3b0;
+    /* Timeline markers */
 
     /* Glassmorphism Variables */
     --glass-bg: rgba(255, 255, 255, 0.1);
@@ -118,13 +156,20 @@ body, .font-mono {
     --glass-shadow-strong: 0 12px 40px rgba(0, 0, 0, 0.15);
 
     /* Spacing System */
-    --spacing-xs: 0.25rem;    /* 4px */
-    --spacing-sm: 0.5rem;     /* 8px */
-    --spacing-md: 1rem;       /* 16px */
-    --spacing-lg: 1.5rem;     /* 24px */
-    --spacing-xl: 2rem;       /* 32px */
-    --spacing-2xl: 3rem;      /* 48px */
-    --spacing-3xl: 4rem;      /* 64px */
+    --spacing-xs: 0.25rem;
+    /* 4px */
+    --spacing-sm: 0.5rem;
+    /* 8px */
+    --spacing-md: 1rem;
+    /* 16px */
+    --spacing-lg: 1.5rem;
+    /* 24px */
+    --spacing-xl: 2rem;
+    /* 32px */
+    --spacing-2xl: 3rem;
+    /* 48px */
+    --spacing-3xl: 4rem;
+    /* 64px */
 
     /* Border Radius */
     --radius-sm: 4px;
@@ -194,8 +239,14 @@ body, .font-mono {
   * {
     @apply border-border;
   }
+
+  html {
+    background-color: #0a0a0a;
+  }
+
   body {
     @apply bg-background text-foreground;
+    background-color: #0a0a0a;
     font-family: var(--font-sans);
     line-height: 1.6;
     letter-spacing: -0.005em;
@@ -203,6 +254,7 @@ body, .font-mono {
 }
 
 @layer components {
+
   /* Glassmorphism Components */
   .glass {
     background: var(--glass-bg);
@@ -223,7 +275,8 @@ body, .font-mono {
   }
 
   .glass-modal {
-    background: rgba(24, 24, 27, 0.85); /* dark glass, matches stone-900 */
+    background: rgba(24, 24, 27, 0.85);
+    /* dark glass, matches stone-900 */
     backdrop-filter: blur(40px);
     -webkit-backdrop-filter: blur(40px);
     /* border: 1px solid rgba(255, 255, 255, 0.3); */
@@ -356,7 +409,7 @@ body, .font-mono {
   }
 
   /* ===== DARK LANDING PAGE THEME ===== */
-  
+
   /* Dark Glass Variants */
   .glass-dark {
     background: rgba(10, 10, 10, 0.7);
@@ -398,11 +451,11 @@ body, .font-mono {
 
   .bg-gradient-radial-dark {
     background: radial-gradient(ellipse at 50% 0%, rgba(120, 80, 200, 0.15) 0%, transparent 60%),
-                linear-gradient(180deg, #0a0a0a 0%, #0f0f0f 100%);
+      linear-gradient(180deg, #0a0a0a 0%, #0f0f0f 100%);
   }
 
   .bg-gradient-mesh {
-    background: 
+    background:
       radial-gradient(at 40% 20%, rgba(147, 51, 234, 0.15) 0px, transparent 50%),
       radial-gradient(at 80% 0%, rgba(59, 130, 246, 0.1) 0px, transparent 50%),
       radial-gradient(at 0% 50%, rgba(236, 72, 153, 0.08) 0px, transparent 50%),
@@ -475,15 +528,15 @@ body, .font-mono {
   .perspective-1000 {
     perspective: 1000px;
   }
-  
+
   .transform-gpu {
     transform: translate3d(0, 0, 0);
   }
-  
+
   .rotate-y-12 {
     transform: rotateY(12deg);
   }
-  
+
   .rotate-x-3 {
     transform: rotateX(3deg);
   }
@@ -491,32 +544,48 @@ body, .font-mono {
 
 /* Keyframe Animations */
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.3;
+  }
 }
 
 @keyframes glassPulse {
-  0%, 100% { 
+
+  0%,
+  100% {
     background: rgba(255, 255, 255, 0.8);
-    opacity: 1; 
+    opacity: 1;
   }
-  50% { 
+
+  50% {
     background: rgba(255, 255, 255, 0.6);
-    opacity: 0.8; 
+    opacity: 0.8;
   }
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes slideUp {
-  from { 
+  from {
     opacity: 0;
     transform: translateY(20px);
   }
-  to { 
+
+  to {
     opacity: 1;
     transform: translateY(0);
   }
@@ -622,4 +691,4 @@ body, .font-mono {
 .parsing-status.failed {
   background: rgba(239, 68, 68, 0.2);
   color: #b91c1c;
-} 
+}
