@@ -44,14 +44,14 @@ export class ParticleNetworkEffect implements VisualEffect {
   private connectionLines!: THREE.LineSegments;
   private material!: THREE.ShaderMaterial;
   private uniforms!: Record<string, THREE.IUniform>;
-  
+
   private particles: Particle[] = [];
   private geometry!: THREE.BufferGeometry;
   private positions!: Float32Array;
   private colors!: Float32Array;
   private sizes!: Float32Array;
   private lives!: Float32Array;
-  
+
   // Connection data
   private connectionGeometry!: THREE.BufferGeometry;
   private connectionMaterial!: THREE.LineBasicMaterial;
@@ -59,7 +59,7 @@ export class ParticleNetworkEffect implements VisualEffect {
   private connectionColors!: Float32Array;
   private maxConnections: number = 500; // Limit connections
   private activeConnections: number = 0;
-  
+
   // Performance optimization: skip frames
   private frameSkipCounter = 0;
   private frameSkipInterval = 2; // Update every 3rd frame for 30fps -> 10fps updates
@@ -79,7 +79,7 @@ export class ParticleNetworkEffect implements VisualEffect {
     this.setupUniforms();
   }
 
-  
+
 
   private screenToWorld(screenX: number, screenY: number): THREE.Vector3 {
     // Convert screen px to NDC
@@ -115,18 +115,18 @@ export class ParticleNetworkEffect implements VisualEffect {
     const aspect = size.x / size.y || 1;
     this.internalCamera = new THREE.PerspectiveCamera(60, aspect, 0.1, 1000);
     this.internalCamera.position.set(0, 0, 5);
-    
+
     this.createParticleSystem();
     this.createConnectionSystem();
-    
+
     // Initialize size multiplier based on current particleSize parameter
     if (this.uniforms) {
       this.uniforms.uSizeMultiplier.value = this.parameters.particleSize;
     }
-    
+
     debugLog.log('🌟 Particle Network initialized');
   }
-  
+
   private createParticleSystem() {
     // Plane that will always face the camera (we'll orient in updateBuffers)
     const quad = new THREE.PlaneGeometry(1, 1);
@@ -195,8 +195,8 @@ export class ParticleNetworkEffect implements VisualEffect {
 
     // Per-instance dynamic attributes
     this.instanceColors = new Float32Array(maxParticles * 3);
-    this.instanceLives  = new Float32Array(maxParticles);
-    this.instanceSizes  = new Float32Array(maxParticles);
+    this.instanceLives = new Float32Array(maxParticles);
+    this.instanceSizes = new Float32Array(maxParticles);
 
     this.instancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.instancedMesh.geometry.setAttribute(
@@ -226,7 +226,7 @@ export class ParticleNetworkEffect implements VisualEffect {
     }
     this.updateBuffers();
   }
-  
+
   private getRandomSpawnPosition(index: number): THREE.Vector3 {
     // Always use Remotion's deterministic random() function for WYSIWYG consistency
     // This ensures the editor preview matches the rendered output exactly
@@ -235,12 +235,12 @@ export class ParticleNetworkEffect implements VisualEffect {
     const y = (random(`particle-y-${index}`) - 0.5) * 4;
     return new THREE.Vector3(x, y, 0);
   }
-  
+
   private createParticle(note: number, velocity: number, track: string, spawnType: 'midi' | 'audio' = 'midi', audioFeature?: string, audioValue?: number, particleIndex?: number): Particle {
     // Use particleIndex for deterministic spawning, fallback to note if not provided
     const index = particleIndex !== undefined ? particleIndex : note;
     const position = this.getRandomSpawnPosition(index);
-    
+
     // Always use Remotion's deterministic random() function for WYSIWYG consistency
     // This ensures the editor preview matches the rendered output exactly
     const vel = new THREE.Vector3(
@@ -248,7 +248,7 @@ export class ParticleNetworkEffect implements VisualEffect {
       (random(`particle-vel-y-${index}`) - 0.5) * 0.02,
       (random(`particle-vel-z-${index}`) - 0.5) * 0.02
     );
-    
+
     // Calculate size based on spawn type
     let size: number;
     if (spawnType === 'audio' && audioValue !== undefined) {
@@ -258,7 +258,7 @@ export class ParticleNetworkEffect implements VisualEffect {
       // MIDI particles: size based on velocity
       size = 3.0 + (velocity / 127) * 5.0;
     }
-    
+
     return {
       position,
       velocity: vel,
@@ -273,14 +273,14 @@ export class ParticleNetworkEffect implements VisualEffect {
       spawnType
     };
   }
-  
+
   private getNoteColor(note: number, velocity: number, spawnType: 'midi' | 'audio' = 'midi', audioValue?: number): THREE.Color {
     const baseColor = new THREE.Color(
       this.parameters.particleColor[0],
-      this.parameters.particleColor[1], 
+      this.parameters.particleColor[1],
       this.parameters.particleColor[2]
     );
-    
+
     if (spawnType === 'audio' && audioValue !== undefined) {
       // Audio particles: vary hue based on audio value
       const hue = (audioValue * 0.3) % 1.0;
@@ -291,64 +291,64 @@ export class ParticleNetworkEffect implements VisualEffect {
       const hue = (note % 12) / 12;
       const saturation = 0.4 + (velocity / 127) * 0.3;
       const lightness = 0.5 + (velocity / 127) * 0.2;
-      
+
       const noteColor = new THREE.Color();
       noteColor.setHSL(hue, saturation, lightness);
       return noteColor.lerp(baseColor, 0.3);
     }
   }
-  
+
   private updateParticles(deltaTime: number) {
     // Particle spawning is now controlled only by explicit parameter mappings
     // (via particleSpawning parameter and updateParameter())
-    
+
     // Spawn particles based on particleSpawning parameter (manual or audio-modulated)
     if (this.parameters.particleSpawning >= this.parameters.spawnThreshold) {
       this.spawnManualParticles(deltaTime);
     }
-    
+
     // Update existing particles
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const particle = this.particles[i];
-      
+
       // Update life
       particle.life -= deltaTime / particle.maxLife;
-      
+
       // Remove dead particles
       if (particle.life <= 0) {
         this.particles.splice(i, 1);
         continue;
       }
-      
+
       // Update physics
       particle.velocity.multiplyScalar(0.98); // Damping
-      
+
       // Apply velocity
       particle.position.add(particle.velocity);
     }
-    
+
     this.updateBuffers();
     this.updateConnections();
   }
-  
-  
+
+
   private spawnManualParticles(deltaTime: number) {
     // Use uTime for deterministic time, fallback to performance.now() for live editor
     const isRendering = getRemotionEnvironment().isRendering;
     const currentTime = isRendering ? this.uniforms.uTime.value : performance.now() / 1000;
-    
+
     // Check cooldown for manual spawning
     if (currentTime - this.lastManualSpawnTime < 0.1) { // 100ms cooldown for manual testing
       return;
     }
-    
+
     // Calculate spawn probability based on how much particleSpawning exceeds threshold
     const excessAmount = this.parameters.particleSpawning - this.parameters.spawnThreshold;
     const spawnProbability = Math.min(excessAmount * 2.0, 0.5); // Max 50% chance per frame
-    
+
     // Always use deterministic random for WYSIWYG consistency
     const randomValue = random(`particle-spawn-${Math.floor(currentTime * 10)}`);
-    
+
     if (randomValue < spawnProbability && this.particles.length < this.parameters.maxParticles) {
       // Create manual test particle with deterministic index
       const particleIndex = this.particles.length; // Use current particle count as index
@@ -359,16 +359,15 @@ export class ParticleNetworkEffect implements VisualEffect {
         'audio', // Use audio spawn type for visual distinction
         'manual',
         undefined,
-        particleIndex,
-        this.parameters.particleSpawning
+        particleIndex
       );
-      
+
       this.particles.push(particle);
       this.lastManualSpawnTime = currentTime;
     }
   }
-  
-  
+
+
   private updateBuffers() {
     const cameraQuat = this.internalCamera.quaternion;
 
@@ -404,36 +403,36 @@ export class ParticleNetworkEffect implements VisualEffect {
     (this.instancedMesh.geometry.getAttribute('instanceLife') as THREE.InstancedBufferAttribute).needsUpdate = true;
     (this.instancedMesh.geometry.getAttribute('instanceSize') as THREE.InstancedBufferAttribute).needsUpdate = true;
   }
-  
+
   private createConnectionSystem() {
     // Create connection line system using LineSegments for multiple disconnected lines
     this.connectionGeometry = new THREE.BufferGeometry();
     this.connectionPositions = new Float32Array(this.maxConnections * 6); // 2 points per line, 3 coords each
     this.connectionColors = new Float32Array(this.maxConnections * 6); // 2 colors per line, 3 channels each
-    
+
     this.connectionGeometry.setAttribute('position', new THREE.BufferAttribute(this.connectionPositions, 3));
     this.connectionGeometry.setAttribute('color', new THREE.BufferAttribute(this.connectionColors, 3));
-    
+
     this.connectionMaterial = new THREE.LineBasicMaterial({
       vertexColors: true,
       transparent: true,
       blending: THREE.AdditiveBlending,
       depthTest: false
     });
-    
+
     this.connectionLines = new THREE.LineSegments(this.connectionGeometry, this.connectionMaterial);
     this.internalScene.add(this.connectionLines);
   }
 
   private updateConnections() {
     let connectionIndex = 0;
-    
+
     for (let i = 0; i < this.particles.length - 1 && connectionIndex < this.maxConnections; i++) {
       for (let j = i + 1; j < this.particles.length && connectionIndex < this.maxConnections; j++) {
         const p1 = this.particles[i];
         const p2 = this.particles[j];
         const distance = p1.position.distanceTo(p2.position);
-        
+
         if (distance < this.parameters.connectionDistance) {
           // Improved strength calculation - less aggressive falloff
           const distanceFactor = 1.0 - (distance / this.parameters.connectionDistance);
@@ -441,11 +440,11 @@ export class ParticleNetworkEffect implements VisualEffect {
           // Normalize velocity contribution (0.5 to 1.0 range instead of multiplying)
           const velocityFactor = 0.5 + ((p1.noteVelocity + p2.noteVelocity) / 508);
           const strength = distanceFactor * lifeFactor * velocityFactor * this.parameters.connectionOpacity;
-          
+
           // Use white for connection lines (user preference)
           // With additive blending, strength controls brightness
           const whiteColor = 1.0;
-          
+
           // Set positions for this line segment (2 points)
           const baseIndex = connectionIndex * 6;
           this.connectionPositions[baseIndex] = p1.position.x;
@@ -454,7 +453,7 @@ export class ParticleNetworkEffect implements VisualEffect {
           this.connectionPositions[baseIndex + 3] = p2.position.x;
           this.connectionPositions[baseIndex + 4] = p2.position.y;
           this.connectionPositions[baseIndex + 5] = p2.position.z;
-          
+
           // Set white colors with strength for both vertices
           this.connectionColors[baseIndex] = whiteColor * strength;
           this.connectionColors[baseIndex + 1] = whiteColor * strength;
@@ -462,19 +461,19 @@ export class ParticleNetworkEffect implements VisualEffect {
           this.connectionColors[baseIndex + 3] = whiteColor * strength;
           this.connectionColors[baseIndex + 4] = whiteColor * strength;
           this.connectionColors[baseIndex + 5] = whiteColor * strength;
-          
+
           connectionIndex++;
         }
       }
     }
-    
+
     // Set the draw range to only render active connections
     this.connectionGeometry.setDrawRange(0, connectionIndex * 2); // 2 vertices per connection
     this.connectionGeometry.attributes.position.needsUpdate = true;
     this.connectionGeometry.attributes.color.needsUpdate = true;
     this.activeConnections = connectionIndex;
   }
-  
+
   updateParameter(paramName: string, value: any): void {
     // Immediately update parameters for real-time control
     switch (paramName) {
@@ -531,12 +530,12 @@ export class ParticleNetworkEffect implements VisualEffect {
     // Intensity is now static - controlled only by explicit parameter mappings
     this.uniforms.uIntensity.value = 1.0;
     this.uniforms.uGlowIntensity.value = this.parameters.glowIntensity;
-    
+
     // Ensure the instanced mesh is visible
     if (this.instancedMesh) {
       this.instancedMesh.visible = true;
     }
-    
+
     // Skip heavy particle updates every few frames for performance
     this.frameSkipCounter++;
     if (this.frameSkipCounter >= this.frameSkipInterval) {
@@ -568,12 +567,12 @@ export class ParticleNetworkEffect implements VisualEffect {
     // Intensity is now static - controlled only by explicit parameter mappings
     this.uniforms.uIntensity.value = 1.0;
     this.uniforms.uGlowIntensity.value = this.parameters.glowIntensity;
-    
+
     // Ensure the instanced mesh is visible
     if (this.instancedMesh) {
       this.instancedMesh.visible = true;
     }
-    
+
     // For deterministic rendering, update particles based on absolute time
     // Calculate approximate deltaTime for particle physics (use fixed 1/60 for consistency)
     const approximateDeltaTime = 1 / 60;
@@ -609,7 +608,7 @@ export class ParticleNetworkEffect implements VisualEffect {
       this.instancedMesh.geometry.dispose();
       this.material.dispose();
     }
-    
+
     if (this.connectionLines) {
       this.internalScene.remove(this.connectionLines);
       this.connectionGeometry.dispose();
