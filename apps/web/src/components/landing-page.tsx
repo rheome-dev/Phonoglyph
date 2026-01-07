@@ -4,7 +4,7 @@ import * as React from "react"
 import Link from "next/link"
 import { motion } from "framer-motion"
 import {
-  Waveform,
+  Activity,
   Zap,
   Palette,
   Film,
@@ -26,7 +26,7 @@ const LandingPage = React.forwardRef<HTMLDivElement, LandingPageProps>(
       {
         title: "Audio Analysis",
         description: "Real-time tempo, frequency bands, amplitude dynamics, and onset detection. Your music drives every visual.",
-        icon: Waveform,
+        icon: Activity,
         gradient: "from-purple-500 to-indigo-500"
       },
       {
