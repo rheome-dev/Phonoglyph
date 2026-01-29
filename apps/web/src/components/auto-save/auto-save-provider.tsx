@@ -13,7 +13,6 @@ import { cn, debugLog } from '@/lib/utils'
 import { useTimelineStore } from '@/stores/timelineStore'
 import { useProjectSettingsStore } from '@/stores/projectSettingsStore'
 import { useVisualizerStore } from '@/stores/visualizerStore'
-import { parseParamKey } from '@/lib/visualizer/paramKeys'
 
 import type { EditState } from '@/hooks/use-auto-save'
 
@@ -85,7 +84,7 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
     const projectSettings = useProjectSettingsStore.getState()
     const visualizerState = useVisualizerStore.getState()
 
-    return {
+    const capturedState = {
       // We structure this to match the EditState interface in schema
       timelineState: {
         layers: timelineState.layers,
@@ -112,36 +111,18 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
       },
       schemaVersion: 1
     }
+
+    // Debug logging for save operation
+    debugLog.log('💾 Capturing state for save:', {
+      layers: capturedState.timelineState.layers?.length || 0,
+      layerTypes: capturedState.timelineState.layers?.map((l: any) => l.effectType || l.type) || [],
+      baseParamEffects: Object.keys(capturedState.visualizationParams.baseParameterValues).length,
+      activeParamEffects: Object.keys(capturedState.visualizationParams.activeSliderValues).length,
+    })
+
+    return capturedState
   }, [])
 
-  // Convert legacy flat param maps (key -> number) to nested (effectId -> { paramName: value })
-  const toNestedParams = (maybeFlat: any): Record<string, Record<string, any>> => {
-    if (!maybeFlat || typeof maybeFlat !== 'object') return {}
-    // Heuristic: if any value is an object, assume already nested
-    const values = Object.values(maybeFlat)
-    const hasObjectValue = values.some(v => v && typeof v === 'object' && !Array.isArray(v))
-    if (hasObjectValue) {
-      return maybeFlat as Record<string, Record<string, any>>
-    }
-    const nested: Record<string, Record<string, any>> = {}
-    Object.entries(maybeFlat as Record<string, any>).forEach(([key, value]) => {
-      if (value === undefined) return
-      const parsed = parseParamKey(key)
-      if (parsed) {
-        const { effectInstanceId, paramName } = parsed
-        nested[effectInstanceId] = { ...(nested[effectInstanceId] || {}), [paramName]: value }
-      } else {
-        // Fallback: try last '-' split (legacy)
-        const idx = key.lastIndexOf('-')
-        if (idx !== -1) {
-          const effectInstanceId = key.slice(0, idx)
-          const paramName = key.slice(idx + 1)
-          nested[effectInstanceId] = { ...(nested[effectInstanceId] || {}), [paramName]: value }
-        }
-      }
-    })
-    return nested
-  }
 
   // Save current state
   const saveCurrentState = useCallback(async () => {
@@ -210,14 +191,12 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
             visualizerStore.setAspectRatio(visualizationParams.aspectRatio)
           }
           if (visualizationParams.baseParameterValues) {
-            const nestedBase = toNestedParams(visualizationParams.baseParameterValues)
-            visualizerStore.setBaseParameterValues(nestedBase)
-            debugLog.log('✅ Restored baseParameterValues:', Object.keys(nestedBase).length, 'effect instances')
+            visualizerStore.setBaseParameterValues(visualizationParams.baseParameterValues)
+            debugLog.log('✅ Restored baseParameterValues:', Object.keys(visualizationParams.baseParameterValues).length, 'effect instances')
           }
           if (visualizationParams.activeSliderValues) {
-            const nestedActive = toNestedParams(visualizationParams.activeSliderValues)
-            visualizerStore.setActiveSliderValues(nestedActive)
-            debugLog.log('✅ Restored activeSliderValues:', Object.keys(nestedActive).length, 'effect instances')
+            visualizerStore.setActiveSliderValues(visualizationParams.activeSliderValues)
+            debugLog.log('✅ Restored activeSliderValues:', Object.keys(visualizationParams.activeSliderValues).length, 'effect instances')
           }
           if (visualizationParams.audioAnalysisSettings) {
             visualizerStore.setAudioAnalysisSettings(visualizationParams.audioAnalysisSettings)
@@ -361,7 +340,11 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
           // Hydrate Timeline Store
           if (timelineState) {
             if (timelineState.layers) {
+              debugLog.log('✅ Restoring timeline layers:', timelineState.layers.length, 'layers')
+              debugLog.log('  Layer types:', timelineState.layers.map((l: any) => `${l.effectType || l.type} (${l.id.slice(0, 20)}...)`))
               useTimelineStore.getState().setLayers(timelineState.layers)
+            } else {
+              debugLog.warn('⚠️ No timeline layers found in saved state')
             }
             if (timelineState.duration !== undefined) {
               useTimelineStore.getState().setDuration(timelineState.duration)
@@ -369,6 +352,8 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
             if (timelineState.zoom !== undefined) {
               useTimelineStore.getState().setZoom(timelineState.zoom)
             }
+          } else {
+            debugLog.warn('⚠️ No timeline state found in saved data')
           }
 
           // Hydrate Settings Store
@@ -396,16 +381,14 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
             if (visualizationParams.aspectRatio) {
               visualizerStore.setAspectRatio(visualizationParams.aspectRatio)
             }
-          if (visualizationParams.baseParameterValues) {
-            const nestedBase = toNestedParams(visualizationParams.baseParameterValues)
-            visualizerStore.setBaseParameterValues(nestedBase)
-            debugLog.log('✅ Restored baseParameterValues:', Object.keys(nestedBase).length, 'effect instances')
-          }
-          if (visualizationParams.activeSliderValues) {
-            const nestedActive = toNestedParams(visualizationParams.activeSliderValues)
-            visualizerStore.setActiveSliderValues(nestedActive)
-            debugLog.log('✅ Restored activeSliderValues:', Object.keys(nestedActive).length, 'effect instances')
-          }
+            if (visualizationParams.baseParameterValues) {
+              visualizerStore.setBaseParameterValues(visualizationParams.baseParameterValues)
+              debugLog.log('✅ Restored baseParameterValues:', Object.keys(visualizationParams.baseParameterValues).length, 'effect instances')
+            }
+            if (visualizationParams.activeSliderValues) {
+              visualizerStore.setActiveSliderValues(visualizationParams.activeSliderValues)
+              debugLog.log('✅ Restored activeSliderValues:', Object.keys(visualizationParams.activeSliderValues).length, 'effect instances')
+            }
             if (visualizationParams.audioAnalysisSettings) {
               visualizerStore.setAudioAnalysisSettings(visualizationParams.audioAnalysisSettings)
             }

@@ -337,18 +337,33 @@ function validateStateData(data: Record<string, any>): boolean {
     // Check for required top-level keys
     const requiredKeys = ['visualizationParams', 'stemMappings', 'effectSettings', 'timelineState']
     const hasRequiredKeys = requiredKeys.every(key => key in data)
-    
+
     if (!hasRequiredKeys) {
+      debugLog.warn('❌ Missing required keys in state data:', requiredKeys.filter(k => !(k in data)))
       return false
     }
 
     // Validate data types
-    const isValid = 
+    const isValid =
       typeof data.visualizationParams === 'object' &&
       typeof data.stemMappings === 'object' &&
-      typeof data.effectSettings === 'object'
+      typeof data.effectSettings === 'object' &&
+      typeof data.timelineState === 'object'
 
-    return isValid
+    if (!isValid) {
+      debugLog.warn('❌ Invalid data types in state data')
+      return false
+    }
+
+    // Validate timeline state structure
+    if (data.timelineState) {
+      if (data.timelineState.layers && !Array.isArray(data.timelineState.layers)) {
+        debugLog.warn('❌ timelineState.layers is not an array')
+        return false
+      }
+    }
+
+    return true
   } catch (error) {
     debugLog.error('Error validating state data:', error)
     return false
