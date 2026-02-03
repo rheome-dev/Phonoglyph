@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { trpc } from '@/lib/trpc'
+import { supabase } from '@/lib/supabase'
 import { useAuth } from './use-auth'
 import { debugLog } from '@/lib/utils'
 
@@ -136,18 +137,18 @@ export function useAutoSave(projectId: string): UseAutoSave {
       })
 
       setLastSaved(new Date())
-      
-      // Refresh queries to get updated data
-      await getCurrentStateQuery.refetch()
+
+      // Invalidate queries to get updated data on next access
+      await queryClient.invalidateQueries({ queryKey: ['autoSave', 'getCurrentState'] })
       await getProjectStatesQuery.refetch()
-      
+
     } catch (error) {
       debugLog.error('Failed to save state:', error)
       // Don't throw error to avoid breaking the UI
     } finally {
       setIsSaving(false)
     }
-  }, [projectId, isAuthenticated, user, config.enabled, saveStateMutation, getCurrentStateQuery, getProjectStatesQuery])
+  }, [projectId, isAuthenticated, user, config.enabled, saveStateMutation, getProjectStatesQuery, queryClient])
 
   // Restore state function
   const restoreState = useCallback(async (stateId: string): Promise<EditState> => {
@@ -159,11 +160,11 @@ export function useAutoSave(projectId: string): UseAutoSave {
       setIsSaving(true)
       
       const restoredState = await restoreStateMutation.mutateAsync({ stateId })
-      
+
       setLastSaved(new Date())
-      
-      // Refresh queries to get updated data
-      await getCurrentStateQuery.refetch()
+
+      // Invalidate queries to get updated data on next access
+      await queryClient.invalidateQueries({ queryKey: ['autoSave', 'getCurrentState'] })
       await getProjectStatesQuery.refetch()
       
       // Map the database response to EditState format
@@ -182,7 +183,7 @@ export function useAutoSave(projectId: string): UseAutoSave {
     } finally {
       setIsSaving(false)
     }
-  }, [projectId, isAuthenticated, user, restoreStateMutation, getCurrentStateQuery, getProjectStatesQuery])
+  }, [projectId, isAuthenticated, user, restoreStateMutation, getProjectStatesQuery, queryClient])
 
   // Clear history function
   const clearHistory = useCallback(async () => {
@@ -206,50 +207,70 @@ export function useAutoSave(projectId: string): UseAutoSave {
     }
   }, [projectId, isAuthenticated, user, clearHistoryMutation])
 
-  // Get current state function - invalidate cache and fetch fresh data
+  // Get current state function - bypass memoization issues with direct fetch
   const getCurrentState = useCallback(async (): Promise<EditState | null> => {
-    console.log('🔄 AUTOSAVE: getCurrentState CALLED, projectId:', projectId)
+    console.log('🔄 AUTOSAVE: getCurrentState DIRECT CALLED, projectId:', projectId)
 
     if (!projectId) {
       console.log('🔄 AUTOSAVE: getCurrentState - no projectId')
       return null
     }
 
-    console.log('🔄 AUTOSAVE: getCurrentState - starting')
-
     try {
-      console.log('🔄 AUTOSAVE: getCurrentState - invalidating cache...')
-      // Invalidate the cache to ensure we get fresh data
-      await queryClient.invalidateQueries({
-        queryKey: ['autoSave', 'getCurrentState', { projectId }]
+      console.log('🔄 AUTOSAVE: getCurrentState - making direct API call')
+
+      // Get the current session for auth
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token
+
+      // Direct API call bypassing React Query cache
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.phonoglyph.rheome.tools'
+      const trpcInput = JSON.stringify({
+        "0": {
+          "json": {
+            "projectId": projectId
+          }
+        }
+      })
+      const response = await fetch(`${apiUrl}/api/trpc/autoSave.getCurrentState?batch=1&input=${encodeURIComponent(trpcInput)}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        }
       })
 
-      console.log('🔄 AUTOSAVE: getCurrentState - refetching...')
-      // Force refetch and wait for it
-      const result = await getCurrentStateQuery.refetch()
+      if (!response.ok) {
+        console.log('🔄 AUTOSAVE: getCurrentState - API error:', response.status)
+        return null
+      }
 
-      console.log('🔄 AUTOSAVE: getCurrentState - refetch complete, version:', result.data?.version || 'null')
+      const json = await response.json()
+      console.log('🔄 AUTOSAVE: getCurrentState - API response received')
 
-      if (!result.data) {
-        console.log('🔄 AUTOSAVE: getCurrentState - no data returned')
+      // tRPC batch response format
+      const result = json[0]?.result?.data
+      console.log('🔄 AUTOSAVE: getCurrentState - direct call version:', result?.version || 'null')
+
+      if (!result) {
+        console.log('🔄 AUTOSAVE: getCurrentState - no result in API response')
         return null
       }
 
       // Map the database response to EditState format
       return {
-        id: result.data.id,
-        userId: result.data.user_id,
-        projectId: result.data.project_id,
-        timestamp: new Date(result.data.timestamp),
-        data: result.data.data,
-        version: result.data.version,
-        isCurrent: result.data.is_current
+        id: result.id,
+        userId: result.user_id,
+        projectId: result.project_id,
+        timestamp: new Date(result.timestamp),
+        data: result.data,
+        version: result.version,
+        isCurrent: result.is_current
       }
     } catch (error) {
       console.error('🔄 AUTOSAVE: getCurrentState - error:', error)
       return null
     }
-  }, [projectId, getCurrentStateQuery, queryClient])
+  }, [projectId])
 
   // Update config function
   const updateConfig = useCallback((newConfig: Partial<AutoSaveConfig>) => {
