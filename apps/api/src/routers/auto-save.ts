@@ -102,6 +102,7 @@ export const autoSaveRouter = router({
     .input(z.object({ projectId: z.string().min(1, 'Project ID is required') }))
     .query(async ({ input, ctx }) => {
       try {
+        // First, try to get the current state marked as is_current
         const { data: editState, error } = await ctx.supabase
           .from('edit_states')
           .select('*')
@@ -110,22 +111,46 @@ export const autoSaveRouter = router({
           .eq('is_current', true)
           .single();
 
-        if (error) {
-          if (error.code === 'PGRST116') {
-            // No current state found, return null
-            return null;
-          }
-          logger.error('Database error fetching current state:', error);
+        if (editState) {
+          logger.log(`[autoSave] getCurrentState: found is_current=true, version=${editState.version}, id=${editState.id}`);
+          return editState;
+        }
+
+        // If no current state found (or error), fallback to the latest by timestamp
+        if (error && error.code !== 'PGRST116') {
+          logger.error('[autoSave] getCurrentState: error fetching is_current state:', error);
+        }
+
+        logger.log(`[autoSave] getCurrentState: no is_current found, fallback to latest by timestamp`);
+
+        const { data: latestState, error: latestError } = await ctx.supabase
+          .from('edit_states')
+          .select('*')
+          .eq('project_id', input.projectId)
+          .eq('user_id', ctx.user.id)
+          .order('timestamp', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (latestError) {
+          logger.error('[autoSave] getCurrentState: error fetching latest state:', latestError);
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to fetch current state',
           });
         }
 
-        return editState;
+        if (!latestState) {
+          logger.log(`[autoSave] getCurrentState: no states found for project`);
+          return null;
+        }
+
+        logger.log(`[autoSave] getCurrentState: fallback returned version=${latestState.version}, id=${latestState.id}`);
+
+        return latestState;
       } catch (error) {
         if (error instanceof TRPCError) throw error;
-        logger.error('Error fetching current state:', error);
+        logger.error('[autoSave] getCurrentState: unexpected error:', error);
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch current state',
