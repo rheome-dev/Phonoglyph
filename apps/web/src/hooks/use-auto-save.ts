@@ -72,15 +72,16 @@ export function useAutoSave(projectId: string): UseAutoSave {
 
   // Get current state query - always enabled, let backend handle auth
   // The backend protectedProcedure will return 401 if not authenticated
+  // staleTime: 0 ensures we always fetch fresh data from the API
   const getCurrentStateQuery = trpc.autoSave.getCurrentState.useQuery(
     { projectId },
-    { enabled: !!projectId }
+    { enabled: !!projectId, staleTime: 0, refetchOnWindowFocus: true }
   )
 
   // Get project states query - always enabled, let backend handle auth
   const getProjectStatesQuery = trpc.autoSave.getProjectStates.useQuery(
     { projectId, limit: config.maxHistory },
-    { enabled: !!projectId }
+    { enabled: !!projectId, staleTime: 0, refetchOnWindowFocus: true }
   )
 
   // Update save history when query data changes
