@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { trpc } from '@/lib/trpc'
-import { supabase } from '@/lib/supabase'
 import { useAuth } from './use-auth'
 import { debugLog } from '@/lib/utils'
 
@@ -73,12 +72,14 @@ export function useAutoSave(projectId: string): UseAutoSave {
   const restoreStateMutation = trpc.autoSave.restoreState.useMutation()
   const clearHistoryMutation = trpc.autoSave.clearProjectHistory.useMutation()
 
-  // Get current state query - always enabled, let backend handle auth
-  // The backend protectedProcedure will return 401 if not authenticated
-  // staleTime: 0 ensures we always fetch fresh data from the API
+  // Get current state query
   const getCurrentStateQuery = trpc.autoSave.getCurrentState.useQuery(
     { projectId },
-    { enabled: !!projectId, staleTime: 0, refetchOnWindowFocus: true }
+    {
+      enabled: !!projectId && isAuthenticated,
+      staleTime: 0,
+      refetchOnWindowFocus: true
+    }
   )
 
   // Get project states query - always enabled, let backend handle auth
@@ -207,70 +208,40 @@ export function useAutoSave(projectId: string): UseAutoSave {
     }
   }, [projectId, isAuthenticated, user, clearHistoryMutation])
 
-  // Get current state function - bypass memoization issues with direct fetch
+  // Get current state function - clean implementation using tRPC refetch
   const getCurrentState = useCallback(async (): Promise<EditState | null> => {
-    console.log('🔄 AUTOSAVE: getCurrentState DIRECT CALLED, projectId:', projectId)
+    console.log('🔄 AUTOSAVE: getCurrentState called, projectId:', projectId)
 
-    if (!projectId) {
-      console.log('🔄 AUTOSAVE: getCurrentState - no projectId')
+    if (!projectId || !isAuthenticated) {
       return null
     }
 
     try {
-      console.log('🔄 AUTOSAVE: getCurrentState - making direct API call')
+      // Force a hard refresh from the server
+      const { data, isError } = await getCurrentStateQuery.refetch()
 
-      // Get the current session for auth
-      const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.access_token
-
-      // Direct API call bypassing React Query cache
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.phonoglyph.rheome.tools'
-      const trpcInput = JSON.stringify({
-        "0": {
-          "json": {
-            "projectId": projectId
-          }
-        }
-      })
-      const response = await fetch(`${apiUrl}/api/trpc/autoSave.getCurrentState?batch=1&input=${encodeURIComponent(trpcInput)}`, {
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token && { 'Authorization': `Bearer ${token}` })
-        }
-      })
-
-      if (!response.ok) {
-        console.log('🔄 AUTOSAVE: getCurrentState - API error:', response.status)
+      if (isError || !data) {
+        console.log('🔄 AUTOSAVE: No state found or error')
         return null
       }
 
-      const json = await response.json()
-      console.log('🔄 AUTOSAVE: getCurrentState - API response received')
+      console.log('🔄 AUTOSAVE: getCurrentState - version:', data.version)
 
-      // tRPC batch response format
-      const result = json[0]?.result?.data
-      console.log('🔄 AUTOSAVE: getCurrentState - direct call version:', result?.version || 'null')
-
-      if (!result) {
-        console.log('🔄 AUTOSAVE: getCurrentState - no result in API response')
-        return null
-      }
-
-      // Map the database response to EditState format
+      // Map the database response to EditState format (handling dates)
       return {
-        id: result.id,
-        userId: result.user_id,
-        projectId: result.project_id,
-        timestamp: new Date(result.timestamp),
-        data: result.data,
-        version: result.version,
-        isCurrent: result.is_current
+        id: data.id,
+        userId: data.user_id,
+        projectId: data.project_id,
+        timestamp: new Date(data.timestamp),
+        data: data.data,
+        version: data.version,
+        isCurrent: data.is_current
       }
     } catch (error) {
       console.error('🔄 AUTOSAVE: getCurrentState - error:', error)
       return null
     }
-  }, [projectId])
+  }, [projectId, isAuthenticated, getCurrentStateQuery])
 
   // Update config function
   const updateConfig = useCallback((newConfig: Partial<AutoSaveConfig>) => {
