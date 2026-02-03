@@ -69,13 +69,18 @@ export function useAutoSave(projectId: string): UseAutoSave {
   const saveStateMutation = trpc.autoSave.saveState.useMutation()
   const restoreStateMutation = trpc.autoSave.restoreState.useMutation()
   const clearHistoryMutation = trpc.autoSave.clearProjectHistory.useMutation()
+
+  // Get current state query - always enabled, let backend handle auth
+  // The backend protectedProcedure will return 401 if not authenticated
   const getCurrentStateQuery = trpc.autoSave.getCurrentState.useQuery(
     { projectId },
-    { enabled: !!projectId && isAuthenticated }
+    { enabled: !!projectId }
   )
+
+  // Get project states query - always enabled, let backend handle auth
   const getProjectStatesQuery = trpc.autoSave.getProjectStates.useQuery(
     { projectId, limit: config.maxHistory },
-    { enabled: !!projectId && isAuthenticated }
+    { enabled: !!projectId }
   )
 
   // Update save history when query data changes
@@ -200,16 +205,24 @@ export function useAutoSave(projectId: string): UseAutoSave {
 
   // Get current state function
   const getCurrentState = useCallback(async (): Promise<EditState | null> => {
-    if (!projectId || !isAuthenticated) {
+    if (!projectId) {
       return null
     }
 
     try {
+      // Check if already authenticated via Supabase session in trpc-links
+      // The backend protectedProcedure will return 401 if not authenticated
       const currentState = await getCurrentStateQuery.refetch()
+
+      // If query was disabled due to auth failure (401), return null
+      if (currentState.data === null || getCurrentStateQuery.status === 'error') {
+        return null
+      }
+
       if (!currentState.data) {
         return null
       }
-      
+
       // Map the database response to EditState format
       return {
         id: currentState.data.id,
@@ -224,7 +237,7 @@ export function useAutoSave(projectId: string): UseAutoSave {
       debugLog.error('Failed to get current state:', error)
       return null
     }
-  }, [projectId, isAuthenticated, getCurrentStateQuery])
+  }, [projectId, getCurrentStateQuery])
 
   // Update config function
   const updateConfig = useCallback((newConfig: Partial<AutoSaveConfig>) => {

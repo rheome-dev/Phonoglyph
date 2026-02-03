@@ -99,9 +99,11 @@ supabase.auth.onAuthStateChange(() => {
 });
 
 // Determine API URL for tRPC
+// Production fallback: always use the production API URL if env var is not set
+// This fixes SSR requests in production that were previously falling back to localhost
 const apiUrl =
   process.env.NEXT_PUBLIC_API_URL ||
-  (typeof window !== 'undefined' ? 'https://api.phonoglyph.rheome.tools' : 'http://localhost:3001'); // fallback for SSR dev
+  'https://api.phonoglyph.rheome.tools';
 
 // Debug logging to see what URL is being used
 debugLog.log('🔧 tRPC API URL Debug:', {
