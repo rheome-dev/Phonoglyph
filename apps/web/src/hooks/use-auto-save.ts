@@ -209,21 +209,27 @@ export function useAutoSave(projectId: string): UseAutoSave {
   // Get current state function - invalidate cache and fetch fresh data
   const getCurrentState = useCallback(async (): Promise<EditState | null> => {
     if (!projectId) {
+      console.log('🔄 AUTOSAVE: getCurrentState - no projectId')
       return null
     }
 
+    console.log('🔄 AUTOSAVE: getCurrentState - starting for project:', projectId)
+
     try {
+      console.log('🔄 AUTOSAVE: getCurrentState - invalidating cache...')
       // Invalidate the cache to ensure we get fresh data
       await queryClient.invalidateQueries({
         queryKey: ['autoSave', 'getCurrentState', { projectId }]
       })
 
+      console.log('🔄 AUTOSAVE: getCurrentState - refetching...')
       // Force refetch and wait for it
       const result = await getCurrentStateQuery.refetch()
 
-      console.log('🔄 AUTOSAVE: After refetch, version:', result.data?.version || 'null')
+      console.log('🔄 AUTOSAVE: getCurrentState - refetch complete, version:', result.data?.version || 'null')
 
       if (!result.data) {
+        console.log('🔄 AUTOSAVE: getCurrentState - no data returned')
         return null
       }
 
@@ -238,7 +244,7 @@ export function useAutoSave(projectId: string): UseAutoSave {
         isCurrent: result.data.is_current
       }
     } catch (error) {
-      console.error('🔄 AUTOSAVE: Failed to get current state:', error)
+      console.error('🔄 AUTOSAVE: getCurrentState - error:', error)
       return null
     }
   }, [projectId, getCurrentStateQuery, queryClient])
