@@ -207,20 +207,26 @@ export function useAutoSave(projectId: string): UseAutoSave {
   // Get current state function
   const getCurrentState = useCallback(async (): Promise<EditState | null> => {
     if (!projectId) {
+      console.log('🔄 AUTOSAVE: No projectId, skipping')
       return null
     }
 
     try {
       // Check if already authenticated via Supabase session in trpc-links
       // The backend protectedProcedure will return 401 if not authenticated
+      console.log('🔄 AUTOSAVE: Calling refetch...')
       const currentState = await getCurrentStateQuery.refetch()
+
+      console.log('🔄 AUTOSAVE: refetch result, data:', currentState.data ? 'version ' + currentState.data.version : 'null')
 
       // If query was disabled due to auth failure (401), return null
       if (currentState.data === null || getCurrentStateQuery.status === 'error') {
+        console.log('🔄 AUTOSAVE: No data or error, returning null')
         return null
       }
 
       if (!currentState.data) {
+        console.log('🔄 AUTOSAVE: No data, returning null')
         return null
       }
 
@@ -235,7 +241,7 @@ export function useAutoSave(projectId: string): UseAutoSave {
         isCurrent: currentState.data.is_current
       }
     } catch (error) {
-      debugLog.error('Failed to get current state:', error)
+      console.error('🔄 AUTOSAVE: Failed to get current state:', error)
       return null
     }
   }, [projectId, getCurrentStateQuery])
