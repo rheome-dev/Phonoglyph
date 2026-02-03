@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { trpc } from '@/lib/trpc'
 import { useAuth } from './use-auth'
 import { debugLog } from '@/lib/utils'
@@ -57,6 +58,7 @@ const DEFAULT_CONFIG: AutoSaveConfig = {
 
 export function useAutoSave(projectId: string): UseAutoSave {
   const { user, isAuthenticated } = useAuth()
+  const queryClient = useQueryClient()
   const [config, setConfig] = useState<AutoSaveConfig>(DEFAULT_CONFIG)
   const [isSaving, setIsSaving] = useState(false)
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
@@ -204,47 +206,42 @@ export function useAutoSave(projectId: string): UseAutoSave {
     }
   }, [projectId, isAuthenticated, user, clearHistoryMutation])
 
-  // Get current state function
+  // Get current state function - invalidate cache and fetch fresh data
   const getCurrentState = useCallback(async (): Promise<EditState | null> => {
     if (!projectId) {
-      console.log('🔄 AUTOSAVE: No projectId, skipping')
       return null
     }
 
     try {
-      // Check if already authenticated via Supabase session in trpc-links
-      // The backend protectedProcedure will return 401 if not authenticated
-      console.log('🔄 AUTOSAVE: Calling refetch...')
-      const currentState = await getCurrentStateQuery.refetch()
+      // Invalidate the cache to ensure we get fresh data
+      await queryClient.invalidateQueries({
+        queryKey: ['autoSave', 'getCurrentState', { projectId }]
+      })
 
-      console.log('🔄 AUTOSAVE: refetch result, data:', currentState.data ? 'version ' + currentState.data.version : 'null')
+      // Force refetch and wait for it
+      const result = await getCurrentStateQuery.refetch()
 
-      // If query was disabled due to auth failure (401), return null
-      if (currentState.data === null || getCurrentStateQuery.status === 'error') {
-        console.log('🔄 AUTOSAVE: No data or error, returning null')
-        return null
-      }
+      console.log('🔄 AUTOSAVE: After refetch, version:', result.data?.version || 'null')
 
-      if (!currentState.data) {
-        console.log('🔄 AUTOSAVE: No data, returning null')
+      if (!result.data) {
         return null
       }
 
       // Map the database response to EditState format
       return {
-        id: currentState.data.id,
-        userId: currentState.data.user_id,
-        projectId: currentState.data.project_id,
-        timestamp: new Date(currentState.data.timestamp),
-        data: currentState.data.data,
-        version: currentState.data.version,
-        isCurrent: currentState.data.is_current
+        id: result.data.id,
+        userId: result.data.user_id,
+        projectId: result.data.project_id,
+        timestamp: new Date(result.data.timestamp),
+        data: result.data.data,
+        version: result.data.version,
+        isCurrent: result.data.is_current
       }
     } catch (error) {
       console.error('🔄 AUTOSAVE: Failed to get current state:', error)
       return null
     }
-  }, [projectId, getCurrentStateQuery])
+  }, [projectId, getCurrentStateQuery, queryClient])
 
   // Update config function
   const updateConfig = useCallback((newConfig: Partial<AutoSaveConfig>) => {
