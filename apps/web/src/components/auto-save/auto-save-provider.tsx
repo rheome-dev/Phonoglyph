@@ -375,37 +375,41 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
 
   // Load saved state on mount (hydration)
   useEffect(() => {
+    console.log('🔄 AUTOSAVE: Starting hydration for project:', projectId)
+
     const loadSavedState = async () => {
       if (!projectId) {
-        debugLog.log('⚠️ No projectId, skipping auto-save restoration')
+        console.log('⚠️ AUTOSAVE: No projectId, skipping')
         return
       }
 
-      debugLog.log('🔄 Starting auto-save restoration for project:', projectId)
+      console.log('🔄 AUTOSAVE: Fetching current state...')
 
       try {
         setIsHydrating(true)
         const savedState = await autoSave.getCurrentState()
 
-        debugLog.log('📦 Auto-save response:', savedState ? 'data found' : 'no data')
+        console.log('🔄 AUTOSAVE: Response received:', savedState ? 'HAS DATA' : 'NULL')
 
         if (!savedState || !savedState.data) {
-          debugLog.log('⚠️ No saved state found for project - this is expected for new projects')
+          console.log('⚠️ AUTOSAVE: No saved state found - is this a new project?')
           setIsHydrating(false)
           return
         }
 
-        if (savedState && savedState.data) {
+        console.log('🔄 AUTOSAVE: Found data, hydrating...')
+        console.log('🔄 AUTOSAVE: timelineState.layers:', savedState.data.timelineState?.layers?.length || 0)
+
+          if (savedState && savedState.data) {
           const { timelineState, projectSettings, effectSettings, stemMappings, visualizationParams } = savedState.data
 
           // Hydrate Timeline Store
           if (timelineState) {
             if (timelineState.layers) {
-              debugLog.log('✅ Restoring timeline layers:', timelineState.layers.length, 'layers')
-              debugLog.log('  Layer types:', timelineState.layers.map((l: any) => `${l.effectType || l.type} (${l.id.slice(0, 20)}...)`))
+              console.log('✅ AUTOSAVE: Restoring', timelineState.layers.length, 'timeline layers')
               useTimelineStore.getState().setLayers(timelineState.layers)
             } else {
-              debugLog.warn('⚠️ No timeline layers found in saved state')
+              console.warn('⚠️ AUTOSAVE: No timeline layers found in saved state')
             }
             if (timelineState.duration !== undefined) {
               useTimelineStore.getState().setDuration(timelineState.duration)
@@ -414,11 +418,12 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
               useTimelineStore.getState().setZoom(timelineState.zoom)
             }
           } else {
-            debugLog.warn('⚠️ No timeline state found in saved data')
+            console.warn('⚠️ AUTOSAVE: No timeline state found')
           }
 
           // Hydrate Settings Store
           if (projectSettings) {
+            console.log('✅ AUTOSAVE: Restoring project settings')
             if (projectSettings.backgroundColor) {
               useProjectSettingsStore.getState().setBackgroundColor(projectSettings.backgroundColor)
             }
@@ -446,16 +451,17 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
               // Convert legacy flat format to nested format if needed
               const nestedBase = toNestedParams(visualizationParams.baseParameterValues)
               visualizerStore.setBaseParameterValues(nestedBase)
-              debugLog.log('✅ Restored baseParameterValues:', Object.keys(nestedBase).length, 'effect instances')
+              console.log('✅ AUTOSAVE: Restored baseParameterValues for', Object.keys(nestedBase).length, 'effects')
             }
             if (visualizationParams.activeSliderValues) {
               // Convert legacy flat format to nested format if needed
               const nestedActive = toNestedParams(visualizationParams.activeSliderValues)
               visualizerStore.setActiveSliderValues(nestedActive)
-              debugLog.log('✅ Restored activeSliderValues:', Object.keys(nestedActive).length, 'effect instances')
+              console.log('✅ AUTOSAVE: Restored activeSliderValues for', Object.keys(nestedActive).length, 'effects')
             }
             if (visualizationParams.audioAnalysisSettings) {
               visualizerStore.setAudioAnalysisSettings(visualizationParams.audioAnalysisSettings)
+              console.log('✅ AUTOSAVE: Restored audioAnalysisSettings')
             }
             if (visualizationParams.featureDecayTimes) {
               Object.entries(visualizationParams.featureDecayTimes).forEach(([featureId, decayTime]) => {
@@ -469,10 +475,10 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
             }
           }
 
-          debugLog.log('✅ Hydrated project state from version', savedState.version)
+          console.log('✅ AUTOSAVE: Complete - restored from version', savedState.version)
         }
       } catch (err) {
-        debugLog.error('Failed to load saved state:', err)
+        console.error('❌ AUTOSAVE: Failed to load saved state:', err)
       } finally {
         setIsHydrating(false)
       }
