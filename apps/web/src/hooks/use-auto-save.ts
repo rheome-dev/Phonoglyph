@@ -208,12 +208,14 @@ export function useAutoSave(projectId: string): UseAutoSave {
 
   // Get current state function - invalidate cache and fetch fresh data
   const getCurrentState = useCallback(async (): Promise<EditState | null> => {
+    console.log('🔄 AUTOSAVE: getCurrentState CALLED, projectId:', projectId)
+
     if (!projectId) {
       console.log('🔄 AUTOSAVE: getCurrentState - no projectId')
       return null
     }
 
-    console.log('🔄 AUTOSAVE: getCurrentState - starting for project:', projectId)
+    console.log('🔄 AUTOSAVE: getCurrentState - starting')
 
     try {
       console.log('🔄 AUTOSAVE: getCurrentState - invalidating cache...')
