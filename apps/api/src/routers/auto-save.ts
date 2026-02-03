@@ -102,6 +102,8 @@ export const autoSaveRouter = router({
     .input(z.object({ projectId: z.string().min(1, 'Project ID is required') }))
     .query(async ({ input, ctx }) => {
       try {
+        logger.info(`[autoSave] 🔍 getCurrentState CALLED: projectId=${input.projectId}, userId=${ctx.user.id}`);
+
         // FIXED: Ignore 'is_current' flag which can be unreliable.
         // Always return the absolute latest state by timestamp.
         const { data: latestState, error } = await ctx.supabase
@@ -114,17 +116,18 @@ export const autoSaveRouter = router({
           .maybeSingle(); // Use maybeSingle to return null instead of error if empty
 
         if (error) {
-          logger.error('Database error fetching current state:', error);
+          logger.error('[autoSave] ❌ getCurrentState: Database error:', error);
           throw new TRPCError({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to fetch current state',
           });
         }
 
+        logger.info(`[autoSave] ✅ getCurrentState RESULT: version=${latestState?.version || 'NULL'}, timestamp=${latestState?.timestamp || 'NULL'}, id=${latestState?.id || 'NULL'}`);
         return latestState;
       } catch (error) {
         if (error instanceof TRPCError) throw error;
-        logger.error('[autoSave] getCurrentState: unexpected error:', error);
+        logger.error('[autoSave] ❌ getCurrentState: unexpected error:', error);
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch current state',

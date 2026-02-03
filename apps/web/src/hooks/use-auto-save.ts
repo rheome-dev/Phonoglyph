@@ -47,6 +47,7 @@ export interface UseAutoSave {
   getCurrentState: () => Promise<EditState | null>
   config: AutoSaveConfig
   updateConfig: (config: Partial<AutoSaveConfig>) => void
+  isAuthenticated: boolean
 }
 
 const DEFAULT_CONFIG: AutoSaveConfig = {
@@ -210,32 +211,45 @@ export function useAutoSave(projectId: string): UseAutoSave {
 
   // Get current state function - clean implementation using tRPC refetch
   const getCurrentState = useCallback(async (): Promise<EditState | null> => {
-    console.log('🔄 AUTOSAVE: getCurrentState called, projectId:', projectId)
+    console.log('🔄 AUTOSAVE: getCurrentState called', {
+      projectId,
+      isAuthenticated,
+      queryEnabled: !!projectId && isAuthenticated
+    })
 
     if (!projectId || !isAuthenticated) {
+      console.log('🔄 AUTOSAVE: getCurrentState early return - projectId:', projectId, 'isAuthenticated:', isAuthenticated)
       return null
     }
 
     try {
+      console.log('🔄 AUTOSAVE: Calling tRPC refetch...')
       // Force a hard refresh from the server
-      const { data, isError } = await getCurrentStateQuery.refetch()
+      const result = await getCurrentStateQuery.refetch()
 
-      if (isError || !data) {
+      console.log('🔄 AUTOSAVE: tRPC refetch result:', {
+        hasData: !!result.data,
+        isError: result.isError,
+        dataVersion: result.data?.version,
+        dataId: result.data?.id
+      })
+
+      if (result.isError || !result.data) {
         console.log('🔄 AUTOSAVE: No state found or error')
         return null
       }
 
-      console.log('🔄 AUTOSAVE: getCurrentState - version:', data.version)
+      console.log('🔄 AUTOSAVE: getCurrentState SUCCESS - version:', result.data.version, 'timestamp:', result.data.timestamp)
 
       // Map the database response to EditState format (handling dates)
       return {
-        id: data.id,
-        userId: data.user_id,
-        projectId: data.project_id,
-        timestamp: new Date(data.timestamp),
-        data: data.data,
-        version: data.version,
-        isCurrent: data.is_current
+        id: result.data.id,
+        userId: result.data.user_id,
+        projectId: result.data.project_id,
+        timestamp: new Date(result.data.timestamp),
+        data: result.data.data,
+        version: result.data.version,
+        isCurrent: result.data.is_current
       }
     } catch (error) {
       console.error('🔄 AUTOSAVE: getCurrentState - error:', error)
@@ -344,7 +358,8 @@ export function useAutoSave(projectId: string): UseAutoSave {
     clearHistory: isAuthenticated ? clearHistory : async () => { throw new Error('Clear history not available for guest users') },
     getCurrentState: getCurrentStateFn,
     config,
-    updateConfig
+    updateConfig,
+    isAuthenticated
   }
 }
 

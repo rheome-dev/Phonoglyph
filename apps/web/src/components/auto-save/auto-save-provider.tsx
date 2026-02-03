@@ -120,7 +120,8 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
   const [showHistory, setShowHistory] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [isHydrating, setIsHydrating] = React.useState(false)
-  
+  const [hasHydrated, setHasHydrated] = React.useState(false)
+
   const autoSave = useAutoSave(projectId)
 
   // Function to capture current visualization state from Zustand stores
@@ -375,7 +376,7 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
 
   // Load saved state on mount (hydration)
   useEffect(() => {
-    console.log('🔄 AUTOSAVE: Starting hydration for project:', projectId)
+    console.log('🔄 AUTOSAVE: Hydration effect triggered, projectId:', projectId, 'isAuthenticated:', autoSave.isAuthenticated, 'hasHydrated:', hasHydrated)
 
     const loadSavedState = async () => {
       if (!projectId) {
@@ -383,7 +384,19 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
         return
       }
 
-      console.log('🔄 AUTOSAVE: Fetching current state...')
+      // Wait for authentication to be determined before hydrating
+      if (!autoSave.isAuthenticated) {
+        console.log('⏳ AUTOSAVE: Waiting for authentication...')
+        return
+      }
+
+      // Prevent duplicate hydration
+      if (hasHydrated) {
+        console.log('⏭️ AUTOSAVE: Already hydrated, skipping')
+        return
+      }
+
+      console.log('🔄 AUTOSAVE: Fetching current state (authenticated)...')
 
       try {
         setIsHydrating(true)
@@ -394,6 +407,7 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
         if (!savedState || !savedState.data) {
           console.log('⚠️ AUTOSAVE: No saved state found - is this a new project?')
           setIsHydrating(false)
+          setHasHydrated(true)
           return
         }
 
@@ -481,13 +495,14 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
         console.error('❌ AUTOSAVE: Failed to load saved state:', err)
       } finally {
         setIsHydrating(false)
+        setHasHydrated(true)
       }
     }
 
     loadSavedState()
-    // FIX: Only run on mount/project change. Excluding autoSave prevents infinite loops.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId])
+    // Run when projectId changes OR when authentication status changes
+    // The hasHydrated flag prevents duplicate hydration
+  }, [projectId, autoSave.isAuthenticated, hasHydrated])
 
   // Wrapper for restoreState that matches the context interface
   const handleRestoreStateWrapper = useCallback(async (stateId: string): Promise<EditState> => {
