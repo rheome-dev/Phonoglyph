@@ -75,6 +75,7 @@ interface AutoSaveContextType {
   showHistory?: boolean
   setShowHistory?: (show: boolean) => void
   error?: string | null
+  isAuthenticated: boolean
 }
 
 const AutoSaveContext = createContext<AutoSaveContextType | null>(null)
@@ -174,16 +175,21 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
   // Save current state
   const saveCurrentState = useCallback(async () => {
     if (isHydrating) {
-      // Don't save while hydrating to avoid race conditions
+      console.log('💾 AUTOSAVE: Skipping save - hydrating in progress')
       return
     }
-    
+
+    console.log('💾 AUTOSAVE: saveCurrentState triggered')
+
     try {
       setError(null)
       const stateData = captureCurrentState()
       await autoSave.saveState(stateData)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save state')
+      console.log('💾 AUTOSAVE: saveCurrentState completed successfully')
+    } catch (err: any) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to save state'
+      console.error('💾 AUTOSAVE: saveCurrentState FAILED:', errorMessage, err)
+      setError(errorMessage)
       debugLog.error('Auto-save error:', err)
     }
   }, [autoSave, captureCurrentState, isHydrating])
@@ -304,15 +310,25 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
   // Create debounced save function
   const debouncedSave = useRef(
     debounce(() => {
+      console.log('💾 AUTOSAVE: debouncedSave triggered')
       saveCurrentState()
     }, autoSave.config.debounceTime)
   ).current
 
+  // Track pending changes that occurred during hydration
+  const pendingChangesRef = useRef<{
+    hasChanges: boolean
+    changeTime: number
+  }>({ hasChanges: false, changeTime: 0 })
+
   // Reactive auto-save: Subscribe to store changes
   useEffect(() => {
-    if (!autoSave.config.enabled || isHydrating) {
+    if (!autoSave.config.enabled) {
+      console.log('💾 AUTOSAVE: Store subscriptions disabled (config)')
       return
     }
+
+    console.log('💾 AUTOSAVE: Setting up store subscriptions, isHydrating:', isHydrating)
 
     // Track previous state for comparison
     let prevTimelineState = useTimelineStore.getState()
@@ -321,14 +337,24 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
 
     // Subscribe to timeline changes
     const unsubTimeline = useTimelineStore.subscribe((state) => {
-      // Only trigger save on meaningful changes (not transient playback state)
-      if (
-        state.layers !== prevTimelineState.layers || 
+      const hasChanges =
+        state.layers !== prevTimelineState.layers ||
         state.duration !== prevTimelineState.duration ||
         state.zoom !== prevTimelineState.zoom
-      ) {
+
+      if (hasChanges) {
+        console.log('💾 AUTOSAVE: Timeline changes detected', {
+          layerCount: state.layers?.length,
+          duration: state.duration,
+          zoom: state.zoom
+        })
         prevTimelineState = state
-        debouncedSave()
+        if (isHydrating) {
+          console.log('💾 AUTOSAVE: Change during hydration - queuing')
+          pendingChangesRef.current = { hasChanges: true, changeTime: Date.now() }
+        } else {
+          debouncedSave()
+        }
       } else {
         prevTimelineState = state
       }
@@ -336,12 +362,18 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
 
     // Subscribe to settings changes
     const unsubSettings = useProjectSettingsStore.subscribe((state) => {
-      if (
+      const hasChanges =
         state.backgroundColor !== prevSettingsState.backgroundColor ||
         state.isBackgroundVisible !== prevSettingsState.isBackgroundVisible
-      ) {
+
+      if (hasChanges) {
+        console.log('💾 AUTOSAVE: Settings changes detected')
         prevSettingsState = state
-        debouncedSave()
+        if (isHydrating) {
+          pendingChangesRef.current = { hasChanges: true, changeTime: Date.now() }
+        } else {
+          debouncedSave()
+        }
       } else {
         prevSettingsState = state
       }
@@ -349,24 +381,34 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
 
     // Subscribe to visualizer changes
     const unsubVisualizer = useVisualizerStore.subscribe((state) => {
-      if (
+      const hasChanges =
         state.mappings !== prevVisualizerState.mappings ||
         state.selectedEffects !== prevVisualizerState.selectedEffects ||
         state.aspectRatio !== prevVisualizerState.aspectRatio ||
-        state.baseParameterValues !== prevVisualizerState.baseParameterValues ||
-        state.activeSliderValues !== prevVisualizerState.activeSliderValues ||
-        state.audioAnalysisSettings !== prevVisualizerState.audioAnalysisSettings ||
-        state.featureDecayTimes !== prevVisualizerState.featureDecayTimes ||
-        state.featureSensitivities !== prevVisualizerState.featureSensitivities
-      ) {
+        JSON.stringify(state.baseParameterValues) !== JSON.stringify(prevVisualizerState.baseParameterValues) ||
+        JSON.stringify(state.activeSliderValues) !== JSON.stringify(prevVisualizerState.activeSliderValues) ||
+        JSON.stringify(state.audioAnalysisSettings) !== JSON.stringify(prevVisualizerState.audioAnalysisSettings) ||
+        JSON.stringify(state.featureDecayTimes) !== JSON.stringify(prevVisualizerState.featureDecayTimes) ||
+        JSON.stringify(state.featureSensitivities) !== JSON.stringify(prevVisualizerState.featureSensitivities)
+
+      if (hasChanges) {
+        console.log('💾 AUTOSAVE: Visualizer changes detected', {
+          mappingsCount: Object.keys(state.mappings || {}).length,
+          effectCount: state.selectedEffects?.length
+        })
         prevVisualizerState = state
-        debouncedSave()
+        if (isHydrating) {
+          pendingChangesRef.current = { hasChanges: true, changeTime: Date.now() }
+        } else {
+          debouncedSave()
+        }
       } else {
         prevVisualizerState = state
       }
     })
 
     return () => {
+      console.log('💾 AUTOSAVE: Cleaning up store subscriptions')
       unsubTimeline()
       unsubSettings()
       unsubVisualizer()
@@ -394,6 +436,26 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
       if (hasHydrated) {
         console.log('⏭️ AUTOSAVE: Already hydrated, skipping')
         return
+      }
+
+      // Check for orphaned localStorage saves from before auth completed
+      // This handles the race condition where saves went to localStorage
+      // because auth wasn't ready yet
+      const guestKey = `guest_auto_save_${projectId}`
+      const guestData = localStorage.getItem(guestKey)
+      if (guestData) {
+        try {
+          const parsed = JSON.parse(guestData)
+          console.log('🔄 AUTOSAVE: Found localStorage data, migrating to database...')
+          // Migrate to database
+          await autoSave.saveState(parsed.data)
+          // Clean up localStorage after successful migration
+          localStorage.removeItem(guestKey)
+          console.log('✅ AUTOSAVE: Successfully migrated localStorage data to database')
+        } catch (migrationErr) {
+          console.error('❌ AUTOSAVE: Failed to migrate localStorage data:', migrationErr)
+          // Don't block hydration on migration failure
+        }
       }
 
       console.log('🔄 AUTOSAVE: Fetching current state (authenticated)...')
@@ -496,6 +558,16 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
       } finally {
         setIsHydrating(false)
         setHasHydrated(true)
+
+        // Check for pending changes that occurred during hydration
+        if (pendingChangesRef.current.hasChanges) {
+          console.log('💾 AUTOSAVE: Saving pending changes from during hydration')
+          pendingChangesRef.current = { hasChanges: false, changeTime: 0 }
+          // Trigger a save with a small delay to ensure subscriptions are re-established
+          setTimeout(() => {
+            saveCurrentState()
+          }, 100)
+        }
       }
     }
 
@@ -517,6 +589,7 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
     lastSaved: autoSave.lastSaved,
     config: autoSave.config,
     updateConfig: autoSave.updateConfig,
+    isAuthenticated: autoSave.isAuthenticated,
   }
 
   // Expose panel state setters for external use

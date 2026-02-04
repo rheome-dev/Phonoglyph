@@ -108,34 +108,66 @@ export function useAutoSave(projectId: string): UseAutoSave {
 
   // Save state function
   const saveState = useCallback(async (stateData?: Record<string, any>) => {
-    if (!projectId || !isAuthenticated || !user || !config.enabled) {
+    // Log save attempt details for debugging
+    console.log('💾 AUTOSAVE: saveState called', {
+      projectId,
+      isAuthenticated,
+      hasUser: !!user,
+      configEnabled: config.enabled,
+      hasStateData: !!stateData
+    })
+
+    if (!projectId) {
+      console.warn('💾 AUTOSAVE: Skipping save - no projectId')
+      return
+    }
+
+    if (!isAuthenticated) {
+      console.warn('💾 AUTOSAVE: Skipping save - not authenticated')
+      return
+    }
+
+    if (!user) {
+      console.warn('💾 AUTOSAVE: Skipping save - no user')
+      return
+    }
+
+    if (!config.enabled) {
+      console.warn('💾 AUTOSAVE: Skipping save - config disabled')
       return
     }
 
     try {
       setIsSaving(true)
-      
+
       // If stateData is provided, store it in the ref for future use
       if (stateData) {
         currentStateRef.current = stateData
       }
-      
+
       const dataToSave = stateData || currentStateRef.current
       if (!dataToSave) {
-        debugLog.warn('No state data to save')
+        console.warn('💾 AUTOSAVE: No state data to save')
         return
       }
 
       // Validate state data structure
       const isValidData = validateStateData(dataToSave)
       if (!isValidData) {
-        debugLog.warn('Invalid state data structure')
+        console.warn('💾 AUTOSAVE: Invalid state data structure')
         return
       }
 
-      await saveStateMutation.mutateAsync({
+      console.log('💾 AUTOSAVE: Sending save mutation...', { projectId })
+
+      const result = await saveStateMutation.mutateAsync({
         projectId,
         data: dataToSave
+      })
+
+      console.log('💾 AUTOSAVE: Save successful!', {
+        version: result?.version,
+        id: result?.id
       })
 
       setLastSaved(new Date())
@@ -144,9 +176,17 @@ export function useAutoSave(projectId: string): UseAutoSave {
       await queryClient.invalidateQueries({ queryKey: ['autoSave', 'getCurrentState'] })
       await getProjectStatesQuery.refetch()
 
-    } catch (error) {
+    } catch (error: any) {
+      // Surface errors clearly for debugging
+      console.error('💾 AUTOSAVE: Save FAILED!', {
+        error: error?.message || error,
+        code: error?.data?.code,
+        projectId,
+        userId: user?.id
+      })
       debugLog.error('Failed to save state:', error)
-      // Don't throw error to avoid breaking the UI
+      // Re-throw to let the provider handle the error state
+      throw error
     } finally {
       setIsSaving(false)
     }

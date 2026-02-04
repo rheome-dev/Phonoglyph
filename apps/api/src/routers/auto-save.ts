@@ -37,13 +37,6 @@ export const autoSaveRouter = router({
     .input(saveStateSchema)
     .mutation(async ({ input, ctx }) => {
       try {
-        // First, mark all existing states for this project as not current
-        await ctx.supabase
-          .from('edit_states')
-          .update({ is_current: false })
-          .eq('project_id', input.projectId)
-          .eq('user_id', ctx.user.id);
-
         // Get the next version number
         const { data: latestState } = await ctx.supabase
           .from('edit_states')
@@ -64,7 +57,6 @@ export const autoSaveRouter = router({
             project_id: input.projectId,
             data: input.data,
             version: nextVersion,
-            is_current: true,
           })
           .select()
           .single();
@@ -75,6 +67,31 @@ export const autoSaveRouter = router({
             code: 'INTERNAL_SERVER_ERROR',
             message: 'Failed to save edit state',
           });
+        }
+
+        // Clean up old states (keep max 10)
+        const maxHistory = 10;
+        const { count } = await ctx.supabase
+          .from('edit_states')
+          .select('*', { count: 'exact', head: true })
+          .eq('project_id', input.projectId)
+          .eq('user_id', ctx.user.id);
+
+        if (count && count > maxHistory) {
+          const { data: statesToDelete } = await ctx.supabase
+            .from('edit_states')
+            .select('id')
+            .eq('project_id', input.projectId)
+            .eq('user_id', ctx.user.id)
+            .order('timestamp', { ascending: true })
+            .limit(count - maxHistory);
+
+          if (statesToDelete && statesToDelete.length > 0) {
+            await ctx.supabase
+              .from('edit_states')
+              .delete()
+              .in('id', statesToDelete.map((s: { id: string }) => s.id));
+          }
         }
 
         // Log audit event
@@ -162,12 +179,17 @@ export const autoSaveRouter = router({
           });
         }
 
-        // Mark all existing states for this project as not current
-        await ctx.supabase
+        // Get next version number
+        const { data: latestState } = await ctx.supabase
           .from('edit_states')
-          .update({ is_current: false })
+          .select('version')
           .eq('project_id', editState.project_id)
-          .eq('user_id', ctx.user.id);
+          .eq('user_id', ctx.user.id)
+          .order('version', { ascending: false })
+          .limit(1)
+          .single();
+
+        const nextVersion = (latestState?.version || 0) + 1;
 
         // Create a new state based on the restored one
         const { data: newState, error: createError } = await ctx.supabase
@@ -176,8 +198,7 @@ export const autoSaveRouter = router({
             user_id: ctx.user.id,
             project_id: editState.project_id,
             data: editState.data,
-            version: editState.version + 1,
-            is_current: true,
+            version: nextVersion,
           })
           .select()
           .single();
@@ -196,10 +217,10 @@ export const autoSaveRouter = router({
           p_action: 'auto_save.restore_state',
           p_resource_type: 'edit_state',
           p_resource_id: newState.id,
-          p_metadata: { 
+          p_metadata: {
             original_state_id: input.stateId,
             project_id: editState.project_id,
-            version: newState.version 
+            version: newState.version
           },
         });
 
@@ -251,10 +272,10 @@ export const autoSaveRouter = router({
     .input(deleteStateSchema)
     .mutation(async ({ input, ctx }) => {
       try {
-        // Check if this is the current state
+        // Get state info for audit log
         const { data: editState, error: fetchError } = await ctx.supabase
           .from('edit_states')
-          .select('is_current, project_id')
+          .select('project_id')
           .eq('id', input.stateId)
           .eq('user_id', ctx.user.id)
           .single();
@@ -288,35 +309,13 @@ export const autoSaveRouter = router({
           });
         }
 
-        // If this was the current state, make the most recent state current
-        if (editState.is_current) {
-          const { data: latestState } = await ctx.supabase
-            .from('edit_states')
-            .select('id')
-            .eq('project_id', editState.project_id)
-            .eq('user_id', ctx.user.id)
-            .order('timestamp', { ascending: false })
-            .limit(1)
-            .single();
-
-          if (latestState) {
-            await ctx.supabase
-              .from('edit_states')
-              .update({ is_current: true })
-              .eq('id', latestState.id);
-          }
-        }
-
         // Log audit event
         await ctx.supabase.rpc('log_audit_event', {
           p_user_id: ctx.user.id,
           p_action: 'auto_save.delete_state',
           p_resource_type: 'edit_state',
           p_resource_id: input.stateId,
-          p_metadata: { 
-            was_current: editState.is_current,
-            project_id: editState.project_id 
-          },
+          p_metadata: { project_id: editState.project_id },
         });
 
         return { success: true };
