@@ -69,9 +69,9 @@ export function AutoSaveTopBar() {
             <div>Last Saved: {autoSave.lastSaved ? new Date(autoSave.lastSaved).toLocaleTimeString() : 'Never'}</div>
             <div className="border-t border-stone-700 my-2 pt-2">
               <div className="font-bold text-stone-400 mb-1">Store State:</div>
-              <div>Layers: <span className="text-yellow-400">{timelineState.layers?.length || 0}</span></div>
-              <div>Effects: <span className="text-yellow-400">{Object.keys(visualizerState.selectedEffects || {}).filter(k => visualizerState.selectedEffects[k]).length}</span></div>
-              <div>Params: <span className="text-yellow-400">{Object.keys(visualizerState.baseParameterValues || {}).length}</span></div>
+              <div>Timeline Layers: <span className="text-yellow-400">{timelineState.layers?.length || 0}</span></div>
+              <div>Unique Effect Types: <span className="text-yellow-400">{new Set(timelineState.layers?.map(l => l.effectType) || []).size}</span></div>
+              <div>Base Params: <span className="text-yellow-400">{Object.keys(visualizerState.baseParameterValues || {}).length}</span></div>
             </div>
           </div>
           <div className="mt-2 pt-2 border-t border-stone-700 text-stone-500">
