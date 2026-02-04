@@ -38,7 +38,7 @@ export function RayboxLogo({ className, size = 'md' }: RayboxLogoProps) {
         style={{
           fontFamily: 'var(--font-logo)',
           fontSize: `${scaledFontSize}px`,
-          fontWeight: 400,
+          fontWeight: 700,
           letterSpacing: '-0.02em',
           lineHeight: 1.2,
           margin: 0,
