@@ -1,10 +1,15 @@
 import React from 'react'
 import './globals.css'
-import { Inter } from 'next/font/google'
+import { Inter, Lusitana } from 'next/font/google'
 import { Toaster } from '@/components/ui/toaster'
 import { TRPCProvider } from '@/components/providers/trpc-provider'
 
 const inter = Inter({ subsets: ['latin'] })
+const lusitana = Lusitana({
+  subsets: ['latin'],
+  weight: ['400', '700'],
+  variable: '--font-lusitana',
+})
 
 export const metadata = {
   title: 'Raybox - MIDI Visualization Platform',
@@ -39,7 +44,7 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/favicon/apple-touch-icon.png" />
         <link rel="manifest" href="/favicon/site.webmanifest" />
       </head>
-      <body className={inter.className}>
+      <body className={`${inter.className} ${lusitana.variable}`}>
         <TRPCProvider>
           {children}
           <Toaster />
