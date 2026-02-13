@@ -1,4 +1,5 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useLayoutEffect } from 'react';
+import { useCurrentFrame, useVideoConfig } from 'remotion';
 import { debugLog } from '@/lib/utils';
 import type { Layer } from '@/types/video-composition';
 
@@ -512,6 +513,8 @@ const SPECTROGRAM_BUFFER_SIZE = 200; // Number of FFT frames to keep (controls w
 type HudOverlayProps = {
   layer: Layer;
   featureData?: any;
+  videoWidth?: number;  // Explicit dimensions for headless rendering
+  videoHeight?: number;
   onOpenModal?: () => void;
   onUpdate: (updates: Partial<Layer>) => void;
   isSelected?: boolean;
@@ -523,6 +526,8 @@ const clamp = (val: number, min: number, max: number) => Math.max(min, Math.min(
 export function HudOverlay({
   layer,
   featureData,
+  videoWidth,
+  videoHeight,
   onOpenModal,
   onUpdate,
   isSelected,
@@ -570,16 +575,36 @@ export function HudOverlay({
   const type = layer.effectType || (layer as any).type;
   const stem = (layer as any).stem;
 
+  // Remotion frame hooks - these drive per-frame rendering
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+
+  // Force re-render on frame change - more reliable than deps in useLayoutEffect
+  // for headless/lambda rendering
+  const [, forceUpdate] = useState(0);
+  useLayoutEffect(() => {
+    forceUpdate((f) => f + 1);
+  }, [frame]);
+
   const updateCanvasSize = useCallback(() => {
     const parentRect = containerRef.current?.parentElement?.getBoundingClientRect();
-    if (!parentRect) return;
-    const width = (parentRect.width * widthPct) / 100;
-    const height = (parentRect.height * heightPct) / 100;
+
+    // FIX: Use video dimensions as fallback for headless rendering
+    // When getBoundingClientRect returns 0x0 (headless), use explicit dimensions
+    const parentWidth = parentRect?.width ?? 0;
+    const parentHeight = parentRect?.height ?? 0;
+
+    // If parent rect is 0x0 (headless), use video dimensions
+    const effectiveParentWidth = parentWidth > 0 ? parentWidth : (videoWidth ?? 1080);
+    const effectiveParentHeight = parentHeight > 0 ? parentHeight : (videoHeight ?? 1920);
+
+    const width = (effectiveParentWidth * widthPct) / 100;
+    const height = (effectiveParentHeight * heightPct) / 100;
     setCanvasSize({
       width: Math.max(1, width),
       height: Math.max(1, height),
     });
-  }, [widthPct, heightPct]);
+  }, [widthPct, heightPct, videoWidth, videoHeight]);
 
   useEffect(() => {
     updateCanvasSize();
@@ -657,7 +682,10 @@ export function HudOverlay({
     }
   }, [dragging, resizing]);
 
-  useEffect(() => {
+  // Use useLayoutEffect for synchronous per-frame drawing in Remotion
+  // This ensures canvas draws synchronously before paint, which is critical for
+  // headless/lambda rendering where useEffect may be deferred
+  useLayoutEffect(() => {
     if (!canvasRef.current) return;
     const ctx = canvasRef.current.getContext('2d');
     if (!ctx) return;
@@ -768,7 +796,7 @@ export function HudOverlay({
       default:
         drawWaveform(ctx, width, height, [], settings);
     }
-  }, [type, stem, settings, featureData, canvasSize]);
+  }, [type, stem, settings, featureData, canvasSize, frame]);
 
   function onMouseDown(e: React.MouseEvent) {
     if ((e.target as HTMLElement).classList.contains('transform-anchor')) return;
