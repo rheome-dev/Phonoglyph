@@ -515,6 +515,8 @@ type HudOverlayProps = {
   featureData?: any;
   videoWidth?: number;  // Explicit dimensions for headless rendering
   videoHeight?: number;
+  frame?: number;      // Optional frame number - uses Remotion hook if not provided
+  fps?: number;        // Optional fps - uses Remotion hook if not provided
   onOpenModal?: () => void;
   onUpdate: (updates: Partial<Layer>) => void;
   isSelected?: boolean;
@@ -528,6 +530,8 @@ export function HudOverlay({
   featureData,
   videoWidth,
   videoHeight,
+  frame: externalFrame,
+  fps: externalFps,
   onOpenModal,
   onUpdate,
   isSelected,
@@ -539,6 +543,19 @@ export function HudOverlay({
   const [resizing, setResizing] = useState<string | null>(null); // anchor key
   const [isHovered, setIsHovered] = useState(false);
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
+
+  // Use external frame/fps if provided, otherwise use Remotion hooks
+  // This allows HudOverlay to work both inside and outside Remotion compositions
+  let frame: number;
+  let fpsVal: number;
+  if (externalFrame !== undefined && externalFps !== undefined) {
+    frame = externalFrame;
+    fpsVal = externalFps;
+  } else {
+    // Inside Remotion composition - use hooks
+    frame = useCurrentFrame();
+    fpsVal = useVideoConfig().fps;
+  }
 
   const dragStartRef = useRef<{
     mouseX: number;
@@ -574,10 +591,6 @@ export function HudOverlay({
   const settings = (layer as any).settings || {};
   const type = layer.effectType || (layer as any).type;
   const stem = (layer as any).stem;
-
-  // Remotion frame hooks - these drive per-frame rendering
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
 
   // Force re-render on frame change - more reliable than deps in useLayoutEffect
   // for headless/lambda rendering

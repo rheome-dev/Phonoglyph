@@ -303,6 +303,9 @@ export const RemotionOverlayRenderer: React.FC<RemotionOverlayRendererProps> = (
             // Pass video dimensions for headless rendering - avoids 0x0 canvas issue
             videoWidth={videoWidth}
             videoHeight={videoHeight}
+            // Pass frame/fps explicitly to avoid calling hooks twice
+            frame={frame}
+            fps={fps}
             // No-op callbacks: overlays are not editable in Remotion render
             onOpenModal={() => { }}
             onUpdate={() => { }}

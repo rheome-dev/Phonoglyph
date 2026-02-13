@@ -271,6 +271,8 @@ export function HudOverlayRenderer({ stemUrlMap = {}, cachedAnalysis = [] }: Hud
             key={layer.id}
             layer={layerWithStem}
             featureData={featureData}
+            frame={frame}
+            fps={60}
             onOpenModal={() => {}}
             onUpdate={(updates: Partial<Layer>) => updateLayer(layer.id, updates)}
             isSelected={false}
