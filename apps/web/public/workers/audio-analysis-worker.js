@@ -599,12 +599,13 @@ async function performFullAnalysis(channelData, sampleRate, stemType, onProgress
 
     // Note: FFT data is now extracted via complexSpectrum in the main feature extraction loop
 
-    // Extract stereo window for Lissajous stereometer (mono for now)
+    // Extract stereo window for Lissajous stereometer - extract at each frame position
     const N = 1024;
-    const leftWindow = buffer.slice(-N);
+    const leftWindow = channelData.slice(currentPosition, currentPosition + N);
     // For mono, provide both left and right as the same array
-    featureFrames.stereoWindow_left = Array.from(leftWindow);
-    featureFrames.stereoWindow_right = Array.from(leftWindow);
+    // Push per-frame stereo window data (same pattern as amplitudeSpectrum)
+    featureFrames.stereoWindow_left.push(Array.from(leftWindow));
+    featureFrames.stereoWindow_right.push(Array.from(leftWindow));
 
     // Record frame start time for timestamped series
     const frameStartTime = currentPosition / sampleRate;
@@ -656,9 +657,14 @@ async function performFullAnalysis(channelData, sampleRate, stemType, onProgress
         flatFeatures.fftFrequencies = fftFrequencies;
       }
     } else if (key === 'stereoWindow_left' || key === 'stereoWindow_right') {
-      // Keep stereo window data (already extracted per-frame, use last frame for now)
-      // Note: Could be enhanced to save time-series stereo data similar to FFT
-      flatFeatures[key] = featureFrames[key];
+      // Flatten per-frame stereo window data similar to FFT
+      // Format: [frame0_sample0, frame0_sample1, ..., frame1_sample0, frame1_sample1, ...]
+      const allFrames = featureFrames[key];
+      if (allFrames.length > 0) {
+        flatFeatures[key] = allFrames.flat();
+      } else {
+        flatFeatures[key] = [];
+      }
     } else if (key === 'volume' || key === 'bass' || key === 'mid' || key === 'treble' || key === 'features') {
       // Ensure these fields are arrays
       flatFeatures[key] = Array.isArray(featureFrames[key]) ? featureFrames[key] : [];

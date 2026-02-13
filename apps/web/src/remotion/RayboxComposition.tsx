@@ -15,6 +15,7 @@ import type { AudioAnalysisData as SimpleAudioAnalysisData } from '@/types/visua
 import type { AudioAnalysisData as CachedAudioAnalysisData } from '@/types/audio-analysis-data';
 import { parseParamKey } from '@/lib/visualizer/paramKeys';
 import { debugLog } from '@/lib/utils';
+import { RemotionOverlayRenderer } from './RemotionOverlayRenderer';
 
 const VALID_STEMS = new Set(['master', 'drums', 'bass', 'vocals', 'other']);
 
@@ -135,20 +136,71 @@ export function extractAudioDataAtTime(
   let frequencies: number[] = [];
   let timeData: number[] = [];
 
-  if (fft && frameTimes && Array.isArray(fft) && Array.isArray(frameTimes) && frameTimes.length > 0) {
+  // Check for real stereo window data first (per-frame extraction)
+  const stereoWindowLeft = (analysis.analysisData as any).stereoWindow_left;
+  const stereoWindowRight = (analysis.analysisData as any).stereoWindow_right;
+  const hasRealStereoData = stereoWindowLeft && stereoWindowRight &&
+    Array.isArray(stereoWindowLeft) && Array.isArray(stereoWindowRight) &&
+    stereoWindowLeft.length > 0 && stereoWindowRight.length > 0;
+
+  if (hasRealStereoData) {
+    // Calculate samples per frame for the flattened stereo window arrays
+    const samplesPerFrame = stereoWindowLeft.length > 0 ? 1024 : 256; // Default to 1024 (N value from worker)
+    const totalFrames = Math.floor(stereoWindowLeft.length / samplesPerFrame);
+
     // Find the frame index closest to the current time
+    let effectiveFrameTimes = frameTimes;
+    if (!effectiveFrameTimes || !Array.isArray(effectiveFrameTimes) || effectiveFrameTimes.length === 0) {
+      const duration = (analysis.analysisData as any).analysisDuration || analysis.metadata?.duration || 30;
+      effectiveFrameTimes = Array.from({ length: totalFrames }, (_, i) => (i / totalFrames) * duration);
+    }
+
     let frameIndex = 0;
-    for (let i = 0; i < frameTimes.length; i++) {
-      if (frameTimes[i] <= time) {
+    for (let i = 0; i < effectiveFrameTimes.length; i++) {
+      if (effectiveFrameTimes[i] <= time) {
         frameIndex = i;
       } else {
         break;
       }
     }
 
-    // [CHANGE 2] Dynamically calculate bin size instead of hardcoding 256
-    // This prevents index out of bounds or misalignment if analysis uses 512/1024 bins
-    const binsPerFrame = Math.floor(fft.length / frameTimes.length);
+    // Extract the stereo window for this frame
+    const startIdx = frameIndex * samplesPerFrame;
+    const endIdx = Math.min(startIdx + samplesPerFrame, stereoWindowLeft.length);
+
+    if (startIdx < stereoWindowLeft.length) {
+      timeData = [
+        ...stereoWindowLeft.slice(startIdx, endIdx),
+        ...stereoWindowRight.slice(startIdx, endIdx)
+      ];
+    }
+  } else if (fft && Array.isArray(fft) && fft.length > 0) {
+    // Fallback: Generate time-domain approximation from FFT magnitudes (only if no real stereo data)
+    // FIX: Add linear interpolation fallback when frameTimes is missing
+    // This handles compressed payloads where frameTimes is not included
+    let effectiveFrameTimes = frameTimes;
+    let binsPerFrame = 1;
+
+    if (!effectiveFrameTimes || !Array.isArray(effectiveFrameTimes) || effectiveFrameTimes.length === 0) {
+      // Generate synthetic linear frameTimes based on analysis duration
+      const duration = (analysis.analysisData as any).analysisDuration || analysis.metadata?.duration || 30;
+      const numFrames = Math.min(fft.length, 256); // Assume reasonable frame count
+      effectiveFrameTimes = Array.from({ length: numFrames }, (_, i) => (i / numFrames) * duration);
+      binsPerFrame = Math.floor(fft.length / numFrames);
+    } else {
+      // [CHANGE 2] Dynamically calculate bin size instead of hardcoding 256
+      binsPerFrame = Math.floor(fft.length / effectiveFrameTimes.length);
+    }
+
+    // Find the frame index closest to the current time
+    let frameIndex = 0;
+    for (let i = 0; i < effectiveFrameTimes.length; i++) {
+      if (effectiveFrameTimes[i] <= time) {
+        frameIndex = i;
+      } else {
+        break;
+      }
+    }
 
     if (binsPerFrame > 0) {
       const startIdx = frameIndex * binsPerFrame;
@@ -156,8 +208,19 @@ export function extractAudioDataAtTime(
 
       if (startIdx < fft.length) {
         frequencies = Array.from(fft.slice(startIdx, endIdx));
-        // Map FFT to Time Data approximation if TimeData is missing (common in compressed payloads)
-        timeData = frequencies.map((_, i) => fft[startIdx + i] || 0);
+        // FIX: Generate time-domain approximation from FFT magnitudes
+        // This is needed for stereometer which requires timeData
+        // Generate a sine wave approximation from FFT magnitudes
+        const numSamples = Math.min(binsPerFrame, 256);
+        timeData = [];
+        for (let i = 0; i < numSamples; i++) {
+          // Create a simple approximation using the FFT magnitude
+          const fftIdx = Math.min(startIdx + i, fft.length - 1);
+          const mag = fft[fftIdx] || 0;
+          // Add some variation based on index to simulate waveform
+          const wave = Math.sin(i * 0.1) * mag * 0.3 + Math.cos(i * 0.05) * mag * 0.2;
+          timeData.push(Math.max(-1, Math.min(1, wave)));
+        }
       }
     }
   }
@@ -381,6 +444,10 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
     <div style={{ width, height, position: 'relative' }}>
       <canvas ref={canvasRef} width={width} height={height} style={{ width: '100%', height: '100%' }} />
       {masterAudioUrl && <Audio src={masterAudioUrl} />}
+      <RemotionOverlayRenderer
+        layers={actualLayers}
+        audioAnalysisData={actualAudioAnalysisData as unknown as CachedAudioAnalysisData[]}
+      />
     </div>
   );
 };

@@ -1,4 +1,5 @@
 import React, { useMemo, useCallback } from 'react';
+import { useCurrentFrame, useVideoConfig } from 'remotion';
 import { HudOverlay } from '@/components/hud/HudOverlay';
 import type { Layer } from '@/types/video-composition';
 import type { AudioAnalysisData as CachedAudioAnalysisData } from '@/types/audio-analysis-data';
@@ -7,8 +8,6 @@ import { extractAudioDataAtTime } from './RayboxComposition';
 type RemotionOverlayRendererProps = {
   layers: Layer[];
   audioAnalysisData: CachedAudioAnalysisData[];
-  currentFrame: number;
-  fps: number;
 };
 
 // Helper: get feature keys for overlay type (copied from HudOverlayManager)
@@ -36,10 +35,12 @@ function getFeatureKeyForOverlay(type: string): string[] {
 export const RemotionOverlayRenderer: React.FC<RemotionOverlayRendererProps> = ({
   layers,
   audioAnalysisData,
-  currentFrame,
-  fps,
 }) => {
-  const currentTime = fps > 0 ? currentFrame / fps : 0;
+  // Use Remotion's hook directly - this gets the frame value during render
+  const frame = useCurrentFrame();
+  const { fps, durationInFrames, width: videoWidth, height: videoHeight } = useVideoConfig();
+  const videoDuration = fps > 0 ? durationInFrames / fps : 30; // Fallback to 30s if no duration
+  const currentTime = fps > 0 ? frame / fps : 0;
   const cachedAnalysis = audioAnalysisData as CachedAudioAnalysisData[];
 
   const overlayLayers = useMemo(
@@ -97,8 +98,10 @@ export const RemotionOverlayRenderer: React.FC<RemotionOverlayRendererProps> = (
       const analysisDurationField = (analysis.analysisData as any)
         .analysisDuration as number | undefined;
 
+      // FIX: Use videoDuration as ultimate fallback instead of 1 second
+      // This prevents overlays from "finishing" immediately and freezing
       const analysisDuration =
-        metadataDuration ?? derivedDurationFromFrames ?? analysisDurationField ?? 1;
+        metadataDuration ?? derivedDurationFromFrames ?? analysisDurationField ?? videoDuration;
       const progress = Math.max(0, Math.min(currentTime / analysisDuration, 1));
 
       // For spectrum overlays
@@ -154,8 +157,13 @@ export const RemotionOverlayRenderer: React.FC<RemotionOverlayRendererProps> = (
         return null;
       }
 
-      // For stereometer: Approximate stereo window using cached time-domain data
+      // For stereometer: Try to get stereo window from analysis data first
+      // The analysis may include stereoWindow_left/right fields
       if (overlayType === 'stereometer') {
+        const stereoLeft = (analysis.analysisData as any).stereoWindow_left;
+        const stereoRight = (analysis.analysisData as any).stereoWindow_right;
+
+        // If we have per-frame time-data, use that
         const extracted = extractAudioDataAtTime(
           cachedAnalysis,
           analysis.fileMetadataId,
@@ -172,6 +180,16 @@ export const RemotionOverlayRenderer: React.FC<RemotionOverlayRendererProps> = (
             stereoWindow: {
               left,
               right,
+            },
+          };
+        }
+
+        // Fallback: use static stereo window from analysis if available
+        if (stereoLeft && stereoRight && Array.isArray(stereoLeft) && Array.isArray(stereoRight)) {
+          return {
+            stereoWindow: {
+              left: stereoLeft,
+              right: stereoRight,
             },
           };
         }
@@ -282,6 +300,9 @@ export const RemotionOverlayRenderer: React.FC<RemotionOverlayRendererProps> = (
             key={layer.id}
             layer={layer}
             featureData={featureData}
+            // Pass video dimensions for headless rendering - avoids 0x0 canvas issue
+            videoWidth={videoWidth}
+            videoHeight={videoHeight}
             // No-op callbacks: overlays are not editable in Remotion render
             onOpenModal={() => { }}
             onUpdate={() => { }}
