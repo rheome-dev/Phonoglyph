@@ -415,15 +415,20 @@ self.onmessage = function (event: MessageEvent<WorkerMessage>) {
       for (const feature of FEATURES_TO_NORMALIZE) {
         const arr = analysis[feature];
         if (arr && Array.isArray(arr) && arr.length > 0) {
-          const min = Math.min(...arr);
-          const max = Math.max(...arr);
+          // Get original min/max BEFORE normalization for metadata
+          let origMin = Infinity, origMax = -Infinity;
+          for (const v of arr) {
+            if (v < origMin) origMin = v;
+            if (v > origMax) origMax = v;
+          }
 
           normalizationMeta[feature] = {
-            originalMin: min,
-            originalMax: max,
+            originalMin: origMin,
+            originalMax: origMax,
             wasNormalized: true,
           };
 
+          // Now normalize
           analysis[feature] = Array.from(normalizeFeatureArray(arr));
         }
       }
