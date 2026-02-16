@@ -29,6 +29,22 @@ const STEM_FEATURES: Record<string, string[]> = {
   master: ['rms', 'loudness', 'spectralCentroid', 'spectralRolloff', 'spectralFlatness', 'zcr', 'perceptualSpread', 'amplitudeSpectrum', 'perceptualSharpness', 'energy', 'chroma'],
 };
 
+const FEATURES_TO_NORMALIZE = [
+  'rms',
+  'volume',
+  'loudness',
+  'bass',
+  'mid',
+  'treble',
+  'spectralCentroid',
+  'spectralRolloff',
+  'spectralFlux',
+  'zcr',
+  'energy',
+  'perceptualSharpness',
+  'perceptualSpread',
+] as const;
+
 /**
  * Helper function to check if a value is an array-like object (regular array or TypedArray)
  * and convert it to a regular array for processing.
@@ -44,6 +60,38 @@ function toArray(value: any): number[] | null {
     return Array.from(value as unknown as ArrayLike<number>);
   }
   return null;
+}
+
+/**
+ * Normalize a feature array to 0-1 range based on min/max values across the entire track.
+ */
+function normalizeFeatureArray(arr: Float32Array | number[]): Float32Array {
+  if (!arr || arr.length === 0) return new Float32Array(0);
+
+  let min = Infinity;
+  let max = -Infinity;
+
+  // Find min/max in single pass
+  for (let i = 0; i < arr.length; i++) {
+    const v = arr[i];
+    if (v < min) min = v;
+    if (v > max) max = v;
+  }
+
+  // Avoid division by zero
+  const range = max - min;
+  if (range === 0) {
+    // All values identical - return array of 0s or 1s based on value
+    return new Float32Array(arr.length).fill(max > 0 ? 1 : 0);
+  }
+
+  // Normalize to 0-1
+  const normalized = new Float32Array(arr.length);
+  for (let i = 0; i < arr.length; i++) {
+    normalized[i] = (arr[i] - min) / range;
+  }
+
+  return normalized;
 }
 
 /**
@@ -360,6 +408,28 @@ self.onmessage = function (event: MessageEvent<WorkerMessage>) {
       
       // Run enhanced analysis for transients with frame-based classification
       const transients = performEnhancedAnalysis(analysis, channelData, sampleRate, stemType, analysisParams);
+
+      // Normalize all time-series features to 0-1 range
+      const normalizationMeta: Record<string, { originalMin: number; originalMax: number; wasNormalized: boolean }> = {};
+
+      for (const feature of FEATURES_TO_NORMALIZE) {
+        const arr = analysis[feature];
+        if (arr && Array.isArray(arr) && arr.length > 0) {
+          const min = Math.min(...arr);
+          const max = Math.max(...arr);
+
+          normalizationMeta[feature] = {
+            originalMin: min,
+            originalMax: max,
+            wasNormalized: true,
+          };
+
+          analysis[feature] = Array.from(normalizeFeatureArray(arr));
+        }
+      }
+
+      // Add normalization metadata to analysis
+      (analysis as any).normalizationMeta = normalizationMeta;
 
       const result = {
         id: `client_${fileId}`,

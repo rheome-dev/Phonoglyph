@@ -5,6 +5,14 @@ export interface TransientData {
   frequency?: number;
 }
 
+export interface FeatureNormalizationMeta {
+  [featureName: string]: {
+    originalMin: number;
+    originalMax: number;
+    wasNormalized: boolean;
+  };
+}
+
 export interface ChromaData {
   time: number;
   pitch: number;
@@ -54,6 +62,9 @@ export interface AudioAnalysisData {
 
     // Optional scalar BPM when detected and persisted
     bpm?: number;
+
+    // Normalization metadata for time-series features
+    normalizationMeta?: FeatureNormalizationMeta;
   };
 
   waveformData: WaveformData;

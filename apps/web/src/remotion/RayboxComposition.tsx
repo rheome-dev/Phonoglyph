@@ -20,6 +20,68 @@ import { RemotionOverlayRenderer } from './RemotionOverlayRenderer';
 const VALID_STEMS = new Set(['master', 'drums', 'bass', 'vocals', 'other']);
 
 /**
+ * Default decay times for stateless peaks calculation.
+ * Fast decay for drums, medium for bass/vocals/melody.
+ */
+const DEFAULT_PEAK_DECAY_TIMES: Record<string, number> = {
+  'drums-peaks': 0.3,   // Fast decay for drums
+  'bass-peaks': 0.5,    // Medium decay for bass
+  'vocals-peaks': 0.4,  // Medium-fast for vocals
+  'melody-peaks': 0.5,  // Medium for melody
+  'master-peaks': 0.4,  // Default
+  'other-peaks': 0.5,
+};
+
+const DEFAULT_DECAY_TIME = 0.5;
+
+/**
+ * Stateless peaks calculation for Remotion/Lambda rendering.
+ *
+ * Algorithm:
+ * 1. Binary search for the most recent transient at or before time `t`
+ * 2. If within decay window, return decayed intensity
+ * 3. Otherwise return 0
+ *
+ * This is O(log n) per frame lookup.
+ */
+function calculatePeaksValueStateless(
+  transients: Array<{ time: number; intensity: number; type?: string }>,
+  time: number,
+  featureId: string
+): number {
+  if (!transients || transients.length === 0) return 0;
+
+  const decayTime = DEFAULT_PEAK_DECAY_TIMES[featureId] ?? DEFAULT_DECAY_TIME;
+
+  // Binary search for the latest transient at or before `time`
+  let lo = 0;
+  let hi = transients.length - 1;
+  let latestIdx = -1;
+
+  while (lo <= hi) {
+    const mid = (lo + hi) >>> 1;
+    if (transients[mid].time <= time) {
+      latestIdx = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+
+  // No transient found before this time
+  if (latestIdx === -1) return 0;
+
+  const transient = transients[latestIdx];
+  const elapsed = time - transient.time;
+
+  // Outside decay window
+  if (elapsed < 0 || elapsed >= decayTime) return 0;
+
+  // Apply linear decay envelope
+  return transient.intensity * (1 - elapsed / decayTime);
+}
+
+/**
  * Helper function to extract audio feature values at a specific time from cached analysis data.
  * Adapted from use-audio-analysis.ts getFeatureValue logic.
  */
@@ -70,6 +132,16 @@ function getFeatureValueFromCached(
   };
 
   const normalizedFeature = featureName.toLowerCase().replace(/-/g, '');
+
+  // Handle peaks/transients case - stateless calculation
+  if (normalizedFeature === 'peaks') {
+    const transients = (analysisData as any).transients;
+    if (!transients || !Array.isArray(transients)) return 0;
+
+    // Construct full feature ID for decay time lookup
+    const fullFeatureId = `${parsedStem}-peaks`;
+    return calculatePeaksValueStateless(transients, time, fullFeatureId);
+  }
 
   switch (normalizedFeature) {
     case 'rms':
