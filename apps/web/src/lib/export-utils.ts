@@ -70,6 +70,7 @@ export function getProjectExportPayload(
   const mappings: Record<string, FeatureMapping> = visualizerState.mappings;
   const baseParameterValues: Record<string, Record<string, any>> =
     visualizerState.baseParameterValues;
+  const featureDecayTimes: Record<string, number> = visualizerState.featureDecayTimes;
 
   type VisualizationSettingsWithAspect = VisualizationSettings & {
     aspectRatio?: string;
@@ -130,6 +131,7 @@ export function getProjectExportPayload(
     masterAudioUrl,
     mappings,
     baseParameterValues,
+    featureDecayTimes,
   };
 }
 

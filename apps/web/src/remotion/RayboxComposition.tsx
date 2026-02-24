@@ -43,15 +43,21 @@ const DEFAULT_DECAY_TIME = 0.5;
  * 3. Otherwise return 0
  *
  * This is O(log n) per frame lookup.
+ *
+ * @param userDecayTimes - User-configured decay times from the export payload
  */
 function calculatePeaksValueStateless(
   transients: Array<{ time: number; intensity: number; type?: string }>,
   time: number,
-  featureId: string
+  featureId: string,
+  userDecayTimes?: Record<string, number>
 ): number {
   if (!transients || transients.length === 0) return 0;
 
-  const decayTime = DEFAULT_PEAK_DECAY_TIMES[featureId] ?? DEFAULT_DECAY_TIME;
+  // Priority: user-configured > hardcoded defaults > fallback
+  const decayTime = userDecayTimes?.[featureId]
+    ?? DEFAULT_PEAK_DECAY_TIMES[featureId]
+    ?? DEFAULT_DECAY_TIME;
 
   // Binary search for the latest transient at or before `time`
   let lo = 0;
@@ -77,13 +83,16 @@ function calculatePeaksValueStateless(
   // Outside decay window
   if (elapsed < 0 || elapsed >= decayTime) return 0;
 
-  // Apply linear decay envelope
-  return transient.intensity * (1 - elapsed / decayTime);
+  // Apply exponential decay envelope for smoother visual falloff
+  // exp(-3) ≈ 0.05, so decay reaches near-zero by decayTime
+  return transient.intensity * Math.exp(-elapsed / decayTime * 3);
 }
 
 /**
  * Helper function to extract audio feature values at a specific time from cached analysis data.
  * Adapted from use-audio-analysis.ts getFeatureValue logic.
+ *
+ * @param userDecayTimes - User-configured decay times for peaks features
  */
 function getFeatureValueFromCached(
   cachedAnalysis: CachedAudioAnalysisData[],
@@ -91,6 +100,7 @@ function getFeatureValueFromCached(
   feature: string,
   time: number,
   stemType?: string,
+  userDecayTimes?: Record<string, number>,
 ): number {
   let parsedStem = stemType ?? 'master';
   let featureName = feature;
@@ -140,7 +150,7 @@ function getFeatureValueFromCached(
 
     // Construct full feature ID for decay time lookup
     const fullFeatureId = `${parsedStem}-peaks`;
-    return calculatePeaksValueStateless(transients, time, fullFeatureId);
+    return calculatePeaksValueStateless(transients, time, fullFeatureId, userDecayTimes);
   }
 
   switch (normalizedFeature) {
@@ -314,6 +324,7 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
   masterAudioUrl,
   mappings,
   baseParameterValues,
+  featureDecayTimes,
 }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
@@ -433,9 +444,31 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
       'master',
     );
 
+    // DEBUG: Check if mappings exist - ALWAYS LOG TO TERMINAL
+    if (frame === 0) {
+      console.log('[MAPPING DEBUG] mappings:', mappings);
+      console.log('[MAPPING DEBUG] actualLayers:', actualLayers.map(l => l.id));
+      console.log('[MAPPING DEBUG] audioAnalysisData:', actualAudioAnalysisData.length, 'entries');
+    }
     if (mappings && Object.keys(mappings).length > 0) {
-      const getSliderMax = (p: string) =>
-        ['opacity', 'scale', 'baseRadius'].includes(p) ? 1.0 : 100;
+      // Map parameter names to their valid max ranges
+      const getSliderMax = (p: string): number => {
+        const paramMaxMap: Record<string, number> = {
+          // 0-1 range parameters
+          opacity: 1.0,
+          scale: 1.0,
+          baseRadius: 1.0,
+          threshold: 1.0,
+          triggerValue: 1.0,
+          // 0-2 range parameters
+          contrast: 2.0,
+          gamma: 2.2,
+          // 0-100 range parameters (for legacy)
+          rotation: 360,
+          speed: 100,
+        };
+        return paramMaxMap[p] ?? 100; // Default to 100 for unknown params
+      };
 
       Object.entries(mappings).forEach(([paramKey, mapping]) => {
         if (!mapping?.featureId) return;
@@ -450,6 +483,18 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
           baseValue = effectInstancesRef.current.get(layerId)?.parameters?.[paramName];
         if (baseValue === undefined) baseValue = 0;
 
+        // DEBUG
+        if (frame < 5) {
+          console.log(`[DEBUG] Mapping ${paramKey}:`, {
+            layerId,
+            paramName,
+            baseValue,
+            hasBaseInParams: !!baseParameterValues?.[layerId],
+            baseParamKeys: Object.keys(baseParameterValues || {}),
+            layerIds: actualLayers.map(l => l.id),
+          });
+        }
+
         // FIX: Find the correct fileId based on the feature prefix (e.g. "bass-rms")
         const featureStemType = mapping.featureId.split('-')[0] || 'master';
         const targetFileId = stemMap.get(featureStemType) || fileId || 'unknown';
@@ -459,12 +504,28 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
           targetFileId, // Pass real ID!
           mapping.featureId,
           time,
+          undefined, // stemType - let function parse from featureId
+          featureDecayTimes, // User-configured decay times
         );
 
         const maxValue = getSliderMax(paramName);
         const knob = Math.max(-0.5, Math.min(0.5, (mapping.modulationAmount ?? 0.5) * 2 - 1));
         const delta = rawValue * knob * maxValue;
         const finalValue = Math.max(0, Math.min(maxValue, baseValue + delta));
+
+        // DEBUG
+        if (frame < 5) {
+          console.log(`[DEBUG] Calc ${paramKey}:`, {
+            featureId: mapping.featureId,
+            targetFileId,
+            stemMap: Object.fromEntries(stemMap),
+            rawValue,
+            knob,
+            maxValue,
+            delta,
+            finalValue,
+          });
+        }
 
         if (!Number.isNaN(finalValue)) {
           visualizerManagerRef.current?.updateEffectParameter(layerId, paramName, finalValue);

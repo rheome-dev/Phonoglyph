@@ -54,6 +54,8 @@ export interface RayboxCompositionProps extends Record<string, unknown> {
   mappings?: Record<string, { featureId: string | null; modulationAmount: number }>;
   // Base parameter values before modulation
   baseParameterValues?: Record<string, Record<string, any>>;
+  // User-configured decay times for peaks features (e.g., "drums-peaks": 0.3)
+  featureDecayTimes?: Record<string, number>;
   // URL to fetch analysis data from R2 (used when payload is too large for Lambda)
   analysisUrl?: string;
 }
