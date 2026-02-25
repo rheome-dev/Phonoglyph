@@ -117,7 +117,7 @@ const calculateMetadata: CalculateMetadataFunction<RayboxCompositionProps> = asy
   props,
 }) => {
   // FPS is set on the Composition component (30), so we use that value here
-  const safeFps = 30;
+  const safeFps = 60;
 
   let finalAudioData = props.audioAnalysisData;
 
@@ -201,7 +201,7 @@ export const RemotionRoot = () => {
       <Composition
         id="RayboxMain"
         component={RayboxComposition}
-        fps={30}
+        fps={60}
         width={1080}
         height={1920}
         defaultProps={defaultProps}
@@ -212,7 +212,7 @@ export const RemotionRoot = () => {
         component={RayboxComposition}
         width={1080}
         height={1920}
-        fps={30}
+        fps={60}
         defaultProps={TEST_PAYLOAD ?? defaultProps}
         calculateMetadata={calculateMetadata}
       />
