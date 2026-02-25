@@ -35,6 +35,16 @@ const DEFAULT_PEAK_DECAY_TIMES: Record<string, number> = {
 const DEFAULT_DECAY_TIME = 0.5;
 
 /**
+ * Physics constants for damped spring oscillation.
+ * SPRING_FREQ: 8.0 Hz (wobble speed)
+ * SPRING_DECAY: 4.0 (energy dissipation rate)
+ * PHYSICS_WINDOW: 2.0s (lookback duration for summing impulses)
+ */
+const PHYSICS_WINDOW = 2.0; // seconds to look back for impulse accumulation
+const SPRING_FREQ = 8.0;    // Hz - frequency of wobble
+const SPRING_DECAY = 4.0;    // decay rate constant
+
+/**
  * Default sensitivity values for peaks features.
  * 0.5 = 50% (keep upper half of transients by intensity)
  * 1.0 = 100% (keep all transients)
@@ -122,48 +132,39 @@ function calculatePeaksValueStateless(
     ?? DEFAULT_PEAK_DECAY_TIMES[featureId]
     ?? DEFAULT_DECAY_TIME;
 
-  // Binary search for the latest transient at or before `time`
-  let lo = 0;
-  let hi = filteredTransients.length - 1;
-  let latestIdx = -1;
+  // PHYSICS-BASED CALCULATION: Sum damped spring impulses from all transients in lookback window
+  // This creates constructive/destructive interference from multiple beats
+  let totalImpulse = 0;
+  const windowStart = time - PHYSICS_WINDOW;
 
-  while (lo <= hi) {
-    const mid = (lo + hi) >>> 1;
-    if (filteredTransients[mid].time <= time) {
-      latestIdx = mid;
-      lo = mid + 1;
-    } else {
-      hi = mid - 1;
-    }
+  // Iterate through all transients within the physics window
+  for (const transient of filteredTransients) {
+    const elapsed = time - transient.time;
+
+    // Skip transients outside the physics window or in the future
+    if (elapsed < 0 || elapsed > PHYSICS_WINDOW) continue;
+
+    // Skip transients that have fully decayed (beyond decay time)
+    if (elapsed >= decayTime) continue;
+
+    // Use transient timestamp as deterministic seed for random direction (+/-)
+    // This creates variation without requiring external state
+    const direction = transient.time >= 0 ? 1 : -1;
+
+    // Damped sine wave: amplitude * exp(-decay * elapsed) * sin(freq * elapsed)
+    // The sin component creates the "wobble" effect
+    const dampedWave = transient.intensity * Math.exp(-SPRING_DECAY * elapsed) * Math.sin(SPRING_FREQ * elapsed * Math.PI * 2);
+
+    // Accumulate impulses for constructive/destructive interference
+    totalImpulse += direction * dampedWave;
   }
 
-  // No transient found before this time
-  if (latestIdx === -1) {
-    // DEBUG: Log when no transient found (first few frames only)
-    if (frameForDebug !== undefined && frameForDebug < 10) {
-      console.log(`[Peaks Debug] frame=${frameForDebug} time=${time.toFixed(3)} featureId=${featureId} → NO TRANSIENT (first at ${filteredTransients[0]?.time?.toFixed(3) ?? 'N/A'})`);
-    }
-    return 0;
-  }
-
-  const transient = filteredTransients[latestIdx];
-  const elapsed = time - transient.time;
-
-  // Outside decay window
-  if (elapsed < 0 || elapsed >= decayTime) {
-    // DEBUG: Log decay expiry
-    if (frameForDebug !== undefined && frameForDebug < 10) {
-      console.log(`[Peaks Debug] frame=${frameForDebug} time=${time.toFixed(3)} featureId=${featureId} → DECAYED (elapsed=${elapsed.toFixed(3)} >= decayTime=${decayTime})`);
-    }
-    return 0;
-  }
-
-  // Apply linear decay envelope - intensity decreases linearly from full to zero over decayTime
-  const result = transient.intensity * (1 - elapsed / decayTime);
+  // Clamp result to [0, 1] range (intensity is always positive, but interference can be negative)
+  const result = Math.max(0, Math.min(1, totalImpulse));
 
   // DEBUG: Log computed value
   if (frameForDebug !== undefined && (frameForDebug < 10 || frameForDebug % 60 === 0)) {
-    console.log(`[Peaks Debug] frame=${frameForDebug} time=${time.toFixed(3)} featureId=${featureId} → value=${result.toFixed(4)} (transient@${transient.time.toFixed(3)}, intensity=${transient.intensity.toFixed(4)}, elapsed=${elapsed.toFixed(3)})`);
+    console.log(`[Peaks Debug] frame=${frameForDebug} time=${time.toFixed(3)} featureId=${featureId} → value=${result.toFixed(4)} (decayTime=${decayTime.toFixed(2)})`);
   }
 
   return result;

@@ -10,6 +10,17 @@ import type { AudioAnalysisData } from '@/types/audio-analysis-data';
 // Shared decay time storage - allows FeatureNode slider to control envelope generation
 export const featureDecayTimesRef = { current: {} as Record<string, number> };
 
+/**
+ * Physics constants for damped spring oscillation in live visualizer.
+ * These match the Remotion implementation for consistent behavior.
+ * SPRING_FREQ: 8.0 Hz (wobble speed)
+ * SPRING_DECAY: 4.0 (energy dissipation rate)
+ * PHYSICS_WINDOW: 2.0s (lookback duration for summing impulses)
+ */
+const PHYSICS_WINDOW = 2.0; // seconds to look back for impulse accumulation
+const SPRING_FREQ = 8.0;    // Hz - frequency of wobble
+const SPRING_DECAY = 4.0;   // decay rate constant
+
 export interface UseAudioAnalysis {
   // State
   cachedAnalysis: AudioAnalysisData[]; // Keep name for backward compatibility
@@ -216,46 +227,63 @@ export function useAudioAnalysis(): UseAudioAnalysis {
     const { analysisData } = analysis;
     const featureName = featureParts.length > 1 ? featureParts.slice(1).join('-') : feature;
 
-    // --- ENVELOPE LOGIC FOR "PEAKS" FEATURES ---
+    // --- PHYSICS-BASED PEAKS LOGIC (Damped Spring Accumulation) ---
     if (featureName === 'peaks') {
       const decayTime = featureDecayTimesRef.current[feature] ?? 0.5;
-      
+
       // All transients are generic now, no filtering needed
       const relevantTransients = analysisData.transients || [];
-      
-      const envelopeKey = `${fileId}-${feature}`;
-      let storedTransient: { time: number; intensity: number } | undefined = lastTransientRefs.current[envelopeKey];
 
-      // *** FIX A: LOOP DETECTION & STATE RESET ***
-      // If time is much smaller than the stored transient's time, we've looped. Reset state.
+      // Loop detection: If time is much smaller than stored transient time, we've looped. Reset state.
+      const envelopeKey = `${fileId}-${feature}`;
+      const storedTransient = lastTransientRefs.current[envelopeKey];
       if (storedTransient && (time < storedTransient.time - 0.5)) {
         delete lastTransientRefs.current[envelopeKey];
-        storedTransient = undefined;
       }
-      
+
+      // Find latest transient and update stored state
       const latestTransient = relevantTransients.reduce((latest: any, t: any) => {
         if (t.time <= time && (!latest || t.time > latest.time)) {
           return t;
         }
         return latest;
       }, null);
-      
+
       if (latestTransient) {
         if (!storedTransient || latestTransient.time > storedTransient.time) {
           lastTransientRefs.current[envelopeKey] = { time: latestTransient.time, intensity: latestTransient.intensity };
         }
       }
-      
-      const activeTransient = lastTransientRefs.current[envelopeKey];
-      if (activeTransient) {
-        const elapsedTime = time - activeTransient.time;
-        if (elapsedTime >= 0 && elapsedTime < decayTime) {
-          // This is the correct, enveloped modulation signal
-          return activeTransient.intensity * (1 - (elapsedTime / decayTime));
-        }
+
+      // PHYSICS-BASED CALCULATION: Sum damped spring impulses from all transients in lookback window
+      // This creates constructive/destructive interference from multiple beats
+      let totalImpulse = 0;
+      const windowStart = time - PHYSICS_WINDOW;
+
+      // Iterate through all transients within the physics window
+      for (const transient of relevantTransients) {
+        const elapsed = time - transient.time;
+
+        // Skip transients outside the physics window or in the future
+        if (elapsed < 0 || elapsed > PHYSICS_WINDOW) continue;
+
+        // Skip transients that have fully decayed (beyond decay time)
+        if (elapsed >= decayTime) continue;
+
+        // Use transient timestamp as deterministic seed for random direction (+/-)
+        // This creates variation without requiring external state
+        const direction = transient.time >= 0 ? 1 : -1;
+
+        // Damped sine wave: amplitude * exp(-decay * elapsed) * sin(freq * elapsed)
+        // The sin component creates the "wobble" effect
+        const dampedWave = transient.intensity * Math.exp(-SPRING_DECAY * elapsed) * Math.sin(SPRING_FREQ * elapsed * Math.PI * 2);
+
+        // Accumulate impulses for constructive/destructive interference
+        totalImpulse += direction * dampedWave;
       }
-      
-      return 0;
+
+      // Clamp result to [0, 1] range
+      return Math.max(0, Math.min(1, totalImpulse));
     }
     
     // --- PITCH & TIME-SERIES LOGIC ---
