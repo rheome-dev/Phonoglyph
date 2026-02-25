@@ -5,6 +5,7 @@ import {
   Audio,
   delayRender,
   continueRender,
+  random,
 } from 'remotion';
 import { VisualizerManager } from '@/lib/visualizer/core/VisualizerManager';
 import { EffectRegistry } from '@/lib/visualizer/effects/EffectRegistry';
@@ -35,14 +36,16 @@ const DEFAULT_PEAK_DECAY_TIMES: Record<string, number> = {
 const DEFAULT_DECAY_TIME = 0.5;
 
 /**
- * Physics constants for damped spring oscillation.
- * SPRING_FREQ: 8.0 Hz (wobble speed)
- * SPRING_DECAY: 4.0 (energy dissipation rate)
- * PHYSICS_WINDOW: 2.0s (lookback duration for summing impulses)
+ * Physics constants for momentum accumulator model.
+ *
+ * Unlike the old damped spring (wobble) model, this creates organic directional drift:
+ * - Peak hits → parameter gets bumped in a random direction (±1)
+ * - No spring-back/return-to-zero by default
+ * - Decay adds inertia (slows rate of change, doesn't pull back to zero)
+ * - Soft bounds gently push back toward base value at extremes
  */
-const PHYSICS_WINDOW = 2.0; // seconds to look back for impulse accumulation
-const SPRING_FREQ = 8.0;    // Hz - frequency of wobble
-const SPRING_DECAY = 4.0;    // decay rate constant
+const MOMENTUM_LOOKBACK_MULTIPLIER = 3; // Look back decayTime * this for transients
+const SOFT_BOUND_STRENGTH = 0.3;        // How strongly to pull back at extremes
 
 /**
  * Default sensitivity values for peaks features.
@@ -86,18 +89,23 @@ function filterTransientsBySensitivity(
 }
 
 /**
- * Stateless peaks calculation for Remotion/Lambda rendering.
+ * Stateless peaks calculation for Remotion/Lambda rendering using momentum accumulator model.
  *
- * Algorithm:
+ * Algorithm (Momentum Accumulator):
  * 1. Filter transients by sensitivity (remove quiet "noise" peaks)
- * 2. Binary search for the most recent transient at or before time `t`
- * 3. If within decay window, return decayed intensity
- * 4. Otherwise return 0
+ * 2. For each transient in lookback window, add directional impulse (random ±1 per transient)
+ * 3. Impulses decay exponentially but don't oscillate (no sine wave = no wobble)
+ * 4. Apply soft bounds to gently push back toward base value at extremes
  *
- * This is O(log n) per frame lookup.
+ * Key differences from old wobble model:
+ * - No oscillation (monotonic decay instead of sin wave)
+ * - Random direction per transient creates organic drift
+ * - Soft bounds instead of hard clamp
+ * - Value drifts naturally, doesn't snap back to zero
  *
  * @param userDecayTimes - User-configured decay times from the export payload
  * @param userSensitivities - User-configured sensitivity values (0-1)
+ * @param baseValue - The user's slider base value (default 0.5)
  */
 function calculatePeaksValueStateless(
   transients: Array<{ time: number; intensity: number; type?: string }>,
@@ -105,16 +113,17 @@ function calculatePeaksValueStateless(
   featureId: string,
   userDecayTimes?: Record<string, number>,
   userSensitivities?: Record<string, number>,
-  frameForDebug?: number
+  frameForDebug?: number,
+  baseValue: number = 0.5
 ): number {
-  if (!transients || transients.length === 0) return 0;
+  if (!transients || transients.length === 0) return baseValue;
 
   // Priority: user-configured > hardcoded defaults > fallback
   const sensitivity = userSensitivities?.[featureId]
     ?? DEFAULT_PEAK_SENSITIVITIES[featureId]
     ?? 0.5; // Default to 50%
 
-  // Filter transients by sensitivity BEFORE the binary search
+  // Filter transients by sensitivity BEFORE processing
   const filteredTransients = filterTransientsBySensitivity(transients, sensitivity);
 
   // DEBUG: Log sensitivity filtering
@@ -122,9 +131,9 @@ function calculatePeaksValueStateless(
     console.log(`[Peaks Debug] frame=${frameForDebug} ${featureId}: ${transients.length} → ${filteredTransients.length} transients (sensitivity=${sensitivity})`);
   }
 
-  // If no transients remain after filtering, return 0
+  // If no transients remain after filtering, return base value
   if (!filteredTransients || filteredTransients.length === 0) {
-    return 0;
+    return baseValue;
   }
 
   // Priority: user-configured > hardcoded defaults > fallback
@@ -132,39 +141,46 @@ function calculatePeaksValueStateless(
     ?? DEFAULT_PEAK_DECAY_TIMES[featureId]
     ?? DEFAULT_DECAY_TIME;
 
-  // PHYSICS-BASED CALCULATION: Sum damped spring impulses from all transients in lookback window
-  // This creates constructive/destructive interference from multiple beats
-  let totalImpulse = 0;
-  const windowStart = time - PHYSICS_WINDOW;
+  // Lookback window based on decay time
+  const lookbackWindow = decayTime * MOMENTUM_LOOKBACK_MULTIPLIER;
 
-  // Iterate through all transients within the physics window
+  // MOMENTUM ACCUMULATOR: Sum directional impulses that decay over time
+  let totalMomentum = 0;
+
   for (const transient of filteredTransients) {
     const elapsed = time - transient.time;
 
-    // Skip transients outside the physics window or in the future
-    if (elapsed < 0 || elapsed > PHYSICS_WINDOW) continue;
+    // Skip future or too-old transients
+    if (elapsed < 0 || elapsed > lookbackWindow) continue;
 
-    // Skip transients that have fully decayed (beyond decay time)
-    if (elapsed >= decayTime) continue;
+    // Deterministic direction from seeded random using Remotion's random()
+    // This ensures same result across renders
+    const direction = random(`peak-${transient.time}`) > 0.5 ? 1 : -1;
 
-    // Use transient timestamp as deterministic seed for random direction (+/-)
-    // This creates variation without requiring external state
-    const direction = transient.time >= 0 ? 1 : -1;
+    // Exponential decay - impulse fades over time but doesn't oscillate
+    // (No sine wave = no wobble, just monotonic decay)
+    const decayFactor = Math.exp(-elapsed / decayTime);
 
-    // Damped sine wave: amplitude * exp(-decay * elapsed) * sin(freq * elapsed)
-    // The sin component creates the "wobble" effect
-    const dampedWave = transient.intensity * Math.exp(-SPRING_DECAY * elapsed) * Math.sin(SPRING_FREQ * elapsed * Math.PI * 2);
-
-    // Accumulate impulses for constructive/destructive interference
-    totalImpulse += direction * dampedWave;
+    // Accumulate momentum (no sine wave = no wobble)
+    totalMomentum += transient.intensity * direction * decayFactor;
   }
 
-  // Clamp result to [0, 1] range (intensity is always positive, but interference can be negative)
-  const result = Math.max(0, Math.min(1, totalImpulse));
+  // Soft bounds: reduce momentum if it would push too far from [0, 1]
+  const projectedValue = baseValue + totalMomentum;
+
+  if (projectedValue > 1) {
+    const overshoot = projectedValue - 1;
+    totalMomentum -= overshoot * SOFT_BOUND_STRENGTH;
+  } else if (projectedValue < 0) {
+    const undershoot = -projectedValue;
+    totalMomentum += undershoot * SOFT_BOUND_STRENGTH;
+  }
+
+  const result = Math.max(0, Math.min(1, baseValue + totalMomentum));
 
   // DEBUG: Log computed value
   if (frameForDebug !== undefined && (frameForDebug < 10 || frameForDebug % 60 === 0)) {
-    console.log(`[Peaks Debug] frame=${frameForDebug} time=${time.toFixed(3)} featureId=${featureId} → value=${result.toFixed(4)} (decayTime=${decayTime.toFixed(2)})`);
+    console.log(`[Peaks Debug] frame=${frameForDebug} time=${time.toFixed(3)} featureId=${featureId} → value=${result.toFixed(4)} (baseValue=${baseValue.toFixed(2)}, decayTime=${decayTime.toFixed(2)})`);
   }
 
   return result;
@@ -177,6 +193,7 @@ function calculatePeaksValueStateless(
  * @param userDecayTimes - User-configured decay times for peaks features
  * @param userSensitivities - User-configured sensitivity values for peaks features
  * @param frameForDebug - Optional frame number for debug logging
+ * @param baseValue - Base value from user's slider (for momentum accumulator model)
  */
 function getFeatureValueFromCached(
   cachedAnalysis: CachedAudioAnalysisData[],
@@ -187,6 +204,7 @@ function getFeatureValueFromCached(
   userDecayTimes?: Record<string, number>,
   userSensitivities?: Record<string, number>,
   frameForDebug?: number,
+  baseValue?: number,
 ): number {
   let parsedStem = stemType ?? 'master';
   let featureName = feature;
@@ -247,7 +265,15 @@ function getFeatureValueFromCached(
       console.log(`[Peaks Debug] frame=${frameForDebug} ${fullFeatureId} has ${transients.length} transients, first at t=${transients[0]?.time?.toFixed(3)}`);
     }
 
-    return calculatePeaksValueStateless(transients, time, fullFeatureId, userDecayTimes, userSensitivities, frameForDebug);
+    return calculatePeaksValueStateless(
+      transients,
+      time,
+      fullFeatureId,
+      userDecayTimes,
+      userSensitivities,
+      frameForDebug,
+      baseValue ?? 0.5  // Default to 0.5 if not provided
+    );
   }
 
   switch (normalizedFeature) {

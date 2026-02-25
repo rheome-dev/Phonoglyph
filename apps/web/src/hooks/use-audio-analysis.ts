@@ -11,15 +11,26 @@ import type { AudioAnalysisData } from '@/types/audio-analysis-data';
 export const featureDecayTimesRef = { current: {} as Record<string, number> };
 
 /**
- * Physics constants for damped spring oscillation in live visualizer.
+ * Physics constants for momentum accumulator model in live visualizer.
  * These match the Remotion implementation for consistent behavior.
- * SPRING_FREQ: 8.0 Hz (wobble speed)
- * SPRING_DECAY: 4.0 (energy dissipation rate)
- * PHYSICS_WINDOW: 2.0s (lookback duration for summing impulses)
+ *
+ * Unlike the old damped spring (wobble) model, this creates organic directional drift:
+ * - Peak hits → parameter gets bumped in a random direction (±1)
+ * - No spring-back/return-to-zero by default
+ * - Decay adds inertia (slows rate of change, doesn't pull back to zero)
+ * - Soft bounds gently push back toward base value at extremes
  */
-const PHYSICS_WINDOW = 2.0; // seconds to look back for impulse accumulation
-const SPRING_FREQ = 8.0;    // Hz - frequency of wobble
-const SPRING_DECAY = 4.0;   // decay rate constant
+const MOMENTUM_LOOKBACK_MULTIPLIER = 3; // Look back decayTime * this for transients
+const SOFT_BOUND_STRENGTH = 0.3;        // How strongly to pull back at extremes
+
+/**
+ * Seeded random function for live visualizer.
+ * Matches Remotion's random() behavior for deterministic direction per transient.
+ */
+function seededRandom(seed: number): number {
+  const x = Math.sin(seed * 12.9898) * 43758.5453;
+  return x - Math.floor(x);
+}
 
 export interface UseAudioAnalysis {
   // State
@@ -227,9 +238,11 @@ export function useAudioAnalysis(): UseAudioAnalysis {
     const { analysisData } = analysis;
     const featureName = featureParts.length > 1 ? featureParts.slice(1).join('-') : feature;
 
-    // --- PHYSICS-BASED PEAKS LOGIC (Damped Spring Accumulation) ---
+    // --- MOMENTUM ACCUMULATOR PEAKS LOGIC ---
+    // Replaces old damped spring (wobble) with organic directional drift
     if (featureName === 'peaks') {
       const decayTime = featureDecayTimesRef.current[feature] ?? 0.5;
+      const baseValue = 0.5; // Default base value for live visualizer
 
       // All transients are generic now, no filtering needed
       const relevantTransients = analysisData.transients || [];
@@ -241,7 +254,7 @@ export function useAudioAnalysis(): UseAudioAnalysis {
         delete lastTransientRefs.current[envelopeKey];
       }
 
-      // Find latest transient and update stored state
+      // Find latest transient and update stored state (for loop detection)
       const latestTransient = relevantTransients.reduce((latest: any, t: any) => {
         if (t.time <= time && (!latest || t.time > latest.time)) {
           return t;
@@ -255,35 +268,42 @@ export function useAudioAnalysis(): UseAudioAnalysis {
         }
       }
 
-      // PHYSICS-BASED CALCULATION: Sum damped spring impulses from all transients in lookback window
-      // This creates constructive/destructive interference from multiple beats
-      let totalImpulse = 0;
-      const windowStart = time - PHYSICS_WINDOW;
+      // Lookback window based on decay time
+      const lookbackWindow = decayTime * MOMENTUM_LOOKBACK_MULTIPLIER;
 
-      // Iterate through all transients within the physics window
+      // MOMENTUM ACCUMULATOR: Sum directional impulses that decay over time
+      let totalMomentum = 0;
+
       for (const transient of relevantTransients) {
         const elapsed = time - transient.time;
 
-        // Skip transients outside the physics window or in the future
-        if (elapsed < 0 || elapsed > PHYSICS_WINDOW) continue;
+        // Skip future or too-old transients
+        if (elapsed < 0 || elapsed > lookbackWindow) continue;
 
-        // Skip transients that have fully decayed (beyond decay time)
-        if (elapsed >= decayTime) continue;
+        // Deterministic direction from seeded random
+        // Uses same seed pattern as Remotion for consistency
+        const direction = seededRandom(transient.time * 1000) > 0.5 ? 1 : -1;
 
-        // Use transient timestamp as deterministic seed for random direction (+/-)
-        // This creates variation without requiring external state
-        const direction = transient.time >= 0 ? 1 : -1;
+        // Exponential decay - impulse fades over time but doesn't oscillate
+        // (No sine wave = no wobble, just monotonic decay)
+        const decayFactor = Math.exp(-elapsed / decayTime);
 
-        // Damped sine wave: amplitude * exp(-decay * elapsed) * sin(freq * elapsed)
-        // The sin component creates the "wobble" effect
-        const dampedWave = transient.intensity * Math.exp(-SPRING_DECAY * elapsed) * Math.sin(SPRING_FREQ * elapsed * Math.PI * 2);
-
-        // Accumulate impulses for constructive/destructive interference
-        totalImpulse += direction * dampedWave;
+        // Accumulate momentum (no sine wave = no wobble)
+        totalMomentum += transient.intensity * direction * decayFactor;
       }
 
-      // Clamp result to [0, 1] range
-      return Math.max(0, Math.min(1, totalImpulse));
+      // Soft bounds: reduce momentum if it would push too far from [0, 1]
+      const projectedValue = baseValue + totalMomentum;
+
+      if (projectedValue > 1) {
+        const overshoot = projectedValue - 1;
+        totalMomentum -= overshoot * SOFT_BOUND_STRENGTH;
+      } else if (projectedValue < 0) {
+        const undershoot = -projectedValue;
+        totalMomentum += undershoot * SOFT_BOUND_STRENGTH;
+      }
+
+      return Math.max(0, Math.min(1, baseValue + totalMomentum));
     }
     
     // --- PITCH & TIME-SERIES LOGIC ---
