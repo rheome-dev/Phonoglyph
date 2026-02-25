@@ -71,6 +71,7 @@ export function getProjectExportPayload(
   const baseParameterValues: Record<string, Record<string, any>> =
     visualizerState.baseParameterValues;
   const featureDecayTimes: Record<string, number> = visualizerState.featureDecayTimes;
+  const featureSensitivities: Record<string, number> = visualizerState.featureSensitivities;
 
   type VisualizationSettingsWithAspect = VisualizationSettings & {
     aspectRatio?: string;
@@ -132,6 +133,7 @@ export function getProjectExportPayload(
     mappings,
     baseParameterValues,
     featureDecayTimes,
+    featureSensitivities,
   };
 }
 

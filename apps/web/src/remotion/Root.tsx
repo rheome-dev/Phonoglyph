@@ -56,6 +56,9 @@ export interface RayboxCompositionProps extends Record<string, unknown> {
   baseParameterValues?: Record<string, Record<string, any>>;
   // User-configured decay times for peaks features (e.g., "drums-peaks": 0.3)
   featureDecayTimes?: Record<string, number>;
+  // User-configured sensitivity for peaks features (e.g., "drums-peaks": 0.5 for 50%)
+  // Higher values = keep more transients, lower = filter out quiet ones
+  featureSensitivities?: Record<string, number>;
   // URL to fetch analysis data from R2 (used when payload is too large for Lambda)
   analysisUrl?: string;
 }

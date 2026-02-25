@@ -35,24 +35,87 @@ const DEFAULT_PEAK_DECAY_TIMES: Record<string, number> = {
 const DEFAULT_DECAY_TIME = 0.5;
 
 /**
+ * Default sensitivity values for peaks features.
+ * 0.5 = 50% (keep upper half of transients by intensity)
+ * 1.0 = 100% (keep all transients)
+ */
+const DEFAULT_PEAK_SENSITIVITIES: Record<string, number> = {
+  'drums-peaks': 0.5,
+  'bass-peaks': 0.5,
+  'vocals-peaks': 0.5,
+  'melody-peaks': 0.5,
+  'master-peaks': 0.5,
+  'other-peaks': 0.5,
+};
+
+/**
+ * Helper to filter transients by sensitivity.
+ * Ported from MappingSourcesPanel.tsx filterTransientsBySensitivity.
+ *
+ * @param sensitivity - 0-1 range, where 1 keeps all transients, 0 keeps only the strongest
+ */
+function filterTransientsBySensitivity(
+  transients: Array<{ time: number; intensity: number; type?: string }>,
+  sensitivity: number
+): Array<{ time: number; intensity: number; type?: string }> {
+  if (!transients || transients.length === 0) return transients;
+  const clamped = Math.max(0, Math.min(1, sensitivity));
+  if (clamped >= 0.999) return transients;
+
+  const intensities = transients
+    .map(t => t.intensity)
+    .filter(v => Number.isFinite(v))
+    .sort((a, b) => a - b);
+
+  if (!intensities.length) return transients;
+
+  const index = Math.floor((1 - clamped) * (intensities.length - 1));
+  const threshold = intensities[index];
+
+  return transients.filter(t => (Number.isFinite(t.intensity) ? t.intensity : 0) >= threshold);
+}
+
+/**
  * Stateless peaks calculation for Remotion/Lambda rendering.
  *
  * Algorithm:
- * 1. Binary search for the most recent transient at or before time `t`
- * 2. If within decay window, return decayed intensity
- * 3. Otherwise return 0
+ * 1. Filter transients by sensitivity (remove quiet "noise" peaks)
+ * 2. Binary search for the most recent transient at or before time `t`
+ * 3. If within decay window, return decayed intensity
+ * 4. Otherwise return 0
  *
  * This is O(log n) per frame lookup.
  *
  * @param userDecayTimes - User-configured decay times from the export payload
+ * @param userSensitivities - User-configured sensitivity values (0-1)
  */
 function calculatePeaksValueStateless(
   transients: Array<{ time: number; intensity: number; type?: string }>,
   time: number,
   featureId: string,
-  userDecayTimes?: Record<string, number>
+  userDecayTimes?: Record<string, number>,
+  userSensitivities?: Record<string, number>,
+  frameForDebug?: number
 ): number {
   if (!transients || transients.length === 0) return 0;
+
+  // Priority: user-configured > hardcoded defaults > fallback
+  const sensitivity = userSensitivities?.[featureId]
+    ?? DEFAULT_PEAK_SENSITIVITIES[featureId]
+    ?? 0.5; // Default to 50%
+
+  // Filter transients by sensitivity BEFORE the binary search
+  const filteredTransients = filterTransientsBySensitivity(transients, sensitivity);
+
+  // DEBUG: Log sensitivity filtering
+  if (frameForDebug !== undefined && frameForDebug < 5) {
+    console.log(`[Peaks Debug] frame=${frameForDebug} ${featureId}: ${transients.length} → ${filteredTransients.length} transients (sensitivity=${sensitivity})`);
+  }
+
+  // If no transients remain after filtering, return 0
+  if (!filteredTransients || filteredTransients.length === 0) {
+    return 0;
+  }
 
   // Priority: user-configured > hardcoded defaults > fallback
   const decayTime = userDecayTimes?.[featureId]
@@ -61,12 +124,12 @@ function calculatePeaksValueStateless(
 
   // Binary search for the latest transient at or before `time`
   let lo = 0;
-  let hi = transients.length - 1;
+  let hi = filteredTransients.length - 1;
   let latestIdx = -1;
 
   while (lo <= hi) {
     const mid = (lo + hi) >>> 1;
-    if (transients[mid].time <= time) {
+    if (filteredTransients[mid].time <= time) {
       latestIdx = mid;
       lo = mid + 1;
     } else {
@@ -75,17 +138,35 @@ function calculatePeaksValueStateless(
   }
 
   // No transient found before this time
-  if (latestIdx === -1) return 0;
+  if (latestIdx === -1) {
+    // DEBUG: Log when no transient found (first few frames only)
+    if (frameForDebug !== undefined && frameForDebug < 10) {
+      console.log(`[Peaks Debug] frame=${frameForDebug} time=${time.toFixed(3)} featureId=${featureId} → NO TRANSIENT (first at ${filteredTransients[0]?.time?.toFixed(3) ?? 'N/A'})`);
+    }
+    return 0;
+  }
 
-  const transient = transients[latestIdx];
+  const transient = filteredTransients[latestIdx];
   const elapsed = time - transient.time;
 
   // Outside decay window
-  if (elapsed < 0 || elapsed >= decayTime) return 0;
+  if (elapsed < 0 || elapsed >= decayTime) {
+    // DEBUG: Log decay expiry
+    if (frameForDebug !== undefined && frameForDebug < 10) {
+      console.log(`[Peaks Debug] frame=${frameForDebug} time=${time.toFixed(3)} featureId=${featureId} → DECAYED (elapsed=${elapsed.toFixed(3)} >= decayTime=${decayTime})`);
+    }
+    return 0;
+  }
 
-  // Apply exponential decay envelope for smoother visual falloff
-  // exp(-3) ≈ 0.05, so decay reaches near-zero by decayTime
-  return transient.intensity * Math.exp(-elapsed / decayTime * 3);
+  // Apply linear decay envelope - intensity decreases linearly from full to zero over decayTime
+  const result = transient.intensity * (1 - elapsed / decayTime);
+
+  // DEBUG: Log computed value
+  if (frameForDebug !== undefined && (frameForDebug < 10 || frameForDebug % 60 === 0)) {
+    console.log(`[Peaks Debug] frame=${frameForDebug} time=${time.toFixed(3)} featureId=${featureId} → value=${result.toFixed(4)} (transient@${transient.time.toFixed(3)}, intensity=${transient.intensity.toFixed(4)}, elapsed=${elapsed.toFixed(3)})`);
+  }
+
+  return result;
 }
 
 /**
@@ -93,6 +174,8 @@ function calculatePeaksValueStateless(
  * Adapted from use-audio-analysis.ts getFeatureValue logic.
  *
  * @param userDecayTimes - User-configured decay times for peaks features
+ * @param userSensitivities - User-configured sensitivity values for peaks features
+ * @param frameForDebug - Optional frame number for debug logging
  */
 function getFeatureValueFromCached(
   cachedAnalysis: CachedAudioAnalysisData[],
@@ -101,6 +184,8 @@ function getFeatureValueFromCached(
   time: number,
   stemType?: string,
   userDecayTimes?: Record<string, number>,
+  userSensitivities?: Record<string, number>,
+  frameForDebug?: number,
 ): number {
   let parsedStem = stemType ?? 'master';
   let featureName = feature;
@@ -146,11 +231,22 @@ function getFeatureValueFromCached(
   // Handle peaks/transients case - stateless calculation
   if (normalizedFeature === 'peaks') {
     const transients = (analysisData as any).transients;
-    if (!transients || !Array.isArray(transients)) return 0;
+    if (!transients || !Array.isArray(transients)) {
+      if (frameForDebug !== undefined && frameForDebug < 5) {
+        console.log(`[Peaks Debug] frame=${frameForDebug} NO TRANSIENTS for ${parsedStem}-peaks (transients=${transients})`);
+      }
+      return 0;
+    }
 
     // Construct full feature ID for decay time lookup
     const fullFeatureId = `${parsedStem}-peaks`;
-    return calculatePeaksValueStateless(transients, time, fullFeatureId, userDecayTimes);
+
+    // DEBUG: Log first transient time to verify correct stem data
+    if (frameForDebug !== undefined && frameForDebug < 5) {
+      console.log(`[Peaks Debug] frame=${frameForDebug} ${fullFeatureId} has ${transients.length} transients, first at t=${transients[0]?.time?.toFixed(3)}`);
+    }
+
+    return calculatePeaksValueStateless(transients, time, fullFeatureId, userDecayTimes, userSensitivities, frameForDebug);
   }
 
   switch (normalizedFeature) {
@@ -325,6 +421,7 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
   mappings,
   baseParameterValues,
   featureDecayTimes,
+  featureSensitivities,
 }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
@@ -476,11 +573,14 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
         if (!parsed) return;
         const { effectInstanceId: layerId, paramName } = parsed;
 
+        // IMPORTANT: For mapped parameters, we must use STATIC base values only.
+        // Do NOT read from effectInstancesRef.current.get(layerId)?.parameters
+        // because those are dynamically updated each frame, causing accumulation.
         let baseValue = baseParameterValues?.[layerId]?.[paramName];
         if (baseValue === undefined)
           baseValue = actualLayers.find((l) => l.id === layerId)?.settings?.[paramName];
-        if (baseValue === undefined)
-          baseValue = effectInstancesRef.current.get(layerId)?.parameters?.[paramName];
+        // Default to 0 for unmapped base values - this prevents accumulation
+        // since modulation is additive (baseValue + delta)
         if (baseValue === undefined) baseValue = 0;
 
         // DEBUG
@@ -506,6 +606,8 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
           time,
           undefined, // stemType - let function parse from featureId
           featureDecayTimes, // User-configured decay times
+          featureSensitivities, // User-configured sensitivities
+          frame, // For debug logging
         );
 
         const maxValue = getSliderMax(paramName);
@@ -513,17 +615,17 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
         const delta = rawValue * knob * maxValue;
         const finalValue = Math.max(0, Math.min(maxValue, baseValue + delta));
 
-        // DEBUG
-        if (frame < 5) {
-          console.log(`[DEBUG] Calc ${paramKey}:`, {
+        // DEBUG: Enhanced logging for triggerValue mapping
+        if (frame < 5 || (paramName === 'triggerValue' && frame % 30 === 0)) {
+          console.log(`[Mapping Calc] frame=${frame} ${paramKey}:`, {
             featureId: mapping.featureId,
             targetFileId,
-            stemMap: Object.fromEntries(stemMap),
-            rawValue,
-            knob,
+            rawValue: rawValue.toFixed(4),
+            baseValue,
+            knob: knob.toFixed(4),
             maxValue,
-            delta,
-            finalValue,
+            delta: delta.toFixed(4),
+            finalValue: finalValue.toFixed(4),
           });
         }
 
