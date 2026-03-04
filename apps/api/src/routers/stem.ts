@@ -239,7 +239,7 @@ export const stemRouter = router({
     .input(z.object({
       fileMetadataId: z.string(),
       stemType: z.string(),
-      // Allow scalar values like bpm, numeric arrays, and transient objects
+      // Allow scalar values like bpm, numeric arrays, transient objects, and normalization metadata
       analysisData: z.record(z.string(), z.union([
         z.array(z.number()), // Time-series arrays
         z.number(), // Scalar values
@@ -247,6 +247,11 @@ export const stemRouter = router({
           time: z.number(),
           intensity: z.number(),
           type: z.string(), // 'kick', 'snare', 'hat', 'generic', etc. - always provided by worker as 'generic'
+        })),
+        z.record(z.string(), z.object({ // Normalization metadata { featureName: { originalMin, originalMax, wasNormalized } }
+          originalMin: z.number(),
+          originalMax: z.number(),
+          wasNormalized: z.boolean(),
         }))
       ])),
       waveformData: z.object({
