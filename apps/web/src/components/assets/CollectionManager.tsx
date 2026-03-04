@@ -61,6 +61,12 @@ interface CollectionManagerProps {
   );
 
   const handleCreateCollection = async () => {
+    // Guard: prevent creation without valid projectId
+    if (!projectId) {
+      toast({ title: "Error", description: "No project selected. Please open a project first.", variant: "destructive" });
+      return;
+    }
+
     if (selectedFilesForNew.size === 0) {
       toast({ title: "No images selected", description: "Select at least one image to create a collection.", variant: "destructive" });
       return;
