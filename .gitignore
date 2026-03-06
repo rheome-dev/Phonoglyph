@@ -50,3 +50,4 @@ out/
 .cursor/
 .github/apps/api/.env
 apps/web/.env.local
+.todos/

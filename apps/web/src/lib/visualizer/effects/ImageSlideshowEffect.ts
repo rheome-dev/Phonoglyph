@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { VisualEffect } from '@/types/visualizer';
 import { debugLog } from '@/lib/utils';
+import { getRemotionEnvironment } from 'remotion';
 
 // Use standard debugLog for ImageSlideshowEffect to allow suppression
 const slideshowLog = {
@@ -33,6 +34,8 @@ export class ImageSlideshowEffect implements VisualEffect {
   private loadingImages: Set<string> = new Set();
   private wasTriggered: boolean = false;
   private previousTriggerValue: number = 0; // Track previous value for edge detection
+  private lastTriggerFrame: number = -999; // Frame when we last triggered (for cooldown)
+  private minFramesBetweenTriggers: number = 6; // Minimum ~100ms at 60fps between triggers
   private textureLoader = new THREE.TextureLoader();
   private aspectRatio: number = 1;
   private failureCount = 0;
@@ -103,11 +106,26 @@ export class ImageSlideshowEffect implements VisualEffect {
   }
 
   init(renderer: THREE.WebGLRenderer): void {
+    const remotionEnv = getRemotionEnvironment();
+    const isInRemotionContext = remotionEnv.isRendering || remotionEnv.isStudio;
+
     slideshowLog.log('Initializing ImageSlideshowEffect', {
       effectId: this.id,
       imagesCount: this.parameters.images.length,
       sampleUrls: this.parameters.images.slice(0, 2).map(url => url.substring(0, 60) + '...')
     });
+
+    if (isInRemotionContext) {
+      console.log('[Slideshow Remotion] INIT', {
+        effectId: this.id,
+        imagesCount: this.parameters.images.length,
+        threshold: this.parameters.threshold,
+        isStudio: remotionEnv.isStudio,
+        isRendering: remotionEnv.isRendering,
+        sampleUrls: this.parameters.images.slice(0, 2).map(url => url.substring(0, 60) + '...')
+      });
+    }
+
     if (this.parameters.images.length > 0) {
       slideshowLog.log('Images available at init, calling advanceSlide()');
       this.advanceSlide();
@@ -119,8 +137,83 @@ export class ImageSlideshowEffect implements VisualEffect {
   update(deltaTime: number): void {
     if (!this.enabled) return;
 
+    // Skip all image operations in Remotion rendering to prevent hangs
+    // The effect will still render its current state but won't load new images
+    const isRemotionRendering = getRemotionEnvironment().isRendering;
+
     // STRICT CHECK: If network is throttled due to 403s, stop all operations
     if (this.isNetworkThrottled) {
+      return;
+    }
+
+    // Trigger detection: Use cooldown-based approach for audio-reactive slideshow
+    // This handles cases where drums-peaks produces sustained rising values
+    const currentValue = this.parameters.triggerValue;
+    const threshold = this.parameters.threshold;
+
+    // Check Remotion context for logging
+    const remotionEnv = getRemotionEnvironment();
+    const isInRemotionContext = remotionEnv.isRendering || remotionEnv.isStudio;
+
+    // Calculate the change in value
+    const valueDelta = currentValue - this.previousTriggerValue;
+
+    // Cooldown check: don't trigger too frequently
+    const framesSinceLastTrigger = this.frameCounter - this.lastTriggerFrame;
+    const cooldownExpired = framesSinceLastTrigger >= this.minFramesBetweenTriggers;
+
+    // Trigger conditions:
+    // 1. Value jumped significantly (rising edge) - catches sharp transients
+    // 2. OR value is high and we haven't triggered recently - catches sustained peaks
+    const isRisingEdge = valueDelta > threshold;
+    const isAboveThreshold = currentValue > threshold * 2; // Higher threshold for sustained trigger
+    const shouldTrigger = cooldownExpired && (isRisingEdge || (isAboveThreshold && !this.wasTriggered));
+
+    // DEBUG: Log state periodically or on triggers
+    if (isInRemotionContext && (this.frameCounter % 30 === 0 || shouldTrigger)) {
+      console.log('[Slideshow Debug]', {
+        frame: this.frameCounter,
+        currentValue: currentValue.toFixed(4),
+        valueDelta: valueDelta.toFixed(4),
+        threshold,
+        cooldownExpired,
+        framesSinceLastTrigger,
+        shouldTrigger,
+        currentImageIndex: this.currentImageIndex,
+      });
+    }
+
+    if (shouldTrigger) {
+      if (isInRemotionContext) {
+        console.log('[Slideshow] TRIGGER - advancing slide', {
+          frame: this.frameCounter,
+          currentIndex: this.currentImageIndex,
+          reason: isRisingEdge ? 'rising_edge' : 'sustained_peak',
+        });
+      }
+      this.advanceSlide();
+      this.lastTriggerFrame = this.frameCounter;
+      this.wasTriggered = true;
+    } else if (currentValue <= threshold && this.wasTriggered) {
+      // Reset wasTriggered when value drops low enough - enables next rising edge trigger
+      if (isInRemotionContext && this.frameCounter % 30 === 0) {
+        console.log('[Slideshow Debug] RESET wasTriggered (value dropped below threshold)', {
+          frame: this.frameCounter,
+          currentValue: currentValue.toFixed(4),
+          threshold,
+        });
+      }
+      this.wasTriggered = false;
+    }
+
+    // Update previous value for next frame
+    this.previousTriggerValue = currentValue;
+
+    // In Remotion mode, skip expensive image loading/processing
+    // but still allow texture display if already loaded
+    if (isRemotionRendering) {
+      // Just update frame counter and return - don't load new images
+      this.frameCounter++;
       return;
     }
 
@@ -167,29 +260,6 @@ export class ImageSlideshowEffect implements VisualEffect {
         this.advanceSlide();
       }
     }
-
-    // Edge detection: trigger on significant positive change (transient/peak detection)
-    const currentValue = this.parameters.triggerValue;
-    const threshold = this.parameters.threshold;
-
-    // Calculate the change in value
-    const valueDelta = currentValue - this.previousTriggerValue;
-
-    // Detect rising edge: value increased significantly (positive delta above threshold)
-    // For transient detection, we want to trigger on rapid increases, not just crossing a static threshold
-    const isRisingEdge = valueDelta > threshold && !this.wasTriggered;
-
-    if (isRisingEdge) {
-      this.advanceSlide();
-      this.wasTriggered = true;
-    } else if (valueDelta <= 0 || currentValue <= threshold) {
-      // Reset trigger state when value stops increasing or drops below threshold
-      // This allows the next increase to trigger again
-      this.wasTriggered = false;
-    }
-
-    // Update previous value for next frame
-    this.previousTriggerValue = currentValue;
 
     // Update plane position and size if parameters changed
     this.updatePlaneGeometryAndPosition();
@@ -360,17 +430,32 @@ export class ImageSlideshowEffect implements VisualEffect {
   }
 
   private async advanceSlide() {
+    const remotionEnv = getRemotionEnvironment();
+    const isInRemotionContext = remotionEnv.isRendering || remotionEnv.isStudio;
+
     if (this.parameters.images.length === 0) {
       slideshowLog.warn('advanceSlide called but images array is empty');
+      if (isInRemotionContext) {
+        console.log('[Slideshow Remotion] advanceSlide BLOCKED: no images');
+      }
       return;
     }
 
     // Prevent concurrent calls - if already advancing, skip
     if (this.isAdvancing) {
+      if (isInRemotionContext) {
+        console.log('[Slideshow Remotion] advanceSlide BLOCKED: already advancing (async load in progress)');
+      }
       return;
     }
 
     this.isAdvancing = true;
+    if (isInRemotionContext) {
+      console.log('[Slideshow Remotion] advanceSlide STARTING', {
+        currentIndex: this.currentImageIndex,
+        nextIndex: (this.currentImageIndex + 1) % this.parameters.images.length,
+      });
+    }
 
     try {
       const nextIndex = (this.currentImageIndex + 1) % this.parameters.images.length;
@@ -419,6 +504,13 @@ export class ImageSlideshowEffect implements VisualEffect {
           textureSize: texture.image ? `${texture.image.width}x${texture.image.height}` : 'unknown'
         });
 
+        if (isInRemotionContext) {
+          console.log('[Slideshow Remotion] advanceSlide SUCCESS', {
+            newIndex: nextIndex,
+            textureSize: texture.image ? `${texture.image.width}x${texture.image.height}` : 'unknown',
+          });
+        }
+
         this.fitTextureToScreen(texture);
 
         // Preload next images & cleanup
@@ -426,6 +518,9 @@ export class ImageSlideshowEffect implements VisualEffect {
         this.loadNextTextures(nextIndex);
       } else {
         slideshowLog.error('advanceSlide: texture is null after load attempt');
+        if (isInRemotionContext) {
+          console.log('[Slideshow Remotion] advanceSlide FAILED: texture is null');
+        }
       }
     } finally {
       this.isAdvancing = false;
@@ -508,6 +603,51 @@ export class ImageSlideshowEffect implements VisualEffect {
     return { bitmap: processedBitmap, wasResized: needsResize, originalWidth, originalHeight };
   }
 
+  /**
+   * Load image from blob and return as HTMLImageElement.
+   * Uses the native Image constructor which is available in both browser and Node.js
+   * environments when running with Three.js/Remotion.
+   */
+  private async loadImageFromBlobAsElement(blob: Blob): Promise<HTMLImageElement> {
+    // Convert blob to base64 data URL
+    const arrayBuffer = await blob.arrayBuffer();
+    const base64 = this.arrayBufferToBase64(arrayBuffer);
+    const mimeType = blob.type || 'image/jpeg';
+    const dataUrl = `data:${mimeType};base64,${base64}`;
+
+    // Create image element using the global Image constructor
+    // This is available in browser and in Node.js when running with canvas support
+    const img = new (globalThis.Image || Image || HTMLImageElement)();
+
+    return new Promise((resolve, reject) => {
+      img.onload = () => {
+        resolve(img);
+      };
+      img.onerror = () => {
+        reject(new Error('Failed to load image from blob'));
+      };
+      img.src = dataUrl;
+    });
+  }
+
+  /**
+   * Convert ArrayBuffer to base64 string
+   */
+  private arrayBufferToBase64(buffer: ArrayBuffer): string {
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    // Use btoa in browser, but in Node.js we need a different approach
+    if (typeof window !== 'undefined') {
+      return btoa(binary);
+    } else {
+      // Node.js environment - use Buffer
+      return Buffer.from(binary, 'binary').toString('base64');
+    }
+  }
+
   private loadTexture(url: string): Promise<THREE.Texture> {
     // Check if URL is blacklisted (403/404)
     if (this.blacklistedUrls.has(url)) {
@@ -574,33 +714,29 @@ export class ImageSlideshowEffect implements VisualEffect {
 
         const blob = await response.blob();
 
-        // Decode using ImageBitmap API (faster, off main thread)
-        const imageBitmap = await createImageBitmap(blob);
+        // Use HTMLImageElement approach that works in both browser and Node.js
+        // This avoids createImageBitmap which is browser-only
+        const img = await this.loadImageFromBlobAsElement(blob);
 
-        // Resize if needed (max 2048px for performance)
-        const { bitmap: resizedBitmap, wasResized, originalWidth, originalHeight } = await this.resizeImageIfNeeded(imageBitmap, 2048);
-
-        // Create texture from ImageBitmap
-        const texture = new THREE.CanvasTexture(resizedBitmap);
+        // Create texture directly from the image element
+        // This works in both browser and Node.js environments
+        const texture = new THREE.Texture(img);
         texture.colorSpace = THREE.SRGBColorSpace;
         texture.minFilter = THREE.LinearFilter;
         texture.magFilter = THREE.LinearFilter;
         texture.generateMipmaps = false;
         texture.matrixAutoUpdate = true;
-        // flipY = false because we pre-flip the image in resizeImageIfNeeded()
-        // via canvas transform. This ensures consistent orientation across browsers.
-        texture.flipY = false;
+        // flipY = true (default) since we're loading from HTMLImageElement
+        texture.flipY = true;
+        texture.needsUpdate = true;
 
         this.textureCache.set(url, texture);
         this.loadingImages.delete(url);
 
         slideshowLog.log('Texture loaded successfully:', {
           url: url.substring(0, 50),
-          width: resizedBitmap.width,
-          height: resizedBitmap.height,
-          originalWidth,
-          originalHeight,
-          wasResized
+          width: img.width,
+          height: img.height,
         });
 
         // Resolve primary caller
