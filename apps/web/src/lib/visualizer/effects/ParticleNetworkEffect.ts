@@ -19,6 +19,17 @@ interface Particle {
   spawnType: 'midi' | 'audio';
 }
 
+/**
+ * SpawnEvent represents a particle spawn triggered by audio transients.
+ * Used for stateless Remotion Lambda rendering where spawn times
+ * are pre-computed from audio analysis and passed via props.
+ */
+export interface SpawnEvent {
+  time: number;        // Spawn time in seconds
+  intensity: number;   // 0-1, affects size/color
+  stemType?: string;   // Which stem triggered this (drums, bass, etc.)
+}
+
 export class ParticleNetworkEffect implements VisualEffect {
   id = 'particleNetwork';
   name = 'MIDI & Audio Particle Network';
@@ -35,6 +46,9 @@ export class ParticleNetworkEffect implements VisualEffect {
     particleSpawning: 0.0, // Modulation destination for particle spawning (0-1)
     spawnThreshold: 0.5, // Threshold for when modulation signal spawns particles
     connectionOpacity: 0.8, // Opacity multiplier for connection lines
+    // Stateless spawn events for Remotion Lambda rendering
+    // Populated from audio transients in RayboxComposition
+    spawnEvents: [] as SpawnEvent[],
   };
 
   private internalScene!: THREE.Scene;
@@ -45,6 +59,8 @@ export class ParticleNetworkEffect implements VisualEffect {
   private material!: THREE.ShaderMaterial;
   private uniforms!: Record<string, THREE.IUniform>;
 
+  // Particle array - used as accumulator in live editor update(), but
+  // REPLACED entirely in updateWithTime() for stateless Remotion Lambda rendering.
   private particles: Particle[] = [];
   private geometry!: THREE.BufferGeometry;
   private positions!: Float32Array;
@@ -61,6 +77,8 @@ export class ParticleNetworkEffect implements VisualEffect {
   private activeConnections: number = 0;
 
   // Performance optimization: skip frames
+  // NOTE: These are ONLY used by update() for live editor preview.
+  // updateWithTime() for Remotion Lambda is fully stateless and ignores these.
   private frameSkipCounter = 0;
   private frameSkipInterval = 2; // Update every 3rd frame for 30fps -> 10fps updates
 
@@ -71,6 +89,8 @@ export class ParticleNetworkEffect implements VisualEffect {
   private dummyMatrix: THREE.Matrix4 = new THREE.Matrix4();
 
   // Audio spawning state
+  // NOTE: These are ONLY used by update() for live editor preview.
+  // updateWithTime() for Remotion Lambda is fully stateless and ignores these.
   private lastAudioSpawnTime: number = 0;
   private lastManualSpawnTime: number = 0;
 
@@ -508,6 +528,9 @@ export class ParticleNetworkEffect implements VisualEffect {
       case 'connectionOpacity':
         this.parameters.connectionOpacity = value;
         break;
+      case 'spawnEvents':
+        this.parameters.spawnEvents = value as SpawnEvent[];
+        break;
     }
   }
 
@@ -545,7 +568,15 @@ export class ParticleNetworkEffect implements VisualEffect {
   }
 
   /**
-   * Update with absolute time for deterministic Remotion rendering
+   * Update with absolute time for deterministic Remotion rendering.
+   * STATELESS: Computes particle state entirely from spawnEvents and absoluteTime.
+   * No accumulated state - each frame is computed independently.
+   *
+   * For any time T, we compute:
+   * 1. Which particles exist: spawn_time <= T < spawn_time + lifetime
+   * 2. Each particle's life: 1 - (T - spawn_time) / lifetime
+   * 3. Each particle's position: initial_pos + velocity * effective_age
+   *
    * @param absoluteTime - Absolute time in seconds (frame / fps)
    */
   updateWithTime(absoluteTime: number): void {
@@ -554,33 +585,90 @@ export class ParticleNetworkEffect implements VisualEffect {
       return;
     }
 
-    // Generic: sync all parameters to uniforms
-    for (const key in this.parameters) {
-      const uniformKey = 'u' + key.charAt(0).toUpperCase() + key.slice(1);
-      if (this.uniforms[uniformKey]) {
-        this.uniforms[uniformKey].value = this.parameters[key as keyof typeof this.parameters];
-      }
-    }
-
-    // Set time directly for deterministic behavior
+    // Sync uniforms
     this.uniforms.uTime.value = absoluteTime;
-    // Intensity is now static - controlled only by explicit parameter mappings
     this.uniforms.uIntensity.value = 1.0;
     this.uniforms.uGlowIntensity.value = this.parameters.glowIntensity;
+    this.uniforms.uGlowSoftness.value = this.parameters.glowSoftness;
 
     // Ensure the instanced mesh is visible
     if (this.instancedMesh) {
       this.instancedMesh.visible = true;
     }
 
-    // For deterministic rendering, update particles based on absolute time
-    // Calculate approximate deltaTime for particle physics (use fixed 1/60 for consistency)
-    const approximateDeltaTime = 1 / 60;
-    this.frameSkipCounter++;
-    if (this.frameSkipCounter >= this.frameSkipInterval) {
-      this.frameSkipCounter = 0;
-      this.updateParticles(approximateDeltaTime * this.frameSkipInterval);
+    // STATELESS: Compute active particles purely from spawn events
+    const activeParticles: Particle[] = [];
+    const lifetime = this.parameters.particleLifetime;
+    const maxParticles = this.parameters.maxParticles;
+    const spawnEvents = this.parameters.spawnEvents;
+
+    // If no spawn events, fall back to default particles for visibility
+    if (!spawnEvents || spawnEvents.length === 0) {
+      // Maintain default particles for editor preview without audio
+      if (this.particles.length === 0) {
+        this.initializeDefaultParticles();
+      }
+      this.updateBuffers();
+      this.updateConnections();
+      return;
     }
+
+    for (const event of spawnEvents) {
+      const age = absoluteTime - event.time;
+
+      // Skip future or expired particles
+      if (age < 0 || age >= lifetime) continue;
+
+      // Compute deterministic state from spawn time
+      const life = 1 - (age / lifetime);
+
+      // Use spawn time as seed for deterministic position
+      const seed = Math.floor(event.time * 1000);
+      const initialPos = new THREE.Vector3(
+        (random(`particle-x-${seed}`) - 0.5) * 4,
+        (random(`particle-y-${seed}`) - 0.5) * 4,
+        0
+      );
+
+      // Compute velocity deterministically
+      const velocity = new THREE.Vector3(
+        (random(`particle-vel-x-${seed}`) - 0.5) * 0.02,
+        (random(`particle-vel-y-${seed}`) - 0.5) * 0.02,
+        (random(`particle-vel-z-${seed}`) - 0.5) * 0.02
+      );
+
+      // Apply physics: position = initial + velocity * damped_age
+      // For damping factor 0.98 per frame at 60fps, the integral gives effective age
+      // Using simplified exponential decay: effectiveAge ≈ (1 - e^(-age*k)) / k
+      const dampingRate = -Math.log(0.98) * 60; // Convert per-frame damping to continuous rate
+      const effectiveAge = (1 - Math.exp(-age * dampingRate)) / dampingRate;
+      const position = initialPos.clone().add(velocity.clone().multiplyScalar(effectiveAge * 60));
+
+      // Size based on intensity
+      const size = this.parameters.particleSize * (0.5 + event.intensity * 1.5);
+
+      activeParticles.push({
+        position,
+        velocity,
+        life,
+        maxLife: lifetime,
+        size,
+        note: 60,
+        noteVelocity: Math.floor(event.intensity * 127),
+        track: event.stemType || 'audio',
+        audioValue: event.intensity,
+        spawnType: 'audio',
+      });
+
+      if (activeParticles.length >= maxParticles) break;
+    }
+
+    // Replace particle array entirely (no accumulation)
+    this.particles = activeParticles;
+
+    // Update GPU buffers
+    this.updateBuffers();
+    this.updateConnections();
   }
 
   public getScene(): THREE.Scene {

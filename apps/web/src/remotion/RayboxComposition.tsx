@@ -14,6 +14,7 @@ import '@/lib/visualizer/effects/EffectDefinitions';
 import type { RayboxCompositionProps } from './Root';
 import type { AudioAnalysisData as SimpleAudioAnalysisData } from '@/types/visualizer';
 import type { AudioAnalysisData as CachedAudioAnalysisData } from '@/types/audio-analysis-data';
+import type { SpawnEvent } from '@/lib/visualizer/effects/ParticleNetworkEffect';
 import { parseParamKey } from '@/lib/visualizer/paramKeys';
 import { debugLog } from '@/lib/utils';
 import { RemotionOverlayRenderer } from './RemotionOverlayRenderer';
@@ -455,7 +456,8 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const visualizerManagerRef = useRef<VisualizerManager | null>(null);
   const effectInstancesRef = useRef<Map<string, any>>(new Map());
-  const [handle] = useState(() => delayRender('Initializing Visualizer'));
+  // Increase timeout to 120 seconds for large payload loading
+  const [handle] = useState(() => delayRender('Initializing Visualizer', { timeoutInMilliseconds: 120000 }));
   const isInitializedRef = useRef(false);
 
   const actualLayers = layers || [];
@@ -463,12 +465,19 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
 
   // 1. Initialize Visualizer (useLayoutEffect) - runs once on mount
   useLayoutEffect(() => {
-    if (!canvasRef.current || isInitializedRef.current) return;
-    
+    // Early return if already initialized or canvas not ready
+    if (isInitializedRef.current) return;
+    if (!canvasRef.current) {
+      console.warn('[RayboxComposition] Canvas ref not ready, waiting for next render');
+      return;
+    }
+
     let isNewManager = false;
+    let safetyTimeout: NodeJS.Timeout | null = null;
 
     if (!visualizerManagerRef.current) {
       try {
+        console.log('[RayboxComposition] Creating VisualizerManager...');
         visualizerManagerRef.current = new VisualizerManager(canvasRef.current, {
           canvas: { width, height, pixelRatio: 1 },
           performance: { targetFPS: fps, enableShadows: false },
@@ -477,10 +486,12 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
         isNewManager = true;
         // If a new manager is created, any cached effect refs are stale.
         effectInstancesRef.current.clear();
+        console.log('[RayboxComposition] VisualizerManager created successfully');
       } catch (e) {
-        console.error('Failed to initialize VisualizerManager:', e);
+        console.error('[RayboxComposition] Failed to initialize VisualizerManager:', e);
         // Log error but continue - let the render attempt to proceed
         // The canvas will just be black if WebGL fails, but won't crash the render
+        isInitializedRef.current = true;
         continueRender(handle);
         return;
       }
@@ -496,6 +507,7 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
       }
 
       const effectLayers = actualLayers.filter((l) => l.type === 'effect' && l.effectType);
+      console.log(`[RayboxComposition] Creating ${effectLayers.length} effects...`);
       for (const layer of effectLayers) {
         const hasRef = effectInstancesRef.current.has(layer.id);
         const managerHasEffect =
@@ -521,23 +533,88 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
           (effect) => typeof (effect as any).waitForImages === 'function',
         );
 
+        console.log(`[RayboxComposition] Waiting for ${asyncEffects.length} effects with images...`);
+
         if (asyncEffects.length > 0) {
-          // 10s timeout safety to prevent hanging forever on bad URLs
+          // 8s timeout safety to prevent hanging forever on bad URLs
+          // (reduced from 10s to give more margin before 33s Remotion timeout)
           await Promise.race([
             Promise.all(asyncEffects.map((effect) => (effect as any).waitForImages())),
-            new Promise((r) => setTimeout(r, 10000)),
+            new Promise((r) => setTimeout(r, 8000)),
           ]);
         }
+        console.log('[RayboxComposition] Asset loading complete');
       } catch (e) {
-        console.warn('⚠️ Asset waiting warning:', e);
+        console.warn('[RayboxComposition] Asset waiting warning:', e);
       } finally {
-        isInitializedRef.current = true;
-        continueRender(handle);
+        if (!isInitializedRef.current) {
+          isInitializedRef.current = true;
+          console.log('[RayboxComposition] Calling continueRender from waitForAssets');
+          continueRender(handle);
+        }
+        // Clear safety timeout since we're done
+        if (safetyTimeout) {
+          clearTimeout(safetyTimeout);
+          safetyTimeout = null;
+        }
       }
     };
 
-    waitForAssets();
-  }, [width, height, fps, actualLayers]); // Include actualLayers to update effects on change
+    waitForAssets().catch((err) => {
+      console.error('[RayboxComposition] waitForAssets failed:', err);
+      if (!isInitializedRef.current) {
+        isInitializedRef.current = true;
+        continueRender(handle);
+      }
+      if (safetyTimeout) {
+        clearTimeout(safetyTimeout);
+        safetyTimeout = null;
+      }
+    });
+
+    // Safety timeout: always clear the delayRender after 15 seconds
+    // (reduced from 20s to give more margin before 33s Remotion timeout)
+    safetyTimeout = setTimeout(() => {
+      if (!isInitializedRef.current) {
+        console.warn('[RayboxComposition] Safety timeout: forcing continueRender after 15s');
+        isInitializedRef.current = true;
+        continueRender(handle);
+      }
+    }, 15000);
+
+    // Cleanup function to clear timeout on unmount
+    return () => {
+      if (safetyTimeout) {
+        clearTimeout(safetyTimeout);
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [width, height, fps]); // Removed actualLayers to prevent re-runs during init
+
+  // 1b. Update effects when layers change (after initialization)
+  useLayoutEffect(() => {
+    if (!isInitializedRef.current || !visualizerManagerRef.current) return;
+
+    const manager = visualizerManagerRef.current;
+    const effectLayers = actualLayers.filter((l) => l.type === 'effect' && l.effectType);
+
+    for (const layer of effectLayers) {
+      const hasRef = effectInstancesRef.current.has(layer.id);
+      const managerHasEffect =
+        typeof manager.getEffect === 'function' ? !!manager.getEffect(layer.id) : false;
+
+      if (!hasRef || !managerHasEffect) {
+        const baseValues = baseParameterValues?.[layer.id] || {};
+        const mergedSettings = { ...layer.settings, ...baseValues };
+        const effectType = layer.effectType as string;
+        const effect = EffectRegistry.createEffect(effectType, mergedSettings);
+        if (effect) {
+          effectInstancesRef.current.set(layer.id, effect);
+          manager.addEffect(layer.id, effect);
+        }
+      }
+    }
+  }, [actualLayers, baseParameterValues]);
 
   // 2. Render Loop (useLayoutEffect) - runs on every frame
   useLayoutEffect(() => {
@@ -684,7 +761,45 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
 
     visualizerManagerRef.current.updateTimelineState(actualLayers, time);
     if (audioData) visualizerManagerRef.current.setAudioData(audioData);
-    
+
+    // 2b. Pass spawn events to particle network effects for stateless Lambda rendering
+    // Find all particle network layers and inject spawn events from audio transients
+    const particleEffectLayers = actualLayers.filter(
+      l => l.type === 'effect' && l.effectType === 'particleNetwork'
+    );
+
+    for (const layer of particleEffectLayers) {
+      // Determine which stem to use for this particle effect
+      // Priority: layer-specific setting > 'drums' (most common for particles)
+      const stemType = (layer.settings?.stemType as string) || 'drums';
+
+      // Find the audio analysis data for this stem
+      const stemAnalysis = actualAudioAnalysisData.find(
+        a => a.stemType === stemType
+      );
+
+      if (stemAnalysis?.analysisData) {
+        const transients = (stemAnalysis.analysisData as any).transients;
+
+        if (transients && Array.isArray(transients)) {
+          // Convert transients to spawn events
+          const spawnEvents: SpawnEvent[] = transients.map((t: any) => ({
+            time: t.time,
+            intensity: t.intensity,
+            stemType,
+          }));
+
+          // Update the effect parameter
+          visualizerManagerRef.current?.updateEffectParameter(layer.id, 'spawnEvents', spawnEvents);
+
+          // DEBUG: Log on first few frames
+          if (frame < 3) {
+            console.log(`[ParticleSpawn] frame=${frame} layer=${layer.id}: ${spawnEvents.length} spawn events from ${stemType}`);
+          }
+        }
+      }
+    }
+
     // 2. Deterministic Update - sets uTime and all effect states based on frame/fps
     // This ensures frame 100 looks identical whether rendered on laptop, AWS Lambda in Virginia, or Oregon
     visualizerManagerRef.current.update(frame, fps);
