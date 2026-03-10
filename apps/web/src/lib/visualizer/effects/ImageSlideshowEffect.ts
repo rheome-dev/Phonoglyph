@@ -714,30 +714,56 @@ export class ImageSlideshowEffect implements VisualEffect {
 
         const blob = await response.blob();
 
-        // Use HTMLImageElement approach that works in both browser and Node.js
-        // This avoids createImageBitmap which is browser-only
-        const img = await this.loadImageFromBlobAsElement(blob);
+        let texture: THREE.Texture;
 
-        // Create texture directly from the image element
-        // This works in both browser and Node.js environments
-        const texture = new THREE.Texture(img);
-        texture.colorSpace = THREE.SRGBColorSpace;
-        texture.minFilter = THREE.LinearFilter;
-        texture.magFilter = THREE.LinearFilter;
-        texture.generateMipmaps = false;
-        texture.matrixAutoUpdate = true;
-        // flipY = true (default) since we're loading from HTMLImageElement
-        texture.flipY = true;
-        texture.needsUpdate = true;
+        // Use createImageBitmap in browser (fast, off-main-thread decoding)
+        // Fall back to HTMLImageElement for Remotion/Node.js where createImageBitmap is unavailable
+        const canUseBitmap = typeof createImageBitmap === 'function';
+
+        if (canUseBitmap) {
+          // Browser path: fast off-main-thread decode via ImageBitmap
+          const imageBitmap = await createImageBitmap(blob);
+          const { bitmap: processedBitmap, wasResized, originalWidth, originalHeight } = await this.resizeImageIfNeeded(imageBitmap, 2048);
+
+          texture = new THREE.CanvasTexture(processedBitmap);
+          texture.colorSpace = THREE.SRGBColorSpace;
+          texture.minFilter = THREE.LinearFilter;
+          texture.magFilter = THREE.LinearFilter;
+          texture.generateMipmaps = false;
+          texture.matrixAutoUpdate = true;
+          // flipY = false because we pre-flip in resizeImageIfNeeded() via canvas transform
+          texture.flipY = false;
+
+          slideshowLog.log('Texture loaded via ImageBitmap:', {
+            url: url.substring(0, 50),
+            width: processedBitmap.width,
+            height: processedBitmap.height,
+            originalWidth,
+            originalHeight,
+            wasResized,
+          });
+        } else {
+          // Remotion/Node.js path: HTMLImageElement with base64 data URL
+          const img = await this.loadImageFromBlobAsElement(blob);
+
+          texture = new THREE.Texture(img);
+          texture.colorSpace = THREE.SRGBColorSpace;
+          texture.minFilter = THREE.LinearFilter;
+          texture.magFilter = THREE.LinearFilter;
+          texture.generateMipmaps = false;
+          texture.matrixAutoUpdate = true;
+          texture.flipY = true;
+          texture.needsUpdate = true;
+
+          slideshowLog.log('Texture loaded via HTMLImageElement:', {
+            url: url.substring(0, 50),
+            width: img.width,
+            height: img.height,
+          });
+        }
 
         this.textureCache.set(url, texture);
         this.loadingImages.delete(url);
-
-        slideshowLog.log('Texture loaded successfully:', {
-          url: url.substring(0, 50),
-          width: img.width,
-          height: img.height,
-        });
 
         // Resolve primary caller
         resolve(texture);
