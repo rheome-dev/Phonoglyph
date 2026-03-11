@@ -192,7 +192,7 @@ export const renderRouter = router({
             analysisUrl: analysisUrl, // PASS THE LINK INSTEAD
           },
           codec: 'h264',
-          concurrencyPerRender: 25,
+          concurrencyPerRender: 10,
           logLevel: 'verbose',
           chromiumOptions: {
             gl: 'swangle', // Force software rendering for Lambda (no GPU available)

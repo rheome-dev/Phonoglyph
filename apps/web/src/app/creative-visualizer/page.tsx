@@ -975,10 +975,10 @@ function CreativeVisualizerPage() {
           const progressPercent = Math.round((status.overallProgress || 0) * 100);
           setRenderProgress(progressPercent);
 
+          // Fatal render errors must propagate immediately — don't retry
           if (status.fatalErrorEncountered) {
-            throw new Error(
-              `Render failed: ${status.errors?.map((e: any) => e.message).join(', ') || 'Fatal error'}`
-            );
+            const msg = status.errors?.map((e: any) => e.message).join(', ') || 'Fatal error';
+            throw Object.assign(new Error(`Render failed: ${msg}`), { fatal: true });
           }
 
           if (status.done && status.outputFile) {
@@ -997,7 +997,10 @@ function CreativeVisualizerPage() {
             setIsDownloadReady(false);
             break;
           }
-        } catch (error) {
+        } catch (error: any) {
+          // Fatal render errors skip backoff and propagate immediately
+          if (error?.fatal) throw error;
+
           consecutiveErrors++;
           if (consecutiveErrors >= MAX_ERRORS) {
             throw new Error(`Render status check failed ${MAX_ERRORS} times. Last error: ${error}`);
