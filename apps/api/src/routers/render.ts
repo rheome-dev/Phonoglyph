@@ -117,6 +117,9 @@ const triggerRenderSchema = z.object({
     z.string(),
     z.record(z.string(), z.any())
   ).optional(),
+  // Audio modulation settings (TASK 4: previously stripped by Zod)
+  featureDecayTimes: z.record(z.string(), z.number()).optional(),
+  featureSensitivities: z.record(z.string(), z.number()).optional(),
 });
 
 export const renderRouter = router({
@@ -196,11 +199,12 @@ export const renderRouter = router({
           },
         } as any);
 
-        logger.log('Render triggered successfully:', { renderId, bucketName });
+        logger.log('Render triggered successfully:', { renderId, bucketName, functionName });
 
         return {
           renderId,
           bucketName,
+          functionName,
         };
       } catch (error) {
         logger.error('Failed to trigger render:', error);
@@ -216,35 +220,16 @@ export const renderRouter = router({
       z.object({
         renderId: z.string(),
         bucketName: z.string(),
+        functionName: z.string(),
       })
     )
     .mutation(async ({ input }) => {
       try {
         const region = 'us-east-1';
 
-        // Try to get the function name dynamically, fallback to standard name
-        let functionName = 'remotion-render-4-0-390-mem2048mb-disk2048mb-120sec';
-        
-        try {
-          const functions = await getFunctions({
-            region,
-            compatibleOnly: true,
-          });
-          
-          if (functions.length > 0 && functions[0]) {
-            // Use the first compatible function
-            functionName = functions[0].functionName;
-            logger.log(`Using Remotion function: ${functionName}`);
-          } else {
-            logger.warn(`No compatible functions found, using default: ${functionName}`);
-          }
-        } catch (error) {
-          logger.warn(`Failed to get functions dynamically, using default: ${functionName}`, error);
-        }
-
         logger.log('Getting render status:', {
           region,
-          functionName,
+          functionName: input.functionName,
           renderId: input.renderId,
           bucketName: input.bucketName,
         });
@@ -252,8 +237,9 @@ export const renderRouter = router({
         const progress = await getRenderProgress({
           renderId: input.renderId,
           bucketName: input.bucketName,
-          functionName,
+          functionName: input.functionName,
           region,
+          skipLambdaInvocation: true,
         });
 
         logger.log('Render status retrieved:', {

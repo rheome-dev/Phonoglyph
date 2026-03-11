@@ -955,40 +955,42 @@ function CreativeVisualizerPage() {
       const result = await triggerRenderMutation.mutateAsync(payload);
       
       console.log('Render result:', result);
-      const { renderId, bucketName } = result;
+      const { renderId, bucketName, functionName } = result;
 
-      // Poll for completion
+      // Wait before first poll — Lambda needs time to write initial progress to S3
+      await new Promise(r => setTimeout(r, 10000));
+
+      // Poll for completion with exponential backoff on errors
+      let pollInterval = 5000;
+      const MAX_POLL = 30000;
+      let consecutiveErrors = 0;
+      const MAX_ERRORS = 10;
+
       while (true) {
-        // Wait 5 seconds before checking status
-        await new Promise(r => setTimeout(r, 5000));
-
         try {
-          // Get render status
-          const status = await getStatus.mutateAsync({ renderId, bucketName });
+          const status = await getStatus.mutateAsync({ renderId, bucketName, functionName });
+          consecutiveErrors = 0;
+          pollInterval = 5000;
 
-          // Update progress
           const progressPercent = Math.round((status.overallProgress || 0) * 100);
           setRenderProgress(progressPercent);
 
-          // Check for fatal error
           if (status.fatalErrorEncountered) {
-            throw new Error('Render failed with a fatal error');
+            throw new Error(
+              `Render failed: ${status.errors?.map((e: any) => e.message).join(', ') || 'Fatal error'}`
+            );
           }
 
-          // Check if done
           if (status.done && status.outputFile) {
-            // Show download ready state
             setIsDownloadReady(true);
-            
-            // Trigger download
+
             const link = document.createElement('a');
             link.href = status.outputFile;
             link.download = 'render.mp4';
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            
-            // Reset after brief delay
+
             await new Promise(r => setTimeout(r, 2000));
             setIsRendering(false);
             setRenderProgress(0);
@@ -996,11 +998,15 @@ function CreativeVisualizerPage() {
             break;
           }
         } catch (error) {
-          // Handle rate limit errors and other polling errors
-          console.warn('Polling error, retrying...', error);
-          // Continue to next iteration (will wait 5s and try again)
-          continue;
+          consecutiveErrors++;
+          if (consecutiveErrors >= MAX_ERRORS) {
+            throw new Error(`Render status check failed ${MAX_ERRORS} times. Last error: ${error}`);
+          }
+          pollInterval = Math.min(pollInterval * 1.5, MAX_POLL);
+          console.warn(`Polling error (${consecutiveErrors}/${MAX_ERRORS}), next check in ${pollInterval / 1000}s`, error);
         }
+
+        await new Promise(r => setTimeout(r, pollInterval));
       }
     } catch (error) {
       console.error('Export error:', error);
