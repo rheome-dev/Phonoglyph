@@ -30,12 +30,27 @@ export interface SpawnEvent {
   stemType?: string;   // Which stem triggered this (drums, bass, etc.)
 }
 
+export interface ParticleNetworkParameters {
+  maxParticles: number;
+  connectionDistance: number;
+  particleLifetime: number;
+  glowIntensity: number;
+  glowSoftness: number;
+  particleColor: number[];
+  particleSize: number;
+  particleSpawning: number;
+  spawnThreshold: number;
+  connectionOpacity: number;
+  spawnEvents: SpawnEvent[];
+}
+
 export class ParticleNetworkEffect implements VisualEffect {
   id = 'particleNetwork';
   name = 'MIDI & Audio Particle Network';
   description = 'Glowing particle network that responds to MIDI notes and audio features';
   enabled = true;
-  parameters = {
+
+  parameters: ParticleNetworkParameters = {
     maxParticles: 50,
     connectionDistance: 1.0,
     particleLifetime: 3.0,
@@ -95,7 +110,9 @@ export class ParticleNetworkEffect implements VisualEffect {
   private lastManualSpawnTime: number = 0;
 
 
-  constructor() {
+  constructor(config: Partial<ParticleNetworkParameters> = {}) {
+    // Apply config to parameters (user settings override defaults)
+    this.parameters = { ...this.parameters, ...config };
     this.setupUniforms();
   }
 
@@ -118,9 +135,9 @@ export class ParticleNetworkEffect implements VisualEffect {
     this.uniforms = {
       uTime: { value: 0.0 },
       uIntensity: { value: 1.0 },
-      uGlowIntensity: { value: 1.0 }, // Reset to a reasonable default
+      uGlowIntensity: { value: this.parameters.glowIntensity },
       uGlowSoftness: { value: this.parameters.glowSoftness },
-      uSizeMultiplier: { value: 1.0 } // Size control uniform
+      uSizeMultiplier: { value: this.parameters.particleSize }
     };
   }
 
@@ -193,8 +210,8 @@ export class ParticleNetworkEffect implements VisualEffect {
         float alpha = (core + glow * uGlowIntensity) * vLife;
         vec3 finalColor = vColor * (1.0 + glow * uGlowIntensity * 0.5 + core * 0.2);
 
-        // Premultiplied alpha for additive blending
-        gl_FragColor = vec4(finalColor * alpha, alpha);
+        // Standard alpha for additive blending
+        gl_FragColor = vec4(finalColor, alpha);
       }
     `;
 
@@ -206,7 +223,6 @@ export class ParticleNetworkEffect implements VisualEffect {
       blending: THREE.AdditiveBlending,
       depthWrite: false,
       depthTest: false,
-      premultipliedAlpha: true,
       vertexColors: true
     });
 
@@ -295,11 +311,19 @@ export class ParticleNetworkEffect implements VisualEffect {
   }
 
   private getNoteColor(note: number, velocity: number, spawnType: 'midi' | 'audio' = 'midi', audioValue?: number): THREE.Color {
-    const baseColor = new THREE.Color(
-      this.parameters.particleColor[0],
-      this.parameters.particleColor[1],
-      this.parameters.particleColor[2]
-    );
+    // Handle both hex string and RGB array formats for particleColor
+    let baseColor: THREE.Color;
+    const pc = this.parameters.particleColor;
+    if (typeof pc === 'string') {
+      // Hex string format (e.g., '#ff0000' or 'ff0000')
+      baseColor = new THREE.Color(pc);
+    } else if (Array.isArray(pc) && pc.length >= 3) {
+      // RGB array format [r, g, b]
+      baseColor = new THREE.Color(pc[0], pc[1], pc[2]);
+    } else {
+      // Default to white
+      baseColor = new THREE.Color(1, 1, 1);
+    }
 
     if (spawnType === 'audio' && audioValue !== undefined) {
       // Audio particles: vary hue based on audio value
@@ -507,6 +531,7 @@ export class ParticleNetworkEffect implements VisualEffect {
         // This affects particle creation
         break;
       case 'glowIntensity':
+        this.parameters.glowIntensity = value;
         if (this.uniforms) this.uniforms.uGlowIntensity.value = value;
         break;
       case 'glowSoftness':
@@ -514,10 +539,11 @@ export class ParticleNetworkEffect implements VisualEffect {
         if (this.uniforms) this.uniforms.uGlowSoftness.value = value;
         break;
       case 'particleColor':
-        // This affects particle color generation
+        this.parameters.particleColor = value;
         break;
       case 'particleSize':
         this.parameters.particleSize = value;
+        if (this.uniforms) this.uniforms.uSizeMultiplier.value = value;
         break;
       case 'particleSpawning':
         this.parameters.particleSpawning = value;
