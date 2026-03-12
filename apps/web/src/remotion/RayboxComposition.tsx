@@ -450,6 +450,7 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
   baseParameterValues,
   featureDecayTimes,
   featureSensitivities,
+  analysisUrl,
 }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
@@ -460,8 +461,32 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
   const [handle] = useState(() => delayRender('Initializing Visualizer', { timeoutInMilliseconds: 120000 }));
   const isInitializedRef = useRef(false);
 
+  // State for fetched analysis data (needed because calculateMetadata doesn't pass data to Lambda chunks)
+  const [fetchedAudioAnalysisData, setFetchedAudioAnalysisData] = useState<typeof audioAnalysisData | null>(null);
+
+  // Fetch analysis data from R2 if analysisUrl exists and audioAnalysisData is empty
+  // This is needed because Remotion Lambda doesn't pass calculateMetadata results to chunk renders
+  useEffect(() => {
+    if (analysisUrl && (!audioAnalysisData || audioAnalysisData.length === 0)) {
+      console.log('[RayboxComposition] Fetching analysis data from:', analysisUrl);
+      fetch(analysisUrl)
+        .then(res => {
+          if (!res.ok) throw new Error(`Failed to fetch: ${res.status}`);
+          return res.json();
+        })
+        .then(data => {
+          console.log('[RayboxComposition] Fetched analysis data:', data.length, 'entries');
+          setFetchedAudioAnalysisData(data);
+        })
+        .catch(err => {
+          console.error('[RayboxComposition] Failed to fetch analysis data:', err);
+        });
+    }
+  }, [analysisUrl, audioAnalysisData]);
+
   const actualLayers = layers || [];
-  const actualAudioAnalysisData = audioAnalysisData || [];
+  // Use fetched data if available, otherwise use prop data
+  const actualAudioAnalysisData = fetchedAudioAnalysisData || audioAnalysisData || [];
 
   // 1. Initialize Visualizer (useLayoutEffect) - runs once on mount
   useLayoutEffect(() => {
