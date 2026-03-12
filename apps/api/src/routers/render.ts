@@ -128,7 +128,7 @@ export const renderRouter = router({
     .mutation(async ({ input, ctx }) => {
       try {
         const region = 'us-east-1';
-        const serveUrl = 'https://remotionlambda-useast1-zq6uoa8xhi.s3.us-east-1.amazonaws.com/sites/raybox-renderer/index.html';
+        const serveUrl = 'https://remotionlambda-useast1-zq6uoa8xhi.s3.us-east-1.amazonaws.com/sites/raybox-renderer/';
         const composition = 'RayboxMain';
 
         // 1. Generate a unique key for this render's analysis
