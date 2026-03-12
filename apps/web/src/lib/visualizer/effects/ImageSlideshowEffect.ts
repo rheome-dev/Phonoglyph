@@ -55,13 +55,18 @@ export class ImageSlideshowEffect implements VisualEffect {
     this.enabled = true;
     this.parameters = {
       triggerValue: 0,
-      threshold: 0.1, // Lower default threshold to catch more transients
+      threshold: config?.threshold ?? 0.1, // Lower default threshold to catch more transients
+      // Enforce minimum threshold of 0.01 to prevent edge case where threshold=0
+      // breaks the trigger state machine (wasTriggered can never reset when threshold is 0)
       images: config?.images || [],
       opacity: 1.0,
       position: config?.position || { x: 0.5, y: 0.5 }, // Center by default
       size: config?.size || { width: 1.0, height: 1.0 }, // Full screen by default
       ...config
     };
+
+    // Enforce minimum threshold to prevent broken state machine
+    this.parameters.threshold = Math.max(0.01, this.parameters.threshold);
 
     this.textureLoader.setCrossOrigin('anonymous');
 
@@ -137,9 +142,10 @@ export class ImageSlideshowEffect implements VisualEffect {
   update(deltaTime: number): void {
     if (!this.enabled) return;
 
-    // Skip all image operations in Remotion rendering to prevent hangs
-    // The effect will still render its current state but won't load new images
-    const isRemotionRendering = getRemotionEnvironment().isRendering;
+    // Check Remotion context FIRST - before any trigger logic
+    const remotionEnv = getRemotionEnvironment();
+    const isRemotionRendering = remotionEnv.isRendering;
+    const isInRemotionContext = isRemotionRendering || remotionEnv.isStudio;
 
     // STRICT CHECK: If network is throttled due to 403s, stop all operations
     if (this.isNetworkThrottled) {
@@ -151,10 +157,6 @@ export class ImageSlideshowEffect implements VisualEffect {
     const currentValue = this.parameters.triggerValue;
     const threshold = this.parameters.threshold;
 
-    // Check Remotion context for logging
-    const remotionEnv = getRemotionEnvironment();
-    const isInRemotionContext = remotionEnv.isRendering || remotionEnv.isStudio;
-
     // Calculate the change in value
     const valueDelta = currentValue - this.previousTriggerValue;
 
@@ -164,9 +166,9 @@ export class ImageSlideshowEffect implements VisualEffect {
 
     // Trigger conditions:
     // 1. Value jumped significantly (rising edge) - catches sharp transients
-    // 2. OR value is high and we haven't triggered recently - catches sustained peaks
+    // 2. OR value is above half threshold and we haven't triggered recently - catches sustained peaks
     const isRisingEdge = valueDelta > threshold;
-    const isAboveThreshold = currentValue > threshold * 2; // Higher threshold for sustained trigger
+    const isAboveThreshold = currentValue > threshold * 0.5; // Lower threshold for sustained trigger
     const shouldTrigger = cooldownExpired && (isRisingEdge || (isAboveThreshold && !this.wasTriggered));
 
     // DEBUG: Log state periodically or on triggers
@@ -180,27 +182,45 @@ export class ImageSlideshowEffect implements VisualEffect {
         framesSinceLastTrigger,
         shouldTrigger,
         currentImageIndex: this.currentImageIndex,
+        isRemotionRendering,
       });
     }
 
-    if (shouldTrigger) {
+    // CRITICAL FIX: In Remotion rendering mode, do NOT call advanceSlide()
+    // because network loading doesn't work reliably in Lambda. Just track state.
+    // The effect renders its current texture only - no advancing during render.
+    if (shouldTrigger && !isRemotionRendering) {
       if (isInRemotionContext) {
-        console.log('[Slideshow] TRIGGER - advancing slide', {
+        console.log('[Slideshow] TRIGGER - would advance slide (but blocked in Remotion render)', {
           frame: this.frameCounter,
           currentIndex: this.currentImageIndex,
           reason: isRisingEdge ? 'rising_edge' : 'sustained_peak',
         });
       }
+      // Only advance in non-Remotion (live preview) mode
       this.advanceSlide();
       this.lastTriggerFrame = this.frameCounter;
       this.wasTriggered = true;
-    } else if (currentValue <= threshold && this.wasTriggered) {
-      // Reset wasTriggered when value drops low enough - enables next rising edge trigger
+    } else if (shouldTrigger && isRemotionRendering) {
+      // In Remotion mode: just log that we would trigger but can't
+      if (isInRemotionContext) {
+        console.log('[Slideshow] BLOCKED TRIGGER in Remotion render mode', {
+          frame: this.frameCounter,
+          currentIndex: this.currentImageIndex,
+        });
+      }
+      // Still track that we "triggered" to prevent rapid re-triggering
+      this.lastTriggerFrame = this.frameCounter;
+      this.wasTriggered = true;
+    } else if (currentValue <= threshold * 0.5 && this.wasTriggered) {
+      // Reset wasTriggered when value drops below half threshold - enables next trigger
+      // Using threshold * 0.5 ensures reset happens before the next potential trigger point
       if (isInRemotionContext && this.frameCounter % 30 === 0) {
-        console.log('[Slideshow Debug] RESET wasTriggered (value dropped below threshold)', {
+        console.log('[Slideshow Debug] RESET wasTriggered (value dropped below threshold*0.5)', {
           frame: this.frameCounter,
           currentValue: currentValue.toFixed(4),
           threshold,
+          threshold05: (threshold * 0.5).toFixed(4),
         });
       }
       this.wasTriggered = false;
@@ -209,10 +229,9 @@ export class ImageSlideshowEffect implements VisualEffect {
     // Update previous value for next frame
     this.previousTriggerValue = currentValue;
 
-    // In Remotion mode, skip expensive image loading/processing
-    // but still allow texture display if already loaded
+    // In Remotion mode, skip all expensive image loading/processing
+    // The effect renders its current texture only - no advancing, no loading
     if (isRemotionRendering) {
-      // Just update frame counter and return - don't load new images
       this.frameCounter++;
       return;
     }

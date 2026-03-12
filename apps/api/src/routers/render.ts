@@ -50,6 +50,7 @@ const visualizationSettingsSchema = z.object({
   showVelocity: z.boolean().optional(),
   minKey: z.number().optional(),
   maxKey: z.number().optional(),
+  aspectRatio: z.string().optional(), // youtube, tiktok, instagram, etc.
 });
 
 // AudioAnalysisData schema - simplified to handle arrays as numbers
