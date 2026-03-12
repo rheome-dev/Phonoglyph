@@ -198,7 +198,7 @@ export const renderRouter = router({
                 analysisUrl: analysisUrl, // PASS THE LINK INSTEAD
               },
               codec: 'h264',
-              concurrencyPerRender: 3,
+              concurrencyPerRender: 1000,
               framesPerLambda: 120, // Spread work across fewer Lambdas (under 10 limit)
               logLevel: 'verbose',
               chromiumOptions: {
