@@ -202,7 +202,7 @@ export const renderRouter = router({
               framesPerLambda: 20, // Match working render (w3sheoepsg) - 20 frames per Lambda works
               logLevel: 'verbose',
               chromiumOptions: {
-                gl: 'swangle', // Force software rendering for Lambda (no GPU available)
+                gl: 'swiftshader' // Force software rendering for Lambda (no GPU available)
               },
             } as any);
 
