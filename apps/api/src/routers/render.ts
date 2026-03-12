@@ -180,32 +180,61 @@ export const renderRouter = router({
           analysisUrl,
         });
 
-        // 3. Trigger Lambda with SLIM props
-        const { renderId, bucketName } = await renderMediaOnLambda({
-          region,
-          functionName,
-          serveUrl,
-          composition,
-          inputProps: {
-            ...input,
-            audioAnalysisData: [], // EMPTY THIS OUT to keep payload small
-            analysisUrl: analysisUrl, // PASS THE LINK INSTEAD
-          },
-          codec: 'h264',
-          concurrencyPerRender: 5,
-          logLevel: 'verbose',
-          chromiumOptions: {
-            gl: 'swangle', // Force software rendering for Lambda (no GPU available)
-          },
-        } as any);
+        // 3. Trigger Lambda with retry logic for rate limits
+        const maxRetries = 3;
+        const baseDelayMs = 2000;
+        let lastError: Error | null = null;
 
-        logger.log('Render triggered successfully:', { renderId, bucketName, functionName });
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+          try {
+            const renderResult = await renderMediaOnLambda({
+              region,
+              functionName,
+              serveUrl,
+              composition,
+              inputProps: {
+                ...input,
+                audioAnalysisData: [], // EMPTY THIS OUT to keep payload small
+                analysisUrl: analysisUrl, // PASS THE LINK INSTEAD
+              },
+              codec: 'h264',
+              concurrencyPerRender: 3,
+              framesPerLambda: 120, // Spread work across fewer Lambdas (under 10 limit)
+              logLevel: 'verbose',
+              chromiumOptions: {
+                gl: 'swangle', // Force software rendering for Lambda (no GPU available)
+              },
+            } as any);
 
-        return {
-          renderId,
-          bucketName,
-          functionName,
-        };
+            const { renderId, bucketName } = renderResult;
+            const cloudWatchLogs = (renderResult as any).cloudWatchLogs;
+
+            logger.log('Render triggered successfully:', { renderId, bucketName, functionName, cloudWatchLogs });
+
+            return {
+              renderId,
+              bucketName,
+              functionName,
+              cloudWatchLogs,
+            };
+          } catch (error) {
+            lastError = error instanceof Error ? error : new Error(String(error));
+            const isRateLimit = lastError.message.includes('Rate Exceeded') ||
+                                lastError.message.includes('concurrency') ||
+                                lastError.message.includes('ConcurrentInvocationLimit');
+
+            if (isRateLimit && attempt < maxRetries - 1) {
+              const delayMs = baseDelayMs * Math.pow(2, attempt);
+              logger.warn(`Lambda rate limit hit, retrying in ${delayMs}ms (attempt ${attempt + 1}/${maxRetries})`);
+              await new Promise(resolve => setTimeout(resolve, delayMs));
+            } else {
+              throw lastError;
+            }
+          }
+        }
+
+        // Should not reach here, but just in case
+        throw lastError;
       } catch (error) {
         logger.error('Failed to trigger render:', error);
         throw new TRPCError({
