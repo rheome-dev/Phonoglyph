@@ -640,6 +640,17 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
           effectInstancesRef.current.set(layer.id, effect);
           manager.addEffect(layer.id, effect);
         }
+      } else {
+        // Effect already exists - update its parameters from layer.settings
+        // This ensures settings changes are applied on each render
+        const existingEffect = effectInstancesRef.current.get(layer.id);
+        if (existingEffect && layer.settings) {
+          for (const [paramName, value] of Object.entries(layer.settings)) {
+            if (value !== undefined && value !== null) {
+              existingEffect.updateParameter(paramName, value);
+            }
+          }
+        }
       }
     }
   }, [actualLayers, baseParameterValues]);
