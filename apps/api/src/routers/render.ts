@@ -199,7 +199,7 @@ export const renderRouter = router({
               },
               codec: 'h264',
               concurrencyPerRender: 1000,
-              framesPerLambda: 30, // Fewer frames per Lambda = faster completion, less timeout risk
+              framesPerLambda: 20, // Match working render (w3sheoepsg) - 20 frames per Lambda works
               logLevel: 'verbose',
               chromiumOptions: {
                 gl: 'swangle', // Force software rendering for Lambda (no GPU available)
