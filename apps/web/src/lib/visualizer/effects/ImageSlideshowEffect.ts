@@ -145,13 +145,25 @@ export class ImageSlideshowEffect implements VisualEffect {
     // Check Remotion context FIRST - before any trigger logic
     const remotionEnv = getRemotionEnvironment();
     const isRemotionRendering = remotionEnv.isRendering;
-    const isInRemotionContext = isRemotionRendering || remotionEnv.isStudio;
+
+    // CRITICAL FIX: In Remotion Lambda rendering mode, completely disable the effect
+    // - No trigger evaluation (audio data is for live preview only in browser)
+    // - No advanceSlide calls (network doesn't work in Lambda)
+    // - No retry logic - just render the current texture state as-is
+    // This prevents the "flashing" bug where trigger state gets corrupted during render
+    if (isRemotionRendering) {
+      this.frameCounter++;
+      return;
+    }
+
+    const isInRemotionContext = remotionEnv.isStudio;
 
     // STRICT CHECK: If network is throttled due to 403s, stop all operations
     if (this.isNetworkThrottled) {
       return;
     }
 
+    // Only run trigger logic in live preview mode (not in Remotion Lambda renders)
     // Trigger detection: Use cooldown-based approach for audio-reactive slideshow
     // This handles cases where drums-peaks produces sustained rising values
     const currentValue = this.parameters.triggerValue;
@@ -171,70 +183,16 @@ export class ImageSlideshowEffect implements VisualEffect {
     const isAboveThreshold = currentValue > threshold * 0.5; // Lower threshold for sustained trigger
     const shouldTrigger = cooldownExpired && (isRisingEdge || (isAboveThreshold && !this.wasTriggered));
 
-    // DEBUG: Log state periodically or on triggers
-    if (isInRemotionContext && (this.frameCounter % 30 === 0 || shouldTrigger)) {
-      console.log('[Slideshow Debug]', {
-        frame: this.frameCounter,
-        currentValue: currentValue.toFixed(4),
-        valueDelta: valueDelta.toFixed(4),
-        threshold,
-        cooldownExpired,
-        framesSinceLastTrigger,
-        shouldTrigger,
-        currentImageIndex: this.currentImageIndex,
-        isRemotionRendering,
-      });
-    }
-
-    // CRITICAL FIX: In Remotion rendering mode, do NOT call advanceSlide()
-    // because network loading doesn't work reliably in Lambda. Just track state.
-    // The effect renders its current texture only - no advancing during render.
-    if (shouldTrigger && !isRemotionRendering) {
-      if (isInRemotionContext) {
-        console.log('[Slideshow] TRIGGER - would advance slide (but blocked in Remotion render)', {
-          frame: this.frameCounter,
-          currentIndex: this.currentImageIndex,
-          reason: isRisingEdge ? 'rising_edge' : 'sustained_peak',
-        });
-      }
-      // Only advance in non-Remotion (live preview) mode
+    if (shouldTrigger) {
       this.advanceSlide();
       this.lastTriggerFrame = this.frameCounter;
       this.wasTriggered = true;
-    } else if (shouldTrigger && isRemotionRendering) {
-      // In Remotion mode: just log that we would trigger but can't
-      if (isInRemotionContext) {
-        console.log('[Slideshow] BLOCKED TRIGGER in Remotion render mode', {
-          frame: this.frameCounter,
-          currentIndex: this.currentImageIndex,
-        });
-      }
-      // Still track that we "triggered" to prevent rapid re-triggering
-      this.lastTriggerFrame = this.frameCounter;
-      this.wasTriggered = true;
     } else if (currentValue <= threshold * 0.5 && this.wasTriggered) {
-      // Reset wasTriggered when value drops below half threshold - enables next trigger
-      // Using threshold * 0.5 ensures reset happens before the next potential trigger point
-      if (isInRemotionContext && this.frameCounter % 30 === 0) {
-        console.log('[Slideshow Debug] RESET wasTriggered (value dropped below threshold*0.5)', {
-          frame: this.frameCounter,
-          currentValue: currentValue.toFixed(4),
-          threshold,
-          threshold05: (threshold * 0.5).toFixed(4),
-        });
-      }
       this.wasTriggered = false;
     }
 
     // Update previous value for next frame
     this.previousTriggerValue = currentValue;
-
-    // In Remotion mode, skip all expensive image loading/processing
-    // The effect renders its current texture only - no advancing, no loading
-    if (isRemotionRendering) {
-      this.frameCounter++;
-      return;
-    }
 
     // Emergency backoff if we are hitting errors (e.g. 403s)
     if (Date.now() - this.lastErrorTime < this.errorCooldownMs) {
