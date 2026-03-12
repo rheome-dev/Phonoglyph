@@ -88,7 +88,8 @@ EffectRegistry.register({
     images: [],
     opacity: 1.0,
     position: { x: 0.5, y: 0.5 },
-    size: { width: 1.0, height: 1.0 }
+    size: { width: 1.0, height: 1.0 },
+    slideEvents: [] // STATELESS: pre-computed transients for Lambda rendering
   }
 });
 

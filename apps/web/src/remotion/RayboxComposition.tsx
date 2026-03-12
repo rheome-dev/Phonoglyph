@@ -560,11 +560,14 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
 
         console.log(`[RayboxComposition] Waiting for ${asyncEffects.length} effects with images...`);
 
+        // Get the total render duration for pre-loading images in Lambda
+        const totalDuration = actualAudioAnalysisData[0]?.metadata?.duration || 30;
+
         if (asyncEffects.length > 0) {
           // 8s timeout safety to prevent hanging forever on bad URLs
           // (reduced from 10s to give more margin before 33s Remotion timeout)
           await Promise.race([
-            Promise.all(asyncEffects.map((effect) => (effect as any).waitForImages())),
+            Promise.all(asyncEffects.map((effect) => (effect as any).waitForImages(totalDuration))),
             new Promise((r) => setTimeout(r, 8000)),
           ]);
         }
@@ -820,6 +823,43 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
           // DEBUG: Log on first few frames
           if (frame < 3) {
             console.log(`[ParticleSpawn] frame=${frame} layer=${layer.id}: ${spawnEvents.length} spawn events from ${stemType}`);
+          }
+        }
+      }
+    }
+
+    // 2c. Pass slide events to image slideshow effects for stateless Lambda rendering
+    // Similar to particle effects, but for image slideshow transitions
+    const slideshowLayers = actualLayers.filter(
+      l => l.type === 'effect' && l.effectType === 'imageSlideshow'
+    );
+
+    for (const layer of slideshowLayers) {
+      // Determine which stem to use for slideshow triggers
+      // Priority: layer-specific setting > 'drums' (most common for beats)
+      const stemType = (layer.settings?.stemType as string) || 'drums';
+
+      // Find the audio analysis data for this stem
+      const stemAnalysis = actualAudioAnalysisData.find(
+        a => a.stemType === stemType
+      );
+
+      if (stemAnalysis?.analysisData) {
+        const transients = (stemAnalysis.analysisData as any).transients;
+
+        if (transients && Array.isArray(transients)) {
+          // Convert transients to slide events (same structure as spawn events)
+          const slideEvents = transients.map((t: any) => ({
+            time: t.time,
+            intensity: t.intensity || 1.0,
+          }));
+
+          // Update the effect parameter
+          visualizerManagerRef.current?.updateEffectParameter(layer.id, 'slideEvents', slideEvents);
+
+          // DEBUG: Log on first few frames
+          if (frame < 3) {
+            console.log(`[SlideshowEvents] frame=${frame} layer=${layer.id}: ${slideEvents.length} slide events from ${stemType}`);
           }
         }
       }

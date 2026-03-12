@@ -22,6 +22,8 @@ export class ImageSlideshowEffect implements VisualEffect {
     opacity: number;
     position: { x: number; y: number }; // Normalized position (0-1), 0,0 = top-left
     size: { width: number; height: number }; // Normalized size (0-1), fraction of screen
+    // STATELESS: Pre-computed slide events for deterministic Lambda rendering
+    slideEvents: { time: number; intensity: number }[];
   };
 
   private scene: THREE.Scene;
@@ -48,6 +50,9 @@ export class ImageSlideshowEffect implements VisualEffect {
   private consecutiveErrors: number = 0; // Track consecutive 403 errors
   private blacklistedUrls: Set<string> = new Set(); // URLs that returned 403/404
 
+  // STATELESS: Track last calculated index to avoid redundant texture loads
+  private lastCalculatedIndex: number = -1;
+
   constructor(config?: any) {
     this.id = config?.id || `imageSlideshow_${Math.random().toString(36).substr(2, 9)}`;
     this.name = 'Image Slideshow';
@@ -62,6 +67,7 @@ export class ImageSlideshowEffect implements VisualEffect {
       opacity: 1.0,
       position: config?.position || { x: 0.5, y: 0.5 }, // Center by default
       size: config?.size || { width: 1.0, height: 1.0 }, // Full screen by default
+      slideEvents: config?.slideEvents || [], // STATELESS: pre-computed transients for Lambda
       ...config
     };
 
@@ -428,6 +434,77 @@ export class ImageSlideshowEffect implements VisualEffect {
     } else if (paramName === 'triggerValue') {
       const newValue = typeof value === 'number' ? value : parseFloat(value);
       this.parameters.triggerValue = newValue;
+    } else if (paramName === 'slideEvents') {
+      // STATELESS: Receive pre-computed slide events from audio transients
+      if (Array.isArray(value)) {
+        this.parameters.slideEvents = value as { time: number; intensity: number }[];
+        slideshowLog.log('slideEvents updated:', {
+          count: this.parameters.slideEvents.length,
+          sample: this.parameters.slideEvents.slice(0, 3)
+        });
+      }
+    }
+  }
+
+  /**
+   * STATELESS: Update method that receives absolute time for deterministic Lambda rendering.
+   * This computes the current slide index based on slideEvents, eliminating stateful edge detection.
+   * @param absoluteTime - Absolute time in seconds (frame / fps)
+   */
+  updateWithTime(absoluteTime: number): void {
+    if (!this.enabled) return;
+    if (this.parameters.images.length === 0) return;
+
+    const remotionEnv = getRemotionEnvironment();
+    const isInRemotionContext = remotionEnv.isRendering || remotionEnv.isStudio;
+
+    // STATELESS: Use slideEvents if available (Lambda mode)
+    const slideEvents = this.parameters.slideEvents;
+
+    if (slideEvents && slideEvents.length > 0) {
+      // Count how many events have occurred by this time
+      // Each event triggers one slide advance
+      const eventsSoFar = slideEvents.filter(e => e.time <= absoluteTime).length;
+
+      // Calculate which image should be shown (wrap around)
+      const newIndex = eventsSoFar % this.parameters.images.length;
+
+      // Only update if the index changed (avoid redundant texture loads)
+      if (newIndex !== this.lastCalculatedIndex) {
+        this.lastCalculatedIndex = newIndex;
+        this.currentImageIndex = newIndex;
+
+        if (isInRemotionContext) {
+          console.log(`[Slideshow Stateless] time=${absoluteTime.toFixed(2)}s, events=${eventsSoFar}, index=${newIndex}`);
+        }
+
+        // Load the texture if not already cached
+        const imageUrl = this.parameters.images[newIndex];
+        if (imageUrl && !this.textureCache.has(imageUrl)) {
+          // In Lambda, try to load - if it fails, we'll show what's cached
+          this.loadTexture(imageUrl).catch(() => {
+            // Silently fail - keep showing previous texture
+          });
+        }
+
+        // Apply cached texture if available
+        const texture = this.textureCache.get(imageUrl);
+        if (texture) {
+          this.material.map = texture;
+          this.material.color.setHex(0xffffff);
+          this.material.needsUpdate = true;
+          this.plane.visible = true;
+          this.fitTextureToScreen(texture);
+        }
+      }
+
+      return;
+    }
+
+    // FALLBACK: No slideEvents - use legacy stateful approach for live preview
+    // (This path should rarely be hit in Lambda as slideEvents should always be provided)
+    if (isInRemotionContext && this.frameCounter % 60 === 0) {
+      console.log('[Slideshow] WARNING: No slideEvents, falling back to stateful mode');
     }
   }
 
@@ -826,11 +903,75 @@ export class ImageSlideshowEffect implements VisualEffect {
   /**
    * Public method to wait for essential images to load.
    * Used by Remotion to delay rendering until assets are ready.
+   * @param duration - Optional total render duration in seconds. If provided, pre-loads
+   *                   all images that will be shown during the render for Lambda compatibility.
    */
-  public async waitForImages(): Promise<void> {
+  public async waitForImages(duration?: number): Promise<void> {
     if (this.parameters.images.length === 0) return;
 
-    // Determine which images we need. 
+    const remotionEnv = getRemotionEnvironment();
+    const isInRemotionContext = remotionEnv.isRendering || remotionEnv.isStudio;
+
+    // STATELESS: In Lambda, pre-load all images that will be needed based on slideEvents and duration
+    if (isInRemotionContext && this.parameters.slideEvents.length > 0 && duration) {
+      const slideEvents = this.parameters.slideEvents;
+
+      // Find how many slides will be shown during this render
+      const relevantEvents = slideEvents.filter(e => e.time <= duration);
+      const maxSlideIndex = relevantEvents.length % this.parameters.images.length;
+
+      // Pre-load current + next few images that will be shown
+      const imagesToPreload = new Set<number>();
+      imagesToPreload.add(this.currentImageIndex >= 0 ? this.currentImageIndex : 0);
+
+      // Pre-load up to maxSlideIndex + buffer
+      const maxPreload = Math.min(maxSlideIndex + 5, this.parameters.images.length);
+      for (let i = 0; i < maxPreload; i++) {
+        imagesToPreload.add(i);
+      }
+
+      slideshowLog.log('waitForImages: Pre-loading images for Lambda render', {
+        duration,
+        relevantEvents: relevantEvents.length,
+        maxSlideIndex,
+        imagesToPreload: Array.from(imagesToPreload)
+      });
+
+      // Load all needed images in parallel
+      const loadPromises = Array.from(imagesToPreload).map(async (idx) => {
+        const url = this.parameters.images[idx];
+        if (url && !this.textureCache.has(url)) {
+          try {
+            await this.loadTexture(url);
+          } catch (e) {
+            // Continue loading other images even if one fails
+            slideshowLog.warn(`waitForImages: Failed to preload image ${idx}`, e);
+          }
+        }
+      });
+
+      await Promise.all(loadPromises);
+
+      // Apply first image if not already applied
+      const firstIndex = this.currentImageIndex >= 0 ? this.currentImageIndex : 0;
+      const firstUrl = this.parameters.images[firstIndex];
+      if (firstUrl) {
+        const texture = this.textureCache.get(firstUrl);
+        if (texture) {
+          this.currentImageIndex = firstIndex;
+          this.material.map = texture;
+          this.material.color.setHex(0xffffff);
+          this.material.needsUpdate = true;
+          this.plane.visible = true;
+          this.fitTextureToScreen(texture);
+        }
+      }
+
+      return;
+    }
+
+    // LEGACY: Single image load for live preview
+    // Determine which images we need.
     // If we have a current index, we need that one.
     // If not, we need the first one.
     const targetIndex = this.currentImageIndex >= 0 ? this.currentImageIndex : 0;
