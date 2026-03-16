@@ -469,7 +469,7 @@ export class ImageSlideshowEffect implements VisualEffect {
       // Calculate which image should be shown (wrap around)
       const newIndex = eventsSoFar % this.parameters.images.length;
 
-      // Only update if the index changed (avoid redundant texture loads)
+      // When index changes: update state and kick off texture load if not cached
       if (newIndex !== this.lastCalculatedIndex) {
         this.lastCalculatedIndex = newIndex;
         this.currentImageIndex = newIndex;
@@ -486,10 +486,16 @@ export class ImageSlideshowEffect implements VisualEffect {
             // Silently fail - keep showing previous texture
           });
         }
+      }
 
-        // Apply cached texture if available
-        const texture = this.textureCache.get(imageUrl);
-        if (texture) {
+      // EVERY FRAME: Apply texture for current index if it's now in cache.
+      // This is critical for Lambda: loadTexture is async, so the texture won't be
+      // in cache on the same frame the index changes. We check every frame so it gets
+      // applied as soon as it loads (within one frame of the load completing).
+      if (this.currentImageIndex >= 0) {
+        const imageUrl = this.parameters.images[this.currentImageIndex];
+        const texture = imageUrl ? this.textureCache.get(imageUrl) : undefined;
+        if (texture && this.material.map !== texture) {
           this.material.map = texture;
           this.material.color.setHex(0xffffff);
           this.material.needsUpdate = true;
@@ -918,22 +924,28 @@ export class ImageSlideshowEffect implements VisualEffect {
 
       // Find how many slides will be shown during this render
       const relevantEvents = slideEvents.filter(e => e.time <= duration);
-      const maxSlideIndex = relevantEvents.length % this.parameters.images.length;
 
-      // Pre-load current + next few images that will be shown
+      // Pre-load all images that will be cycled through.
+      // If there are more events than images, all images will appear at some point.
+      // If fewer events than images, only the first N images are needed.
       const imagesToPreload = new Set<number>();
       imagesToPreload.add(this.currentImageIndex >= 0 ? this.currentImageIndex : 0);
 
-      // Pre-load up to maxSlideIndex + buffer
-      const maxPreload = Math.min(maxSlideIndex + 5, this.parameters.images.length);
-      for (let i = 0; i < maxPreload; i++) {
-        imagesToPreload.add(i);
+      if (relevantEvents.length >= this.parameters.images.length) {
+        // All images will be shown — preload everything
+        for (let i = 0; i < this.parameters.images.length; i++) {
+          imagesToPreload.add(i);
+        }
+      } else {
+        // Only some images will be shown — preload exactly those indices
+        for (let i = 0; i <= relevantEvents.length; i++) {
+          imagesToPreload.add(i % this.parameters.images.length);
+        }
       }
 
       slideshowLog.log('waitForImages: Pre-loading images for Lambda render', {
         duration,
         relevantEvents: relevantEvents.length,
-        maxSlideIndex,
         imagesToPreload: Array.from(imagesToPreload)
       });
 

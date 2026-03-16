@@ -464,6 +464,17 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
   // State for fetched analysis data (needed because calculateMetadata doesn't pass data to Lambda chunks)
   const [fetchedAudioAnalysisData, setFetchedAudioAnalysisData] = useState<typeof audioAnalysisData | null>(null);
 
+  // Second delayRender handle: keeps rendering paused until slideshow images are preloaded
+  // after audio analysis data arrives. Only created when using analysisUrl (Lambda case)
+  // where audio data is fetched async and slideshow images can't be preloaded during init.
+  const hasSlideshowLayers = (layers || []).some(l => l.type === 'effect' && l.effectType === 'imageSlideshow');
+  const [slideshowPreloadHandle] = useState(() =>
+    hasSlideshowLayers && analysisUrl
+      ? delayRender('Preloading Slideshow Images', { timeoutInMilliseconds: 60000 })
+      : null
+  );
+  const slideshowPreloadDoneRef = useRef(false);
+
   // Fetch analysis data from R2 if analysisUrl exists and audioAnalysisData is empty
   // This is needed because Remotion Lambda doesn't pass calculateMetadata results to chunk renders
   useEffect(() => {
@@ -480,6 +491,11 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
         })
         .catch(err => {
           console.error('[RayboxComposition] Failed to fetch analysis data:', err);
+          // On fetch failure, release the slideshow preload handle so rendering can proceed
+          if (slideshowPreloadHandle && !slideshowPreloadDoneRef.current) {
+            slideshowPreloadDoneRef.current = true;
+            continueRender(slideshowPreloadHandle);
+          }
         });
     }
   }, [analysisUrl, audioAnalysisData]);
@@ -487,6 +503,66 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
   const actualLayers = layers || [];
   // Use fetched data if available, otherwise use prop data
   const actualAudioAnalysisData = fetchedAudioAnalysisData || audioAnalysisData || [];
+
+  // Pre-populate slideEvents on slideshow effects and preload images once audio data arrives.
+  // This is the key fix for Lambda rendering: in Lambda, audio data is fetched async via
+  // analysisUrl, so slideEvents are empty during init. We hold rendering paused (via
+  // slideshowPreloadHandle) until all slideshow images are loaded based on the real slideEvents.
+  useEffect(() => {
+    if (!slideshowPreloadHandle || slideshowPreloadDoneRef.current) return;
+    if (!actualAudioAnalysisData || actualAudioAnalysisData.length === 0) return;
+    if (!visualizerManagerRef.current) return;
+
+    const manager = visualizerManagerRef.current;
+    const slideshowLayers = actualLayers.filter(
+      l => l.type === 'effect' && l.effectType === 'imageSlideshow'
+    );
+
+    if (slideshowLayers.length === 0) {
+      slideshowPreloadDoneRef.current = true;
+      continueRender(slideshowPreloadHandle);
+      return;
+    }
+
+    // Set slideEvents on each slideshow effect so waitForImages can preload correctly
+    for (const layer of slideshowLayers) {
+      const stemType = (layer.settings?.stemType as string) || 'drums';
+      const stemAnalysis = (actualAudioAnalysisData as any[]).find(
+        (a: any) => a.stemType === stemType
+      );
+      if (stemAnalysis?.analysisData) {
+        const transients = (stemAnalysis.analysisData as any).transients;
+        if (transients && Array.isArray(transients)) {
+          const slideEvents = transients.map((t: any) => ({
+            time: t.time,
+            intensity: t.intensity || 1.0,
+          }));
+          manager.updateEffectParameter(layer.id, 'slideEvents', slideEvents);
+          console.log(`[SlideshowPreload] Set ${slideEvents.length} slideEvents on layer ${layer.id}`);
+        }
+      }
+    }
+
+    // Now preload all images for each slideshow effect
+    const totalDuration = (actualAudioAnalysisData as any[])[0]?.metadata?.duration || 30;
+    const slideshowEffects = slideshowLayers
+      .map(l => effectInstancesRef.current.get(l.id))
+      .filter(Boolean)
+      .filter(effect => typeof (effect as any).waitForImages === 'function');
+
+    console.log(`[SlideshowPreload] Preloading images for ${slideshowEffects.length} slideshow effects (duration=${totalDuration}s)`);
+
+    Promise.race([
+      Promise.all(slideshowEffects.map(effect => (effect as any).waitForImages(totalDuration))),
+      new Promise(r => setTimeout(r, 25000)), // 25s safety timeout
+    ]).finally(() => {
+      if (!slideshowPreloadDoneRef.current) {
+        slideshowPreloadDoneRef.current = true;
+        console.log('[SlideshowPreload] All slideshow images preloaded, releasing delayRender');
+        continueRender(slideshowPreloadHandle);
+      }
+    });
+  }, [actualAudioAnalysisData, slideshowPreloadHandle]);
 
   // 1. Initialize Visualizer (useLayoutEffect) - runs once on mount
   useLayoutEffect(() => {
@@ -561,7 +637,33 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
         console.log(`[RayboxComposition] Waiting for ${asyncEffects.length} effects with images...`);
 
         // Get the total render duration for pre-loading images in Lambda
-        const totalDuration = actualAudioAnalysisData[0]?.metadata?.duration || 30;
+        const totalDuration = (actualAudioAnalysisData as any[])[0]?.metadata?.duration || 30;
+
+        // If audio analysis data is available now (prop-based, not fetched async),
+        // pre-populate slideEvents on slideshow effects so waitForImages can preload
+        // all needed images rather than just image 0.
+        if (actualAudioAnalysisData && actualAudioAnalysisData.length > 0 && manager) {
+          const slideshowLayers = actualLayers.filter(
+            l => l.type === 'effect' && l.effectType === 'imageSlideshow'
+          );
+          for (const layer of slideshowLayers) {
+            const stemType = (layer.settings?.stemType as string) || 'drums';
+            const stemAnalysis = (actualAudioAnalysisData as any[]).find(
+              (a: any) => a.stemType === stemType
+            );
+            if (stemAnalysis?.analysisData) {
+              const transients = (stemAnalysis.analysisData as any).transients;
+              if (transients && Array.isArray(transients)) {
+                const slideEvents = transients.map((t: any) => ({
+                  time: t.time,
+                  intensity: t.intensity || 1.0,
+                }));
+                manager.updateEffectParameter(layer.id, 'slideEvents', slideEvents);
+                console.log(`[RayboxComposition] Pre-populated ${slideEvents.length} slideEvents for layer ${layer.id}`);
+              }
+            }
+          }
+        }
 
         if (asyncEffects.length > 0) {
           // 8s timeout safety to prevent hanging forever on bad URLs
