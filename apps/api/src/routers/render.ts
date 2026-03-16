@@ -152,18 +152,23 @@ export const renderRouter = router({
           dataSize: JSON.stringify(input.audioAnalysisData).length,
         });
 
-        // Try to get the function name dynamically, fallback to standard name
-        let functionName = 'remotion-render-4-0-390-mem2048mb-disk2048mb-120sec';
-        
+        // Try to get the function name dynamically, prefer highest timeout, fallback to 300s function
+        let functionName = 'remotion-render-4-0-390-mem3008mb-disk2048mb-300sec';
+
         try {
           const functions = await getFunctions({
             region,
             compatibleOnly: true,
           });
-          
-          if (functions.length > 0 && functions[0]) {
-            // Use the first compatible function
-            functionName = functions[0].functionName;
+
+          if (functions.length > 0) {
+            // Prefer the function with the highest timeout to avoid orchestrator timeouts
+            const sorted = functions.sort((a, b) => {
+              const aTimeout = parseInt(a.functionName.match(/(\d+)sec$/)?.[1] || '0');
+              const bTimeout = parseInt(b.functionName.match(/(\d+)sec$/)?.[1] || '0');
+              return bTimeout - aTimeout;
+            });
+            functionName = sorted[0]!.functionName;
             logger.log(`Using Remotion function: ${functionName}`);
           } else {
             logger.warn(`No compatible functions found, using default: ${functionName}`);
