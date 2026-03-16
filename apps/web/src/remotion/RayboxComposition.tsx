@@ -1002,6 +1002,7 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
       <RemotionOverlayRenderer
         layers={actualLayers}
         audioAnalysisData={actualAudioAnalysisData as unknown as CachedAudioAnalysisData[]}
+        masterAudioUrl={masterAudioUrl}
       />
     </div>
   );

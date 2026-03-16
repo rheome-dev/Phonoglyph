@@ -1,5 +1,5 @@
-import React, { useMemo, useCallback } from 'react';
-import { useCurrentFrame, useVideoConfig } from 'remotion';
+import React, { useMemo, useCallback, useEffect, useRef, useState } from 'react';
+import { useCurrentFrame, useVideoConfig, delayRender, continueRender } from 'remotion';
 import { HudOverlay } from '@/components/hud/HudOverlay';
 import type { Layer } from '@/types/video-composition';
 import type { AudioAnalysisData as CachedAudioAnalysisData } from '@/types/audio-analysis-data';
@@ -8,6 +8,7 @@ import { extractAudioDataAtTime } from './RayboxComposition';
 type RemotionOverlayRendererProps = {
   layers: Layer[];
   audioAnalysisData: CachedAudioAnalysisData[];
+  masterAudioUrl?: string;
 };
 
 // Helper: get feature keys for overlay type (copied from HudOverlayManager)
@@ -32,9 +33,58 @@ function getFeatureKeyForOverlay(type: string): string[] {
   }
 }
 
+/**
+ * Extract a stereo window from a decoded AudioBuffer at a given time.
+ * Mirrors the live preview's getStereoWindow() from use-stem-audio-controller.ts
+ * so the stereometer shows identical real audio data in Lambda renders.
+ */
+function extractStereoWindow(
+  buffer: AudioBuffer,
+  currentTime: number,
+  windowSize: number = 1024,
+): { left: number[]; right: number[] } | null {
+  const sampleRate = buffer.sampleRate;
+  const playbackTime = buffer.duration > 0 ? currentTime % buffer.duration : 0;
+  const currentSample = Math.floor(playbackTime * sampleRate);
+  const start = currentSample - windowSize;
+  const end = currentSample;
+  const numChannels = buffer.numberOfChannels;
+
+  const extractChannel = (channelData: Float32Array): number[] => {
+    if (start < 0) {
+      // Wrap around buffer start
+      const fromEnd = Array.from(channelData.slice(buffer.length + start, buffer.length));
+      const fromStart = Array.from(channelData.slice(0, end));
+      return fromEnd.concat(fromStart);
+    } else if (end > buffer.length) {
+      // Wrap around buffer end
+      const beforeWrap = Array.from(channelData.slice(start, buffer.length));
+      const afterWrap = Array.from(channelData.slice(0, end - buffer.length));
+      return beforeWrap.concat(afterWrap);
+    } else {
+      return Array.from(channelData.slice(start, end));
+    }
+  };
+
+  const leftChannel = buffer.getChannelData(0);
+  const left = extractChannel(leftChannel);
+
+  let right: number[];
+  if (numChannels >= 2) {
+    const rightChannel = buffer.getChannelData(1);
+    right = extractChannel(rightChannel);
+  } else {
+    // Mono: duplicate to both channels (same as live preview)
+    right = [...left];
+  }
+
+  return { left, right };
+}
+
 export const RemotionOverlayRenderer: React.FC<RemotionOverlayRendererProps> = ({
   layers,
   audioAnalysisData,
+  masterAudioUrl,
 }) => {
   // Use Remotion's hook directly - this gets the frame value during render
   const frame = useCurrentFrame();
@@ -42,6 +92,48 @@ export const RemotionOverlayRenderer: React.FC<RemotionOverlayRendererProps> = (
   const videoDuration = fps > 0 ? durationInFrames / fps : 30; // Fallback to 30s if no duration
   const currentTime = fps > 0 ? frame / fps : 0;
   const cachedAnalysis = audioAnalysisData as CachedAudioAnalysisData[];
+
+  // Decode the master audio to an AudioBuffer for real stereo data (stereometer).
+  // This runs once on mount, cached across all frames within this Lambda chunk.
+  const audioBufferRef = useRef<AudioBuffer | null>(null);
+  const [audioReady, setAudioReady] = useState(!masterAudioUrl);
+  const [delayHandle] = useState(() => {
+    // Only delay render if we have a stereometer overlay and a master audio URL
+    const hasStereometer = layers.some(l => l.type === 'overlay' && l.effectType === 'stereometer');
+    if (hasStereometer && masterAudioUrl) {
+      return delayRender('Decoding master audio for stereometer');
+    }
+    return null;
+  });
+
+  useEffect(() => {
+    if (!masterAudioUrl || delayHandle === null) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const response = await fetch(masterAudioUrl);
+        const arrayBuffer = await response.arrayBuffer();
+        // OfflineAudioContext is available in headless Chrome (Lambda)
+        const offlineCtx = new OfflineAudioContext(2, 1, 44100);
+        const decoded = await offlineCtx.decodeAudioData(arrayBuffer);
+        if (!cancelled) {
+          audioBufferRef.current = decoded;
+          setAudioReady(true);
+          continueRender(delayHandle);
+        }
+      } catch (err) {
+        console.error('Failed to decode master audio for stereometer:', err);
+        if (!cancelled) {
+          setAudioReady(true);
+          continueRender(delayHandle);
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [masterAudioUrl, delayHandle]);
 
   const overlayLayers = useMemo(
     () => layers.filter((layer) => layer.type === 'overlay'),
@@ -166,75 +258,17 @@ export const RemotionOverlayRenderer: React.FC<RemotionOverlayRendererProps> = (
         return null;
       }
 
-      // For stereometer: Generate animated stereo data from per-frame audio features.
-      // Real stereo window data is rarely available (audio analysis is mono), so we
-      // synthesise a goniometer waveform from RMS (amplitude) + spectral centroid (phase width).
-      // This produces an ellipse whose size animates with volume and whose shape changes
-      // with the spectral brightness of the audio — visually meaningful and frame-accurate.
+      // For stereometer: Extract real stereo channel data from the decoded AudioBuffer.
+      // This mirrors the live preview's getStereoWindow() from use-stem-audio-controller.ts —
+      // reading actual left/right PCM samples from the audio file at the current playback time.
       if (overlayType === 'stereometer') {
-        // Try real stereo window data first (if analysis included it)
-        const stereoLeft = (analysis.analysisData as any).stereoWindow_left;
-        const stereoRight = (analysis.analysisData as any).stereoWindow_right;
-        if (
-          stereoLeft && stereoRight &&
-          Array.isArray(stereoLeft) && Array.isArray(stereoRight) &&
-          stereoLeft.length > 0 && stereoRight.length > 0
-        ) {
-          const samplesPerFrame = 1024;
-          const frameTimes = analysis.analysisData.frameTimes as number[] | undefined;
-          const totalFrames = Math.floor(stereoLeft.length / samplesPerFrame);
-          const effectiveTimes = frameTimes && Array.isArray(frameTimes) && frameTimes.length > 0
-            ? frameTimes
-            : Array.from({ length: totalFrames }, (_, i) => {
-                const dur = (analysis!.analysisData as any).analysisDuration || (analysis as any).metadata?.duration || 30;
-                return (i / totalFrames) * dur;
-              });
-          let frameIdx = 0;
-          for (let i = 0; i < effectiveTimes.length; i++) {
-            if (effectiveTimes[i] <= currentTime) frameIdx = i; else break;
-          }
-          const start = frameIdx * samplesPerFrame;
-          const end = Math.min(start + samplesPerFrame, stereoLeft.length);
-          if (start < stereoLeft.length) {
-            return {
-              stereoWindow: {
-                left: stereoLeft.slice(start, end),
-                right: stereoRight.slice(start, end),
-              },
-            };
+        if (audioBufferRef.current) {
+          const stereoWindow = extractStereoWindow(audioBufferRef.current, currentTime, 1024);
+          if (stereoWindow) {
+            return { stereoWindow };
           }
         }
-
-        // Synthesise animated stereo from RMS + spectral centroid.
-        // Produces an ellipse: size ~ RMS (volume), shape ~ spectralCentroid (brightness).
-        const frameTimes = analysis.analysisData.frameTimes as number[] | undefined;
-        let frameIdx = 0;
-        if (frameTimes && Array.isArray(frameTimes)) {
-          for (let i = 0; i < frameTimes.length; i++) {
-            if (frameTimes[i] <= currentTime) frameIdx = i; else break;
-          }
-        }
-
-        const rmsArr = analysis.analysisData.rms;
-        const scArr = (analysis.analysisData as any).spectralCentroid;
-        const rms = (rmsArr && Array.isArray(rmsArr)) ? (rmsArr[frameIdx] ?? 0) : 0;
-        const sc = (scArr && Array.isArray(scArr)) ? (scArr[frameIdx] ?? 0.5) : 0.5;
-
-        // Amplitude: perceptually scaled so quiet passages give a small trace
-        const amplitude = Math.min(0.9, Math.sqrt(Math.max(0, rms)) * 2.5);
-        // Phase offset: narrow ellipse for low-frequency content, wider for bright audio
-        const phaseOffset = 0.15 + sc * 0.5; // [0.15, 0.65] radians
-
-        const numSamples = 512;
-        const left: number[] = new Array(numSamples);
-        const right: number[] = new Array(numSamples);
-        for (let i = 0; i < numSamples; i++) {
-          const t = (i / numSamples) * Math.PI * 2;
-          left[i] = Math.sin(t) * amplitude;
-          right[i] = Math.sin(t + phaseOffset) * amplitude;
-        }
-
-        return { stereoWindow: { left, right } };
+        return null;
       }
 
       // For consoleFeed: Use time-domain window as raw audio buffer
