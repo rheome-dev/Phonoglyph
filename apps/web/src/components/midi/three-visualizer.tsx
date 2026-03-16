@@ -82,14 +82,14 @@ export function ThreeVisualizer({
   const syncParametersToEffects = useCallback(() => {
     const manager = internalVisualizerRef.current;
     if (!manager) {
-      console.log('[ThreeVisualizer] syncParameters: manager not ready');
+      debugLog.log('[ThreeVisualizer] syncParameters: manager not ready');
       return;
     }
 
     const activeCount = Object.keys(activeSliderValues).length;
     const baseCount = Object.keys(baseParameterValues).length;
     const effectCount = Object.keys(effectInstancesRef.current).length;
-    console.log('[ThreeVisualizer] syncParameters start', {
+    debugLog.log('[ThreeVisualizer] syncParameters start', {
       activeCount,
       baseCount,
       isInitialized,

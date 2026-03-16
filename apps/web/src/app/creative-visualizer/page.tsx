@@ -2161,7 +2161,10 @@ function CreativeVisualizerPage() {
 
       // Get current audio time
       const time = stemAudio.currentTime;
-      setCurrentTime(time);
+      // Throttle React state updates to avoid excessive re-renders
+      if (frameCount % 3 === 0) {
+        setCurrentTime(time);
+      }
 
       // Sync calculation
       const audioContextTime = stemAudio.getAudioContextTime?.() || 0;
@@ -2300,7 +2303,7 @@ function CreativeVisualizerPage() {
 
           visualizerRef.current.updateEffectParameter(effectId, paramName, scaledValue);
 
-          if (frameCount % 10 === 0) {
+          if (frameCount % 30 === 0) {
             setModulatedParameterValues(prev => ({ ...prev, [paramKey]: scaledValue }));
           }
         }

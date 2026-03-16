@@ -249,17 +249,7 @@ export class ImageSlideshowEffect implements VisualEffect {
 
     this.frameCounter++;
 
-    // Debug opacity state every 60 frames (~1 second at 60fps)
-    if (this.frameCounter % 60 === 0) {
-      slideshowLog.log('📊 Opacity state check:', {
-        effectId: this.id,
-        parametersOpacity: this.parameters.opacity,
-        materialOpacity: this.material.opacity,
-        materialTransparent: this.material.transparent,
-        hasMap: !!this.material.map,
-        frameCounter: this.frameCounter
-      });
-    }
+    // Opacity debug logging removed for performance
 
     // If images were added after init, load the first one immediately
     if (this.currentImageIndex === -1 && this.parameters.images.length > 0) {
@@ -651,8 +641,8 @@ export class ImageSlideshowEffect implements VisualEffect {
   }
 
   private loadNextTextures(currentIndex: number) {
-    // Preload next 5 images for better responsiveness
-    for (let i = 1; i <= 5; i++) {
+    // Preload next 2 images to reduce concurrent network/decode pressure
+    for (let i = 1; i <= 2; i++) {
       const idx = (currentIndex + i) % this.parameters.images.length;
       const url = this.parameters.images[idx];
       if (!this.textureCache.has(url) && !this.loadingImages.has(url)) {
@@ -781,8 +771,10 @@ export class ImageSlideshowEffect implements VisualEffect {
         const canUseBitmap = typeof createImageBitmap === 'function';
 
         if (canUseBitmap) {
-          // Browser path: fast off-main-thread decode via ImageBitmap
-          const imageBitmap = await createImageBitmap(blob);
+          // Browser path: fast off-main-thread decode + flip via ImageBitmap
+          // imageOrientation 'flipY' flips the image during the off-thread decode,
+          // so we set texture.flipY = false to avoid double-flipping
+          const imageBitmap = await createImageBitmap(blob, { imageOrientation: 'flipY' });
 
           texture = new THREE.CanvasTexture(imageBitmap);
           texture.colorSpace = THREE.SRGBColorSpace;
@@ -790,8 +782,7 @@ export class ImageSlideshowEffect implements VisualEffect {
           texture.magFilter = THREE.LinearFilter;
           texture.generateMipmaps = false;
           texture.matrixAutoUpdate = true;
-          // Use WebGL/GPU to flip it rather than 2D canvas processing
-          texture.flipY = true;
+          texture.flipY = false;
 
           slideshowLog.log('Texture loaded via ImageBitmap:', {
             url: url.substring(0, 50),
@@ -975,10 +966,10 @@ export class ImageSlideshowEffect implements VisualEffect {
   }
 
   private cleanupCache() {
-    // Keep current and next 5 images (matching preload count)
+    // Keep current and next 2 images (matching preload count)
     const keepIndices = new Set<number>();
     keepIndices.add(this.currentImageIndex);
-    for (let i = 1; i <= 5; i++) {
+    for (let i = 1; i <= 2; i++) {
       keepIndices.add((this.currentImageIndex + i) % this.parameters.images.length);
     }
 
