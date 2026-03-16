@@ -889,16 +889,20 @@ export class ImageSlideshowEffect implements VisualEffect {
         // Trigger cooldown on error to prevent flooding
         this.lastErrorTime = Date.now();
 
+        // Blacklist any URL that fails to load (not just 403/404).
+        // This prevents repeated slow network-timeout retries on every frame
+        // when a URL is unreachable (e.g. net::ERR_FAILED from Lambda).
+        this.blacklistedUrls.add(url);
+
         // Provide more detailed error information
         let errorMessage = 'Texture load failed';
         if (err?.message) {
           errorMessage = err.message;
         } else if (err?.name === 'TypeError' && err?.message?.includes('Failed to fetch')) {
-          // This is likely a CORS error or network issue
-          errorMessage = `Network error (likely CORS or expired URL): ${url.substring(0, 100)}...`;
+          errorMessage = `Network error (likely CORS or unreachable): ${url.substring(0, 100)}`;
         }
 
-        slideshowLog.error('🖼️ Texture load failed:', errorMessage);
+        slideshowLog.error('🖼️ Texture load failed (blacklisted):', errorMessage);
         slideshowLog.error('Failed URL:', url.substring(0, 100));
 
         reject(err);

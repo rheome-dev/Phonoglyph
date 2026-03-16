@@ -554,7 +554,7 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
 
     Promise.race([
       Promise.all(slideshowEffects.map(effect => (effect as any).waitForImages(totalDuration))),
-      new Promise(r => setTimeout(r, 25000)), // 25s safety timeout
+      new Promise(r => setTimeout(r, 10000)), // 10s safety timeout — keeps us well under 120s Lambda limit
     ]).finally(() => {
       if (!slideshowPreloadDoneRef.current) {
         slideshowPreloadDoneRef.current = true;
