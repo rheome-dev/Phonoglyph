@@ -479,42 +479,9 @@ function CreativeVisualizerPage() {
   // Real-time sync calibration offset in ms
   const [syncOffsetMs, setSyncOffsetMs] = useState(0);
 
-  // Performance monitoring for sync debugging
-  const [syncMetrics, setSyncMetrics] = useState({
-    audioLatency: 0,
-    visualLatency: 0,
-    syncDrift: 0,
-    frameTime: 0,
-    lastUpdate: 0
-  });
-
   const [sampleMidiData] = useState<MIDIData>(createSampleMIDIData());
   const stemAudio = useStemAudioController();
   const audioAnalysis = useAudioAnalysis();
-
-  // Sync performance monitoring
-  useEffect(() => {
-    if (!isPlaying) return;
-
-    const updateSyncMetrics = () => {
-      const now = performance.now();
-      const audioTime = stemAudio.currentTime;
-      const visualTime = currentTime;
-      const audioLatency = stemAudio.getAudioLatency ? stemAudio.getAudioLatency() * 1000 : 0;
-      const frameTime = now - syncMetrics.lastUpdate;
-
-      setSyncMetrics({
-        audioLatency,
-        visualLatency: frameTime,
-        syncDrift: Math.abs(audioTime - visualTime) * 1000, // Convert to ms
-        frameTime,
-        lastUpdate: now
-      });
-    };
-
-    const interval = setInterval(updateSyncMetrics, 100); // Update every 100ms
-    return () => clearInterval(interval);
-  }, [isPlaying, stemAudio.currentTime, currentTime, syncMetrics.lastUpdate]);
 
   // Enhanced audio analysis data - This state is no longer needed, data comes from useCachedStemAnalysis
   // const [audioAnalysisData, setAudioAnalysisData] = useState<any>(null);

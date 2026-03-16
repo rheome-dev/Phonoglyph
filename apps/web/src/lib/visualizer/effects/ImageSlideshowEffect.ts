@@ -661,49 +661,7 @@ export class ImageSlideshowEffect implements VisualEffect {
     }
   }
 
-  /**
-   * Process image: resize if needed AND flip vertically for correct Three.js orientation.
-   * We always process through canvas to ensure consistent orientation regardless of
-   * browser ImageBitmap implementation differences.
-   */
-  private async resizeImageIfNeeded(imageBitmap: ImageBitmap, maxDimension: number = 2048): Promise<{ bitmap: ImageBitmap; wasResized: boolean; originalWidth: number; originalHeight: number }> {
-    const originalWidth = imageBitmap.width;
-    const originalHeight = imageBitmap.height;
 
-    // Check if resizing is needed
-    const needsResize = imageBitmap.width > maxDimension || imageBitmap.height > maxDimension;
-
-    // Calculate target dimensions
-    let width = imageBitmap.width;
-    let height = imageBitmap.height;
-
-    if (needsResize) {
-      const scale = Math.min(maxDimension / imageBitmap.width, maxDimension / imageBitmap.height);
-      width = Math.floor(imageBitmap.width * scale);
-      height = Math.floor(imageBitmap.height * scale);
-    }
-
-    const canvas = new OffscreenCanvas(width, height);
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      slideshowLog.warn('Could not get 2d context for processing, using original');
-      return { bitmap: imageBitmap, wasResized: false, originalWidth, originalHeight };
-    }
-
-    // Flip vertically for correct WebGL/Three.js texture orientation
-    // This ensures consistent behavior regardless of browser ImageBitmap handling
-    ctx.translate(0, height);
-    ctx.scale(1, -1);
-    ctx.drawImage(imageBitmap, 0, 0, width, height);
-
-    const processedBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.92 });
-    const processedBitmap = await createImageBitmap(processedBlob);
-
-    // Close original to free memory
-    imageBitmap.close();
-
-    return { bitmap: processedBitmap, wasResized: needsResize, originalWidth, originalHeight };
-  }
 
   /**
    * Load image from blob and return as HTMLImageElement.
@@ -825,24 +783,20 @@ export class ImageSlideshowEffect implements VisualEffect {
         if (canUseBitmap) {
           // Browser path: fast off-main-thread decode via ImageBitmap
           const imageBitmap = await createImageBitmap(blob);
-          const { bitmap: processedBitmap, wasResized, originalWidth, originalHeight } = await this.resizeImageIfNeeded(imageBitmap, 2048);
 
-          texture = new THREE.CanvasTexture(processedBitmap);
+          texture = new THREE.CanvasTexture(imageBitmap);
           texture.colorSpace = THREE.SRGBColorSpace;
           texture.minFilter = THREE.LinearFilter;
           texture.magFilter = THREE.LinearFilter;
           texture.generateMipmaps = false;
           texture.matrixAutoUpdate = true;
-          // flipY = false because we pre-flip in resizeImageIfNeeded() via canvas transform
-          texture.flipY = false;
+          // Use WebGL/GPU to flip it rather than 2D canvas processing
+          texture.flipY = true;
 
           slideshowLog.log('Texture loaded via ImageBitmap:', {
             url: url.substring(0, 50),
-            width: processedBitmap.width,
-            height: processedBitmap.height,
-            originalWidth,
-            originalHeight,
-            wasResized,
+            width: imageBitmap.width,
+            height: imageBitmap.height,
           });
         } else {
           // Remotion/Node.js path: HTMLImageElement with base64 data URL
