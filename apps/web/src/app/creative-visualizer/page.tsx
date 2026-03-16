@@ -57,10 +57,10 @@ const EffectsLibrarySidebarWithHud: React.FC<{
   stemUrlsReady: boolean;
   // Inspector mode props
   editingEffectId?: string | null;
-  editingEffectInstance?: { 
-    id: string; 
-    name: string; 
-    description: string; 
+  editingEffectInstance?: {
+    id: string;
+    name: string;
+    description: string;
     parameters: Record<string, any>;
   } | null;
   activeSliderValues?: Record<string, Record<string, any>>;
@@ -85,12 +85,12 @@ const EffectsLibrarySidebarWithHud: React.FC<{
   masterStemId?: string | null;
   availableStems?: Array<{ id: string; file_name: string; stem_type?: string; is_master?: boolean }>;
   onLayerUpdate?: (layerId: string, updates: Partial<Layer>) => void;
-}> = ({ 
-  effects, 
-  selectedEffects, 
-  onEffectToggle, 
-  onEffectDoubleClick, 
-  isVisible, 
+}> = ({
+  effects,
+  selectedEffects,
+  onEffectToggle,
+  onEffectDoubleClick,
+  isVisible,
   stemUrlsReady,
   editingEffectId,
   editingEffectInstance,
@@ -116,118 +116,118 @@ const EffectsLibrarySidebarWithHud: React.FC<{
   availableStems,
   onLayerUpdate
 }) => {
-  const { addLayer, duration, layers } = useTimelineStore((state) => ({
-    addLayer: state.addLayer,
-    duration: state.duration,
-    layers: state.layers,
-  }));
-  const overlayCount = layers.filter((l) => l.type === 'overlay').length;
-  
-  const handleEffectDoubleClick = (effectId: string) => {
-    if (!stemUrlsReady) {
-      debugLog.warn('[EffectsLibrarySidebarWithHud] Overlay creation blocked: stem URLs not ready');
-      return;
-    }
-    const effect = effects.find(e => e.id === effectId);
-    if (effect && effect.category === 'Overlays') {
-      // Map effect ID to overlay type
-      const overlayTypeMap: Record<string, string> = {
-        'waveform': 'waveform',
-        'spectrogram': 'spectrogram',
-        'peakMeter': 'peakMeter',
-        'stereometer': 'stereometer',
-        'oscilloscope': 'oscilloscope',
-        'spectrumAnalyzer': 'spectrumAnalyzer',
-        'vuMeter': 'vuMeter',
-        'chromaWheel': 'chromaWheel',
-        'consoleFeed': 'consoleFeed',
-      };
-      
-      const overlayType = overlayTypeMap[effectId];
-      if (overlayType) {
-        debugLog.log('🎯 Adding HUD overlay to timeline:', overlayType, 'with master stem:', masterStemId);
-        
-        // HudOverlay uses scale.x/y as PERCENTAGES of parent container
-        // and position.x/y as PERCENTAGES for positioning
-        // Default to 40% width, 25% height for a reasonable overlay size
-        const overlayWidthPct = 40;
-        const overlayHeightPct = 25;
-        
-        // Position within canvas bounds with some padding (as percentages), offset by overlay count
-        const paddingPct = 5;
-        const offsetStepPct = 8;
-        const posXPct = paddingPct + (overlayCount * offsetStepPct) % (100 - overlayWidthPct - paddingPct * 2);
-        const posYPct = paddingPct + (overlayCount * offsetStepPct) % (100 - overlayHeightPct - paddingPct * 2);
-        
-        const newOverlayId = `overlay-${Date.now()}`;
-        const newLayer: Layer = {
-          id: newOverlayId,
-          name: `Overlay ${overlayCount + 1}`,
-          type: 'overlay',
-          effectType: overlayType as any,
-          src: '',
-          position: { x: posXPct, y: posYPct },
-          scale: { x: overlayWidthPct, y: overlayHeightPct }, // Percentages!
-          rotation: 0,
-          opacity: 1,
-          audioBindings: [],
-          midiBindings: [],
-          zIndex: 0,
-          blendMode: 'normal',
-          startTime: 0,
-          endTime: duration,
-          duration,
-          settings: {
-            stemId: masterStemId || undefined, // Inherit master stem by default
-          },
-        };
-        addLayer(newLayer);
-        
-        // Pass the new overlay layer ID so the parent opens the inspector for THIS layer
-        onEffectDoubleClick(newOverlayId);
-        return; // Don't call onEffectDoubleClick again below
-      }
-    }
-    onEffectDoubleClick(effectId);
-  };
+    const { addLayer, duration, layers } = useTimelineStore((state) => ({
+      addLayer: state.addLayer,
+      duration: state.duration,
+      layers: state.layers,
+    }));
+    const overlayCount = layers.filter((l) => l.type === 'overlay').length;
 
-  // Find the effect metadata for the header
-  const editingEffect = editingEffectId ? effects.find(e => e.id === editingEffectId) : null;
-  
-  return (
-    <EffectsLibrarySidebar
-      effects={effects}
-      selectedEffects={selectedEffects}
-      onEffectToggle={onEffectToggle}
-      onEffectDoubleClick={handleEffectDoubleClick}
-      isVisible={isVisible}
-      // Inspector mode props
-      editingEffectId={editingEffectId}
-      editingEffect={editingEffect}
-      editingEffectInstance={editingEffectInstance}
-      activeSliderValues={activeSliderValues}
-      baseParameterValues={baseParameterValues}
-      onParameterChange={onParameterChange}
-      onBack={onBack}
-      mappings={mappings}
-      featureNames={featureNames}
-      onMapFeature={onMapFeature}
-      onUnmapFeature={onUnmapFeature}
-      onModulationAmountChange={onModulationAmountChange}
-      // ImageSlideshow specific props
-      projectId={projectId}
-      availableFiles={availableFiles}
-      activeCollectionId={activeCollectionId}
-      setActiveCollectionId={setActiveCollectionId}
-      modulatedParameterValues={modulatedParameterValues}
-      layers={layersProp || layers}
-      setActiveParam={setActiveParam}
-      availableStems={availableStems}
-      masterStemId={masterStemId}
-      onLayerUpdate={onLayerUpdate}
-    />
-  );
-};
+    const handleEffectDoubleClick = (effectId: string) => {
+      if (!stemUrlsReady) {
+        debugLog.warn('[EffectsLibrarySidebarWithHud] Overlay creation blocked: stem URLs not ready');
+        return;
+      }
+      const effect = effects.find(e => e.id === effectId);
+      if (effect && effect.category === 'Overlays') {
+        // Map effect ID to overlay type
+        const overlayTypeMap: Record<string, string> = {
+          'waveform': 'waveform',
+          'spectrogram': 'spectrogram',
+          'peakMeter': 'peakMeter',
+          'stereometer': 'stereometer',
+          'oscilloscope': 'oscilloscope',
+          'spectrumAnalyzer': 'spectrumAnalyzer',
+          'vuMeter': 'vuMeter',
+          'chromaWheel': 'chromaWheel',
+          'consoleFeed': 'consoleFeed',
+        };
+
+        const overlayType = overlayTypeMap[effectId];
+        if (overlayType) {
+          // debugLog.log('🎯 Adding HUD overlay to timeline:', overlayType, 'with master stem:', masterStemId);
+
+          // HudOverlay uses scale.x/y as PERCENTAGES of parent container
+          // and position.x/y as PERCENTAGES for positioning
+          // Default to 40% width, 25% height for a reasonable overlay size
+          const overlayWidthPct = 40;
+          const overlayHeightPct = 25;
+
+          // Position within canvas bounds with some padding (as percentages), offset by overlay count
+          const paddingPct = 5;
+          const offsetStepPct = 8;
+          const posXPct = paddingPct + (overlayCount * offsetStepPct) % (100 - overlayWidthPct - paddingPct * 2);
+          const posYPct = paddingPct + (overlayCount * offsetStepPct) % (100 - overlayHeightPct - paddingPct * 2);
+
+          const newOverlayId = `overlay-${Date.now()}`;
+          const newLayer: Layer = {
+            id: newOverlayId,
+            name: `Overlay ${overlayCount + 1}`,
+            type: 'overlay',
+            effectType: overlayType as any,
+            src: '',
+            position: { x: posXPct, y: posYPct },
+            scale: { x: overlayWidthPct, y: overlayHeightPct }, // Percentages!
+            rotation: 0,
+            opacity: 1,
+            audioBindings: [],
+            midiBindings: [],
+            zIndex: 0,
+            blendMode: 'normal',
+            startTime: 0,
+            endTime: duration,
+            duration,
+            settings: {
+              stemId: masterStemId || undefined, // Inherit master stem by default
+            },
+          };
+          addLayer(newLayer);
+
+          // Pass the new overlay layer ID so the parent opens the inspector for THIS layer
+          onEffectDoubleClick(newOverlayId);
+          return; // Don't call onEffectDoubleClick again below
+        }
+      }
+      onEffectDoubleClick(effectId);
+    };
+
+    // Find the effect metadata for the header
+    const editingEffect = editingEffectId ? effects.find(e => e.id === editingEffectId) : null;
+
+    return (
+      <EffectsLibrarySidebar
+        effects={effects}
+        selectedEffects={selectedEffects}
+        onEffectToggle={onEffectToggle}
+        onEffectDoubleClick={handleEffectDoubleClick}
+        isVisible={isVisible}
+        // Inspector mode props
+        editingEffectId={editingEffectId}
+        editingEffect={editingEffect}
+        editingEffectInstance={editingEffectInstance}
+        activeSliderValues={activeSliderValues}
+        baseParameterValues={baseParameterValues}
+        onParameterChange={onParameterChange}
+        onBack={onBack}
+        mappings={mappings}
+        featureNames={featureNames}
+        onMapFeature={onMapFeature}
+        onUnmapFeature={onUnmapFeature}
+        onModulationAmountChange={onModulationAmountChange}
+        // ImageSlideshow specific props
+        projectId={projectId}
+        availableFiles={availableFiles}
+        activeCollectionId={activeCollectionId}
+        setActiveCollectionId={setActiveCollectionId}
+        modulatedParameterValues={modulatedParameterValues}
+        layers={layersProp || layers}
+        setActiveParam={setActiveParam}
+        availableStems={availableStems}
+        masterStemId={masterStemId}
+        onLayerUpdate={onLayerUpdate}
+      />
+    );
+  };
 
 // Sample MIDI data for demonstration
 const createSampleMIDIData = (): MIDIData => {
@@ -271,7 +271,8 @@ const createSampleMIDIData = (): MIDIData => {
     },
     tracks: [
       { id: 'melody', name: 'Synth Lead', instrument: 'Synthesizer', channel: 1, color: '#84a98c', visible: true, notes: notes },
-      { id: 'bass', name: 'Bass Synth', instrument: 'Bass', channel: 2, color: '#6b7c93', visible: true, notes: [
+      {
+        id: 'bass', name: 'Bass Synth', instrument: 'Bass', channel: 2, color: '#6b7c93', visible: true, notes: [
           { id: 'b1', start: 0.0, duration: 1.0, pitch: 36, velocity: 100, track: 'bass', noteName: 'C2' },
           { id: 'b2', start: 1.0, duration: 1.0, pitch: 40, velocity: 95, track: 'bass', noteName: 'E2' },
           { id: 'b3', start: 2.0, duration: 1.0, pitch: 43, velocity: 90, track: 'bass', noteName: 'G2' },
@@ -279,7 +280,8 @@ const createSampleMIDIData = (): MIDIData => {
           { id: 'b5', start: 4.0, duration: 2.0, pitch: 36, velocity: 100, track: 'bass', noteName: 'C2' },
         ]
       },
-      { id: 'drums', name: 'Drums', instrument: 'Drum Kit', channel: 10, color: '#b08a8a', visible: true, notes: [
+      {
+        id: 'drums', name: 'Drums', instrument: 'Drum Kit', channel: 10, color: '#b08a8a', visible: true, notes: [
           { id: 'd1', start: 0.0, duration: 0.1, pitch: 36, velocity: 120, track: 'drums', noteName: 'Kick' },
           { id: 'd2', start: 0.5, duration: 0.1, pitch: 42, velocity: 80, track: 'drums', noteName: 'HiHat' },
           { id: 'd3', start: 1.0, duration: 0.1, pitch: 38, velocity: 100, track: 'drums', noteName: 'Snare' },
@@ -339,12 +341,12 @@ function CreativeVisualizerPage() {
   useEffect(() => {
     setIsClient(true);
   }, []);
-  
+
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [useDemoData, setUseDemoData] = useState(false);
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
-  
+
   const [settings, setSettings] = useState<VisualizationSettings>(DEFAULT_VISUALIZATION_SETTINGS);
   const {
     layers,
@@ -386,8 +388,8 @@ function CreativeVisualizerPage() {
   // Effects timeline has been merged into layers via store
 
   // Effects carousel state (now for timeline-based effects) - from store
-  const { 
-    selectedEffects, 
+  const {
+    selectedEffects,
     setSelectedEffects,
     aspectRatio: visualizerAspectRatio,
     setAspectRatio: setVisualizerAspectRatio,
@@ -406,7 +408,7 @@ function CreativeVisualizerPage() {
     'metaballs': false,
     'particleNetwork': false
   });
-  
+
   // Inspector mode state - track which effect is being edited in the sidebar
   const [editingEffectId, setEditingEffectId] = useState<string | null>(null);
 
@@ -428,8 +430,8 @@ function CreativeVisualizerPage() {
         ? currentIds.length === 0
           ? []
           : Object.keys(mappings)
-              .map(key => parseParamKey(key)?.effectInstanceId)
-              .filter((id): id is string => !!id && !currentIds.includes(id))
+            .map(key => parseParamKey(key)?.effectInstanceId)
+            .filter((id): id is string => !!id && !currentIds.includes(id))
         : prevIds.filter(id => !currentIds.includes(id));
 
     if (removedIds.length > 0) {
@@ -489,18 +491,18 @@ function CreativeVisualizerPage() {
   const [sampleMidiData] = useState<MIDIData>(createSampleMIDIData());
   const stemAudio = useStemAudioController();
   const audioAnalysis = useAudioAnalysis();
-  
+
   // Sync performance monitoring
   useEffect(() => {
     if (!isPlaying) return;
-    
+
     const updateSyncMetrics = () => {
       const now = performance.now();
       const audioTime = stemAudio.currentTime;
       const visualTime = currentTime;
       const audioLatency = stemAudio.getAudioLatency ? stemAudio.getAudioLatency() * 1000 : 0;
       const frameTime = now - syncMetrics.lastUpdate;
-      
+
       setSyncMetrics({
         audioLatency,
         visualLatency: frameTime,
@@ -509,22 +511,22 @@ function CreativeVisualizerPage() {
         lastUpdate: now
       });
     };
-    
+
     const interval = setInterval(updateSyncMetrics, 100); // Update every 100ms
     return () => clearInterval(interval);
   }, [isPlaying, stemAudio.currentTime, currentTime, syncMetrics.lastUpdate]);
-  
+
   // Enhanced audio analysis data - This state is no longer needed, data comes from useCachedStemAnalysis
   // const [audioAnalysisData, setAudioAnalysisData] = useState<any>(null);
-  
+
   const [showPicker, setShowPicker] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const isLoadingStemsRef = useRef(false);
   const [isCacheLoaded, setIsCacheLoaded] = useState(false);
-  
+
   // Ref to track current analysis state to avoid stale closures
   const currentAnalysisRef = useRef(audioAnalysis.cachedAnalysis);
-  
+
   // Update ref when analysis changes
   useEffect(() => {
     currentAnalysisRef.current = audioAnalysis.cachedAnalysis;
@@ -539,21 +541,21 @@ function CreativeVisualizerPage() {
   const fetchedIdsRef = useRef<Set<string>>(new Set());
 
   // Fetch current project information
-  const { 
-    data: projectData, 
-    isLoading: projectLoading, 
-    error: projectError 
+  const {
+    data: projectData,
+    isLoading: projectLoading,
+    error: projectError
   } = trpc.project.get.useQuery(
     { id: currentProjectId! },
     { enabled: !!currentProjectId }
   );
 
   // Fetch project files for general asset management / UI
-  const { 
-    data: projectFiles, 
-    isLoading: projectFilesLoading 
+  const {
+    data: projectFiles,
+    isLoading: projectFilesLoading
   } = trpc.file.getUserFiles.useQuery(
-    { 
+    {
       limit: 1000, // Increased from 200 to ensure we find all assets
       fileType: 'all',
       projectId: currentProjectId || undefined
@@ -562,8 +564,8 @@ function CreativeVisualizerPage() {
   );
 
   // Dedicated query for audio files so they can never be paged out
-  const { 
-    data: projectAudioFiles 
+  const {
+    data: projectAudioFiles
   } = trpc.file.getUserFiles.useQuery(
     {
       limit: 1000,
@@ -574,10 +576,10 @@ function CreativeVisualizerPage() {
   );
 
   // Fetch MIDI visualization data
-  const { 
-    data: fileData, 
-    isLoading: fileLoading, 
-    error: fileError 
+  const {
+    data: fileData,
+    isLoading: fileLoading,
+    error: fileError
   } = trpc.midi.getVisualizationData.useQuery(
     { fileId: selectedFileId! },
     { enabled: !!selectedFileId && !useDemoData }
@@ -586,12 +588,12 @@ function CreativeVisualizerPage() {
   useEffect(() => {
     const fileId = searchParams.get('fileId');
     const projectId = searchParams.get('projectId');
-    
+
     if (projectId) {
       setCurrentProjectId(projectId);
       setUseDemoData(false);
     }
-    
+
     if (fileId) {
       setSelectedFileId(fileId);
       setUseDemoData(false);
@@ -622,7 +624,7 @@ function CreativeVisualizerPage() {
       let updatesMade = false;
       const files = projectFiles.files;
       const fileIdMap = new Map(files.map(f => [f.id, f.downloadUrl]));
-      
+
       // Iterate layers to find ImageSlideshow effects with expired/mismatched URLs
       const updatedLayers = layers.map(layer => {
         if (layer.effectType === 'imageSlideshow' && layer.settings?.images?.length > 0) {
@@ -634,15 +636,15 @@ function CreativeVisualizerPage() {
           // If we know the collection ID, just get all fresh URLs for that collection.
           if (layer.settings.collectionId) {
             const collectionFiles = files.filter(f => f.collection_id === layer.settings.collectionId && f.downloadUrl);
-            
+
             if (collectionFiles.length > 0) {
               // Sort by name or creation to ensure consistent order if needed, 
               // or just rely on the API order which matches the manual behavior
               newImages = collectionFiles.map(f => f.downloadUrl) as string[];
-              
+
               // If the fresh list is different from current (expired) list, apply it
               if (JSON.stringify(newImages) !== JSON.stringify(currentImages)) {
-                debugLog.log('🔄 Strategy 0 (Collection) matched for layer', layer.id);
+                // debugLog.log('🔄 Strategy 0 (Collection) matched for layer', layer.id);
                 layerModified = true;
               }
             }
@@ -652,11 +654,11 @@ function CreativeVisualizerPage() {
           if (!layerModified && layer.settings.imageIds && Array.isArray(layer.settings.imageIds)) {
             newImages = layer.settings.imageIds.map((id: string) => fileIdMap.get(id)).filter(Boolean) as string[];
             if (newImages.length > 0 && JSON.stringify(newImages) !== JSON.stringify(currentImages)) {
-              debugLog.log('🔄 Strategy 1 (IDs) matched for layer', layer.id);
+              // debugLog.log('🔄 Strategy 1 (IDs) matched for layer', layer.id);
               layerModified = true;
             }
-          } 
-          
+          }
+
           // STRATEGY 2: Filename Heuristic (Last Resort)
           if (!layerModified && (!newImages || newImages.length === 0)) {
             newImages = currentImages.map(url => {
@@ -669,12 +671,12 @@ function CreativeVisualizerPage() {
                 const fileFilename = f.downloadUrl.split('?')[0].split('/').pop();
                 return fileFilename && (fileFilename.includes(urlFilename) || urlFilename.includes(fileFilename));
               });
-              
+
               return (found && found.downloadUrl) ? found.downloadUrl : url;
             });
-            
+
             if (JSON.stringify(newImages) !== JSON.stringify(currentImages)) {
-              debugLog.log('🔄 Strategy 2 (Filename) matched for layer', layer.id);
+              // debugLog.log('🔄 Strategy 2 (Filename) matched for layer', layer.id);
               layerModified = true;
             }
           }
@@ -694,7 +696,7 @@ function CreativeVisualizerPage() {
       });
 
       if (updatesMade) {
-        debugLog.log('✅ Asset Refresher applied updates to layers');
+        // debugLog.log('✅ Asset Refresher applied updates to layers');
         // Apply updates to individual layers to avoid race conditions
         updatedLayers.forEach(l => {
           const original = layers.find(old => old.id === l.id);
@@ -724,24 +726,24 @@ function CreativeVisualizerPage() {
     // This effect now correctly handles both initial load and changes to project files
     if (projectAudioFiles?.files && currentProjectId && isInitialized && !audioAnalysis.isLoading) {
       let cancelled = false;
-      
+
       const loadStemsWithUrls = async () => {
         // Prevent re-loading if already in progress
         if (isLoadingStemsRef.current) return;
         isLoadingStemsRef.current = true;
 
         try {
-          const audioFiles = projectAudioFiles.files.filter(file => 
+          const audioFiles = projectAudioFiles.files.filter(file =>
             file.file_type === 'audio' && file.upload_status === 'completed'
           );
 
           if (audioFiles.length > 0) {
-            debugLog.log('Found audio files, preparing to load:', audioFiles.map(f => f.file_name));
-            debugLog.log('Master stem info:', audioFiles.map(f => ({ name: f.file_name, is_master: f.is_master })));
-            
+            /* debugLog.log('Found audio files, preparing to load:', audioFiles.map(f => f.file_name));
+            debugLog.log('Master stem info:', audioFiles.map(f => ({ name: f.file_name, is_master: f.is_master }))); */
+
             // Debug: Log file structure to see what fields are available
-            debugLog.log('Audio file structure sample:', audioFiles[0]);
-            
+            // debugLog.log('Audio file structure sample:', audioFiles[0]);
+
             // Sort so master is last
             const sortedAudioFiles = sortStemsWithMasterLast(audioFiles.map(f => ({
               ...f,
@@ -755,8 +757,8 @@ function CreativeVisualizerPage() {
                   debugLog.error('File missing ID:', file);
                   throw new Error(`File missing ID: ${file.file_name}`);
                 }
-                
-                debugLog.log('Getting download URL for file:', { id: file.id, name: file.file_name });
+
+                // debugLog.log('Getting download URL for file:', { id: file.id, name: file.file_name });
                 const result = await getDownloadUrlMutation.mutateAsync({ fileId: file.id });
                 return {
                   id: file.id,
@@ -777,18 +779,18 @@ function CreativeVisualizerPage() {
                 // Use ref to get current state to avoid stale closure
                 const currentAnalysis = currentAnalysisRef.current;
                 const hasAnalysis = currentAnalysis.some(a => a.fileMetadataId === stemId);
-                debugLog.log('🎵 Stem loaded callback:', { 
-                  stemId, 
-                  stemType: stem?.stemType, 
-                  hasAnalysis,
-                  cachedAnalysisCount: currentAnalysis.length,
-                  cachedAnalysisIds: currentAnalysis.map(a => a.fileMetadataId)
-                });
+                // debugLog.log('🎵 Stem loaded callback:', {
+                //   stemId,
+                //   stemType: stem?.stemType,
+                //   hasAnalysis,
+                //   cachedAnalysisCount: currentAnalysis.length,
+                //   cachedAnalysisIds: currentAnalysis.map(a => a.fileMetadataId)
+                // });
                 if (stem && !hasAnalysis) {
-                  debugLog.log('🎵 Triggering analysis for stem:', stemId, stem.stemType);
+                  // debugLog.log('🎵 Triggering analysis for stem:', stemId, stem.stemType);
                   audioAnalysis.analyzeAudioBuffer(stemId, audioBuffer, stem.stemType);
                 } else {
-                  debugLog.log('🎵 Skipping analysis for stem:', stemId, 'reason:', !stem ? 'no stem found' : 'analysis already exists');
+                  // debugLog.log('🎵 Skipping analysis for stem:', stemId, 'reason:', !stem ? 'no stem found' : 'analysis already exists');
                 }
               });
               if (masterStems.length > 0) {
@@ -797,24 +799,24 @@ function CreativeVisualizerPage() {
                   // Use ref to get current state to avoid stale closure
                   const currentAnalysis = currentAnalysisRef.current;
                   const hasAnalysis = currentAnalysis.some(a => a.fileMetadataId === stemId);
-                  debugLog.log('🎵 Master stem loaded callback:', { 
-                    stemId, 
-                    stemType: stem?.stemType, 
+                  /* debugLog.log('🎵 Master stem loaded callback:', {
+                    stemId,
+                    stemType: stem?.stemType,
                     hasAnalysis,
                     cachedAnalysisCount: currentAnalysis.length,
                     cachedAnalysisIds: currentAnalysis.map(a => a.fileMetadataId)
-                  });
+                  }); */
                   if (stem && !hasAnalysis) {
-                    debugLog.log('🎵 Triggering analysis for master stem:', stemId, stem.stemType);
+                    // debugLog.log('🎵 Triggering analysis for master stem:', stemId, stem.stemType);
                     audioAnalysis.analyzeAudioBuffer(stemId, audioBuffer, stem.stemType);
                   } else {
-                    debugLog.log('🎵 Skipping analysis for master stem:', stemId, 'reason:', !stem ? 'no stem found' : 'analysis already exists');
+                    // debugLog.log('🎵 Skipping analysis for master stem:', stemId, 'reason:', !stem ? 'no stem found' : 'analysis already exists');
                   }
                 });
               }
             }
           } else {
-            debugLog.log('No completed audio files found in project.');
+            // debugLog.log('No completed audio files found in project.');
           }
         } catch (error) {
           if (!cancelled) {
@@ -826,18 +828,18 @@ function CreativeVisualizerPage() {
           }
         }
       };
-      
+
       loadStemsWithUrls();
-      return () => { 
-        cancelled = true; 
+      return () => {
+        cancelled = true;
         isLoadingStemsRef.current = false;
       };
     }
   }, [projectAudioFiles?.files, currentProjectId, isInitialized, audioAnalysis.isLoading]); // Removed audioAnalysis.cachedAnalysis from dependencies
 
-  
 
-  const availableStems = projectAudioFiles?.files?.filter(file => 
+
+  const availableStems = projectAudioFiles?.files?.filter(file =>
     file.file_type === 'audio' && file.upload_status === 'completed'
   ) || [];
 
@@ -845,7 +847,7 @@ function CreativeVisualizerPage() {
   useEffect(() => {
     // 1. Start with stems from the project
     const idsToLoad = new Set(availableStems.map(s => s.id));
-    
+
     // 2. Add stems referenced in overlay layers
     layers.forEach(layer => {
       if (layer.type === 'overlay') {
@@ -872,7 +874,7 @@ function CreativeVisualizerPage() {
     setUseDemoData(false);
     setCurrentTime(0);
     setPlaying(false);
-    
+
     const params = new URLSearchParams(searchParams);
     params.set('fileId', fileId);
     router.push(`/creative-visualizer?${params.toString()}`, { scroll: false });
@@ -882,7 +884,7 @@ function CreativeVisualizerPage() {
     setUseDemoData(demoMode);
     setCurrentTime(0);
     setPlaying(false);
-    
+
     if (demoMode) {
       const params = new URLSearchParams(searchParams);
       params.delete('fileId');
@@ -949,12 +951,12 @@ function CreativeVisualizerPage() {
         asyncStemUrlMap
       );
 
-      console.log('Export Payload:', payload);
-      
+      // console.log('Export Payload:', payload);
+
       // Trigger render on Lambda
       const result = await triggerRenderMutation.mutateAsync(payload);
-      
-      console.log('Render result:', result);
+
+      // console.log('Render result:', result);
       const { renderId, bucketName, functionName } = result;
 
       // Wait before first poll — Lambda needs time to write initial progress to S3
@@ -1037,57 +1039,57 @@ function CreativeVisualizerPage() {
     setShowCreateModal(false);
   };
 
-  
 
 
-  
+
+
 
   // Check if stems are actually loaded in the audio controller, not just available in the project
   const hasStems = availableStems.length > 0 && stemAudio.stemsLoaded;
-  
+
   // Check if we're currently loading stems
   const stemLoadingState = availableStems.length > 0 && !stemAudio.stemsLoaded;
 
   // Effects data for new sidebar (with categories and rarity)
   const effects: EffectUIData[] = [
-    { 
-      id: 'metaballs', 
-      name: 'Metaballs Effect', 
+    {
+      id: 'metaballs',
+      name: 'Metaballs Effect',
       description: 'Organic, fluid-like visualizations that respond to audio intensity',
       category: 'Generative',
       rarity: 'Rare',
       image: '/effects/generative/metaballs.png',
       parameters: {} // <-- Added
     },
-    { 
-      id: 'particleNetwork', 
-      name: 'Particle Effect', 
+    {
+      id: 'particleNetwork',
+      name: 'Particle Effect',
       description: 'Dynamic particle systems that react to rhythm and pitch',
       category: 'Generative',
       rarity: 'Mythic',
       image: '/effects/generative/particles.png',
       parameters: {} // Empty - modal is handled by ThreeVisualizer
     },
-    { 
-      id: 'imageSlideshow', 
-      name: 'Image Slideshow', 
+    {
+      id: 'imageSlideshow',
+      name: 'Image Slideshow',
       description: 'Rhythmic image slideshow triggered by audio transients',
       category: 'Generative',
       rarity: 'Common',
       image: '/effects/generative/imageSlideshow.png',
       parameters: {
-         triggerValue: 0,
-         threshold: 0.5,
-         opacity: 1.0,
-         position: { x: 0.5, y: 0.5 },
-         size: { width: 1.0, height: 1.0 },
-         images: [] 
+        triggerValue: 0,
+        threshold: 0.5,
+        opacity: 1.0,
+        position: { x: 0.5, y: 0.5 },
+        size: { width: 1.0, height: 1.0 },
+        images: []
       }
     },
     // Stylize Category Effects
-    { 
-      id: 'asciiFilter', 
-      name: 'ASCII Filter', 
+    {
+      id: 'asciiFilter',
+      name: 'ASCII Filter',
       description: 'Converts input to ASCII art with audio-reactive parameters',
       category: 'Stylize',
       rarity: 'Rare',
@@ -1101,9 +1103,9 @@ function CreativeVisualizerPage() {
         color: [1.0, 1.0, 1.0]
       }
     },
-    { 
-      id: 'chromaticAbberation', 
-      name: 'Chromatic Abberation', 
+    {
+      id: 'chromaticAbberation',
+      name: 'Chromatic Abberation',
       description: 'RGB color channel offset for lens distortion effect',
       category: 'Stylize',
       rarity: 'Common',
@@ -1112,9 +1114,9 @@ function CreativeVisualizerPage() {
         direction: 0.0
       }
     },
-    { 
-      id: 'crt', 
-      name: 'CRT Monitor', 
+    {
+      id: 'crt',
+      name: 'CRT Monitor',
       description: 'Vintage CRT monitor effect with phosphors and scanlines',
       category: 'Stylize',
       rarity: 'Rare',
@@ -1125,9 +1127,9 @@ function CreativeVisualizerPage() {
         noise: 0.5
       }
     },
-    { 
-      id: 'dither', 
-      name: 'Dither', 
+    {
+      id: 'dither',
+      name: 'Dither',
       description: 'Ordered dithering for retro pixelart look',
       category: 'Stylize',
       rarity: 'Common',
@@ -1137,9 +1139,9 @@ function CreativeVisualizerPage() {
         scale: 1.0
       }
     },
-    { 
-      id: 'glitch', 
-      name: 'Digital Glitch', 
+    {
+      id: 'glitch',
+      name: 'Digital Glitch',
       description: 'VHS-style digital glitch with corruption and aberration',
       category: 'Stylize',
       rarity: 'Rare',
@@ -1150,9 +1152,9 @@ function CreativeVisualizerPage() {
         frequency: 0.5
       }
     },
-    { 
-      id: 'grain', 
-      name: 'Film Grain', 
+    {
+      id: 'grain',
+      name: 'Film Grain',
       description: 'Adds film grain noise for vintage look',
       category: 'Stylize',
       rarity: 'Common',
@@ -1163,9 +1165,9 @@ function CreativeVisualizerPage() {
         luminance: false
       }
     },
-    { 
-      id: 'halftone', 
-      name: 'Halftone', 
+    {
+      id: 'halftone',
+      name: 'Halftone',
       description: 'CMYK halftone printing effect',
       category: 'Stylize',
       rarity: 'Rare',
@@ -1176,9 +1178,9 @@ function CreativeVisualizerPage() {
         smoothness: 0.75
       }
     },
-    { 
-      id: 'pixelate', 
-      name: 'Pixelate', 
+    {
+      id: 'pixelate',
+      name: 'Pixelate',
       description: 'Mosaic pixelation effect',
       category: 'Stylize',
       rarity: 'Common',
@@ -1187,9 +1189,9 @@ function CreativeVisualizerPage() {
         shape: 'square'
       }
     },
-    { 
-      id: 'posterize', 
-      name: 'Posterize', 
+    {
+      id: 'posterize',
+      name: 'Posterize',
       description: 'Reduces color levels for poster art effect',
       category: 'Stylize',
       rarity: 'Common',
@@ -1199,9 +1201,9 @@ function CreativeVisualizerPage() {
       }
     },
     // Blur Category Effects
-    { 
-      id: 'blur', 
-      name: 'Gaussian Blur', 
+    {
+      id: 'blur',
+      name: 'Gaussian Blur',
       description: 'Smooth Gaussian blur with configurable intensity',
       category: 'Blur',
       rarity: 'Common',
@@ -1211,9 +1213,9 @@ function CreativeVisualizerPage() {
         quality: 1.0
       }
     },
-    { 
-      id: 'radialBlur', 
-      name: 'Radial Blur', 
+    {
+      id: 'radialBlur',
+      name: 'Radial Blur',
       description: 'Rotational blur around a center point',
       category: 'Blur',
       rarity: 'Rare',
@@ -1224,9 +1226,9 @@ function CreativeVisualizerPage() {
         angle: 10.0
       }
     },
-    { 
-      id: 'bokeh', 
-      name: 'Bokeh Blur', 
+    {
+      id: 'bokeh',
+      name: 'Bokeh Blur',
       description: 'Depth-of-field bokeh blur effect',
       category: 'Blur',
       rarity: 'Mythic',
@@ -1236,9 +1238,9 @@ function CreativeVisualizerPage() {
         aperture: 0.8
       }
     },
-    { 
-      id: 'diffusion', 
-      name: 'Diffusion', 
+    {
+      id: 'diffusion',
+      name: 'Diffusion',
       description: 'Soft diffusion glow effect',
       category: 'Blur',
       rarity: 'Rare',
@@ -1247,9 +1249,9 @@ function CreativeVisualizerPage() {
         size: 1.5
       }
     },
-    { 
-      id: 'fog', 
-      name: 'Fog', 
+    {
+      id: 'fog',
+      name: 'Fog',
       description: 'Animated fog effect with noise',
       category: 'Blur',
       rarity: 'Rare',
@@ -1259,9 +1261,9 @@ function CreativeVisualizerPage() {
         color: [1.0, 1.0, 1.0]
       }
     },
-    { 
-      id: 'progressiveBlur', 
-      name: 'Progressive Blur', 
+    {
+      id: 'progressiveBlur',
+      name: 'Progressive Blur',
       description: 'Blur that increases with distance from center',
       category: 'Blur',
       rarity: 'Rare',
@@ -1272,9 +1274,9 @@ function CreativeVisualizerPage() {
       }
     },
     // Distort Category Effects
-    { 
-      id: 'bulge', 
-      name: 'Bulge', 
+    {
+      id: 'bulge',
+      name: 'Bulge',
       description: 'Bulge/pinch distortion effect',
       category: 'Distort',
       rarity: 'Common',
@@ -1285,9 +1287,9 @@ function CreativeVisualizerPage() {
         radius: 0.4
       }
     },
-    { 
-      id: 'fbm', 
-      name: 'FBM Distortion', 
+    {
+      id: 'fbm',
+      name: 'FBM Distortion',
       description: 'Fluid marble-like distortion using Fractal Brownian Motion',
       category: 'Distort',
       rarity: 'Rare',
@@ -1297,9 +1299,9 @@ function CreativeVisualizerPage() {
         scale: 1.0
       }
     },
-    { 
-      id: 'liquify', 
-      name: 'Liquify', 
+    {
+      id: 'liquify',
+      name: 'Liquify',
       description: 'Sine-based liquid distortion effect',
       category: 'Distort',
       rarity: 'Rare',
@@ -1309,9 +1311,9 @@ function CreativeVisualizerPage() {
         speed: 0.5
       }
     },
-    { 
-      id: 'noise', 
-      name: 'BCC Noise', 
+    {
+      id: 'noise',
+      name: 'BCC Noise',
       description: 'Body-Centered Cubic noise distortion',
       category: 'Distort',
       rarity: 'Rare',
@@ -1321,9 +1323,9 @@ function CreativeVisualizerPage() {
         speed: 0.5
       }
     },
-    { 
-      id: 'polar', 
-      name: 'Polar', 
+    {
+      id: 'polar',
+      name: 'Polar',
       description: 'Cartesian to polar coordinates transformation',
       category: 'Distort',
       rarity: 'Common',
@@ -1334,9 +1336,9 @@ function CreativeVisualizerPage() {
         centerY: 0.5
       }
     },
-    { 
-      id: 'ripple', 
-      name: 'Ripple', 
+    {
+      id: 'ripple',
+      name: 'Ripple',
       description: 'Concentric ripple distortion',
       category: 'Distort',
       rarity: 'Common',
@@ -1348,9 +1350,9 @@ function CreativeVisualizerPage() {
         centerY: 0.5
       }
     },
-    { 
-      id: 'sineWaves', 
-      name: 'Sine Waves', 
+    {
+      id: 'sineWaves',
+      name: 'Sine Waves',
       description: 'Sinusoidal wave distortion',
       category: 'Distort',
       rarity: 'Common',
@@ -1362,9 +1364,9 @@ function CreativeVisualizerPage() {
         waveY: true
       }
     },
-    { 
-      id: 'skybox', 
-      name: 'Skybox Projection', 
+    {
+      id: 'skybox',
+      name: 'Skybox Projection',
       description: 'Equirectangular 360 projection',
       category: 'Distort',
       rarity: 'Rare',
@@ -1375,9 +1377,9 @@ function CreativeVisualizerPage() {
         zoom: 1.0
       }
     },
-    { 
-      id: 'stretch', 
-      name: 'Stretch', 
+    {
+      id: 'stretch',
+      name: 'Stretch',
       description: 'Directional stretch/compression distortion',
       category: 'Distort',
       rarity: 'Common',
@@ -1388,9 +1390,9 @@ function CreativeVisualizerPage() {
         centerY: 0.5
       }
     },
-    { 
-      id: 'swirl', 
-      name: 'Swirl', 
+    {
+      id: 'swirl',
+      name: 'Swirl',
       description: 'Swirl/twist distortion effect',
       category: 'Distort',
       rarity: 'Rare',
@@ -1401,9 +1403,9 @@ function CreativeVisualizerPage() {
         radius: 0.4
       }
     },
-    { 
-      id: 'trail', 
-      name: 'Trail', 
+    {
+      id: 'trail',
+      name: 'Trail',
       description: 'Motion trail / afterimage effect',
       category: 'Distort',
       rarity: 'Common',
@@ -1412,9 +1414,9 @@ function CreativeVisualizerPage() {
         decay: 0.9
       }
     },
-    { 
-      id: 'waterRipples', 
-      name: 'Water Ripples', 
+    {
+      id: 'waterRipples',
+      name: 'Water Ripples',
       description: 'Water surface ripple simulation',
       category: 'Distort',
       rarity: 'Common',
@@ -1423,9 +1425,9 @@ function CreativeVisualizerPage() {
         speed: 1.0
       }
     },
-    { 
-      id: 'waves', 
-      name: 'Noise Waves', 
+    {
+      id: 'waves',
+      name: 'Noise Waves',
       description: 'Perlin noise wave distortion',
       category: 'Distort',
       rarity: 'Common',
@@ -1435,9 +1437,9 @@ function CreativeVisualizerPage() {
       }
     },
     // Misc Category Effects
-    { 
-      id: 'circle', 
-      name: 'Circle', 
+    {
+      id: 'circle',
+      name: 'Circle',
       description: 'Circular mask overlay',
       category: 'Misc',
       rarity: 'Common',
@@ -1450,9 +1452,9 @@ function CreativeVisualizerPage() {
         opacity: 1.0
       }
     },
-    { 
-      id: 'glitter', 
-      name: 'Glitter', 
+    {
+      id: 'glitter',
+      name: 'Glitter',
       description: 'Voronoi-based sparkle effect',
       category: 'Misc',
       rarity: 'Rare',
@@ -1462,9 +1464,9 @@ function CreativeVisualizerPage() {
         speed: 0.5
       }
     },
-    { 
-      id: 'gradientFill', 
-      name: 'Gradient Fill', 
+    {
+      id: 'gradientFill',
+      name: 'Gradient Fill',
       description: 'Two-color gradient fill overlay',
       category: 'Misc',
       rarity: 'Common',
@@ -1475,9 +1477,9 @@ function CreativeVisualizerPage() {
         opacity: 1.0
       }
     },
-    { 
-      id: 'noiseFill', 
-      name: 'Noise Fill', 
+    {
+      id: 'noiseFill',
+      name: 'Noise Fill',
       description: 'Procedural noise fill overlay',
       category: 'Misc',
       rarity: 'Common',
@@ -1488,9 +1490,9 @@ function CreativeVisualizerPage() {
         opacity: 1.0
       }
     },
-    { 
-      id: 'pattern', 
-      name: 'Pattern', 
+    {
+      id: 'pattern',
+      name: 'Pattern',
       description: 'Procedural pattern generator',
       category: 'Misc',
       rarity: 'Common',
@@ -1501,9 +1503,9 @@ function CreativeVisualizerPage() {
         opacity: 1.0
       }
     },
-    { 
-      id: 'replicate', 
-      name: 'Replicate', 
+    {
+      id: 'replicate',
+      name: 'Replicate',
       description: 'Trail and aberration effect',
       category: 'Misc',
       rarity: 'Rare',
@@ -1514,9 +1516,9 @@ function CreativeVisualizerPage() {
         opacity: 1.0
       }
     },
-    { 
-      id: 'video', 
-      name: 'Video Overlay', 
+    {
+      id: 'video',
+      name: 'Video Overlay',
       description: 'Video texture overlay (requires video assignment)',
       category: 'Misc',
       rarity: 'Rare',
@@ -1524,9 +1526,9 @@ function CreativeVisualizerPage() {
         opacity: 1.0
       }
     },
-    { 
-      id: 'wisps', 
-      name: 'Wisps', 
+    {
+      id: 'wisps',
+      name: 'Wisps',
       description: 'Flowing smoke/wisp effect',
       category: 'Misc',
       rarity: 'Common',
@@ -1538,9 +1540,9 @@ function CreativeVisualizerPage() {
       }
     },
     // Light Category Effects
-    { 
-      id: 'beam', 
-      name: 'Beam', 
+    {
+      id: 'beam',
+      name: 'Beam',
       description: 'Animated scanning light beam',
       category: 'Light',
       rarity: 'Rare',
@@ -1552,9 +1554,9 @@ function CreativeVisualizerPage() {
         color: '#661aff'
       }
     },
-    { 
-      id: 'bloom', 
-      name: 'Bloom', 
+    {
+      id: 'bloom',
+      name: 'Bloom',
       description: 'High-quality bloom effect',
       category: 'Light',
       rarity: 'Mythic',
@@ -1564,9 +1566,9 @@ function CreativeVisualizerPage() {
         radius: 1.0
       }
     },
-    { 
-      id: 'godRays', 
-      name: 'God Rays', 
+    {
+      id: 'godRays',
+      name: 'God Rays',
       description: 'Volumetric light scattering',
       category: 'Light',
       rarity: 'Mythic',
@@ -1579,9 +1581,9 @@ function CreativeVisualizerPage() {
         lightY: 0.5
       }
     },
-    { 
-      id: 'lightTrail', 
-      name: 'Light Trail', 
+    {
+      id: 'lightTrail',
+      name: 'Light Trail',
       description: 'Mouse/Touch light trail effect',
       category: 'Light',
       rarity: 'Rare',
@@ -1591,9 +1593,9 @@ function CreativeVisualizerPage() {
         color: '#0082f7'
       }
     },
-    { 
-      id: 'waterCaustics', 
-      name: 'Water Caustics', 
+    {
+      id: 'waterCaustics',
+      name: 'Water Caustics',
       description: 'Water surface caustics simulation',
       category: 'Light',
       rarity: 'Rare',
@@ -1605,73 +1607,73 @@ function CreativeVisualizerPage() {
       }
     },
     // HUD Overlay Effects
-    { 
-      id: 'waveform', 
-      name: 'Waveform Overlay', 
+    {
+      id: 'waveform',
+      name: 'Waveform Overlay',
       description: 'Real-time audio waveform visualization',
       category: 'Overlays',
       rarity: 'Common',
       parameters: {}
     },
-    { 
-      id: 'spectrogram', 
-      name: 'Spectrogram Overlay', 
+    {
+      id: 'spectrogram',
+      name: 'Spectrogram Overlay',
       description: 'Frequency vs time visualization with color mapping',
       category: 'Overlays',
       rarity: 'Rare',
       parameters: {}
     },
-    { 
-      id: 'peakMeter', 
-      name: 'Peak/LUFS Meter', 
+    {
+      id: 'peakMeter',
+      name: 'Peak/LUFS Meter',
       description: 'Professional audio level metering with peak and LUFS measurements',
       category: 'Overlays',
       rarity: 'Common',
       parameters: {}
     },
-    { 
-      id: 'stereometer', 
-      name: 'Stereometer Overlay', 
+    {
+      id: 'stereometer',
+      name: 'Stereometer Overlay',
       description: 'Stereo field visualization and correlation meter',
       category: 'Overlays',
       rarity: 'Rare',
       parameters: {}
     },
-    { 
-      id: 'oscilloscope', 
-      name: 'Oscilloscope Overlay', 
+    {
+      id: 'oscilloscope',
+      name: 'Oscilloscope Overlay',
       description: 'Real-time waveform oscilloscope with pitch tracking',
       category: 'Overlays',
       rarity: 'Mythic',
       parameters: {}
     },
-    { 
-      id: 'spectrumAnalyzer', 
-      name: 'Spectrum Analyzer', 
+    {
+      id: 'spectrumAnalyzer',
+      name: 'Spectrum Analyzer',
       description: 'FFT-based frequency spectrum visualization',
       category: 'Overlays',
       rarity: 'Rare',
       parameters: {}
     },
-    { 
-      id: 'vuMeter', 
-      name: 'VU Meter', 
+    {
+      id: 'vuMeter',
+      name: 'VU Meter',
       description: 'Classic VU meter with needle and bar styles',
       category: 'Overlays',
       rarity: 'Common',
       parameters: {}
     },
-    { 
-      id: 'chromaWheel', 
-      name: 'Chroma Wheel', 
+    {
+      id: 'chromaWheel',
+      name: 'Chroma Wheel',
       description: '12-note chroma wheel for pitch class visualization',
       category: 'Overlays',
       rarity: 'Rare',
       parameters: {}
     },
-    { 
-      id: 'consoleFeed', 
-      name: 'Data Feed', 
+    {
+      id: 'consoleFeed',
+      name: 'Data Feed',
       description: 'Live data feed for MIDI, LUFS, FFT, and more',
       category: 'Overlays',
       rarity: 'Common',
@@ -1685,7 +1687,7 @@ function CreativeVisualizerPage() {
       ...prev,
       [effectId]: !prev[effectId]
     }));
-    
+
     // Open the parameter modal for this effect
     setOpenEffectModals(prev => ({
       ...prev,
@@ -1696,10 +1698,10 @@ function CreativeVisualizerPage() {
   const handleEffectDoubleClick = (effectId: string) => {
     // Check if this is a layer ID (from timeline clip) or an effect type (from library)
     const existingLayer = layers.find(l => l.id === effectId);
-    
+
     if (existingLayer) {
       // Double-click on timeline clip: open inspector for this specific instance
-      console.log('🎯 [handleEffectDoubleClick] Opening inspector for existing layer:', effectId);
+      // console.log('🎯 [handleEffectDoubleClick] Opening inspector for existing layer:', effectId);
       setEditingEffectId(effectId);
     } else {
       // Double-click on effect card in library: add new effect layer and open its inspector
@@ -1708,18 +1710,18 @@ function CreativeVisualizerPage() {
         console.warn('Effect definition not found:', effectId);
         return;
       }
-      
+
       // Create a new layer ID for this effect instance
       // Use timestamp + random suffix to guarantee uniqueness
       const newLayerId = `effect-${effectId}-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
       const { duration, addLayer, selectLayer } = useTimelineStore.getState();
-      
-      console.log('🆕 [handleEffectDoubleClick] Creating new effect layer:', {
+
+      /* console.log('🆕 [handleEffectDoubleClick] Creating new effect layer:', {
         effectType: effectId,
         newLayerId,
         existingMappingKeys: Object.keys(mappings).filter(k => k.includes(effectId))
-      });
-      
+      }); */
+
       // Add new effect layer to timeline
       // IMPORTANT: Use empty settings {} - the effect class constructor defines its own defaults
       // This ensures new instances don't inherit parameters from previous instances
@@ -1743,12 +1745,12 @@ function CreativeVisualizerPage() {
         midiBindings: [],
         blendMode: 'normal',
       } as Layer);
-      
+
       // Select the new layer and open its inspector
       selectLayer(newLayerId);
       setEditingEffectId(newLayerId);
-      
-      console.log('✅ [handleEffectDoubleClick] New layer created and inspector opened:', newLayerId);
+
+      // console.log('✅ [handleEffectDoubleClick] New layer created and inspector opened:', newLayerId);
     }
   };
 
@@ -1760,7 +1762,7 @@ function CreativeVisualizerPage() {
   // Get the effect instance from the visualizer for the Inspector
   const getEditingEffectInstance = () => {
     if (!editingEffectId) return null;
-    
+
     // Check if this is an overlay layer - overlays have their own parameter definitions
     const overlayLayer = layers.find(l => l.id === editingEffectId && l.type === 'overlay');
     if (overlayLayer) {
@@ -1845,7 +1847,7 @@ function CreativeVisualizerPage() {
           glassmorphism: overlayLayer.settings?.glassmorphism || false,
         },
       };
-      
+
       const effectDef = effects.find(e => e.id === overlayLayer.effectType);
       const overlayType = overlayLayer.effectType as string;
       return {
@@ -1855,7 +1857,7 @@ function CreativeVisualizerPage() {
         parameters: overlayParameters[overlayType] || {}
       };
     }
-    
+
     // First, check if this is a layer ID and get the effect instance from the visualizer
     // This is the primary path when double-clicking timeline clips
     if (visualizerRef.current) {
@@ -1872,7 +1874,7 @@ function CreativeVisualizerPage() {
         };
       }
     }
-    
+
     // Fallback: look up the layer and use its settings
     // This handles cases where the effect hasn't been instantiated in the visualizer yet
     const effectLayer = layers.find(l => l.id === editingEffectId);
@@ -1885,7 +1887,7 @@ function CreativeVisualizerPage() {
         parameters: effectLayer.settings || effectDef?.parameters || {}
       };
     }
-    
+
     return null;
   };
 
@@ -1908,45 +1910,45 @@ function CreativeVisualizerPage() {
 
   // Feature mapping handlers
   const handleMapFeature = (parameterId: string, featureId: string, stemType?: string) => {
-    console.log('🎛️ [page.tsx] handleMapFeature called:', {
+    /* console.log('🎛️ [page.tsx] handleMapFeature called:', {
       parameterId,
       featureId,
       stemType,
       timestamp: Date.now()
-    });
-    
+    }); */
+
     const parsed = parseParamKey(parameterId);
     if (!parsed) {
       console.error('❌ [page.tsx] Invalid parameterId format (cannot parse):', parameterId);
       return;
     }
     const { effectInstanceId: layerOrEffectId, paramName } = parsed;
-    
-    console.log('🎛️ [page.tsx] Creating mapping:', {
+
+    /* console.log('🎛️ [page.tsx] Creating mapping:', {
       parameterId,
       featureId,
       parameterName: paramName,
       layerOrEffectId,
       parsedCorrectly: layerOrEffectId && paramName
-    });
-    
-    setMappings(prev => ({ 
-      ...prev, 
-      [parameterId]: { 
-        featureId, 
+    }); */
+
+    setMappings(prev => ({
+      ...prev,
+      [parameterId]: {
+        featureId,
         modulationAmount: 0.5 // Default to 50% (noon)
-      } 
+      }
     }));
-    
+
     // Special handling for ImageSlideshow triggerValue: also save to layer.settings.triggerSourceId
     if (paramName === 'triggerValue') {
       const slideshowLayer = layers.find(l => l.id === layerOrEffectId && l.type === 'effect' && l.effectType === 'imageSlideshow');
       if (slideshowLayer) {
-        console.log('🖼️ [page.tsx] Saving triggerSourceId to layer settings:', {
+        /* console.log('🖼️ [page.tsx] Saving triggerSourceId to layer settings:', {
           layerId: layerOrEffectId,
           featureId,
           currentSettings: slideshowLayer.settings
-        });
+        }); */
         updateLayer(slideshowLayer.id, {
           ...slideshowLayer,
           settings: {
@@ -1954,7 +1956,7 @@ function CreativeVisualizerPage() {
             triggerSourceId: featureId
           }
         });
-        console.log('🖼️ [page.tsx] Layer updated, new settings should include triggerSourceId:', featureId);
+        // console.log('🖼️ [page.tsx] Layer updated, new settings should include triggerSourceId:', featureId);
       } else {
         console.warn('🖼️ [page.tsx] Could not find slideshow layer for triggerValue mapping:', {
           layerOrEffectId,
@@ -1962,14 +1964,14 @@ function CreativeVisualizerPage() {
         });
       }
     }
-    
+
     // Store feature name for display
-    const featureName = featureId.split('-').map(word => 
+    const featureName = featureId.split('-').map(word =>
       word.charAt(0).toUpperCase() + word.slice(1)
     ).join(' ');
     setFeatureNames(prev => ({ ...prev, [featureId]: featureName }));
-    
-    debugLog.log('🎛️ Mapping created successfully');
+
+    // debugLog.log('🎛️ Mapping created successfully');
   };
 
   const handleUnmapFeature = (parameterId: string) => {
@@ -1979,24 +1981,24 @@ function CreativeVisualizerPage() {
       return;
     }
     const { effectInstanceId: layerOrEffectId, paramName } = parsed;
-    debugLog.log('🎛️ Removing mapping:', {
+    /* debugLog.log('🎛️ Removing mapping:', {
       parameterId,
       currentMapping: mappings[parameterId]
-    });
-    
-    setMappings(prev => ({ 
-      ...prev, 
-      [parameterId]: { 
-        featureId: null, 
-        modulationAmount: 0.5 
-      } 
+    }); */
+
+    setMappings(prev => ({
+      ...prev,
+      [parameterId]: {
+        featureId: null,
+        modulationAmount: 0.5
+      }
     }));
-    
+
     // Special handling for ImageSlideshow triggerValue: also remove from layer.settings.triggerSourceId
     if (paramName === 'triggerValue') {
       const slideshowLayer = layers.find(l => l.id === layerOrEffectId && l.type === 'effect' && l.effectType === 'imageSlideshow');
       if (slideshowLayer) {
-        console.log('🖼️ Removing triggerSourceId from layer settings:', layerOrEffectId);
+        // console.log('🖼️ Removing triggerSourceId from layer settings:', layerOrEffectId);
         updateLayer(slideshowLayer.id, {
           ...slideshowLayer,
           settings: {
@@ -2006,8 +2008,8 @@ function CreativeVisualizerPage() {
         });
       }
     }
-    
-    debugLog.log('🎛️ Mapping removed successfully');
+
+    // debugLog.log('🎛️ Mapping removed successfully');
   };
 
   const handleModulationAmountChange = (parameterId: string, amount: number) => {
@@ -2022,7 +2024,7 @@ function CreativeVisualizerPage() {
 
   // Handler for selecting a stem/track
   const handleStemSelect = (stemId: string) => {
-    debugLog.log('🎛️ Selecting stem:', {
+    /* debugLog.log('🎛️ Selecting stem:', {
       stemId,
       previousActiveTrack: activeTrackId,
       availableAnalyses: audioAnalysis.cachedAnalysis?.map(a => ({
@@ -2031,19 +2033,19 @@ function CreativeVisualizerPage() {
         hasData: !!a.analysisData,
         features: a.analysisData ? Object.keys(a.analysisData) : []
       })) || []
-    });
-    
+    }); */
+
     setActiveTrackId(stemId);
-    
+
     // Log the analysis data for the selected stem
     const selectedAnalysis = audioAnalysis.cachedAnalysis?.find(a => a.fileMetadataId === stemId);
     if (selectedAnalysis) {
-      debugLog.log('🎛️ Selected stem analysis:', {
+      /* debugLog.log('🎛️ Selected stem analysis:', {
         stemId,
         stemType: selectedAnalysis.stemType,
         duration: selectedAnalysis.metadata.duration,
         features: selectedAnalysis.analysisData ? Object.keys(selectedAnalysis.analysisData) : [],
-        sampleValues: selectedAnalysis.analysisData ? 
+        sampleValues: selectedAnalysis.analysisData ?
           Object.entries(selectedAnalysis.analysisData).reduce((acc, [feature, data]) => {
             if (Array.isArray(data) && data.length > 0) {
               acc[feature] = {
@@ -2055,9 +2057,9 @@ function CreativeVisualizerPage() {
             }
             return acc;
           }, {} as Record<string, any>) : {}
-      });
+      }); */
     } else {
-      debugLog.warn('🎛️ No analysis found for selected stem:', stemId);
+      // debugLog.warn('🎛️ No analysis found for selected stem:', stemId);
     }
   };
 
@@ -2077,7 +2079,7 @@ function CreativeVisualizerPage() {
       if (typeof manager.setBackgroundVisibility === 'function') {
         manager.setBackgroundVisibility(isBackgroundVisible);
       }
-    } catch {}
+    } catch { }
   }, [backgroundColor, isBackgroundVisible, visualizerRef]);
 
   // Function to convert frontend feature names to backend analysis keys
@@ -2088,7 +2090,7 @@ function CreativeVisualizerPage() {
     if (parts.length >= 2) {
       // Remove the stem type prefix and get the feature name
       const featureName = parts.slice(1).join('-');
-      
+
       // Map frontend feature names to backend analysis keys
       const featureMapping: Record<string, string> = {
         'rms-volume': 'rms',
@@ -2116,7 +2118,7 @@ function CreativeVisualizerPage() {
         'melody-complexity': 'melodyComplexity',
         'expression': 'expression'
       };
-      
+
       return featureMapping[featureName] || featureName;
     }
     return featureId; // Fallback to original if no prefix
@@ -2134,13 +2136,13 @@ function CreativeVisualizerPage() {
   // Track when visualizer ref becomes available
   useEffect(() => {
     if (visualizerRef.current) {
-      debugLog.log('🎛️ Visualizer ref available:', {
+      /* debugLog.log('🎛️ Visualizer ref available:', {
         hasRef: !!visualizerRef.current,
         availableEffects: visualizerRef.current?.getAllEffects?.()?.map((e: any) => e.id) || [],
         selectedEffects: Object.keys(selectedEffects).filter(k => selectedEffects[k])
-      });
+      }); */
     } else {
-      debugLog.log('🎛️ Visualizer ref not available yet');
+      // debugLog.log('🎛️ Visualizer ref not available yet');
     }
   }, [visualizerRef.current, selectedEffects]);
 
@@ -2169,20 +2171,20 @@ function CreativeVisualizerPage() {
         animationFrameId.current = requestAnimationFrame(animationLoop);
         return;
       }
-      
+
       // 30FPS CAP
       const now = performance.now();
       const elapsed = now - lastUpdateTime;
       const targetFrameTime = 1000 / 30;
-      
+
       if (elapsed < targetFrameTime) {
         animationFrameId.current = requestAnimationFrame(animationLoop);
         return;
       }
-      
+
       lastUpdateTime = now;
       frameCount++;
-      
+
       // Use Refs to get latest state without closure staleness
       const currentLayers = layersRef.current;
       const currentMappings = mappingsRef.current;
@@ -2193,14 +2195,14 @@ function CreativeVisualizerPage() {
       // Get current audio time
       const time = stemAudio.currentTime;
       setCurrentTime(time);
-      
+
       // Sync calculation
       const audioContextTime = stemAudio.getAudioContextTime?.() || 0;
       const scheduledStartTime = stemAudio.scheduledStartTimeRef?.current || 0;
       const measuredLatency = stemAudio.getAudioLatency?.() || 0;
       const audioPlaybackTime = Math.max(0, audioContextTime - scheduledStartTime);
       let syncTime = Math.max(0, audioPlaybackTime - measuredLatency + (syncOffsetMs / 1000));
-      
+
       // Handle audio looping by wrapping syncTime to analysis duration
       if (currentCachedAnalysis.length > 0) {
         const analysisDuration = currentCachedAnalysis[0]?.metadata?.duration || 1;
@@ -2211,9 +2213,9 @@ function CreativeVisualizerPage() {
 
       // Cache mappings - only update when mappings actually change
       const newCachedMappings = Object.entries(currentMappings)
-          .filter(([, mapping]) => mapping.featureId !== null)
-          .map(([paramKey, mapping]) => [paramKey, mapping.featureId!]) as [string, string][];
-        
+        .filter(([, mapping]) => mapping.featureId !== null)
+        .map(([paramKey, mapping]) => [paramKey, mapping.featureId!]) as [string, string][];
+
       // Check if mappings actually changed by comparing keys and values
       const mappingsChanged = cachedMappings.length !== newCachedMappings.length ||
         cachedMappings.some(([key, val], idx) => {
@@ -2224,20 +2226,20 @@ function CreativeVisualizerPage() {
           const oldMapping = cachedMappings[idx];
           return !oldMapping || oldMapping[0] !== key || oldMapping[1] !== val;
         });
-      
+
       if (mappingsChanged) {
         const oldMappings = new Map(cachedMappings);
         cachedMappings = newCachedMappings;
-        
+
         // Log when mappings are created or updated (only once)
-        const newMappings = cachedMappings.filter(([key, featureId]) => 
+        const newMappings = cachedMappings.filter(([key, featureId]) =>
           !oldMappings.has(key) || oldMappings.get(key) !== featureId
         );
         const opacityMappings = cachedMappings.filter(([key]) => {
           const parsed = parseParamKey(key);
           return parsed?.paramName === 'opacity';
         });
-        
+
         if (newMappings.length > 0) {
           // Log removed to reduce console spam
         }
@@ -2247,19 +2249,19 @@ function CreativeVisualizerPage() {
       if (currentCachedAnalysis && currentCachedAnalysis.length > 0) {
         // Debug: log once per second if we have opacity mappings
         const hasOpacityMapping = cachedMappings.some(([key]) => parseParamKey(key)?.paramName === 'opacity');
-        if (hasOpacityMapping && frameCount % 60 === 0) {
-          console.log('🎚️ Audio mapping loop active:', {
+        /* if (hasOpacityMapping && frameCount % 60 === 0) {
+          // console.log('🎚️ Audio mapping loop active:', {
             cachedMappingsCount: cachedMappings.length,
             opacityMappings: cachedMappings.filter(([key]) => parseParamKey(key)?.paramName === 'opacity').map(([key, id]) => ({ key, id })),
             cachedAnalysisCount: currentCachedAnalysis.length,
             syncTime: syncTime.toFixed(3),
             isPlaying
           });
-        }
-        
+        } */
+
         // Known effect TYPE names (not instance IDs) - these are legacy mappings that should be skipped
         const effectTypeNames = ['metaballs', 'particleNetwork', 'imageSlideshow', 'asciiFilter'];
-        
+
         for (const [paramKey, featureId] of cachedMappings) {
           if (!featureId) continue;
 
@@ -2275,9 +2277,9 @@ function CreativeVisualizerPage() {
 
           const featureStemType = getStemTypeFromFeatureId(featureId);
           if (!featureStemType) {
-            if (paramName === 'opacity' && frameCount % 60 === 0) {
+            /* if (paramName === 'opacity' && frameCount % 60 === 0) {
               console.warn('⚠️ Could not get stem type from featureId:', { paramKey, featureId });
-            }
+            } */
             continue;
           }
 
@@ -2285,9 +2287,9 @@ function CreativeVisualizerPage() {
             a => a.stemType === featureStemType
           );
           if (!stemAnalysis) {
-            if (paramName === 'opacity' && frameCount % 60 === 0) {
+            /* if (paramName === 'opacity' && frameCount % 60 === 0) {
               console.warn('⚠️ Stem analysis not found:', { paramKey, featureId, featureStemType, availableStems: currentCachedAnalysis.map(a => a.stemType) });
-            }
+            } */
             continue;
           }
 
@@ -2299,14 +2301,14 @@ function CreativeVisualizerPage() {
           );
 
           if (rawValue === null || rawValue === undefined) {
-            if (paramName === 'opacity' && frameCount % 60 === 0) {
+            /* if (paramName === 'opacity' && frameCount % 60 === 0) {
               console.warn('⚠️ Raw value is null/undefined:', { paramKey, featureId, syncTime: syncTime.toFixed(3) });
-            }
+            } */
             continue;
           }
 
           const maxValue = getSliderMax(paramName);
-          const knobFull = (currentMappings[paramKey]?.modulationAmount ?? 0.5) * 2 - 1; 
+          const knobFull = (currentMappings[paramKey]?.modulationAmount ?? 0.5) * 2 - 1;
           const knob = Math.max(-0.5, Math.min(0.5, knobFull));
           const baseValue = (currentBaseValues[effectId]?.[paramName] ?? (currentActiveSliderValues[effectId]?.[paramName] ?? 0));
           const delta = rawValue * knob * maxValue;
@@ -2314,7 +2316,7 @@ function CreativeVisualizerPage() {
 
           // Log opacity mapping updates every 30 frames (~0.5 seconds at 60fps)
           if (paramName === 'opacity' && frameCount % 30 === 0) {
-            console.log('🎚️ Audio mapping calculating opacity:', {
+            /* console.log('🎚️ Audio mapping calculating opacity:', {
               paramKey,
               effectId,
               paramName,
@@ -2326,39 +2328,39 @@ function CreativeVisualizerPage() {
               scaledValue,
               maxValue,
               syncTime: syncTime.toFixed(3)
-            });
+            }); */
           }
 
           visualizerRef.current.updateEffectParameter(effectId, paramName, scaledValue);
-          
+
           if (frameCount % 10 === 0) {
             setModulatedParameterValues(prev => ({ ...prev, [paramKey]: scaledValue }));
           }
         }
       } else {
         // Log when audio mapping loop doesn't run
-        if (cachedMappings.length > 0 && frameCount % 120 === 0) {
+        /* if (cachedMappings.length > 0 && frameCount % 120 === 0) {
           console.warn('⚠️ Audio mapping loop not running:', {
             cachedMappingsCount: cachedMappings.length,
             hasCachedAnalysis: !!currentCachedAnalysis,
             cachedAnalysisLength: currentCachedAnalysis?.length || 0,
             isPlaying
           });
-        }
+        } */
       }
-      
+
       // Handle timeline-specific audio triggers (e.g., Image Slideshow trigger)
       if (currentLayers.length > 0 && currentCachedAnalysis.length > 0) {
         currentLayers.forEach(layer => {
           if (layer.settings && layer.settings.triggerSourceId) {
             const featureId = layer.settings.triggerSourceId;
             const featureStemType = getStemTypeFromFeatureId(featureId);
-            
+
             if (featureStemType) {
               const stemAnalysis = currentCachedAnalysis?.find(
                 a => a.stemType === featureStemType
               );
-              
+
               if (stemAnalysis) {
                 const rawValue = audioAnalysis.getFeatureValue(
                   stemAnalysis.fileMetadataId,
@@ -2366,42 +2368,42 @@ function CreativeVisualizerPage() {
                   syncTime,
                   featureStemType
                 );
-                
+
                 if (rawValue !== undefined) {
                   // Debug log every 30 frames (roughly twice per second at 60fps)
-                  if (frameCount % 30 === 0) {
-                    console.log('🖼️ [page.tsx] Updating triggerValue:', {
+                  /* if (frameCount % 30 === 0) {
+                    // console.log('🖼️ [page.tsx] Updating triggerValue:', {
                       layerId: layer.id,
                       featureId,
                       rawValue: rawValue.toFixed(4),
                       syncTime: syncTime.toFixed(2),
                       hasVisualizer: !!visualizerRef.current
                     });
-                  }
+                  } */
                   visualizerRef.current?.updateEffectParameter(layer.id, 'triggerValue', rawValue);
                 } else {
-                  if (frameCount % 60 === 0) {
+                  /* if (frameCount % 60 === 0) {
                     console.warn('🖼️ [page.tsx] rawValue is undefined for trigger:', { layerId: layer.id, featureId });
-                  }
+                  } */
                 }
               } else {
-                if (frameCount % 60 === 0) {
+                /* if (frameCount % 60 === 0) {
                   console.warn('🖼️ [page.tsx] No stemAnalysis found for trigger:', { layerId: layer.id, featureId, featureStemType });
-                }
+                } */
               }
             } else {
-              if (frameCount % 60 === 0) {
+              /* if (frameCount % 60 === 0) {
                 console.warn('🖼️ [page.tsx] No featureStemType for trigger:', { layerId: layer.id, featureId });
-              }
+              } */
             }
           } else {
             // Log once per second if we have slideshow layers without triggerSourceId
-            if (frameCount % 60 === 0 && layer.type === 'effect' && layer.effectType === 'imageSlideshow') {
-              console.log('🖼️ [page.tsx] Slideshow layer has no triggerSourceId:', {
+            /* if (frameCount % 60 === 0 && layer.type === 'effect' && layer.effectType === 'imageSlideshow') {
+              // console.log('🖼️ [page.tsx] Slideshow layer has no triggerSourceId:', {
                 layerId: layer.id,
                 settings: layer.settings
               });
-            }
+            } */
           }
         });
       }
@@ -2417,13 +2419,13 @@ function CreativeVisualizerPage() {
       }
     };
   }, [
-    isPlaying, 
-    stemAudio, 
+    isPlaying,
+    stemAudio,
     syncOffsetMs
     // Removed 'layers', 'mappings', etc. from deps to prevent loop restarts.
     // They are accessed via refs inside the loop.
   ]);
-  
+
   const getSliderMax = (paramName: string) => {
     if (paramName === 'base-radius') return 1.0;
     if (paramName === 'animation-speed') return 2.0;
@@ -2474,12 +2476,12 @@ function CreativeVisualizerPage() {
     // Update nested stores
     setBaseParam(effectId, paramName, value);
     setActiveParam(effectId, paramName, value);
-    
+
     // Update the effect instance directly
     if (visualizerRef.current) {
-        visualizerRef.current.updateEffectParameter(effectId, paramName, value);
+      visualizerRef.current.updateEffectParameter(effectId, paramName, value);
     }
-    
+
     // Also update layer settings for persistence (especially for slideshow position/size/opacity)
     const effectLayer = layers.find(l => l.id === effectId && l.type === 'effect');
     if (effectLayer) {
@@ -2491,7 +2493,7 @@ function CreativeVisualizerPage() {
         }
       });
     }
-    
+
     // Handle overlay layer settings updates
     const overlayLayer = layers.find(l => l.id === effectId && l.type === 'overlay');
     if (overlayLayer) {
@@ -2520,7 +2522,7 @@ function CreativeVisualizerPage() {
   // Find the selected stem and its type
   const selectedStem = availableStems.find(stem => stem.id === activeTrackId);
   // Use the actual stem_type from the database, fallback to filename inference
-  const selectedStemType = selectedStem 
+  const selectedStemType = selectedStem
     ? (selectedStem.stem_type || getStemTypeFromFileName(selectedStem.file_name))
     : undefined;
 
@@ -2542,7 +2544,7 @@ function CreativeVisualizerPage() {
       if (typeof d === 'number' && isFinite(d) && d > 0) {
         setDuration(d);
       }
-    } catch {}
+    } catch { }
   }, [hasStems, stemAudio.duration, midiData, sampleMidiData, setDuration]);
 
   // Update currentTime from stemAudio if stems are loaded
@@ -2553,12 +2555,12 @@ function CreativeVisualizerPage() {
       if (hasStems) {
         const duration = getCurrentDuration();
         let displayTime = stemAudio.currentTime;
-        
+
         // If looping is enabled, show position within the current loop cycle
         if (stemAudio.isLooping && duration > 0) {
           displayTime = stemAudio.currentTime % duration;
         }
-        
+
         setCurrentTime(displayTime);
       }
       rafId = requestAnimationFrame(update);
@@ -2571,7 +2573,7 @@ function CreativeVisualizerPage() {
   // Merge project files with any "orphaned" stems found in analysis cache (for UI labels)
   const allStemsForUI = React.useMemo(() => {
     const baseStems = sortStemsWithMasterLast(availableStems);
-    
+
     // Find stems in cachedAnalysis that aren't in baseStems
     const recoveredStems = (audioAnalysis.cachedAnalysis || [])
       .filter(a => !baseStems.find(s => s.id === a.fileMetadataId))
@@ -2581,13 +2583,13 @@ function CreativeVisualizerPage() {
         stem_type: a.stemType,
         is_master: false
       }));
-      
+
     return [...baseStems, ...recoveredStems];
   }, [availableStems, audioAnalysis.cachedAnalysis]);
 
   // Log audio files before building stemUrlMap
   useEffect(() => {
-    debugLog.log('[CreativeVisualizerPage] projectAudioFiles.files:', projectAudioFiles?.files);
+    // debugLog.log('[CreativeVisualizerPage] projectAudioFiles.files:', projectAudioFiles?.files);
   }, [projectAudioFiles?.files]);
 
   // State for asynchronously built stemUrlMap
@@ -2636,7 +2638,7 @@ function CreativeVisualizerPage() {
             const currentUrl = layer.settings?.images?.[layer.settings.imageIds.indexOf(id)];
             // Refresh if: no URL, contains signed URL (cloudflarestorage), or old bucket name
             const isExpired = currentUrl && (
-              currentUrl.includes('cloudflarestorage') || 
+              currentUrl.includes('cloudflarestorage') ||
               currentUrl.includes('phonoglyph-uploads') ||
               currentUrl.includes('X-Amz-Signature')
             );
@@ -2662,7 +2664,7 @@ function CreativeVisualizerPage() {
       try {
         for (let i = 0; i < uniqueIds.length; i += BATCH_SIZE) {
           const batch = uniqueIds.slice(i, i + BATCH_SIZE);
-          debugLog.log(`🔌 Fetching batch ${Math.floor(i / BATCH_SIZE) + 1}:`, batch);
+          // debugLog.log(`🔌 Fetching batch ${Math.floor(i / BATCH_SIZE) + 1}:`, batch);
 
           const results = await Promise.allSettled(
             batch.map(id => getDownloadUrlMutation.mutateAsync({ fileId: id }))
@@ -2784,271 +2786,267 @@ function CreativeVisualizerPage() {
           <DndProvider backend={HTML5Backend}>
             {/* Main visualizer UI */}
             <div className="flex h-screen bg-stone-800 text-white min-w-0 creative-visualizer-text">
-          <CollapsibleSidebar>
-            <div className="space-y-4">
-              <MappingSourcesPanel 
-                activeTrackId={activeTrackId || undefined}
-                className="mb-4"
-                selectedStemType={selectedStemType}
-                currentTime={currentTime}
-                cachedAnalysis={audioAnalysis.cachedAnalysis}
-                isPlaying={isPlaying}
-              />
-              <FileSelector 
-                onFileSelected={handleFileSelected}
-                selectedFileId={selectedFileId || undefined}
-                useDemoData={useDemoData}
-                onDemoModeChange={handleDemoModeChange}
-                projectId={currentProjectId || undefined}
-                projectName={projectData?.name}
-              />
-            </div>
-          </CollapsibleSidebar>
-          <main className="flex-1 flex overflow-hidden min-w-0">
-            {/* Editor bounds container with proper positioning context */}
-            <div 
-              id="editor-bounds" 
-              className="relative flex-1 flex flex-col overflow-hidden min-w-0"
-              style={{ 
-                height: '100vh',
-                position: 'relative',
-                contain: 'layout'
-              }}
-            >
-          {/* Top Control Bar */}
-          <div className="p-2 bg-stone-900/50 border-b border-white/10">
-              <div className="flex items-center justify-between min-w-0">
-                <div className="flex items-center gap-2 min-w-0 overflow-hidden">
-                <Button 
-                  onClick={handlePlayPause} 
-                  size="sm" 
-                    disabled={stemLoadingState}
-                  className={`font-mono text-xs uppercase tracking-wider px-4 py-2 transition-all duration-300 ${
-                      stemLoadingState 
-                      ? 'bg-stone-600 text-stone-400 cursor-not-allowed' 
-                      : 'bg-stone-700 hover:bg-stone-600'
-                  }`}
-                >
-                    {stemLoadingState ? (
-                    <>
-                      <div className="h-3 w-3 mr-1 animate-spin rounded-full border-2 border-stone-400 border-t-transparent" />
-                      LOADING
-                    </>
-                  ) : (
-                    <>
-                      {isPlaying ? <Pause className="h-3 w-3 mr-1" /> : <Play className="h-3 w-3 mr-1" />}
-                      {isPlaying ? 'PAUSE' : 'PLAY'}
-                    </>
-                  )}
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                    disabled={stemLoadingState}
-                  onClick={() => stemAudio.setLooping(!stemAudio.isLooping)}
-                  className={`bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 font-mono text-xs uppercase tracking-wider px-3 py-1 ${
-                      stemLoadingState 
-                      ? 'opacity-50 cursor-not-allowed' 
-                      : stemAudio.isLooping ? 'bg-emerald-900/20 border-emerald-600 text-emerald-300' : ''
-                  }`}
-                  style={{ borderRadius: '6px' }}
-                >
-                  🔄 {stemAudio.isLooping ? 'LOOP' : 'LOOP'}
-                </Button>
-                <Button 
-                  variant="outline" 
-                    disabled={stemLoadingState}
-                  onClick={handleReset} 
-                  className={`bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 px-3 py-1 ${
-                      stemLoadingState ? 'opacity-50 cursor-not-allowed' : ''
-                  }`}
-                >
-                  <RotateCcw className="h-3 w-3 mr-1" />
-                  RESET
-                </Button>
-                  
-                  {/* Stats Section - Compact layout */}
-                  <div className="flex items-center gap-1 overflow-hidden">
-                <div className="text-xs font-mono uppercase tracking-wider px-2 py-1 rounded text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                  <span className="font-creative-mono">{currentTime.toFixed(1)}</span><span className="font-creative-mono">S</span> / <span className="font-creative-mono">{getCurrentDuration().toFixed(1)}</span><span className="font-creative-mono">S</span>
-                </div>
-                {/* BPM on the left, FPS on the right */}
-                <div className="text-xs font-mono uppercase tracking-wider px-2 py-1 rounded text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                  BPM: <span className="font-creative-mono">{(() => {
-                    const masterId = projectAudioFiles?.files?.find(f => f.is_master)?.id;
-                    const ca = audioAnalysis.cachedAnalysis || [];
-                    const master = masterId ? ca.find((a: any) => a.fileMetadataId === masterId) : null;
-                    const candidate: any = master ?? ca[0];
-                    const bpmVal = candidate?.bpm ?? candidate?.metadata?.bpm ?? candidate?.analysisData?.bpm;
-                    return typeof bpmVal === 'number' && isFinite(bpmVal) ? Math.round(bpmVal) : '—';
-                  })()}</span>
-                </div>
-                <div className="text-xs font-mono uppercase tracking-wider px-2 py-1 rounded text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                  FPS: <span className="font-creative-mono">{fps}</span>
-                </div>
-                
-              </div>
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                  <AutoSaveTopBar />
-                <AspectRatioSelector
-                  currentAspectRatio={visualizerAspectRatio}
-                  onAspectRatioChange={setVisualizerAspectRatio}
-                  disabled={stemLoadingState}
-                />
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={handleExport}
-                  disabled={isRendering}
-                  className={`bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 font-mono text-xs uppercase tracking-wider px-2 py-1 ${
-                    isRendering ? 'opacity-50 cursor-not-allowed' : ''
-                  }`}
-                  style={{ borderRadius: '6px' }}
-                >
-                  <Download className="h-3 w-3 mr-1" />
-                  {isDownloadReady 
-                    ? 'DOWNLOAD READY' 
-                    : isRendering 
-                      ? `RENDERING... ${renderProgress}%` 
-                      : 'EXPORT'}
-                </Button>
-                  
-                </div>
-              </div>
-            </div>
-            
-            {/* Visualizer Area - Scrollable Layout */}
-            <div className="flex-1 flex flex-col overflow-hidden bg-stone-900 relative">
-              <div className="flex-1 flex flex-col min-h-0 px-4 overflow-y-auto">
-                {/* Visualizer Container - Responsive with aspect ratio */}
-                <div className="flex-shrink-0 mb-4">
-                  <div 
-                    className="relative mx-auto bg-stone-900 rounded-lg overflow-hidden shadow-lg flex items-center justify-center"
-                    style={{ 
-                      height: 'min(calc(100vh - 400px), 60vh)', // Reduced height to make room for stem panel
-                      minHeight: '200px',
-                      width: '100%',
-                      maxWidth: '100%'
-                    }}
-                  >
-                  <ThreeVisualizer
-                      midiData={midiData || sampleMidiData}
-                      settings={settings}
-                      currentTime={currentTime}
-                      isPlaying={isPlaying}
-                      layers={layers}
-                      selectedLayerId={selectedLayerId}
-                      onLayerSelect={selectLayer}
-                      onPlayPause={handlePlayPause}
-                      onSettingsChange={setSettings}
-                      onFpsUpdate={setFps}
-                      selectedEffects={selectedEffects}
-                      aspectRatio={visualizerAspectRatio}
-                          // Modal and mapping props
-                          openEffectModals={openEffectModals}
-                          onCloseEffectModal={handleCloseEffectModal}
-                          mappings={mappings}
-                          featureNames={featureNames}
-                          onMapFeature={handleMapFeature}
-                          onUnmapFeature={handleUnmapFeature}
-                          onModulationAmountChange={handleModulationAmountChange}
-                          activeSliderValues={activeSliderValues}
-                          baseParameterValues={baseParameterValues}
-                          setActiveSliderValues={setActiveSliderValues}
-                          setBaseParam={setBaseParam}
-                          onLayerUpdate={updateLayer}
-                      onSelectedEffectsChange={() => {}} // <-- Added no-op
-                      visualizerRef={visualizerRef}
-                  >
-                    {/* HUD Overlays rendered inside canvas container so they're constrained to canvas bounds */}
-                    <div className="absolute inset-0 pointer-events-none z-20 overflow-hidden">
-                      <HudOverlayRenderer 
-                        stemUrlMap={asyncStemUrlMap} 
-                        cachedAnalysis={audioAnalysis.cachedAnalysis || []}
-                      />
-                    </div>
-                  </ThreeVisualizer>
-
-
-                      {/* Visualizer content only - no modals here */}
-                </div>
-                </div>
-                
-                {/* Unified Timeline */}
-                <div className="flex-shrink-0 mb-4">
-                  <UnifiedTimeline
-                    stems={allStemsForUI}
-                    masterStemId={projectAudioFiles?.files?.find(f => f.is_master)?.id ?? null}
-                    onStemSelect={handleStemSelect}
-                    activeTrackId={activeTrackId}
-                    soloedStems={stemAudio.soloedStems}
-                    onToggleSolo={stemAudio.toggleStemSolo}
-                    analysisProgress={audioAnalysis.analysisProgress}
-                    cachedAnalysis={audioAnalysis.cachedAnalysis || []}
-                    stemLoadingState={audioAnalysis.isLoading}
-                    stemError={audioAnalysis.error}
-                    onSeek={useTimelineStore.getState().setCurrentTime}
-                    onLayerDoubleClick={handleEffectDoubleClick}
-                    className="bg-stone-800 border border-gray-700"
+              <CollapsibleSidebar>
+                <div className="space-y-4">
+                  <MappingSourcesPanel
+                    activeTrackId={activeTrackId || undefined}
+                    className="mb-4"
+                    selectedStemType={selectedStemType}
+                    currentTime={currentTime}
+                    cachedAnalysis={audioAnalysis.cachedAnalysis}
+                    isPlaying={isPlaying}
+                  />
+                  <FileSelector
+                    onFileSelected={handleFileSelected}
+                    selectedFileId={selectedFileId || undefined}
+                    useDemoData={useDemoData}
+                    onDemoModeChange={handleDemoModeChange}
+                    projectId={currentProjectId || undefined}
+                    projectName={projectData?.name}
                   />
                 </div>
+              </CollapsibleSidebar>
+              <main className="flex-1 flex overflow-hidden min-w-0">
+                {/* Editor bounds container with proper positioning context */}
+                <div
+                  id="editor-bounds"
+                  className="relative flex-1 flex flex-col overflow-hidden min-w-0"
+                  style={{
+                    height: '100vh',
+                    position: 'relative',
+                    contain: 'layout'
+                  }}
+                >
+                  {/* Top Control Bar */}
+                  <div className="p-2 bg-stone-900/50 border-b border-white/10">
+                    <div className="flex items-center justify-between min-w-0">
+                      <div className="flex items-center gap-2 min-w-0 overflow-hidden">
+                        <Button
+                          onClick={handlePlayPause}
+                          size="sm"
+                          disabled={stemLoadingState}
+                          className={`font-mono text-xs uppercase tracking-wider px-4 py-2 transition-all duration-300 ${stemLoadingState
+                            ? 'bg-stone-600 text-stone-400 cursor-not-allowed'
+                            : 'bg-stone-700 hover:bg-stone-600'
+                            }`}
+                        >
+                          {stemLoadingState ? (
+                            <>
+                              <div className="h-3 w-3 mr-1 animate-spin rounded-full border-2 border-stone-400 border-t-transparent" />
+                              LOADING
+                            </>
+                          ) : (
+                            <>
+                              {isPlaying ? <Pause className="h-3 w-3 mr-1" /> : <Play className="h-3 w-3 mr-1" />}
+                              {isPlaying ? 'PAUSE' : 'PLAY'}
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={stemLoadingState}
+                          onClick={() => stemAudio.setLooping(!stemAudio.isLooping)}
+                          className={`bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 font-mono text-xs uppercase tracking-wider px-3 py-1 ${stemLoadingState
+                            ? 'opacity-50 cursor-not-allowed'
+                            : stemAudio.isLooping ? 'bg-emerald-900/20 border-emerald-600 text-emerald-300' : ''
+                            }`}
+                          style={{ borderRadius: '6px' }}
+                        >
+                          🔄 {stemAudio.isLooping ? 'LOOP' : 'LOOP'}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          disabled={stemLoadingState}
+                          onClick={handleReset}
+                          className={`bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 px-3 py-1 ${stemLoadingState ? 'opacity-50 cursor-not-allowed' : ''
+                            }`}
+                        >
+                          <RotateCcw className="h-3 w-3 mr-1" />
+                          RESET
+                        </Button>
+
+                        {/* Stats Section - Compact layout */}
+                        <div className="flex items-center gap-1 overflow-hidden">
+                          <div className="text-xs font-mono uppercase tracking-wider px-2 py-1 rounded text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                            <span className="font-creative-mono">{currentTime.toFixed(1)}</span><span className="font-creative-mono">S</span> / <span className="font-creative-mono">{getCurrentDuration().toFixed(1)}</span><span className="font-creative-mono">S</span>
+                          </div>
+                          {/* BPM on the left, FPS on the right */}
+                          <div className="text-xs font-mono uppercase tracking-wider px-2 py-1 rounded text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                            BPM: <span className="font-creative-mono">{(() => {
+                              const masterId = projectAudioFiles?.files?.find(f => f.is_master)?.id;
+                              const ca = audioAnalysis.cachedAnalysis || [];
+                              const master = masterId ? ca.find((a: any) => a.fileMetadataId === masterId) : null;
+                              const candidate: any = master ?? ca[0];
+                              const bpmVal = candidate?.bpm ?? candidate?.metadata?.bpm ?? candidate?.analysisData?.bpm;
+                              return typeof bpmVal === 'number' && isFinite(bpmVal) ? Math.round(bpmVal) : '—';
+                            })()}</span>
+                          </div>
+                          <div className="text-xs font-mono uppercase tracking-wider px-2 py-1 rounded text-stone-300" style={{ background: 'rgba(30, 30, 30, 0.5)', backdropFilter: 'blur(5px)', WebkitBackdropFilter: 'blur(5px)', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                            FPS: <span className="font-creative-mono">{fps}</span>
+                          </div>
+
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                        <AutoSaveTopBar />
+                        <AspectRatioSelector
+                          currentAspectRatio={visualizerAspectRatio}
+                          onAspectRatioChange={setVisualizerAspectRatio}
+                          disabled={stemLoadingState}
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleExport}
+                          disabled={isRendering}
+                          className={`bg-stone-800 border-stone-600 text-stone-300 hover:bg-stone-700 hover:border-stone-500 font-mono text-xs uppercase tracking-wider px-2 py-1 ${isRendering ? 'opacity-50 cursor-not-allowed' : ''
+                            }`}
+                          style={{ borderRadius: '6px' }}
+                        >
+                          <Download className="h-3 w-3 mr-1" />
+                          {isDownloadReady
+                            ? 'DOWNLOAD READY'
+                            : isRendering
+                              ? `RENDERING... ${renderProgress}%`
+                              : 'EXPORT'}
+                        </Button>
+
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Visualizer Area - Scrollable Layout */}
+                  <div className="flex-1 flex flex-col overflow-hidden bg-stone-900 relative">
+                    <div className="flex-1 flex flex-col min-h-0 px-4 overflow-y-auto">
+                      {/* Visualizer Container - Responsive with aspect ratio */}
+                      <div className="flex-shrink-0 mb-4">
+                        <div
+                          className="relative mx-auto bg-stone-900 rounded-lg overflow-hidden shadow-lg flex items-center justify-center"
+                          style={{
+                            height: 'min(calc(100vh - 400px), 60vh)', // Reduced height to make room for stem panel
+                            minHeight: '200px',
+                            width: '100%',
+                            maxWidth: '100%'
+                          }}
+                        >
+                          <ThreeVisualizer
+                            midiData={midiData || sampleMidiData}
+                            settings={settings}
+                            currentTime={currentTime}
+                            isPlaying={isPlaying}
+                            layers={layers}
+                            selectedLayerId={selectedLayerId}
+                            onLayerSelect={selectLayer}
+                            onPlayPause={handlePlayPause}
+                            onSettingsChange={setSettings}
+                            onFpsUpdate={setFps}
+                            selectedEffects={selectedEffects}
+                            aspectRatio={visualizerAspectRatio}
+                            // Modal and mapping props
+                            openEffectModals={openEffectModals}
+                            onCloseEffectModal={handleCloseEffectModal}
+                            mappings={mappings}
+                            featureNames={featureNames}
+                            onMapFeature={handleMapFeature}
+                            onUnmapFeature={handleUnmapFeature}
+                            onModulationAmountChange={handleModulationAmountChange}
+                            activeSliderValues={activeSliderValues}
+                            baseParameterValues={baseParameterValues}
+                            setActiveSliderValues={setActiveSliderValues}
+                            setBaseParam={setBaseParam}
+                            onLayerUpdate={updateLayer}
+                            onSelectedEffectsChange={() => { }} // <-- Added no-op
+                            visualizerRef={visualizerRef}
+                          >
+                            {/* HUD Overlays rendered inside canvas container so they're constrained to canvas bounds */}
+                            <div className="absolute inset-0 pointer-events-none z-20 overflow-hidden">
+                              <HudOverlayRenderer
+                                stemUrlMap={asyncStemUrlMap}
+                                cachedAnalysis={audioAnalysis.cachedAnalysis || []}
+                              />
+                            </div>
+                          </ThreeVisualizer>
+
+
+                          {/* Visualizer content only - no modals here */}
+                        </div>
+                      </div>
+
+                      {/* Unified Timeline */}
+                      <div className="flex-shrink-0 mb-4">
+                        <UnifiedTimeline
+                          stems={allStemsForUI}
+                          masterStemId={projectAudioFiles?.files?.find(f => f.is_master)?.id ?? null}
+                          onStemSelect={handleStemSelect}
+                          activeTrackId={activeTrackId}
+                          soloedStems={stemAudio.soloedStems}
+                          onToggleSolo={stemAudio.toggleStemSolo}
+                          analysisProgress={audioAnalysis.analysisProgress}
+                          cachedAnalysis={audioAnalysis.cachedAnalysis || []}
+                          stemLoadingState={audioAnalysis.isLoading}
+                          stemError={audioAnalysis.error}
+                          onSeek={useTimelineStore.getState().setCurrentTime}
+                          onLayerDoubleClick={handleEffectDoubleClick}
+                          className="bg-stone-800 border border-gray-700"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Effect parameter modals - positioned relative to editor-bounds */}
+                  {effectModals}
+                </div>
+
+                {/* Right Effects Sidebar */}
+                <CollapsibleEffectsSidebar
+                  expandedWidth={
+                    // Wider sidebar when editing imageSlideshow
+                    (editingEffectId === 'imageSlideshow' ||
+                      layers.find(l => l.id === editingEffectId && l.effectType === 'imageSlideshow'))
+                      ? 'w-[360px]'
+                      : 'w-[260px]'
+                  }
+                >
+                  <EffectsLibrarySidebarWithHud
+                    effects={effects}
+                    selectedEffects={selectedEffects}
+                    onEffectToggle={handleSelectEffect}
+                    onEffectDoubleClick={handleEffectDoubleClick}
+                    isVisible={true}
+                    stemUrlsReady={stemUrlsReady}
+                    // Inspector mode props
+                    editingEffectId={editingEffectId}
+                    editingEffectInstance={getEditingEffectInstance()}
+                    activeSliderValues={activeSliderValues}
+                    baseParameterValues={baseParameterValues}
+                    onParameterChange={handleParameterChange}
+                    onBack={handleBackFromInspector}
+                    mappings={mappings}
+                    featureNames={featureNames}
+                    onMapFeature={handleMapFeature}
+                    onUnmapFeature={handleUnmapFeature}
+                    onModulationAmountChange={handleModulationAmountChange}
+                    // ImageSlideshow specific props
+                    projectId={currentProjectId || ''}
+                    availableFiles={projectFiles?.files || []}
+                    activeCollectionId={activeCollectionId}
+                    setActiveCollectionId={setActiveCollectionId}
+                    modulatedParameterValues={modulatedParameterValues}
+                    layers={layers}
+                    setActiveParam={setActiveParam}
+                    aspectRatio={visualizerAspectRatio}
+                    masterStemId={projectAudioFiles?.files?.find(f => f.is_master)?.id ?? null}
+                    availableStems={allStemsForUI}
+                    onLayerUpdate={updateLayer}
+                  />
+                </CollapsibleEffectsSidebar>
+
+
+
+              </main>
             </div>
-          </div>
-
-              {/* Effect parameter modals - positioned relative to editor-bounds */}
-              {effectModals}
-            </div>
-
-            {/* Right Effects Sidebar */}
-            <CollapsibleEffectsSidebar
-              expandedWidth={
-                // Wider sidebar when editing imageSlideshow
-                (editingEffectId === 'imageSlideshow' || 
-                 layers.find(l => l.id === editingEffectId && l.effectType === 'imageSlideshow'))
-                  ? 'w-[360px]' 
-                  : 'w-[260px]'
-              }
-            >
-              <EffectsLibrarySidebarWithHud
-                effects={effects}
-                selectedEffects={selectedEffects}
-                onEffectToggle={handleSelectEffect}
-                onEffectDoubleClick={handleEffectDoubleClick}
-                isVisible={true}
-                stemUrlsReady={stemUrlsReady}
-                // Inspector mode props
-                editingEffectId={editingEffectId}
-                editingEffectInstance={getEditingEffectInstance()}
-                activeSliderValues={activeSliderValues}
-                baseParameterValues={baseParameterValues}
-                onParameterChange={handleParameterChange}
-                onBack={handleBackFromInspector}
-                mappings={mappings}
-                featureNames={featureNames}
-                onMapFeature={handleMapFeature}
-                onUnmapFeature={handleUnmapFeature}
-                onModulationAmountChange={handleModulationAmountChange}
-                // ImageSlideshow specific props
-                projectId={currentProjectId || ''}
-                availableFiles={projectFiles?.files || []}
-                activeCollectionId={activeCollectionId}
-                setActiveCollectionId={setActiveCollectionId}
-                modulatedParameterValues={modulatedParameterValues}
-                layers={layers}
-                setActiveParam={setActiveParam}
-                aspectRatio={visualizerAspectRatio}
-                masterStemId={projectAudioFiles?.files?.find(f => f.is_master)?.id ?? null}
-                availableStems={allStemsForUI}
-                onLayerUpdate={updateLayer}
-              />
-            </CollapsibleEffectsSidebar>
-
-
-
-        </main>
-      </div>
-      </DndProvider>
+          </DndProvider>
         </AutoSaveProvider>
       ) : (
         <DndProvider backend={HTML5Backend}>
@@ -3056,7 +3054,7 @@ function CreativeVisualizerPage() {
           <div className="flex h-screen bg-stone-800 text-white min-w-0 creative-visualizer-text">
             <CollapsibleSidebar>
               <div className="space-y-4">
-                <MappingSourcesPanel 
+                <MappingSourcesPanel
                   activeTrackId={activeTrackId || undefined}
                   className="mb-4"
                   selectedStemType={selectedStemType}
@@ -3064,7 +3062,7 @@ function CreativeVisualizerPage() {
                   cachedAnalysis={audioAnalysis.cachedAnalysis}
                   isPlaying={isPlaying}
                 />
-                <FileSelector 
+                <FileSelector
                   onFileSelected={handleFileSelected}
                   selectedFileId={selectedFileId || undefined}
                   useDemoData={useDemoData}
