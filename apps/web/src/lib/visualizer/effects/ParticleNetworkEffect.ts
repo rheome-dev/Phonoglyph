@@ -670,8 +670,10 @@ export class ParticleNetworkEffect implements VisualEffect {
       const effectiveAge = (1 - Math.exp(-age * dampingRate)) / dampingRate;
       const position = initialPos.clone().add(velocity.clone().multiplyScalar(effectiveAge * 60));
 
-      // Size based on intensity
-      const size = this.parameters.particleSize * (0.5 + event.intensity * 1.5);
+      // Size based on intensity — use same formula as live preview's MIDI path:
+      // 3.0 + (intensity * 5.0) mirrors "3.0 + (velocity/127) * 5.0" so
+      // Lambda particles match the [3–8] size range users tune against in live preview.
+      const size = 3.0 + (event.intensity * 5.0);
 
       activeParticles.push({
         position,

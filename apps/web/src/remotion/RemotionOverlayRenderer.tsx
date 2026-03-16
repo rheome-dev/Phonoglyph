@@ -64,24 +64,33 @@ export const RemotionOverlayRenderer: React.FC<RemotionOverlayRendererProps> = (
     (layer: Layer) => {
       const settings = (layer as any).settings || {};
       const stemId = settings.stemId || settings.stem?.id;
+      const overlayType = layer.effectType as string;
 
-      if (!stemId || cachedAnalysis.length === 0) {
+      if (cachedAnalysis.length === 0) {
+        return null;
+      }
+      // Stereometer can synthesise data without a stemId — use master stem as fallback.
+      // All other overlay types need a valid stemId to look up their analysis data.
+      if (!stemId && overlayType !== 'stereometer') {
         return null;
       }
 
       // Find the analysis for this stem
-      let analysis = cachedAnalysis.find((a) => a.fileMetadataId === stemId);
+      let analysis = stemId ? cachedAnalysis.find((a) => a.fileMetadataId === stemId) : null;
 
       // FALLBACK: If strict ID match fails, try matching by stemType
       if (!analysis) {
         const requestedStemType = settings.stemType || 'master';
         analysis = cachedAnalysis.find(a => a.stemType === requestedStemType);
       }
+      // Last resort for stereometer: use any available analysis
+      if (!analysis && overlayType === 'stereometer') {
+        analysis = cachedAnalysis[0] ?? null;
+      }
       if (!analysis || !analysis.analysisData) {
         return null;
       }
 
-      const overlayType = layer.effectType as string;
       const featureKeys = getFeatureKeyForOverlay(overlayType);
 
       const frameTimes = analysis.analysisData.frameTimes as
@@ -157,44 +166,75 @@ export const RemotionOverlayRenderer: React.FC<RemotionOverlayRendererProps> = (
         return null;
       }
 
-      // For stereometer: Try to get stereo window from analysis data first
-      // The analysis may include stereoWindow_left/right fields
+      // For stereometer: Generate animated stereo data from per-frame audio features.
+      // Real stereo window data is rarely available (audio analysis is mono), so we
+      // synthesise a goniometer waveform from RMS (amplitude) + spectral centroid (phase width).
+      // This produces an ellipse whose size animates with volume and whose shape changes
+      // with the spectral brightness of the audio — visually meaningful and frame-accurate.
       if (overlayType === 'stereometer') {
+        // Try real stereo window data first (if analysis included it)
         const stereoLeft = (analysis.analysisData as any).stereoWindow_left;
         const stereoRight = (analysis.analysisData as any).stereoWindow_right;
-
-        // If we have per-frame time-data, use that
-        const extracted = extractAudioDataAtTime(
-          cachedAnalysis,
-          analysis.fileMetadataId,
-          currentTime,
-          analysis.stemType,
-        );
-
-        if (extracted?.timeData?.length) {
-          const half = Math.floor(extracted.timeData.length / 2);
-          const left = extracted.timeData.slice(0, half);
-          const right = extracted.timeData.slice(half) || extracted.timeData.slice(0, half);
-
-          return {
-            stereoWindow: {
-              left,
-              right,
-            },
-          };
+        if (
+          stereoLeft && stereoRight &&
+          Array.isArray(stereoLeft) && Array.isArray(stereoRight) &&
+          stereoLeft.length > 0 && stereoRight.length > 0
+        ) {
+          const samplesPerFrame = 1024;
+          const frameTimes = analysis.analysisData.frameTimes as number[] | undefined;
+          const totalFrames = Math.floor(stereoLeft.length / samplesPerFrame);
+          const effectiveTimes = frameTimes && Array.isArray(frameTimes) && frameTimes.length > 0
+            ? frameTimes
+            : Array.from({ length: totalFrames }, (_, i) => {
+                const dur = (analysis!.analysisData as any).analysisDuration || (analysis as any).metadata?.duration || 30;
+                return (i / totalFrames) * dur;
+              });
+          let frameIdx = 0;
+          for (let i = 0; i < effectiveTimes.length; i++) {
+            if (effectiveTimes[i] <= currentTime) frameIdx = i; else break;
+          }
+          const start = frameIdx * samplesPerFrame;
+          const end = Math.min(start + samplesPerFrame, stereoLeft.length);
+          if (start < stereoLeft.length) {
+            return {
+              stereoWindow: {
+                left: stereoLeft.slice(start, end),
+                right: stereoRight.slice(start, end),
+              },
+            };
+          }
         }
 
-        // Fallback: use static stereo window from analysis if available
-        if (stereoLeft && stereoRight && Array.isArray(stereoLeft) && Array.isArray(stereoRight)) {
-          return {
-            stereoWindow: {
-              left: stereoLeft,
-              right: stereoRight,
-            },
-          };
+        // Synthesise animated stereo from RMS + spectral centroid.
+        // Produces an ellipse: size ~ RMS (volume), shape ~ spectralCentroid (brightness).
+        const frameTimes = analysis.analysisData.frameTimes as number[] | undefined;
+        let frameIdx = 0;
+        if (frameTimes && Array.isArray(frameTimes)) {
+          for (let i = 0; i < frameTimes.length; i++) {
+            if (frameTimes[i] <= currentTime) frameIdx = i; else break;
+          }
         }
 
-        return null;
+        const rmsArr = analysis.analysisData.rms;
+        const scArr = (analysis.analysisData as any).spectralCentroid;
+        const rms = (rmsArr && Array.isArray(rmsArr)) ? (rmsArr[frameIdx] ?? 0) : 0;
+        const sc = (scArr && Array.isArray(scArr)) ? (scArr[frameIdx] ?? 0.5) : 0.5;
+
+        // Amplitude: perceptually scaled so quiet passages give a small trace
+        const amplitude = Math.min(0.9, Math.sqrt(Math.max(0, rms)) * 2.5);
+        // Phase offset: narrow ellipse for low-frequency content, wider for bright audio
+        const phaseOffset = 0.15 + sc * 0.5; // [0.15, 0.65] radians
+
+        const numSamples = 512;
+        const left: number[] = new Array(numSamples);
+        const right: number[] = new Array(numSamples);
+        for (let i = 0; i < numSamples; i++) {
+          const t = (i / numSamples) * Math.PI * 2;
+          left[i] = Math.sin(t) * amplitude;
+          right[i] = Math.sin(t + phaseOffset) * amplitude;
+        }
+
+        return { stereoWindow: { left, right } };
       }
 
       // For consoleFeed: Use time-domain window as raw audio buffer
