@@ -191,26 +191,32 @@ export class ParticleNetworkEffect implements VisualEffect {
     const fragmentShader = `
       precision highp float;
       uniform float uGlowIntensity;
-      uniform float uGlowSoftness; // softness control, not exponent
+      uniform float uGlowSoftness; // controls falloff sharpness (higher = softer)
       varying vec3 vColor;
       varying float vLife;
       varying vec2 vUv;
-      
+
       void main() {
         vec2 center = vUv - 0.5;
         float dist = length(center) * 2.0; // 0.0 center → 1.0 edge
-        if (dist > 1.0) discard;
 
-        // Solid core ensures visibility
-        float core = 1.0 - smoothstep(0.0, 0.2, dist);
+        // Smooth Gaussian-like falloff - no hard edge, no rings
+        // exp(-dist^2 * softness) creates natural soft glow
+        float softness = uGlowSoftness * 3.0 + 1.0; // remap to avoid harsh settings
+        float falloff = exp(-dist * dist * softness);
 
-        // Smooth glow falloff using exp
-        float glow = exp(-pow(dist, uGlowSoftness));
-        
-        float alpha = (core + glow * uGlowIntensity) * vLife;
-        vec3 finalColor = vColor * (1.0 + glow * uGlowIntensity * 0.5 + core * 0.2);
+        // Apply glow intensity to modulate brightness
+        float intensity = 1.0 + uGlowIntensity * falloff;
 
-        // Standard alpha for additive blending
+        // Life-based fade
+        float alpha = falloff * vLife * intensity;
+
+        // Color with subtle glow enhancement at center
+        vec3 finalColor = vColor * intensity;
+
+        // Discard when nearly invisible (optimization)
+        if (alpha < 0.001) discard;
+
         gl_FragColor = vec4(finalColor, alpha);
       }
     `;
