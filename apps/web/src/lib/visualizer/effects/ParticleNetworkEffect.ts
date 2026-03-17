@@ -4,6 +4,11 @@ import { getRemotionEnvironment } from 'remotion';
 import { VisualEffect } from '@/types/visualizer';
 import { debugLog } from '@/lib/utils';
 
+// Import Line2 for fat lines that actually support variable width
+import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
+import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
+
 interface Particle {
   position: THREE.Vector3;
   velocity: THREE.Vector3;
@@ -87,9 +92,10 @@ export class ParticleNetworkEffect implements VisualEffect {
   private sizes!: Float32Array;
   private lives!: Float32Array;
 
-  // Connection data
-  private connectionGeometry!: THREE.BufferGeometry;
-  private connectionMaterial!: THREE.LineBasicMaterial;
+  // Connection data - using Line2 (fat lines) for proper width support
+  private connectionLine!: LineSegments2;
+  private connectionMaterial!: LineMaterial;
+  private connectionGeometry!: LineGeometry;
   private connectionPositions!: Float32Array;
   private connectionColors!: Float32Array;
   private maxConnections: number = 500; // Limit connections
@@ -164,6 +170,11 @@ export class ParticleNetworkEffect implements VisualEffect {
 
     this.createParticleSystem();
     this.createConnectionSystem();
+
+    // Set LineMaterial resolution for correct linewidth rendering
+    if (this.connectionMaterial) {
+      this.connectionMaterial.resolution.set(size.x, size.y);
+    }
 
     // Initialize size multiplier based on current particleSize parameter
     if (this.uniforms) {
@@ -497,24 +508,34 @@ export class ParticleNetworkEffect implements VisualEffect {
   }
 
   private createConnectionSystem() {
-    // Create connection line system using LineSegments for multiple disconnected lines
-    this.connectionGeometry = new THREE.BufferGeometry();
+    // Create connection line system using Line2 (fat lines) for proper width support
     this.connectionPositions = new Float32Array(this.maxConnections * 6); // 2 points per line, 3 coords each
     this.connectionColors = new Float32Array(this.maxConnections * 6); // 2 colors per line, 3 channels each
 
+    // Use LineGeometry which supports per-vertex positions
+    this.connectionGeometry = new LineGeometry();
     this.connectionGeometry.setAttribute('position', new THREE.BufferAttribute(this.connectionPositions, 3));
     this.connectionGeometry.setAttribute('color', new THREE.BufferAttribute(this.connectionColors, 3));
 
-    this.connectionMaterial = new THREE.LineBasicMaterial({
-      vertexColors: true,
+    // Parse connection color from parameters
+    const connectionColorHex = this.parameters.connectionColor || '#ffffff';
+    const color = new THREE.Color(connectionColorHex);
+
+    // Use LineMaterial - this actually respects linewidth in all renderers
+    this.connectionMaterial = new LineMaterial({
+      color: color,
       transparent: true,
       blending: THREE.AdditiveBlending,
       depthTest: false,
-      linewidth: this.parameters.connectionLineWidth // Note: Most WebGL implementations ignore this
+      linewidth: this.parameters.connectionLineWidth, // This actually works with Line2!
+      vertexColors: true, // Enable per-vertex colors for strength-based fading
+      opacity: this.parameters.connectionOpacity,
     });
 
-    this.connectionLines = new THREE.LineSegments(this.connectionGeometry, this.connectionMaterial);
-    this.internalScene.add(this.connectionLines);
+    // Create LineSegments2 (fat lines)
+    this.connectionLine = new LineSegments2(this.connectionGeometry, this.connectionMaterial);
+    this.connectionLine.computeLineDistances();
+    this.internalScene.add(this.connectionLine);
   }
 
   private updateConnections() {
@@ -562,10 +583,18 @@ export class ParticleNetworkEffect implements VisualEffect {
       }
     }
 
-    // Set the draw range to only render active connections
-    this.connectionGeometry.setDrawRange(0, connectionIndex * 2); // 2 vertices per connection
-    this.connectionGeometry.attributes.position.needsUpdate = true;
-    this.connectionGeometry.attributes.color.needsUpdate = true;
+    // Update Line2 geometry - use setPositions and setColors for LineGeometry
+    const activePositions = this.connectionPositions.slice(0, connectionIndex * 6);
+    const activeColors = this.connectionColors.slice(0, connectionIndex * 6);
+
+    this.connectionGeometry.setPositions(activePositions);
+    this.connectionGeometry.setColors(activeColors);
+
+    // Compute line distances for the LineSegments2
+    if (this.connectionLine) {
+      this.connectionLine.computeLineDistances();
+    }
+
     this.activeConnections = connectionIndex;
   }
 
@@ -604,6 +633,9 @@ export class ParticleNetworkEffect implements VisualEffect {
         break;
       case 'connectionOpacity':
         this.parameters.connectionOpacity = value;
+        if (this.connectionMaterial) {
+          this.connectionMaterial.opacity = value;
+        }
         break;
       case 'connectionLineWidth':
         this.parameters.connectionLineWidth = value;
@@ -613,6 +645,9 @@ export class ParticleNetworkEffect implements VisualEffect {
         break;
       case 'connectionColor':
         this.parameters.connectionColor = value;
+        if (this.connectionMaterial) {
+          this.connectionMaterial.color = new THREE.Color(value);
+        }
         break;
       case 'spawnEvents':
         this.parameters.spawnEvents = value as SpawnEvent[];
@@ -778,6 +813,11 @@ export class ParticleNetworkEffect implements VisualEffect {
       this.internalCamera.updateProjectionMatrix();
       debugLog.log('🎨 ParticleNetworkEffect camera aspect updated:', this.internalCamera.aspect);
     }
+
+    // Update LineMaterial resolution for correct linewidth rendering
+    if (this.connectionMaterial) {
+      this.connectionMaterial.resolution.set(width, height);
+    }
   }
 
   destroy(): void {
@@ -787,8 +827,8 @@ export class ParticleNetworkEffect implements VisualEffect {
       this.material.dispose();
     }
 
-    if (this.connectionLines) {
-      this.internalScene.remove(this.connectionLines);
+    if (this.connectionLine) {
+      this.internalScene.remove(this.connectionLine);
       this.connectionGeometry.dispose();
       this.connectionMaterial.dispose();
     }
