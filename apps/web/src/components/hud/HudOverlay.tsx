@@ -206,22 +206,23 @@ function drawStereometer(ctx: CanvasRenderingContext2D, w: number, h: number, fe
       const r = parseInt(gridColorMatch[1], 16);
       const g = parseInt(gridColorMatch[2], 16);
       const b = parseInt(gridColorMatch[3], 16);
-      ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.15)`;
+      ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.3)`;
     } else {
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
     }
     ctx.lineWidth = gridLineWidth;
     ctx.beginPath();
-    // Vertical / Horizontal Crosshair
+    // Vertical / Horizontal Crosshair - full container edges
     ctx.moveTo(centerX, 0);
     ctx.lineTo(centerX, h);
     ctx.moveTo(0, centerY);
     ctx.lineTo(w, centerY);
-    // Draw 45 degree angle lines
-    ctx.moveTo(centerX - scale, centerY + scale);
-    ctx.lineTo(centerX + scale, centerY - scale);
-    ctx.moveTo(centerX - scale, centerY - scale);
-    ctx.lineTo(centerX + scale, centerY + scale);
+    // Draw 45 degree angle lines - extended to full container corners
+    const diagScale = Math.max(w, h);
+    ctx.moveTo(centerX - diagScale, centerY + diagScale);
+    ctx.lineTo(centerX + diagScale, centerY - diagScale);
+    ctx.moveTo(centerX - diagScale, centerY - diagScale);
+    ctx.lineTo(centerX + diagScale, centerY + diagScale);
     ctx.stroke();
   }
 
