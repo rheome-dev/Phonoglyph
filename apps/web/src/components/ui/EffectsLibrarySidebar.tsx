@@ -724,6 +724,21 @@ export function EffectsLibrarySidebar({
       if ('shadowBlur' in params) processedParams.add('shadowBlur');
     }
 
+    // Group grid parameters (stereometer/oscilloscope)
+    if ('showGrid' in params || 'gridColor' in params || 'gridLineWidth' in params) {
+      groupedParams.push({
+        group: 'grid',
+        toggle: 'showGrid' in params ? { name: 'showGrid', value: params.showGrid as boolean } : undefined,
+        params: [
+          ...('gridColor' in params ? [{ name: 'gridColor', value: params.gridColor, type: 'color' as const }] : []),
+          ...('gridLineWidth' in params ? [{ name: 'gridLineWidth', value: params.gridLineWidth, type: 'number' as const }] : []),
+        ]
+      });
+      if ('showGrid' in params) processedParams.add('showGrid');
+      if ('gridColor' in params) processedParams.add('gridColor');
+      if ('gridLineWidth' in params) processedParams.add('gridLineWidth');
+    }
+
 
     // Add remaining parameters that aren't grouped
     Object.entries(params).forEach(([name, value]) => {
