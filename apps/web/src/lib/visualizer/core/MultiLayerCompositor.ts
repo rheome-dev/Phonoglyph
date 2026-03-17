@@ -176,17 +176,6 @@ export class MultiLayerCompositor {
       const layer = this.layers.get(layerId);
       if (!layer || !layer.enabled) continue;
       
-      // Debug: Check if scene has objects
-      const objectCount = layer.scene.children.length;
-      if (renderedLayers < 10) { // Show more layers
-        console.log(`🎨 [MultiLayerCompositor] Rendering layer ${layerId}:`, {
-          enabled: layer.enabled,
-          objectCount,
-          children: layer.scene.children.map(c => c.type),
-          zIndex: layer.zIndex
-        });
-      }
-      
       this.renderer.setRenderTarget(layer.renderTarget);
       // Clear color/depth/stencil with transparent background
       this.renderer.clear(true, true, true);
