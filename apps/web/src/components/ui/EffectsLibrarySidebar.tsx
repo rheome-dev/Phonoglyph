@@ -76,8 +76,8 @@ function getSliderMax(paramName: string) {
     case 'radius': return 2.0;
     case 'threshold': return 1.0;
     case 'particleLifetime': return 10;
-    case 'particleSize': return 200; // Increased for stereometer overlay
-    case 'pointSize': return 200; // Stereometer overlay point size
+    case 'particleSize': return 50;
+    case 'pointSize': return 4; // Stereometer overlay point size
     case 'glowSoftness': return 5;
     case 'particleSpawning': return 1.0;
     case 'spawnThreshold': return 1.0;
@@ -132,7 +132,7 @@ function getSliderStep(paramName: string) {
     case 'audioSpawnIntensity': return 0.01;
     case 'opacity': return 0.01;
     // Stereometer overlay parameters
-    case 'pointSize': return 1; // Larger step for point size
+    case 'pointSize': return 0.5; // Fine-grained control for point size
     // Bloom Filter parameters
     case 'intensity': return 0.01;
     case 'softness': return 0.01;
