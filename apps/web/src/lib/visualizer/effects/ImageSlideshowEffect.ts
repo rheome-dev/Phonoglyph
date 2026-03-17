@@ -37,7 +37,7 @@ export class ImageSlideshowEffect implements VisualEffect {
   private wasTriggered: boolean = false;
   private previousTriggerValue: number = 0; // Track previous value for edge detection
   private lastTriggerFrame: number = -999; // Frame when we last triggered (for cooldown)
-  private minFramesBetweenTriggers: number = 3; // Minimum ~100ms at 30fps between triggers
+  private minFramesBetweenTriggers: number = 8; // Minimum ~133ms at 60fps between triggers
   private textureLoader = new THREE.TextureLoader();
   private aspectRatio: number = 1;
   private failureCount = 0;
@@ -168,12 +168,12 @@ export class ImageSlideshowEffect implements VisualEffect {
     const framesSinceLastTrigger = this.frameCounter - this.lastTriggerFrame;
     const cooldownExpired = framesSinceLastTrigger >= this.minFramesBetweenTriggers;
 
-    // Trigger conditions:
-    // 1. Value jumped significantly (rising edge) - catches sharp transients
-    // 2. OR value is above half threshold and we haven't triggered recently - catches sustained peaks
+    // Trigger condition: Only fire on a clear rising edge (value jumped by more than threshold).
+    // The "isAboveThreshold && !wasTriggered" path is intentionally removed — with a
+    // momentum-accumulator input the base value hovers around 0.5, so "above threshold"
+    // is always true and would cause spurious re-triggers after the cooldown expires.
     const isRisingEdge = valueDelta > threshold;
-    const isAboveThreshold = currentValue > threshold * 0.5; // Lower threshold for sustained trigger
-    const shouldTrigger = cooldownExpired && (isRisingEdge || (isAboveThreshold && !this.wasTriggered));
+    const shouldTrigger = cooldownExpired && isRisingEdge;
 
     // DEBUG: Log state periodically or on triggers (Remotion only)
     if (this.isInRemotionContext && (this.frameCounter % 30 === 0 || shouldTrigger)) {
@@ -241,16 +241,20 @@ export class ImageSlideshowEffect implements VisualEffect {
       }
     }
 
-    // Retry loading if no texture is displayed but images are available
+    // Retry loading the CURRENT image if no texture is displayed.
+    // Important: Do NOT call advanceSlide() here — that would skip ahead through
+    // images every frame when a texture is loading, causing multiple advances per trigger.
     if (
       !this.material.map &&
+      this.currentImageIndex >= 0 &&
       this.parameters.images.length > 0 &&
       this.failureCount < this.parameters.images.length * 2
     ) {
-      const nextIndex = (this.currentImageIndex + 1) % this.parameters.images.length;
-      const targetUrl = this.parameters.images[nextIndex];
-      if (!this.loadingImages.has(targetUrl)) {
-        this.advanceSlide();
+      const currentUrl = this.parameters.images[this.currentImageIndex];
+      if (currentUrl && !this.textureCache.has(currentUrl) && !this.loadingImages.has(currentUrl)) {
+        this.loadTexture(currentUrl).catch(() => {
+          this.failureCount++;
+        });
       }
     }
 
