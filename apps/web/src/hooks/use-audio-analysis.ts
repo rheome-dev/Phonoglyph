@@ -10,6 +10,34 @@ import type { AudioAnalysisData } from '@/types/audio-analysis-data';
 // Shared decay time storage - allows FeatureNode slider to control envelope generation
 export const featureDecayTimesRef = { current: {} as Record<string, number> };
 
+// Shared sensitivity storage - allows animation loop to read latest sensitivity values
+export const featureSensitivitiesRef = { current: {} as Record<string, number> };
+
+/**
+ * Filter transients by sensitivity (1 = keep all, 0 = keep only strongest).
+ * Ported from MappingSourcesPanel.tsx to match Remotion export behavior.
+ */
+function filterTransientsBySensitivity(
+  transients: Array<{ time: number; intensity: number }>,
+  sensitivity: number
+): Array<{ time: number; intensity: number }> {
+  if (!transients || transients.length === 0) return transients;
+  const clamped = Math.max(0, Math.min(1, sensitivity));
+  if (clamped >= 0.999) return transients;
+
+  const intensities = transients
+    .map(t => t.intensity)
+    .filter(v => Number.isFinite(v))
+    .sort((a, b) => a - b);
+
+  if (!intensities.length) return transients;
+
+  const index = Math.floor((1 - clamped) * (intensities.length - 1));
+  const threshold = intensities[index];
+
+  return transients.filter(t => (Number.isFinite(t.intensity) ? t.intensity : 0) >= threshold);
+}
+
 /**
  * Physics constants for momentum accumulator model in live visualizer.
  * These match the Remotion implementation for consistent behavior.
@@ -44,7 +72,7 @@ export interface UseAudioAnalysis {
   analyze: (fileId: string, audioBuffer: AudioBuffer, stemType: string) => void;
   analyzeAudioBuffer: (fileId: string, audioBuffer: AudioBuffer, stemType: string) => void; // Alias
   getAnalysis: (fileId: string, stemType?: string) => AudioAnalysisData | null;
-  getFeatureValue: (fileId: string, feature: string, time: number, stemType?: string) => number;
+  getFeatureValue: (fileId: string, feature: string, time: number, stemType?: string, sensitivity?: number) => number;
 }
 
 export function useAudioAnalysis(): UseAudioAnalysis {
@@ -225,7 +253,8 @@ export function useAudioAnalysis(): UseAudioAnalysis {
     fileId: string, 
     feature: string, 
     time: number,
-    stemType?: string
+    stemType?: string,
+    sensitivity?: number
   ): number => {
     const featureParts = feature.includes('-') ? feature.split('-') : [feature];
     const parsedStem = featureParts.length > 1 ? featureParts[0] : (stemType ?? 'master');
@@ -244,8 +273,10 @@ export function useAudioAnalysis(): UseAudioAnalysis {
       const decayTime = featureDecayTimesRef.current[feature] ?? 0.5;
       const baseValue = 0.5; // Default base value for live visualizer
 
-      // All transients are generic now, no filtering needed
-      const relevantTransients = analysisData.transients || [];
+      // Apply sensitivity filtering to transients (matches Remotion export behavior)
+      const allTransients = analysisData.transients || [];
+      const effectiveSensitivity = sensitivity ?? featureSensitivitiesRef.current[feature] ?? 0.5;
+      const relevantTransients = filterTransientsBySensitivity(allTransients, effectiveSensitivity);
 
       // Loop detection: If time is much smaller than stored transient time, we've looped. Reset state.
       const envelopeKey = `${fileId}-${feature}`;

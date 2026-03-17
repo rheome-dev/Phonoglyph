@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { useAudioFeatures, AudioFeature } from '@/hooks/use-audio-features';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
-import { featureDecayTimesRef } from '@/hooks/use-audio-analysis';
+import { featureDecayTimesRef, featureSensitivitiesRef } from '@/hooks/use-audio-analysis';
 import { useVisualizerStore } from '@/stores/visualizerStore';
 
 // --- Meter Sub-Components ---
@@ -280,19 +280,21 @@ const FeatureNode = ({
     };
   }, [isTransientFeature, cachedAnalysis, feature.stemType, sensitivity]);
   
-  // Initialize shared ref on mount and sync with store
+  // Initialize shared refs on mount and sync with store
   useEffect(() => {
     if (isTransientFeature) {
-      // If store has a value, use it for the ref; otherwise initialize both
-      const storeValue = featureDecayTimes[feature.id];
-      if (storeValue !== undefined) {
-        featureDecayTimesRef.current[feature.id] = storeValue;
+      // Sync decay time
+      const storeDecay = featureDecayTimes[feature.id];
+      if (storeDecay !== undefined) {
+        featureDecayTimesRef.current[feature.id] = storeDecay;
       } else if (!featureDecayTimesRef.current[feature.id]) {
         featureDecayTimesRef.current[feature.id] = 0.5; // Default
         setFeatureDecayTime(feature.id, 0.5);
       }
+      // Sync sensitivity to shared ref so animation loop can read it
+      featureSensitivitiesRef.current[feature.id] = sensitivity;
     }
-  }, [feature.id, isTransientFeature, featureDecayTimes, setFeatureDecayTime]);
+  }, [feature.id, isTransientFeature, featureDecayTimes, setFeatureDecayTime, sensitivity]);
 
   useEffect(() => {
     if (!isPlaying || !feature.stemType) {
@@ -458,6 +460,8 @@ const FeatureNode = ({
               onValueChange={(value) => {
                 const next = Math.max(0, Math.min(1, value[0] ?? 0));
                 setFeatureSensitivity(feature.id, next);
+                // Sync to shared ref so animation loop can read it
+                featureSensitivitiesRef.current[feature.id] = next;
               }}
               min={0}
               max={1}

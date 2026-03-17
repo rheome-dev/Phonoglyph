@@ -14,6 +14,7 @@ import { useTimelineStore } from '@/stores/timelineStore'
 import { useProjectSettingsStore } from '@/stores/projectSettingsStore'
 import { useVisualizerStore } from '@/stores/visualizerStore'
 import { parseParamKey } from '@/lib/visualizer/paramKeys'
+import { featureDecayTimesRef, featureSensitivitiesRef } from '@/hooks/use-audio-analysis'
 
 import type { EditState } from '@/hooks/use-auto-save'
 
@@ -266,6 +267,14 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
           if (visualizationParams.featureSensitivities) {
             Object.entries(visualizationParams.featureSensitivities).forEach(([featureId, sensitivity]) => {
               visualizerStore.setFeatureSensitivity(featureId, sensitivity as number)
+              // Sync to shared ref for animation loop access
+              featureSensitivitiesRef.current[featureId] = sensitivity as number
+            })
+          }
+          if (visualizationParams.featureDecayTimes) {
+            // Also sync decay times to shared ref
+            Object.entries(visualizationParams.featureDecayTimes).forEach(([featureId, decayTime]) => {
+              featureDecayTimesRef.current[featureId] = decayTime as number
             })
           }
         }
@@ -547,6 +556,14 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
             if (visualizationParams.featureSensitivities) {
               Object.entries(visualizationParams.featureSensitivities).forEach(([featureId, sensitivity]) => {
                 visualizerStore.setFeatureSensitivity(featureId, sensitivity as number)
+                // Sync to shared ref for animation loop access
+                featureSensitivitiesRef.current[featureId] = sensitivity as number
+              })
+            }
+            if (visualizationParams.featureDecayTimes) {
+              // Also sync decay times to shared ref
+              Object.entries(visualizationParams.featureDecayTimes).forEach(([featureId, decayTime]) => {
+                featureDecayTimesRef.current[featureId] = decayTime as number
               })
             }
           }
