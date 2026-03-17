@@ -29,6 +29,27 @@ export class ImageSlideshowEffect implements VisualEffect {
   private scene: THREE.Scene;
   private camera: THREE.OrthographicCamera;
   private plane!: THREE.Mesh; // Initialized in updatePlaneGeometryAndPosition
+  private renderer?: THREE.WebGLRenderer;
+
+  private applyTexture(texture: THREE.Texture | null) {
+    if (this.material.map === texture) return;
+    const wasNull = this.material.map === null;
+    const isNowNull = texture === null;
+
+    this.material.map = texture;
+    
+    if (texture) {
+      this.material.color.setHex(0xffffff);
+      this.plane.visible = true;
+      this.fitTextureToScreen(texture);
+    } else {
+      this.material.color.setHex(0x000000); // Back to black
+    }
+    
+    if (wasNull !== isNowNull) {
+      this.material.needsUpdate = true;
+    }
+  }
   private material: THREE.MeshBasicMaterial;
 
   private currentImageIndex: number = -1;
@@ -119,6 +140,7 @@ export class ImageSlideshowEffect implements VisualEffect {
   }
 
   init(renderer: THREE.WebGLRenderer): void {
+    this.renderer = renderer;
     const remotionEnv = getRemotionEnvironment();
     this.isRemotionRendering = remotionEnv.isRendering;
     this.isInRemotionContext = remotionEnv.isRendering || remotionEnv.isStudio;
@@ -232,11 +254,7 @@ export class ImageSlideshowEffect implements VisualEffect {
       if (currentUrl) {
         const cachedTexture = this.textureCache.get(currentUrl);
         if (cachedTexture && this.material.map !== cachedTexture) {
-          this.material.map = cachedTexture;
-          this.material.color.setHex(0xffffff);
-          this.material.needsUpdate = true;
-          this.plane.visible = true;
-          this.fitTextureToScreen(cachedTexture);
+          this.applyTexture(cachedTexture);
         }
       }
     }
@@ -359,9 +377,7 @@ export class ImageSlideshowEffect implements VisualEffect {
 
         // Clear current texture
         if (this.material.map) {
-          this.material.map = null;
-          this.material.color.setHex(0x000000); // Back to black
-          this.material.needsUpdate = true;
+          this.applyTexture(null);
         }
 
         // Load first image immediately
@@ -466,11 +482,7 @@ export class ImageSlideshowEffect implements VisualEffect {
         const imageUrl = this.parameters.images[this.currentImageIndex];
         const texture = imageUrl ? this.textureCache.get(imageUrl) : undefined;
         if (texture && this.material.map !== texture) {
-          this.material.map = texture;
-          this.material.color.setHex(0xffffff);
-          this.material.needsUpdate = true;
-          this.plane.visible = true;
-          this.fitTextureToScreen(texture);
+          this.applyTexture(texture);
         }
       }
 
@@ -524,11 +536,7 @@ export class ImageSlideshowEffect implements VisualEffect {
     // Try synchronous cache hit — instant texture swap
     const cachedTexture = this.textureCache.get(imageUrl);
     if (cachedTexture) {
-      this.material.map = cachedTexture;
-      this.material.color.setHex(0xffffff);
-      this.material.needsUpdate = true;
-      this.plane.visible = true;
-      this.fitTextureToScreen(cachedTexture);
+      this.applyTexture(cachedTexture);
 
       // Fire-and-forget preload / cleanup
       this.cleanupCache();
@@ -740,6 +748,12 @@ export class ImageSlideshowEffect implements VisualEffect {
         }
 
         this.textureCache.set(url, texture);
+        
+        // Force GPU texture upload immediately to avoid lag on first render
+        if (this.renderer) {
+          this.renderer.initTexture(texture);
+        }
+        
         this.loadingImages.delete(url);
 
         // Resolve primary caller
@@ -850,11 +864,7 @@ export class ImageSlideshowEffect implements VisualEffect {
         const texture = this.textureCache.get(firstUrl);
         if (texture) {
           this.currentImageIndex = firstIndex;
-          this.material.map = texture;
-          this.material.color.setHex(0xffffff);
-          this.material.needsUpdate = true;
-          this.plane.visible = true;
-          this.fitTextureToScreen(texture);
+          this.applyTexture(texture);
         }
       }
 
@@ -883,11 +893,7 @@ export class ImageSlideshowEffect implements VisualEffect {
         const texture = this.textureCache.get(url);
         if (texture) {
           this.currentImageIndex = targetIndex;
-          this.material.map = texture;
-          this.material.color.setHex(0xffffff);
-          this.material.needsUpdate = true;
-          this.plane.visible = true;
-          this.fitTextureToScreen(texture);
+          this.applyTexture(texture);
         }
       }
     } catch (e) {
