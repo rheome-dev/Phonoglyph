@@ -73,6 +73,10 @@ export interface UseAudioAnalysis {
   analyzeAudioBuffer: (fileId: string, audioBuffer: AudioBuffer, stemType: string) => void; // Alias
   getAnalysis: (fileId: string, stemType?: string) => AudioAnalysisData | null;
   getFeatureValue: (fileId: string, feature: string, time: number, stemType?: string, sensitivity?: number) => number;
+  /** Binary transient check: returns 1.0 if a transient occurred within the time window, 0.0 otherwise.
+   *  Use this for binary triggers (e.g., slideshow advance) instead of getFeatureValue which returns
+   *  the momentum-accumulator output designed for continuous parameter modulation. */
+  isTransientActive: (fileId: string, feature: string, time: number, stemType?: string, sensitivity?: number, windowSec?: number) => number;
 }
 
 export function useAudioAnalysis(): UseAudioAnalysis {
@@ -393,6 +397,44 @@ export function useAudioAnalysis(): UseAudioAnalysis {
     }
   }, [getAnalysis]);
 
+  /**
+   * Binary transient trigger: returns 1.0 if a sensitivity-filtered transient occurred
+   * within [time - windowSec, time], 0.0 otherwise.
+   * 
+   * Unlike getFeatureValue (which returns the momentum-accumulator output for continuous
+   * modulation), this produces a clean binary signal suitable for trigger/advance events.
+   */
+  const isTransientActive = useCallback((
+    fileId: string,
+    feature: string,
+    time: number,
+    stemType?: string,
+    sensitivity?: number,
+    windowSec: number = 0.05 // 50ms window ≈ 1.5 frames at 30fps
+  ): number => {
+    const featureParts = feature.includes('-') ? feature.split('-') : [feature];
+    const parsedStem = featureParts.length > 1 ? featureParts[0] : (stemType ?? 'master');
+    const featureName = featureParts.length > 1 ? featureParts.slice(1).join('-') : feature;
+
+    // Only works for peaks features
+    if (featureName !== 'peaks') return 0;
+
+    const analysis = getAnalysis(fileId, parsedStem);
+    if (!analysis?.analysisData) return 0;
+
+    const allTransients = analysis.analysisData.transients || [];
+    const effectiveSensitivity = sensitivity ?? featureSensitivitiesRef.current[feature] ?? 0.5;
+    const filteredTransients = filterTransientsBySensitivity(allTransients, effectiveSensitivity);
+
+    // Check if any filtered transient falls within the time window
+    const windowStart = time - windowSec;
+    const hit = filteredTransients.some(
+      t => t.time >= windowStart && t.time <= time
+    );
+
+    return hit ? 1.0 : 0.0;
+  }, [getAnalysis]);
+
   return {
     cachedAnalysis,
     isLoading,
@@ -403,5 +445,6 @@ export function useAudioAnalysis(): UseAudioAnalysis {
     analyzeAudioBuffer: analyze, // Alias for backward compatibility
     getAnalysis,
     getFeatureValue,
+    isTransientActive,
   };
 }

@@ -2332,30 +2332,18 @@ function CreativeVisualizerPage() {
               );
 
               if (stemAnalysis) {
-                const rawValue = audioAnalysis.getFeatureValue(
+                // Use binary transient check (not momentum accumulator) for trigger signals.
+                // isTransientActive returns 1.0 if a transient occurred near syncTime, 0.0 otherwise.
+                // This produces a clean 0→1→0 pulse that the slideshow's rising-edge detection
+                // handles correctly, firing exactly once per transient.
+                const triggerValue = audioAnalysis.isTransientActive(
                   stemAnalysis.fileMetadataId,
                   featureId,
                   syncTime,
                   featureStemType
                 );
 
-                if (rawValue !== undefined) {
-                  // Debug log every 30 frames (roughly twice per second at 60fps)
-                  /* if (frameCount % 30 === 0) {
-                    // console.log('🖼️ [page.tsx] Updating triggerValue:', {
-                      layerId: layer.id,
-                      featureId,
-                      rawValue: rawValue.toFixed(4),
-                      syncTime: syncTime.toFixed(2),
-                      hasVisualizer: !!visualizerRef.current
-                    });
-                  } */
-                  visualizerRef.current?.updateEffectParameter(layer.id, 'triggerValue', rawValue);
-                } else {
-                  /* if (frameCount % 60 === 0) {
-                    console.warn('🖼️ [page.tsx] rawValue is undefined for trigger:', { layerId: layer.id, featureId });
-                  } */
-                }
+                visualizerRef.current?.updateEffectParameter(layer.id, 'triggerValue', triggerValue);
               } else {
                 /* if (frameCount % 60 === 0) {
                   console.warn('🖼️ [page.tsx] No stemAnalysis found for trigger:', { layerId: layer.id, featureId, featureStemType });
