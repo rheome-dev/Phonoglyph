@@ -511,6 +511,7 @@ type HudOverlayProps = {
   onUpdate: (updates: Partial<Layer>) => void;
   isSelected?: boolean;
   onSelect?: () => void;
+  isInteractive?: boolean;
 };
 
 const clamp = (val: number, min: number, max: number) => Math.max(min, Math.min(max, val));
@@ -526,6 +527,7 @@ export function HudOverlay({
   onUpdate,
   isSelected,
   onSelect,
+  isInteractive = true,
 }: HudOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -857,10 +859,10 @@ export function HudOverlay({
         transition: 'background 0.2s',
         isolation: 'isolate',
       }}
-      onMouseDown={e => { onMouseDown(e); onSelect && onSelect(); }}
-      onDoubleClick={onOpenModal}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onMouseDown={e => { if (isInteractive) { onMouseDown(e); onSelect && onSelect(); } }}
+      onDoubleClick={isInteractive ? onOpenModal : undefined}
+      onMouseEnter={() => isInteractive && setIsHovered(true)}
+      onMouseLeave={() => isInteractive && setIsHovered(false)}
     >
       <canvas
         ref={canvasRef}
@@ -868,8 +870,8 @@ export function HudOverlay({
         height={canvasSize.height}
         style={{ width: '100%', height: '100%', display: 'block', borderRadius: typeof settings.cornerRadius === 'number' ? `${settings.cornerRadius}px` : 0 }}
       />
-      {/* Photoshop-style transform anchors - only visible on hover */}
-      {isHovered && ANCHORS.map(anchor => (
+      {/* Photoshop-style transform anchors - only visible on hover and if interactive */}
+      {isInteractive && isHovered && ANCHORS.map(anchor => (
         <div
           key={anchor.key}
           className="transform-anchor"

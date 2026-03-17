@@ -384,6 +384,7 @@ export const RemotionOverlayRenderer: React.FC<RemotionOverlayRendererProps> = (
             onOpenModal={() => { }}
             onUpdate={() => { }}
             isSelected={false}
+            isInteractive={false}
             onSelect={() => { }}
           />
         );
