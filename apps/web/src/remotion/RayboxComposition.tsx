@@ -961,8 +961,17 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
         const transients = (stemAnalysis.analysisData as any).transients;
 
         if (transients && Array.isArray(transients)) {
-          // Convert transients to slide events (same structure as spawn events)
-          const slideEvents = transients.map((t: any) => ({
+          // Apply sensitivity filtering to match live preview behavior.
+          // Without this, exports would use ALL transients regardless of the user's
+          // sensitivity slider, causing more frequent slide advances than the preview.
+          const featureId = `${stemType}-peaks`;
+          const sensitivity = featureSensitivities?.[featureId]
+            ?? DEFAULT_PEAK_SENSITIVITIES[featureId]
+            ?? 0.5;
+          const filteredTransients = filterTransientsBySensitivity(transients, sensitivity);
+
+          // Convert filtered transients to slide events
+          const slideEvents = filteredTransients.map((t: any) => ({
             time: t.time,
             intensity: t.intensity || 1.0,
           }));
@@ -972,7 +981,7 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
 
           // DEBUG: Log on first few frames
           if (frame < 3) {
-            console.log(`[SlideshowEvents] frame=${frame} layer=${layer.id}: ${slideEvents.length} slide events from ${stemType}`);
+            console.log(`[SlideshowEvents] frame=${frame} layer=${layer.id}: ${slideEvents.length} slide events from ${stemType} (${transients.length} raw, sensitivity=${sensitivity})`);
           }
         }
       }
