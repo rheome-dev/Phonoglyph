@@ -23,6 +23,7 @@ const OVERLAY_SETTINGS: Record<string, OverlaySetting[]> = {
   waveform: [
     { label: 'Color', key: 'color', type: 'color' },
     { label: 'Line Width', key: 'lineWidth', type: 'number' },
+    { label: 'Glow Intensity', key: 'glowIntensity', type: 'slider', min: 0, max: 20, step: 1 },
     { label: 'Corner Radius', key: 'cornerRadius', type: 'number', min: 0, max: 50, step: 1 },
     { label: 'Drop Shadow', key: 'dropShadow', type: 'checkbox' },
     { label: 'Shadow Color', key: 'shadowColor', type: 'color' },

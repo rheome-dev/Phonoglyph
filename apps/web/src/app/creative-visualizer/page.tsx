@@ -1739,6 +1739,7 @@ function CreativeVisualizerPage() {
         waveform: {
           color: overlayLayer.settings?.color || '#4db3fa',
           lineWidth: overlayLayer.settings?.lineWidth || 1,
+          glowIntensity: overlayLayer.settings?.glowIntensity || 0,
           cornerRadius: overlayLayer.settings?.cornerRadius ?? 0,
           dropShadow: overlayLayer.settings?.dropShadow || false,
           shadowColor: overlayLayer.settings?.shadowColor || '#000000',

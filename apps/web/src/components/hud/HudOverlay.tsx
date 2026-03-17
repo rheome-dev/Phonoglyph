@@ -40,6 +40,7 @@ function getLogIndex(value: number, min: number, max: number, maxIndex: number) 
 function drawWaveform(ctx: CanvasRenderingContext2D, w: number, h: number, data?: number[], settings: any = {}) {
   const color = settings.color || '#4db3fa';
   const lineWidth = typeof settings.lineWidth === 'number' ? settings.lineWidth : 1;
+  const glowIntensity = typeof settings.glowIntensity === 'number' ? settings.glowIntensity : 0;
   
   ctx.clearRect(0, 0, w, h);
   
@@ -69,10 +70,14 @@ function drawWaveform(ctx: CanvasRenderingContext2D, w: number, h: number, data?
   }
   
   // Add glow
-  ctx.shadowBlur = 10;
-  ctx.shadowColor = color;
-  ctx.stroke();
-  ctx.shadowBlur = 0;
+  if (glowIntensity > 0) {
+    ctx.shadowBlur = glowIntensity;
+    ctx.shadowColor = color;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  } else {
+    ctx.stroke();
+  }
 }
 function drawSpectrogram(ctx: CanvasRenderingContext2D, w: number, h: number, featureData: any, settings: any) {
   // Use the buffer provided by the manager
