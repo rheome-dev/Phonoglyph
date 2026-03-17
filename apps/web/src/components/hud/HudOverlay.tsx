@@ -183,7 +183,9 @@ function drawStereometer(ctx: CanvasRenderingContext2D, w: number, h: number, fe
   if (!left.length || !right.length) return;
 
   const color = settings.traceColor || '#ff00ff';
-  const glow = settings.glowIntensity || 0.5;
+  const glow = typeof settings.glowIntensity === 'number' ? settings.glowIntensity : 0.5;
+  const pointSize = typeof settings.pointSize === 'number' ? settings.pointSize : 4;
+  const showGrid = !!settings.showGrid;
 
   // Goniometer Plot (L+R, L-R)
   // Rotate 45 deg: X = L-R, Y = L+R
@@ -193,6 +195,23 @@ function drawStereometer(ctx: CanvasRenderingContext2D, w: number, h: number, fe
 
   ctx.fillStyle = `rgba(0,0,0, ${0.2})`; // Fade effect
   ctx.fillRect(0,0,w,h);
+
+  if (showGrid) {
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    // Vertical / Horizontal Crosshair
+    ctx.moveTo(centerX, 0);
+    ctx.lineTo(centerX, h);
+    ctx.moveTo(0, centerY);
+    ctx.lineTo(w, centerY);
+    // Draw 45 degree angle lines
+    ctx.moveTo(centerX - scale, centerY + scale);
+    ctx.lineTo(centerX + scale, centerY - scale);
+    ctx.moveTo(centerX - scale, centerY - scale);
+    ctx.lineTo(centerX + scale, centerY + scale);
+    ctx.stroke();
+  }
 
   ctx.globalCompositeOperation = 'lighter'; // Additive blending for "cloud" look
   
@@ -216,7 +235,7 @@ function drawStereometer(ctx: CanvasRenderingContext2D, w: number, h: number, fe
     ctx.globalAlpha = Math.min(1, amp * glow + 0.1);
     
     ctx.beginPath();
-    ctx.rect(x, y, 1.5, 1.5); // Fast square dot
+    ctx.rect(x - pointSize / 2, y - pointSize / 2, pointSize, pointSize);
     ctx.fill();
   }
   

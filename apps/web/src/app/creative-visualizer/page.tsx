@@ -1768,10 +1768,16 @@ function CreativeVisualizerPage() {
         },
         stereometer: {
           traceColor: overlayLayer.settings?.traceColor || '#00ffff',
-          glowIntensity: overlayLayer.settings?.glowIntensity || 0.5,
-          pointSize: overlayLayer.settings?.pointSize || 2,
+          glowIntensity: overlayLayer.settings?.glowIntensity ?? 0.5,
+          pointSize: overlayLayer.settings?.pointSize ?? 4,
           showGrid: overlayLayer.settings?.showGrid || false,
           cornerRadius: overlayLayer.settings?.cornerRadius ?? 0,
+          dropShadow: overlayLayer.settings?.dropShadow || false,
+          shadowColor: overlayLayer.settings?.shadowColor || '#000000',
+          shadowBlur: overlayLayer.settings?.shadowBlur || 8,
+          outline: overlayLayer.settings?.outline || false,
+          outlineColor: overlayLayer.settings?.outlineColor || '#ffffff',
+          outlineWidth: overlayLayer.settings?.outlineWidth || 1,
           glassmorphism: overlayLayer.settings?.glassmorphism || false,
         },
         oscilloscope: {

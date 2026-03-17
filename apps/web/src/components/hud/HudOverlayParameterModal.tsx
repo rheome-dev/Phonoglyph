@@ -60,8 +60,8 @@ const OVERLAY_SETTINGS: Record<string, OverlaySetting[]> = {
   ],
   stereometer: [
     { label: 'Trace Color', key: 'traceColor', type: 'color' },
-    { label: 'Glow Intensity', key: 'glowIntensity', type: 'number', min: 0, max: 1, step: 0.01 },
-    { label: 'Point Size', key: 'pointSize', type: 'number', min: 1, max: 10, step: 1 },
+    { label: 'Glow Intensity', key: 'glowIntensity', type: 'slider', min: 0, max: 20, step: 0.1 },
+    { label: 'Point Size', key: 'pointSize', type: 'slider', min: 1, max: 50, step: 1 },
     { label: 'Show Grid', key: 'showGrid', type: 'checkbox' },
     { label: 'Corner Radius', key: 'cornerRadius', type: 'number', min: 0, max: 50, step: 1 },
     { label: 'Drop Shadow', key: 'dropShadow', type: 'checkbox' },
