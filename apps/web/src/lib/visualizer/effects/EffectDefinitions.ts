@@ -72,7 +72,10 @@ EffectRegistry.register({
   category: 'particles',
   version: '1.0.0',
   constructor: ParticleNetworkEffect,
-  defaultConfig: {}
+  defaultConfig: {
+    connectionLineWidth: 1.0,
+    connectionColor: '#ffffff'
+  }
 });
 
 EffectRegistry.register({
