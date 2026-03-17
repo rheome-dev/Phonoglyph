@@ -37,12 +37,14 @@ export class ImageSlideshowEffect implements VisualEffect {
   private wasTriggered: boolean = false;
   private previousTriggerValue: number = 0; // Track previous value for edge detection
   private lastTriggerFrame: number = -999; // Frame when we last triggered (for cooldown)
-  private minFramesBetweenTriggers: number = 6; // Minimum ~100ms at 60fps between triggers
+  private minFramesBetweenTriggers: number = 3; // Minimum ~100ms at 30fps between triggers
   private textureLoader = new THREE.TextureLoader();
   private aspectRatio: number = 1;
   private failureCount = 0;
-  private isAdvancing: boolean = false; // Prevent concurrent advanceSlide calls
   private pendingTextureResolvers: Map<string, ((texture: THREE.Texture) => void)[]> = new Map();
+  // Cached Remotion environment (doesn't change at runtime)
+  private isRemotionRendering: boolean = false;
+  private isInRemotionContext: boolean = false;
   private frameCounter: number = 0; // For periodic debug logging
   private lastErrorTime: number = 0;
   private errorCooldownMs: number = 2000; // 2 seconds cooldown
@@ -118,7 +120,8 @@ export class ImageSlideshowEffect implements VisualEffect {
 
   init(renderer: THREE.WebGLRenderer): void {
     const remotionEnv = getRemotionEnvironment();
-    const isInRemotionContext = remotionEnv.isRendering || remotionEnv.isStudio;
+    this.isRemotionRendering = remotionEnv.isRendering;
+    this.isInRemotionContext = remotionEnv.isRendering || remotionEnv.isStudio;
 
     slideshowLog.log('Initializing ImageSlideshowEffect', {
       effectId: this.id,
@@ -126,7 +129,7 @@ export class ImageSlideshowEffect implements VisualEffect {
       sampleUrls: this.parameters.images.slice(0, 2).map(url => url.substring(0, 60) + '...')
     });
 
-    if (isInRemotionContext) {
+    if (this.isInRemotionContext) {
       console.log('[Slideshow Remotion] INIT', {
         effectId: this.id,
         imagesCount: this.parameters.images.length,
@@ -147,11 +150,6 @@ export class ImageSlideshowEffect implements VisualEffect {
 
   update(deltaTime: number): void {
     if (!this.enabled) return;
-
-    // Check Remotion context FIRST - before any trigger logic
-    const remotionEnv = getRemotionEnvironment();
-    const isRemotionRendering = remotionEnv.isRendering;
-    const isInRemotionContext = isRemotionRendering || remotionEnv.isStudio;
 
     // STRICT CHECK: If network is throttled due to 403s, stop all operations
     if (this.isNetworkThrottled) {
@@ -177,8 +175,8 @@ export class ImageSlideshowEffect implements VisualEffect {
     const isAboveThreshold = currentValue > threshold * 0.5; // Lower threshold for sustained trigger
     const shouldTrigger = cooldownExpired && (isRisingEdge || (isAboveThreshold && !this.wasTriggered));
 
-    // DEBUG: Log state periodically or on triggers
-    if (isInRemotionContext && (this.frameCounter % 30 === 0 || shouldTrigger)) {
+    // DEBUG: Log state periodically or on triggers (Remotion only)
+    if (this.isInRemotionContext && (this.frameCounter % 30 === 0 || shouldTrigger)) {
       console.log('[Slideshow Debug]', {
         frame: this.frameCounter,
         currentValue: currentValue.toFixed(4),
@@ -188,47 +186,20 @@ export class ImageSlideshowEffect implements VisualEffect {
         framesSinceLastTrigger,
         shouldTrigger,
         currentImageIndex: this.currentImageIndex,
-        isRemotionRendering,
+        isRemotionRendering: this.isRemotionRendering,
       });
     }
 
-    // CRITICAL FIX: In Remotion rendering mode, do NOT call advanceSlide()
-    // because network loading doesn't work reliably in Lambda. Just track state.
-    // The effect renders its current texture only - no advancing during render.
-    if (shouldTrigger && !isRemotionRendering) {
-      if (isInRemotionContext) {
-        console.log('[Slideshow] TRIGGER - would advance slide (but blocked in Remotion render)', {
-          frame: this.frameCounter,
-          currentIndex: this.currentImageIndex,
-          reason: isRisingEdge ? 'rising_edge' : 'sustained_peak',
-        });
-      }
-      // Only advance in non-Remotion (live preview) mode
+    if (shouldTrigger && !this.isRemotionRendering) {
+      // Live preview mode: advance slide immediately (non-blocking)
       this.advanceSlide();
       this.lastTriggerFrame = this.frameCounter;
       this.wasTriggered = true;
-    } else if (shouldTrigger && isRemotionRendering) {
-      // In Remotion mode: just log that we would trigger but can't
-      if (isInRemotionContext) {
-        console.log('[Slideshow] BLOCKED TRIGGER in Remotion render mode', {
-          frame: this.frameCounter,
-          currentIndex: this.currentImageIndex,
-        });
-      }
-      // Still track that we "triggered" to prevent rapid re-triggering
+    } else if (shouldTrigger && this.isRemotionRendering) {
+      // Remotion mode: track trigger state but don't advance (Lambda uses slideEvents)
       this.lastTriggerFrame = this.frameCounter;
       this.wasTriggered = true;
     } else if (currentValue <= threshold * 0.5 && this.wasTriggered) {
-      // Reset wasTriggered when value drops below half threshold - enables next trigger
-      // Using threshold * 0.5 ensures reset happens before the next potential trigger point
-      if (isInRemotionContext && this.frameCounter % 30 === 0) {
-        console.log('[Slideshow Debug] RESET wasTriggered (value dropped below threshold*0.5)', {
-          frame: this.frameCounter,
-          currentValue: currentValue.toFixed(4),
-          threshold,
-          threshold05: (threshold * 0.5).toFixed(4),
-        });
-      }
       this.wasTriggered = false;
     }
 
@@ -236,8 +207,7 @@ export class ImageSlideshowEffect implements VisualEffect {
     this.previousTriggerValue = currentValue;
 
     // In Remotion mode, skip all expensive image loading/processing
-    // The effect renders its current texture only - no advancing, no loading
-    if (isRemotionRendering) {
+    if (this.isRemotionRendering) {
       this.frameCounter++;
       return;
     }
@@ -253,8 +223,22 @@ export class ImageSlideshowEffect implements VisualEffect {
 
     // If images were added after init, load the first one immediately
     if (this.currentImageIndex === -1 && this.parameters.images.length > 0) {
-      slideshowLog.log('Update: currentImageIndex is -1, images available, calling advanceSlide()');
       this.advanceSlide();
+    }
+
+    // If a texture load completed in the background, apply it now
+    if (this.currentImageIndex >= 0) {
+      const currentUrl = this.parameters.images[this.currentImageIndex];
+      if (currentUrl) {
+        const cachedTexture = this.textureCache.get(currentUrl);
+        if (cachedTexture && this.material.map !== cachedTexture) {
+          this.material.map = cachedTexture;
+          this.material.color.setHex(0xffffff);
+          this.material.needsUpdate = true;
+          this.plane.visible = true;
+          this.fitTextureToScreen(cachedTexture);
+        }
+      }
     }
 
     // Retry loading if no texture is displayed but images are available
@@ -266,12 +250,6 @@ export class ImageSlideshowEffect implements VisualEffect {
       const nextIndex = (this.currentImageIndex + 1) % this.parameters.images.length;
       const targetUrl = this.parameters.images[nextIndex];
       if (!this.loadingImages.has(targetUrl)) {
-        slideshowLog.log('Update: No texture map, attempting to load:', {
-          currentIndex: this.currentImageIndex,
-          nextIndex,
-          url: targetUrl.substring(0, 60),
-          failureCount: this.failureCount
-        });
         this.advanceSlide();
       }
     }
@@ -282,7 +260,6 @@ export class ImageSlideshowEffect implements VisualEffect {
     // Safety: if a texture is present but the plane is somehow hidden, force it visible
     if (this.material.map && !this.plane.visible) {
       this.plane.visible = true;
-      slideshowLog.log('Plane visibility auto-enabled in update because a texture is present');
     }
   }
 
@@ -445,8 +422,7 @@ export class ImageSlideshowEffect implements VisualEffect {
     if (!this.enabled) return;
     if (this.parameters.images.length === 0) return;
 
-    const remotionEnv = getRemotionEnvironment();
-    const isInRemotionContext = remotionEnv.isRendering || remotionEnv.isStudio;
+    // Use cached Remotion environment (set in init)
 
     // STATELESS: Use slideEvents if available (Lambda mode)
     const slideEvents = this.parameters.slideEvents;
@@ -464,7 +440,7 @@ export class ImageSlideshowEffect implements VisualEffect {
         this.lastCalculatedIndex = newIndex;
         this.currentImageIndex = newIndex;
 
-        if (isInRemotionContext) {
+        if (this.isInRemotionContext) {
           console.log(`[Slideshow Stateless] time=${absoluteTime.toFixed(2)}s, events=${eventsSoFar}, index=${newIndex}`);
         }
 
@@ -499,7 +475,7 @@ export class ImageSlideshowEffect implements VisualEffect {
 
     // FALLBACK: No slideEvents - use legacy stateful approach for live preview
     // (This path should rarely be hit in Lambda as slideEvents should always be provided)
-    if (isInRemotionContext && this.frameCounter % 60 === 0) {
+    if (this.isInRemotionContext && this.frameCounter % 60 === 0) {
       console.log('[Slideshow] WARNING: No slideEvents, falling back to stateful mode');
     }
   }
@@ -521,101 +497,51 @@ export class ImageSlideshowEffect implements VisualEffect {
     }
   }
 
-  private async advanceSlide() {
-    const remotionEnv = getRemotionEnvironment();
-    const isInRemotionContext = remotionEnv.isRendering || remotionEnv.isStudio;
+  /**
+   * Advance to the next slide. This method is NON-BLOCKING:
+   * - Cache hit: swaps the texture synchronously (instant, same frame)
+   * - Cache miss: advances the index immediately and starts a background load.
+   *   The texture will be applied on the next frame when update() detects it in cache.
+   * No trigger is ever blocked by a pending load.
+   */
+  private advanceSlide() {
+    if (this.parameters.images.length === 0) return;
 
-    if (this.parameters.images.length === 0) {
-      slideshowLog.warn('advanceSlide called but images array is empty');
-      if (isInRemotionContext) {
-        console.log('[Slideshow Remotion] advanceSlide BLOCKED: no images');
-      }
+    const nextIndex = (this.currentImageIndex + 1) % this.parameters.images.length;
+
+    // Guard: already on this index
+    if (nextIndex === this.currentImageIndex && this.currentImageIndex !== -1) return;
+
+    const imageUrl = this.parameters.images[nextIndex];
+
+    // Always advance the index immediately so the trigger state machine progresses
+    this.currentImageIndex = nextIndex;
+
+    // Try synchronous cache hit — instant texture swap
+    const cachedTexture = this.textureCache.get(imageUrl);
+    if (cachedTexture) {
+      this.material.map = cachedTexture;
+      this.material.color.setHex(0xffffff);
+      this.material.needsUpdate = true;
+      this.plane.visible = true;
+      this.fitTextureToScreen(cachedTexture);
+
+      // Fire-and-forget preload / cleanup
+      this.cleanupCache();
+      this.loadNextTextures(nextIndex);
       return;
     }
 
-    // Prevent concurrent calls - if already advancing, skip
-    if (this.isAdvancing) {
-      if (isInRemotionContext) {
-        console.log('[Slideshow Remotion] advanceSlide BLOCKED: already advancing (async load in progress)');
-      }
-      return;
-    }
-
-    this.isAdvancing = true;
-    if (isInRemotionContext) {
-      console.log('[Slideshow Remotion] advanceSlide STARTING', {
-        currentIndex: this.currentImageIndex,
-        nextIndex: (this.currentImageIndex + 1) % this.parameters.images.length,
-      });
-    }
-
-    try {
-      const nextIndex = (this.currentImageIndex + 1) % this.parameters.images.length;
-
-      // If we're already on this index (shouldn't happen, but guard against it)
-      if (nextIndex === this.currentImageIndex && this.currentImageIndex !== -1) {
-        slideshowLog.log('Already on target index, skipping advance');
-        this.isAdvancing = false;
-        return;
-      }
-
-      const imageUrl = this.parameters.images[nextIndex];
-
-      slideshowLog.log('Advancing slide:', {
-        currentIndex: this.currentImageIndex,
-        nextIndex,
-        url: imageUrl.substring(0, 60)
-      });
-
-      // Try to get from cache
-      let texture = this.textureCache.get(imageUrl);
-
-      if (!texture) {
-        try {
-          texture = await this.loadTexture(imageUrl);
-          this.failureCount = 0;
-        } catch (e) {
-          slideshowLog.error("Failed to load image for slideshow", imageUrl.substring(0, 60), e);
-          this.currentImageIndex = nextIndex;
-          this.failureCount++;
-          this.isAdvancing = false;
-          return;
-        }
-      }
-
-      if (texture) {
-        this.currentImageIndex = nextIndex;
-        this.material.map = texture;
-        this.material.color.setHex(0xffffff);
-        this.material.needsUpdate = true;
-        this.plane.visible = true; // Make sure plane is visible now
-
-        slideshowLog.log('Slide advanced successfully:', {
-          index: nextIndex,
-          hasTexture: !!texture,
-          textureSize: texture.image ? `${texture.image.width}x${texture.image.height}` : 'unknown'
-        });
-
-        if (isInRemotionContext) {
-          console.log('[Slideshow Remotion] advanceSlide SUCCESS', {
-            newIndex: nextIndex,
-            textureSize: texture.image ? `${texture.image.width}x${texture.image.height}` : 'unknown',
-          });
-        }
-
-        this.fitTextureToScreen(texture);
-
-        // Preload next images & cleanup
+    // Cache miss: start background load, don't block
+    // The texture will be applied by the polling check in update()
+    if (!this.loadingImages.has(imageUrl)) {
+      this.loadTexture(imageUrl).then(() => {
+        this.failureCount = 0;
         this.cleanupCache();
         this.loadNextTextures(nextIndex);
-      } else {
-        slideshowLog.error('advanceSlide: texture is null after load attempt');
-        if (isInRemotionContext) {
-          console.log('[Slideshow Remotion] advanceSlide FAILED: texture is null');
-        }
-      }
-    } finally {
-      this.isAdvancing = false;
+      }).catch(() => {
+        this.failureCount++;
+      });
     }
   }
 
