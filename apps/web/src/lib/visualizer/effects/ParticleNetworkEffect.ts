@@ -74,7 +74,6 @@ export class ParticleNetworkEffect implements VisualEffect {
   private internalCamera!: THREE.PerspectiveCamera;
   private renderer!: THREE.WebGLRenderer;
   private particleSystem!: THREE.Points;
-  private connectionLines!: THREE.LineSegments;
   private material!: THREE.ShaderMaterial;
   private uniforms!: Record<string, THREE.IUniform>;
 
@@ -87,14 +86,15 @@ export class ParticleNetworkEffect implements VisualEffect {
   private sizes!: Float32Array;
   private lives!: Float32Array;
 
-  // Connection data - using LineBasicMaterial
-  // Note: linewidth is ignored in most WebGL implementations (including Lambda)
-  private connectionMaterial!: THREE.LineBasicMaterial;
-  private connectionGeometry!: THREE.BufferGeometry;
-  private connectionPositions!: Float32Array;
-  private connectionColors!: Float32Array;
+  // Connection data - using instanced cylinders for thick lines (Lambda-compatible)
+  private connectionMaterial!: THREE.MeshBasicMaterial;
+  private connectionInstancedMesh!: THREE.InstancedMesh;
+  private cylinderGeometry!: THREE.CylinderGeometry;
+  private connectionInstanceColors!: Float32Array;
   private maxConnections: number = 500; // Limit connections
   private activeConnections: number = 0;
+  private dummyMatrix: THREE.Matrix4 = new THREE.Matrix4();
+  private upVector: THREE.Vector3 = new THREE.Vector3(0, 1, 0);
 
   // Performance optimization: skip frames
   // NOTE: These are ONLY used by update() for live editor preview.
@@ -106,7 +106,6 @@ export class ParticleNetworkEffect implements VisualEffect {
   private instanceColors!: Float32Array;
   private instanceLives!: Float32Array;
   private instanceSizes!: Float32Array;
-  private dummyMatrix: THREE.Matrix4 = new THREE.Matrix4();
 
   // Audio spawning state
   // NOTE: These are ONLY used by update() for live editor preview.
@@ -498,31 +497,41 @@ export class ParticleNetworkEffect implements VisualEffect {
   }
 
   private createConnectionSystem() {
-    // Create connection line system using LineBasicMaterial
-    // Note: linewidth is limited to 1px in most WebGL implementations (including Lambda)
-    // This is a known WebGL limitation, not a Three.js bug
-    this.connectionGeometry = new THREE.BufferGeometry();
-    this.connectionPositions = new Float32Array(this.maxConnections * 6); // 2 points per line, 3 coords each
-    this.connectionColors = new Float32Array(this.maxConnections * 6); // 2 colors per line, 3 channels each
-
-    this.connectionGeometry.setAttribute('position', new THREE.BufferAttribute(this.connectionPositions, 3));
-    this.connectionGeometry.setAttribute('color', new THREE.BufferAttribute(this.connectionColors, 3));
+    // Create connection system using instanced cylinders for thick lines
+    // This works in Lambda unlike LineBasicMaterial.linewidth which is ignored
 
     // Parse connection color from parameters
     const connectionColorHex = this.parameters.connectionColor || '#ffffff';
+    const colorHex = parseInt(connectionColorHex.replace('#', ''), 16);
 
-    this.connectionMaterial = new THREE.LineBasicMaterial({
-      vertexColors: true,
+    // Create cylinder geometry - radius will be scaled per instance
+    // Using 8 radial segments for performance, sufficient for thin cylinders
+    this.cylinderGeometry = new THREE.CylinderGeometry(1, 1, 1, 8);
+
+    // Create material with connection color
+    this.connectionMaterial = new THREE.MeshBasicMaterial({
+      color: colorHex,
       transparent: true,
       blending: THREE.AdditiveBlending,
       depthTest: false,
-      // Note: linewidth is ignored in most WebGL implementations
-      // Using 1px as the reliable fallback
-      linewidth: 1,
     });
 
-    this.connectionLines = new THREE.LineSegments(this.connectionGeometry, this.connectionMaterial);
-    this.internalScene.add(this.connectionLines);
+    // Create instanced mesh for all possible connections
+    this.connectionInstancedMesh = new THREE.InstancedMesh(
+      this.cylinderGeometry,
+      this.connectionMaterial,
+      this.maxConnections
+    );
+    this.connectionInstancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+
+    // Per-instance colors
+    this.connectionInstanceColors = new Float32Array(this.maxConnections * 3);
+    this.connectionInstancedMesh.geometry.setAttribute(
+      'instanceColor',
+      new THREE.InstancedBufferAttribute(this.connectionInstanceColors, 3, false)
+    );
+
+    this.internalScene.add(this.connectionInstancedMesh);
   }
 
   private updateConnections() {
@@ -534,13 +543,23 @@ export class ParticleNetworkEffect implements VisualEffect {
     const colorG = parseInt(connectionColorHex.slice(3, 5), 16) / 255;
     const colorB = parseInt(connectionColorHex.slice(5, 7), 16) / 255;
 
+    // Get cylinder radius from connectionLineWidth parameter
+    // Default to 0.02 if not set, scale by parameter
+    const cylinderRadius = 0.02 * Math.max(this.parameters.connectionLineWidth, 0.5);
+
+    // Temporary vectors for cylinder transform calculations
+    const midpoint = new THREE.Vector3();
+    const direction = new THREE.Vector3();
+    const quaternion = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+
     for (let i = 0; i < this.particles.length - 1 && connectionIndex < this.maxConnections; i++) {
       for (let j = i + 1; j < this.particles.length && connectionIndex < this.maxConnections; j++) {
         const p1 = this.particles[i];
         const p2 = this.particles[j];
         const distance = p1.position.distanceTo(p2.position);
 
-        if (distance < this.parameters.connectionDistance) {
+        if (distance < this.parameters.connectionDistance && distance > 0.001) {
           // Improved strength calculation - less aggressive falloff
           const distanceFactor = 1.0 - (distance / this.parameters.connectionDistance);
           const lifeFactor = Math.min(p1.life, p2.life);
@@ -548,43 +567,41 @@ export class ParticleNetworkEffect implements VisualEffect {
           const velocityFactor = 0.5 + ((p1.noteVelocity + p2.noteVelocity) / 508);
           const strength = distanceFactor * lifeFactor * velocityFactor * this.parameters.connectionOpacity;
 
-          // Set positions for this line segment (2 points)
-          const baseIndex = connectionIndex * 6;
-          this.connectionPositions[baseIndex] = p1.position.x;
-          this.connectionPositions[baseIndex + 1] = p1.position.y;
-          this.connectionPositions[baseIndex + 2] = p1.position.z;
-          this.connectionPositions[baseIndex + 3] = p2.position.x;
-          this.connectionPositions[baseIndex + 4] = p2.position.y;
-          this.connectionPositions[baseIndex + 5] = p2.position.z;
+          // Position cylinder at midpoint between particles
+          midpoint.copy(p1.position).add(p2.position).multiplyScalar(0.5);
 
-          // Set connection colors with strength for both vertices
-          this.connectionColors[baseIndex] = colorR * strength;
-          this.connectionColors[baseIndex + 1] = colorG * strength;
-          this.connectionColors[baseIndex + 2] = colorB * strength;
-          this.connectionColors[baseIndex + 3] = colorR * strength;
-          this.connectionColors[baseIndex + 4] = colorG * strength;
-          this.connectionColors[baseIndex + 5] = colorB * strength;
+          // Calculate direction and orientation
+          direction.copy(p2.position).sub(p1.position).normalize();
+
+          // Create quaternion to rotate from default UP to direction
+          quaternion.setFromUnitVectors(this.upVector, direction);
+
+          // Scale: x,z = radius, y = length (distance)
+          scale.set(cylinderRadius, distance, cylinderRadius);
+
+          // Compose transform matrix
+          this.dummyMatrix.compose(midpoint, quaternion, scale);
+          this.connectionInstancedMesh.setMatrixAt(connectionIndex, this.dummyMatrix);
+
+          // Set instance color with strength
+          this.connectionInstanceColors[connectionIndex * 3] = colorR * strength;
+          this.connectionInstanceColors[connectionIndex * 3 + 1] = colorG * strength;
+          this.connectionInstanceColors[connectionIndex * 3 + 2] = colorB * strength;
 
           connectionIndex++;
         }
       }
     }
 
-    // Update BufferGeometry with active connection data
-    const positionAttr = this.connectionGeometry.getAttribute('position') as THREE.BufferAttribute;
-    const colorAttr = this.connectionGeometry.getAttribute('color') as THREE.BufferAttribute;
+    // Update instance count
+    this.connectionInstancedMesh.count = connectionIndex;
+    this.connectionInstancedMesh.instanceMatrix.needsUpdate = true;
 
-    // Copy only the active connections
-    for (let i = 0; i < connectionIndex * 6; i++) {
-      positionAttr.array[i] = this.connectionPositions[i];
-      colorAttr.array[i] = this.connectionColors[i];
+    // Update instance colors if attribute exists
+    const colorAttr = this.connectionInstancedMesh.geometry.getAttribute('instanceColor') as THREE.InstancedBufferAttribute;
+    if (colorAttr) {
+      colorAttr.needsUpdate = true;
     }
-
-    positionAttr.needsUpdate = true;
-    colorAttr.needsUpdate = true;
-
-    // Set draw range to only render active connections
-    this.connectionGeometry.setDrawRange(0, connectionIndex * 2);
 
     this.activeConnections = connectionIndex;
   }
@@ -806,9 +823,9 @@ export class ParticleNetworkEffect implements VisualEffect {
       this.material.dispose();
     }
 
-    if (this.connectionLines) {
-      this.internalScene.remove(this.connectionLines);
-      this.connectionGeometry.dispose();
+    if (this.connectionInstancedMesh) {
+      this.internalScene.remove(this.connectionInstancedMesh);
+      this.cylinderGeometry.dispose();
       this.connectionMaterial.dispose();
     }
   }
