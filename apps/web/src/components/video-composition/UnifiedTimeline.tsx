@@ -671,23 +671,19 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
 
   // Default layer is now set in the store's initial state; no need to add here
 
-  // FIX: When the project's duration changes (e.g., on audio load),
-  // ensure all layers are clamped to the new duration.
+  // When the project's duration changes (e.g., on audio load),
+  // clamp layers that overflow the new duration. Layers with endTime < duration
+  // are intentionally trimmed and must NOT be extended (fixes autosave rehydration bug).
   useEffect(() => {
-    // Guard against running when duration is not yet finalized.
     if (duration > 0) {
-      // Use the functional form of state update to get the most recent layers
-      // without adding 'layers' to the dependency array.
       const currentLayers = useTimelineStore.getState().layers;
       currentLayers.forEach(layer => {
-        if (layer.endTime !== duration) {
-          // This now correctly resizes the initial default layer and any other
-          // layers that might be out of sync.
+        if (layer.endTime > duration) {
           updateLayer(layer.id, { endTime: duration });
         }
       });
     }
-  }, [duration, updateLayer]); // Only re-run when the duration itself changes.
+  }, [duration, updateLayer]);
 
   // Keyboard shortcut: Clear selected clip with Delete or Backspace key
   useEffect(() => {
