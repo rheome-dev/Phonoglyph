@@ -8,11 +8,11 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "concurrently \"pnpm --filter @phonoglyph/web dev\" \"pnpm --filter @phonoglyph/api dev\"",
-    "build": "pnpm --filter @phonoglyph/web build && pnpm --filter @phonoglyph/api build",
-    "test": "pnpm -r test",
-    "lint": "pnpm -r lint",
-    "clean": "pnpm -r clean"
+    "dev": "concurrently \"bun --filter @phonoglyph/web run dev\" \"bun --filter @phonoglyph/api run dev\"",
+    "build": "bun --filter @phonoglyph/web run build && bun --filter @phonoglyph/api run build",
+    "test": "bun --filter '*' run test",
+    "lint": "bun --filter '*' run lint",
+    "clean": "bun --filter '*' run clean"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^3.2.4",
