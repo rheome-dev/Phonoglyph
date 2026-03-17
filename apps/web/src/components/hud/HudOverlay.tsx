@@ -179,13 +179,16 @@ function drawStereometer(ctx: CanvasRenderingContext2D, w: number, h: number, fe
   // Need stereo data. If featureData contains stereoWindow object
   const left = featureData?.stereoWindow?.left || [];
   const right = featureData?.stereoWindow?.right || [];
-  
+
   if (!left.length || !right.length) return;
 
   const color = settings.traceColor || '#ff00ff';
-  const glow = typeof settings.glowIntensity === 'number' ? settings.glowIntensity : 0.5;
-  const pointSize = typeof settings.pointSize === 'number' ? settings.pointSize : 4;
-  const showGrid = !!settings.showGrid;
+  // Scale glow down for opacity calculation (glow 0-100 maps to useful opacity range)
+  const glow = typeof settings.glowIntensity === 'number' ? settings.glowIntensity / 20 : 0.5;
+  const pointSize = typeof settings.pointSize === 'number' ? settings.pointSize : 20;
+  const showGrid = settings.showGrid === true;
+  const gridColor = settings.gridColor || '#ffffff';
+  const gridLineWidth = typeof settings.gridLineWidth === 'number' ? settings.gridLineWidth : 1;
 
   // Goniometer Plot (L+R, L-R)
   // Rotate 45 deg: X = L-R, Y = L+R
@@ -197,8 +200,17 @@ function drawStereometer(ctx: CanvasRenderingContext2D, w: number, h: number, fe
   ctx.fillRect(0,0,w,h);
 
   if (showGrid) {
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-    ctx.lineWidth = 0.5;
+    // Parse grid color and apply opacity
+    const gridColorMatch = gridColor.match(/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i);
+    if (gridColorMatch) {
+      const r = parseInt(gridColorMatch[1], 16);
+      const g = parseInt(gridColorMatch[2], 16);
+      const b = parseInt(gridColorMatch[3], 16);
+      ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.15)`;
+    } else {
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    }
+    ctx.lineWidth = gridLineWidth;
     ctx.beginPath();
     // Vertical / Horizontal Crosshair
     ctx.moveTo(centerX, 0);
@@ -214,31 +226,31 @@ function drawStereometer(ctx: CanvasRenderingContext2D, w: number, h: number, fe
   }
 
   ctx.globalCompositeOperation = 'lighter'; // Additive blending for "cloud" look
-  
+
   // Draw dots
   ctx.fillStyle = color;
   const step = 2; // Skip points for performance if buffer is huge
-  
+
   for(let i=0; i<left.length; i+=step) {
     const l = (left[i]); // assumed -1 to 1
     const r = (right[i]);
-    
+
     // M/S processing for Goniometer
     const mid = (l + r) / 2;
     const side = (l - r) / 2;
-    
+
     const x = centerX + side * scale * 2; // Side is X
     const y = centerY - mid * scale * 2;  // Mid is Y (up)
 
-    // Opacity based on amplitude
+    // Opacity based on amplitude with glow multiplier
     const amp = Math.sqrt(l*l + r*r);
     ctx.globalAlpha = Math.min(1, amp * glow + 0.1);
-    
+
     ctx.beginPath();
     ctx.rect(x - pointSize / 2, y - pointSize / 2, pointSize, pointSize);
     ctx.fill();
   }
-  
+
   ctx.globalCompositeOperation = 'source-over';
   ctx.globalAlpha = 1;
 }

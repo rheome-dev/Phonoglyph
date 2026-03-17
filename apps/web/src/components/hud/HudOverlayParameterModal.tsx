@@ -60,9 +60,11 @@ const OVERLAY_SETTINGS: Record<string, OverlaySetting[]> = {
   ],
   stereometer: [
     { label: 'Trace Color', key: 'traceColor', type: 'color' },
-    { label: 'Glow Intensity', key: 'glowIntensity', type: 'slider', min: 0, max: 20, step: 0.1 },
-    { label: 'Point Size', key: 'pointSize', type: 'slider', min: 1, max: 50, step: 1 },
+    { label: 'Glow Intensity', key: 'glowIntensity', type: 'slider', min: 0, max: 100, step: 0.5 },
+    { label: 'Point Size', key: 'pointSize', type: 'slider', min: 1, max: 200, step: 1 },
     { label: 'Show Grid', key: 'showGrid', type: 'checkbox' },
+    { label: 'Grid Color', key: 'gridColor', type: 'color' },
+    { label: 'Grid Line Width', key: 'gridLineWidth', type: 'number', min: 0.5, max: 5, step: 0.5 },
     { label: 'Corner Radius', key: 'cornerRadius', type: 'number', min: 0, max: 50, step: 1 },
     { label: 'Drop Shadow', key: 'dropShadow', type: 'checkbox' },
     { label: 'Shadow Color', key: 'shadowColor', type: 'color' },
@@ -79,6 +81,7 @@ const OVERLAY_SETTINGS: Record<string, OverlaySetting[]> = {
     { label: 'Trace Width', key: 'traceWidth', type: 'slider', min: 0.5, max: 2, step: 0.1 },
     { label: 'Show Grid', key: 'showGrid', type: 'checkbox' },
     { label: 'Grid Color', key: 'gridColor', type: 'color' },
+    { label: 'Grid Line Width', key: 'gridLineWidth', type: 'number', min: 0.5, max: 5, step: 0.5 },
     { label: 'Corner Radius', key: 'cornerRadius', type: 'number', min: 0, max: 50, step: 1 },
     { label: 'Drop Shadow', key: 'dropShadow', type: 'checkbox' },
     { label: 'Shadow Color', key: 'shadowColor', type: 'color' },
@@ -321,15 +324,15 @@ export function HudOverlayParameterModal({ overlay, onClose, onUpdate }: any) {
                   {setting.type === 'slider' && (
                     <div className="flex-1">
                       <Slider
-                        value={[settings[setting.key] ?? (setting.key === 'glowIntensity' ? 0 : setting.key === 'amplitude' ? 1 : setting.key === 'traceWidth' ? 2 : 0)]}
+                        value={[settings[setting.key] ?? (setting.key === 'glowIntensity' ? (overlay.type === 'stereometer' ? 10 : 0) : setting.key === 'amplitude' ? 1 : setting.key === 'traceWidth' ? 2 : setting.key === 'pointSize' ? 20 : 0)]}
                         onValueChange={([value]) => handleSettingChange(setting.key, value)}
-                        min={setting.key === 'amplitude' ? 0.1 : setting.key === 'traceWidth' ? 0.5 : 0}
-                        max={setting.key === 'amplitude' ? 2 : setting.key === 'traceWidth' ? 2 : 5}
-                        step={setting.key === 'amplitude' ? 0.01 : setting.key === 'traceWidth' ? 0.1 : 0.1}
+                        min={setting.min ?? (setting.key === 'amplitude' ? 0.1 : setting.key === 'traceWidth' ? 0.5 : 0)}
+                        max={setting.max ?? (setting.key === 'amplitude' ? 2 : setting.key === 'traceWidth' ? 2 : 5)}
+                        step={setting.step ?? (setting.key === 'amplitude' ? 0.01 : setting.key === 'traceWidth' ? 0.1 : 0.1)}
                         className="w-full"
                       />
                       <div className="text-xs text-white/60 mt-1">
-                        {settings[setting.key] ?? (setting.key === 'glowIntensity' ? 0 : setting.key === 'amplitude' ? 1 : setting.key === 'traceWidth' ? 2 : 0)}
+                        {settings[setting.key] ?? (setting.key === 'glowIntensity' ? (overlay.type === 'stereometer' ? 10 : 0) : setting.key === 'amplitude' ? 1 : setting.key === 'traceWidth' ? 2 : setting.key === 'pointSize' ? 20 : 0)}
                       </div>
                     </div>
                   )}
