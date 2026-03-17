@@ -71,12 +71,13 @@ function getSliderMax(paramName: string) {
     case 'hudOpacity': return 1.0;
     case 'animationSpeed': return 5.0;
     case 'noiseIntensity': return 2.0;
-    case 'glowIntensity': return 2.0;
+    case 'glowIntensity': return 100; // Increased for stereometer overlay
     case 'strength': return 2.0;
     case 'radius': return 2.0;
     case 'threshold': return 1.0;
     case 'particleLifetime': return 10;
-    case 'particleSize': return 50;
+    case 'particleSize': return 200; // Increased for stereometer overlay
+    case 'pointSize': return 200; // Stereometer overlay point size
     case 'glowSoftness': return 5;
     case 'particleSpawning': return 1.0;
     case 'spawnThreshold': return 1.0;
@@ -104,6 +105,8 @@ function getSliderMax(paramName: string) {
     case 'cornerRadius': return 50;
     case 'shadowBlur': return 50;
     case 'outlineWidth': return 10;
+    // Stereometer overlay parameters
+    case 'gridLineWidth': return 5;
     default: return 1;
   }
 }
@@ -115,7 +118,7 @@ function getSliderStep(paramName: string) {
     case 'hudOpacity': return 0.1;
     case 'animationSpeed': return 0.05;
     case 'noiseIntensity': return 0.1;
-    case 'glowIntensity': return 0.1;
+    case 'glowIntensity': return 0.5; // Increased step for stereometer overlay
     case 'strength': return 0.1;
     case 'radius': return 0.05;
     case 'threshold': return 0.01;
@@ -128,6 +131,8 @@ function getSliderStep(paramName: string) {
     case 'audioParticleSize': return 0.1;
     case 'audioSpawnIntensity': return 0.01;
     case 'opacity': return 0.01;
+    // Stereometer overlay parameters
+    case 'pointSize': return 1; // Larger step for point size
     // Bloom Filter parameters
     case 'intensity': return 0.01;
     case 'softness': return 0.01;
@@ -143,6 +148,8 @@ function getSliderStep(paramName: string) {
     case 'cornerRadius': return 1;
     case 'shadowBlur': return 1;
     case 'outlineWidth': return 1;
+    // Grid parameters
+    case 'gridLineWidth': return 0.5;
     default: return 0.01;
   }
 }
