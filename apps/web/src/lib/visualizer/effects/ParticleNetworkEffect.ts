@@ -41,6 +41,8 @@ export interface ParticleNetworkParameters {
   particleSpawning: number;
   spawnThreshold: number;
   connectionOpacity: number;
+  connectionLineWidth: number;
+  connectionColor: string;
   spawnEvents: SpawnEvent[];
 }
 
@@ -61,6 +63,8 @@ export class ParticleNetworkEffect implements VisualEffect {
     particleSpawning: 0.0, // Modulation destination for particle spawning (0-1)
     spawnThreshold: 0.5, // Threshold for when modulation signal spawns particles
     connectionOpacity: 0.8, // Opacity multiplier for connection lines
+    connectionLineWidth: 1.0, // Line width for connection lines (note: limited by WebGL)
+    connectionColor: '#ffffff', // Color for connection lines
     // Stateless spawn events for Remotion Lambda rendering
     // Populated from audio transients in RayboxComposition
     spawnEvents: [] as SpawnEvent[],
@@ -505,7 +509,8 @@ export class ParticleNetworkEffect implements VisualEffect {
       vertexColors: true,
       transparent: true,
       blending: THREE.AdditiveBlending,
-      depthTest: false
+      depthTest: false,
+      linewidth: this.parameters.connectionLineWidth // Note: Most WebGL implementations ignore this
     });
 
     this.connectionLines = new THREE.LineSegments(this.connectionGeometry, this.connectionMaterial);
@@ -514,6 +519,12 @@ export class ParticleNetworkEffect implements VisualEffect {
 
   private updateConnections() {
     let connectionIndex = 0;
+
+    // Parse connection color from hex string
+    const connectionColorHex = this.parameters.connectionColor || '#ffffff';
+    const colorR = parseInt(connectionColorHex.slice(1, 3), 16) / 255;
+    const colorG = parseInt(connectionColorHex.slice(3, 5), 16) / 255;
+    const colorB = parseInt(connectionColorHex.slice(5, 7), 16) / 255;
 
     for (let i = 0; i < this.particles.length - 1 && connectionIndex < this.maxConnections; i++) {
       for (let j = i + 1; j < this.particles.length && connectionIndex < this.maxConnections; j++) {
@@ -529,10 +540,6 @@ export class ParticleNetworkEffect implements VisualEffect {
           const velocityFactor = 0.5 + ((p1.noteVelocity + p2.noteVelocity) / 508);
           const strength = distanceFactor * lifeFactor * velocityFactor * this.parameters.connectionOpacity;
 
-          // Use white for connection lines (user preference)
-          // With additive blending, strength controls brightness
-          const whiteColor = 1.0;
-
           // Set positions for this line segment (2 points)
           const baseIndex = connectionIndex * 6;
           this.connectionPositions[baseIndex] = p1.position.x;
@@ -542,13 +549,13 @@ export class ParticleNetworkEffect implements VisualEffect {
           this.connectionPositions[baseIndex + 4] = p2.position.y;
           this.connectionPositions[baseIndex + 5] = p2.position.z;
 
-          // Set white colors with strength for both vertices
-          this.connectionColors[baseIndex] = whiteColor * strength;
-          this.connectionColors[baseIndex + 1] = whiteColor * strength;
-          this.connectionColors[baseIndex + 2] = whiteColor * strength;
-          this.connectionColors[baseIndex + 3] = whiteColor * strength;
-          this.connectionColors[baseIndex + 4] = whiteColor * strength;
-          this.connectionColors[baseIndex + 5] = whiteColor * strength;
+          // Set connection colors with strength for both vertices
+          this.connectionColors[baseIndex] = colorR * strength;
+          this.connectionColors[baseIndex + 1] = colorG * strength;
+          this.connectionColors[baseIndex + 2] = colorB * strength;
+          this.connectionColors[baseIndex + 3] = colorR * strength;
+          this.connectionColors[baseIndex + 4] = colorG * strength;
+          this.connectionColors[baseIndex + 5] = colorB * strength;
 
           connectionIndex++;
         }
@@ -597,6 +604,15 @@ export class ParticleNetworkEffect implements VisualEffect {
         break;
       case 'connectionOpacity':
         this.parameters.connectionOpacity = value;
+        break;
+      case 'connectionLineWidth':
+        this.parameters.connectionLineWidth = value;
+        if (this.connectionMaterial) {
+          this.connectionMaterial.linewidth = value;
+        }
+        break;
+      case 'connectionColor':
+        this.parameters.connectionColor = value;
         break;
       case 'spawnEvents':
         this.parameters.spawnEvents = value as SpawnEvent[];

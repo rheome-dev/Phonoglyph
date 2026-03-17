@@ -89,6 +89,7 @@ function getSliderMax(paramName: string) {
     case 'connectionDistance': return 5.0;
     case 'maxParticles': return 200;
     case 'connectionOpacity': return 1.0;
+    case 'connectionLineWidth': return 5.0;
     case 'opacity': return 1.0;
     // Bloom Filter parameters
     case 'intensity': return 2.0;
@@ -150,6 +151,8 @@ function getSliderStep(paramName: string) {
     case 'outlineWidth': return 1;
     // Grid parameters
     case 'gridLineWidth': return 0.5;
+    // Connection line parameters
+    case 'connectionLineWidth': return 0.5;
     default: return 0.01;
   }
 }
@@ -739,6 +742,23 @@ export function EffectsLibrarySidebar({
       if ('gridLineWidth' in params) processedParams.add('gridLineWidth');
     }
 
+    // Group connection parameters (particleNetwork overlay)
+    if ('connectionDistance' in params || 'connectionOpacity' in params || 'connectionLineWidth' in params || 'connectionColor' in params) {
+      groupedParams.push({
+        group: 'connection',
+        params: [
+          ...('connectionDistance' in params ? [{ name: 'connectionDistance', value: params.connectionDistance, type: 'number' as const }] : []),
+          ...('connectionOpacity' in params ? [{ name: 'connectionOpacity', value: params.connectionOpacity, type: 'number' as const }] : []),
+          ...('connectionLineWidth' in params ? [{ name: 'connectionLineWidth', value: params.connectionLineWidth, type: 'number' as const }] : []),
+          ...('connectionColor' in params ? [{ name: 'connectionColor', value: params.connectionColor, type: 'color' as const }] : []),
+        ]
+      });
+      if ('connectionDistance' in params) processedParams.add('connectionDistance');
+      if ('connectionOpacity' in params) processedParams.add('connectionOpacity');
+      if ('connectionLineWidth' in params) processedParams.add('connectionLineWidth');
+      if ('connectionColor' in params) processedParams.add('connectionColor');
+    }
+
 
     // Add remaining parameters that aren't grouped
     Object.entries(params).forEach(([name, value]) => {
@@ -757,7 +777,7 @@ export function EffectsLibrarySidebar({
         return;
       } else if (['colorMap', 'colorScheme', 'style', 'meterType', 'dataSource'].includes(name)) {
         type = 'select';
-      } else if (['color', 'shadowColor', 'outlineColor', 'peakColor', 'traceColor', 'gridColor', 'barColor', 'fontColor'].includes(name)) {
+      } else if (['color', 'shadowColor', 'outlineColor', 'peakColor', 'traceColor', 'gridColor', 'barColor', 'fontColor', 'connectionColor'].includes(name)) {
         type = 'color';
       }
 
@@ -1101,7 +1121,7 @@ export function EffectsLibrarySidebar({
               }
 
               // String color parameters (hex strings like '#4db3fa' for overlays)
-              const colorParamNames = ['color', 'shadowColor', 'outlineColor', 'peakColor', 'traceColor', 'gridColor', 'barColor', 'fontColor'];
+              const colorParamNames = ['color', 'shadowColor', 'outlineColor', 'peakColor', 'traceColor', 'gridColor', 'barColor', 'fontColor', 'connectionColor'];
               if (colorParamNames.includes(paramName) && typeof value === 'string') {
                 const displayName = paramName.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase());
                 const currentValue = activeSliderValues[editingEffectId]?.[paramName] ?? value;
