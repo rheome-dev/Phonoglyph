@@ -19,6 +19,7 @@ import { trpc } from '@/lib/trpc';
 import { CollapsibleSidebar } from '@/components/layout/collapsible-sidebar';
 import { ProjectPickerModal } from '@/components/projects/project-picker-modal';
 import { debugLog } from '@/lib/utils';
+import type { SpawnEvent } from '@/lib/visualizer/effects/ParticleNetworkEffect';
 import { ProjectCreationModal } from '@/components/projects/project-creation-modal';
 import { useStemAudioController } from '@/hooks/use-stem-audio-controller';
 import { useAudioAnalysis } from '@/hooks/use-audio-analysis';
@@ -2132,6 +2133,7 @@ function CreativeVisualizerPage() {
     let cachedMappings: [string, string][] = [];
     let lastUpdateTime = 0;
     let frameCount = 0;
+    const particleSpawnEventsLoaded = new Set<string>(); // Track which layers have had spawnEvents set
 
     const animationLoop = () => {
       if (!isPlaying || !visualizerRef.current) {
@@ -2364,6 +2366,42 @@ function CreativeVisualizerPage() {
             } */
           }
         });
+      }
+
+      // Feed spawnEvents from cached transients to particle effects for WYSIWYG preview.
+      // This mirrors the Lambda path in RayboxComposition.tsx so live preview uses
+      // the exact same transient intensities for particle sizing.
+      if (currentCachedAnalysis && currentCachedAnalysis.length > 0 && isPlaying) {
+        const particleLayers = currentLayers.filter(
+          (l: any) => l.type === 'effect' && l.effectType === 'particleNetwork'
+        );
+
+        for (const layer of particleLayers) {
+          // Set spawnEvents once (not every frame) — only when analysis is available
+          // and the effect doesn't already have events loaded
+          if (!particleSpawnEventsLoaded.has(layer.id)) {
+            const stemType = (layer.settings?.stemType as string) || 'drums';
+            const stemAnalysis = currentCachedAnalysis.find(
+              (a: any) => a.stemType === stemType
+            );
+
+            if (stemAnalysis?.analysisData) {
+              const transients = (stemAnalysis.analysisData as any).transients;
+              if (transients && Array.isArray(transients)) {
+                const spawnEvents: SpawnEvent[] = transients.map((t: any) => ({
+                  time: t.time,
+                  intensity: t.intensity || 1.0,
+                  stemType,
+                }));
+                visualizerRef.current?.updateEffectParameter(layer.id, 'spawnEvents', spawnEvents);
+                particleSpawnEventsLoaded.add(layer.id);
+              }
+            }
+          }
+
+          // Pass current playback time every frame so the effect can spawn from events
+          visualizerRef.current?.updateEffectParameter(layer.id, 'currentPlaybackTime', syncTime);
+        }
       }
 
       animationFrameId.current = requestAnimationFrame(animationLoop);

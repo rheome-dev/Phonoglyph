@@ -109,6 +109,11 @@ export class ParticleNetworkEffect implements VisualEffect {
   private lastAudioSpawnTime: number = 0;
   private lastManualSpawnTime: number = 0;
 
+  // Live preview playback time (set from page when audio is playing)
+  // Used to spawn particles from spawnEvents in the update() path for WYSIWYG preview
+  private currentPlaybackTime: number = -1;
+  private lastSpawnEventTime: number = -1; // Track last spawned event to avoid duplicates
+
 
   constructor(config: Partial<ParticleNetworkParameters> = {}) {
     // Apply config to parameters (user settings override defaults)
@@ -349,11 +354,12 @@ export class ParticleNetworkEffect implements VisualEffect {
   }
 
   private updateParticles(deltaTime: number) {
-    // Particle spawning is now controlled only by explicit parameter mappings
-    // (via particleSpawning parameter and updateParameter())
-
-    // Spawn particles based on particleSpawning parameter (manual or audio-modulated)
-    if (this.parameters.particleSpawning >= this.parameters.spawnThreshold) {
+    // If we have spawnEvents AND a valid playback time, spawn from real audio transients
+    // for WYSIWYG preview that matches Lambda rendering exactly.
+    if (this.parameters.spawnEvents.length > 0 && this.currentPlaybackTime >= 0) {
+      this.spawnFromEvents(this.currentPlaybackTime, deltaTime);
+    } else if (this.parameters.particleSpawning >= this.parameters.spawnThreshold) {
+      // Fallback: spawn from particleSpawning slider (no audio playing)
       this.spawnManualParticles(deltaTime);
     }
 
@@ -402,11 +408,8 @@ export class ParticleNetworkEffect implements VisualEffect {
     if (randomValue < spawnProbability && this.particles.length < this.parameters.maxParticles) {
       // Create manual test particle with deterministic index
       const particleIndex = this.particles.length; // Use current particle count as index
-      // Use particleSpawning as audioValue so the audio size formula is used,
-      // matching Lambda's updateWithTime() path: particleSize * (0.5 + audioValue * 1.5).
-      // Previously audioValue was undefined, causing fallthrough to the MIDI formula
-      // (3.0 + vel/127 * 5.0) which is independent of particleSize — this made live
-      // particles much larger than Lambda when particleSize is small.
+      // Use slider value as audioValue for no-audio fallback preview.
+      // When audio is playing, spawnFromEvents() handles spawning with real transient intensities.
       const audioValue = Math.min(this.parameters.particleSpawning, 1.0);
       const particle = this.createParticle(
         60, // Default note
@@ -420,6 +423,35 @@ export class ParticleNetworkEffect implements VisualEffect {
 
       this.particles.push(particle);
       this.lastManualSpawnTime = currentTime;
+    }
+  }
+
+  /**
+   * Spawn particles from spawnEvents based on current playback time.
+   * Uses the same intensity values as Lambda's updateWithTime() for WYSIWYG preview.
+   */
+  private spawnFromEvents(playbackTime: number, deltaTime: number) {
+    // deltaTime already includes frameSkipInterval multiplier from update()
+    const windowStart = playbackTime - deltaTime;
+    const windowEnd = playbackTime;
+
+    for (const event of this.parameters.spawnEvents) {
+      // Only spawn events within the current frame's time window
+      if (event.time < windowStart || event.time > windowEnd) continue;
+      if (this.particles.length >= this.parameters.maxParticles) break;
+
+      const particleIndex = this.particles.length;
+      const particle = this.createParticle(
+        60,
+        Math.floor(event.intensity * 127),
+        event.stemType || 'audio',
+        'audio',
+        event.stemType || 'audio',
+        event.intensity,
+        particleIndex
+      );
+
+      this.particles.push(particle);
     }
   }
 
@@ -568,6 +600,9 @@ export class ParticleNetworkEffect implements VisualEffect {
         break;
       case 'spawnEvents':
         this.parameters.spawnEvents = value as SpawnEvent[];
+        break;
+      case 'currentPlaybackTime':
+        this.currentPlaybackTime = value as number;
         break;
     }
   }
