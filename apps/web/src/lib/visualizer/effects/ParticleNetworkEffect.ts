@@ -534,7 +534,7 @@ export class ParticleNetworkEffect implements VisualEffect {
 
     // Create LineSegments2 (fat lines)
     this.connectionLine = new LineSegments2(this.connectionGeometry, this.connectionMaterial);
-    this.connectionLine.computeLineDistances();
+    // Don't call computeLineDistances here - geometry is empty, will be called in updateConnections
     this.internalScene.add(this.connectionLine);
   }
 
@@ -590,8 +590,8 @@ export class ParticleNetworkEffect implements VisualEffect {
     this.connectionGeometry.setPositions(activePositions);
     this.connectionGeometry.setColors(activeColors);
 
-    // Compute line distances for the LineSegments2
-    if (this.connectionLine) {
+    // Compute line distances for the LineSegments2 only when there are connections
+    if (this.connectionLine && connectionIndex > 0) {
       this.connectionLine.computeLineDistances();
     }
 
