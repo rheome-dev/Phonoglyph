@@ -194,7 +194,11 @@ function drawStereometer(ctx: CanvasRenderingContext2D, w: number, h: number, fe
   // Rotate 45 deg: X = L-R, Y = L+R
   const centerX = w/2;
   const centerY = h/2;
-  const scale = Math.min(w, h) * 0.4; // 40% margin
+  // Add margin from edge - use 10% margin so points stay within bounds
+  const margin = 0.1;
+  const maxRadius = Math.min(w, h) * (0.5 - margin);
+  // Scale factor - use 1.0 instead of 2.0 to keep points within bounds
+  const scale = maxRadius;
 
   ctx.fillStyle = `rgba(0,0,0, ${0.2})`; // Fade effect
   ctx.fillRect(0,0,w,h);
@@ -202,27 +206,54 @@ function drawStereometer(ctx: CanvasRenderingContext2D, w: number, h: number, fe
   if (showGrid) {
     // Parse grid color and apply opacity
     const gridColorMatch = gridColor.match(/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i);
+    let r: number, g: number, b: number;
     if (gridColorMatch) {
-      const r = parseInt(gridColorMatch[1], 16);
-      const g = parseInt(gridColorMatch[2], 16);
-      const b = parseInt(gridColorMatch[3], 16);
+      r = parseInt(gridColorMatch[1], 16);
+      g = parseInt(gridColorMatch[2], 16);
+      b = parseInt(gridColorMatch[3], 16);
       ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.3)`;
     } else {
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+      r = 255; g = 255; b = 255;
     }
     ctx.lineWidth = gridLineWidth;
+
+    // Draw concentric circles (radar style)
+    const numCircles = 4;
+    for (let c = 1; c <= numCircles; c++) {
+      const circleRadius = (c / numCircles) * maxRadius;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, circleRadius, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Draw radial lines from center to edge (8 directions for radar feel)
+    const numRadials = 8;
+    for (let r = 0; r < numRadials; r++) {
+      const angle = (r / numRadials) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(centerX, centerY);
+      ctx.lineTo(
+        centerX + Math.cos(angle) * maxRadius,
+        centerY + Math.sin(angle) * maxRadius
+      );
+      ctx.stroke();
+    }
+
+    // Also keep the crosshairs at 0°, 45°, 90°, 135° for classic goniometer feel
+    ctx.lineWidth = gridLineWidth * 1.5; // Slightly thicker for main axes
     ctx.beginPath();
-    // Vertical / Horizontal Crosshair - full container edges
-    ctx.moveTo(centerX, 0);
-    ctx.lineTo(centerX, h);
-    ctx.moveTo(0, centerY);
-    ctx.lineTo(w, centerY);
-    // Draw 45 degree angle lines - extended to full container corners
-    const diagScale = Math.max(w, h);
-    ctx.moveTo(centerX - diagScale, centerY + diagScale);
-    ctx.lineTo(centerX + diagScale, centerY - diagScale);
-    ctx.moveTo(centerX - diagScale, centerY - diagScale);
-    ctx.lineTo(centerX + diagScale, centerY + diagScale);
+    // Vertical
+    ctx.moveTo(centerX, centerY - maxRadius);
+    ctx.lineTo(centerX, centerY + maxRadius);
+    // Horizontal
+    ctx.moveTo(centerX - maxRadius, centerY);
+    ctx.lineTo(centerX + maxRadius, centerY);
+    // Diagonals (45°)
+    ctx.moveTo(centerX - maxRadius * 0.707, centerY - maxRadius * 0.707);
+    ctx.lineTo(centerX + maxRadius * 0.707, centerY + maxRadius * 0.707);
+    ctx.moveTo(centerX - maxRadius * 0.707, centerY + maxRadius * 0.707);
+    ctx.lineTo(centerX + maxRadius * 0.707, centerY - maxRadius * 0.707);
     ctx.stroke();
   }
 
@@ -240,8 +271,19 @@ function drawStereometer(ctx: CanvasRenderingContext2D, w: number, h: number, fe
     const mid = (l + r) / 2;
     const side = (l - r) / 2;
 
-    const x = centerX + side * scale * 2; // Side is X
-    const y = centerY - mid * scale * 2;  // Mid is Y (up)
+    // Calculate position and clamp to stay within bounds
+    let x = centerX + side * scale;
+    let y = centerY - mid * scale;
+
+    // Clamp to circle bounds (with small padding to prevent edge clipping)
+    const padding = pointSize / 2 + 1;
+    const maxX = centerX + maxRadius - padding;
+    const minX = centerX - maxRadius + padding;
+    const maxY = centerY + maxRadius - padding;
+    const minY = centerY - maxRadius + padding;
+
+    x = Math.max(minX, Math.min(maxX, x));
+    y = Math.max(minY, Math.min(maxY, y));
 
     // Opacity based on amplitude with glow multiplier
     const amp = Math.sqrt(l*l + r*r);
