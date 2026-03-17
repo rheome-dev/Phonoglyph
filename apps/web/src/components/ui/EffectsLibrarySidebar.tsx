@@ -67,6 +67,8 @@ interface EffectsLibrarySidebarProps {
 // Helper: getSliderMax for effect parameter sliders
 function getSliderMax(paramName: string) {
   switch (paramName) {
+    case 'baseRadius': return 1.0;
+    case 'hudOpacity': return 1.0;
     case 'animationSpeed': return 5.0;
     case 'noiseIntensity': return 2.0;
     case 'glowIntensity': return 2.0;
@@ -109,6 +111,8 @@ function getSliderMax(paramName: string) {
 // Helper: getSliderStep for effect parameter sliders
 function getSliderStep(paramName: string) {
   switch (paramName) {
+    case 'baseRadius': return 0.1;
+    case 'hudOpacity': return 0.1;
     case 'animationSpeed': return 0.05;
     case 'noiseIntensity': return 0.1;
     case 'glowIntensity': return 0.1;

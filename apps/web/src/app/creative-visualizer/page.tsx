@@ -2385,47 +2385,61 @@ function CreativeVisualizerPage() {
   ]);
 
   const getSliderMax = (paramName: string) => {
-    if (paramName === 'base-radius') return 1.0;
-    if (paramName === 'animation-speed') return 2.0;
-    if (paramName === 'glow-intensity') return 3.0;
-    if (paramName === 'hud-opacity') return 1.0;
-    if (paramName === 'opacity') return 1.0; // For image slideshow and other effects
-    if (paramName === 'max-particles') return 200;
-    if (paramName === 'connection-distance') return 5.0;
-    if (paramName === 'particle-size') return 50;
-    // ASCII Filter parameters
-    if (paramName === 'textSize') return 1.0;
-    if (paramName === 'gamma') return 2.2;
-    if (paramName === 'contrast') return 2.0;
-    if (paramName === 'invert') return 1.0;
-    // Bloom Filter parameters
-    if (paramName === 'intensity') return 2.0;
-    if (paramName === 'threshold') return 1.0;
-    if (paramName === 'softness') return 1.0;
-    if (paramName === 'radius') return 1.0;
-    return 100; // Default max for other numeric parameters
+    switch (paramName) {
+      case 'baseRadius':
+      case 'base-radius': return 1.0;
+      case 'animationSpeed':
+      case 'animation-speed': return 2.0;
+      case 'glowIntensity':
+      case 'glow-intensity': return 3.0;
+      case 'hudOpacity':
+      case 'hud-opacity': return 1.0;
+      case 'opacity': return 1.0;
+      case 'maxParticles':
+      case 'max-particles': return 200;
+      case 'connectionDistance':
+      case 'connection-distance': return 5.0;
+      case 'particleSize':
+      case 'particle-size': return 50;
+      case 'textSize': return 1.0;
+      case 'gamma': return 2.2;
+      case 'contrast': return 2.0;
+      case 'invert': return 1.0;
+      case 'intensity': return 2.0;
+      case 'threshold': return 1.0;
+      case 'softness': return 1.0;
+      case 'radius': return 1.0;
+      default: return 100;
+    }
   };
 
   const getSliderStep = (paramName: string) => {
-    if (paramName === 'base-radius') return 0.1;
-    if (paramName === 'animation-speed') return 0.1;
-    if (paramName === 'glow-intensity') return 0.1;
-    if (paramName === 'hud-opacity') return 0.1;
-    if (paramName === 'opacity') return 0.01; // Fine-grained control for opacity
-    if (paramName === 'max-particles') return 10;
-    if (paramName === 'connection-distance') return 0.1;
-    if (paramName === 'particle-size') return 5;
-    // ASCII Filter parameters
-    if (paramName === 'textSize') return 0.01;
-    if (paramName === 'gamma') return 0.01;
-    if (paramName === 'contrast') return 0.01;
-    if (paramName === 'invert') return 1.0; // Binary toggle
-    // Bloom Filter parameters
-    if (paramName === 'intensity') return 0.01;
-    if (paramName === 'threshold') return 0.01;
-    if (paramName === 'softness') return 0.01;
-    if (paramName === 'radius') return 0.01;
-    return 1; // Default step for other numeric parameters
+    switch (paramName) {
+      case 'baseRadius':
+      case 'base-radius': return 0.1;
+      case 'animationSpeed':
+      case 'animation-speed': return 0.1;
+      case 'glowIntensity':
+      case 'glow-intensity': return 0.1;
+      case 'hudOpacity':
+      case 'hud-opacity': return 0.1;
+      case 'opacity': return 0.01;
+      case 'maxParticles':
+      case 'max-particles': return 10;
+      case 'connectionDistance':
+      case 'connection-distance': return 0.1;
+      case 'particleSize':
+      case 'particle-size': return 5;
+      case 'textSize': return 0.01;
+      case 'gamma': return 0.01;
+      case 'contrast': return 0.01;
+      case 'invert': return 1.0;
+      case 'intensity': return 0.01;
+      case 'threshold': return 0.01;
+      case 'softness': return 0.01;
+      case 'radius': return 0.01;
+      default: return 1;
+    }
   };
 
   const handleParameterChange = (effectId: string, paramName: string, value: any) => {
