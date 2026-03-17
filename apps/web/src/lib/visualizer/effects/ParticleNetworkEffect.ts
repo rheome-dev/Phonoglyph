@@ -402,13 +402,19 @@ export class ParticleNetworkEffect implements VisualEffect {
     if (randomValue < spawnProbability && this.particles.length < this.parameters.maxParticles) {
       // Create manual test particle with deterministic index
       const particleIndex = this.particles.length; // Use current particle count as index
+      // Use particleSpawning as audioValue so the audio size formula is used,
+      // matching Lambda's updateWithTime() path: particleSize * (0.5 + audioValue * 1.5).
+      // Previously audioValue was undefined, causing fallthrough to the MIDI formula
+      // (3.0 + vel/127 * 5.0) which is independent of particleSize — this made live
+      // particles much larger than Lambda when particleSize is small.
+      const audioValue = Math.min(this.parameters.particleSpawning, 1.0);
       const particle = this.createParticle(
         60, // Default note
         Math.floor(this.parameters.particleSpawning * 127), // Use slider value as velocity
         'manual',
         'audio', // Use audio spawn type for visual distinction
         'manual',
-        undefined,
+        audioValue,
         particleIndex
       );
 
