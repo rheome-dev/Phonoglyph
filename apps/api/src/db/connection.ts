@@ -44,7 +44,7 @@ const prodDbConfig: PoolConfig = {
   // Longer connection timeout for serverless cold starts
   connectionTimeoutMillis: isServerless ? 30000 : 10000,
   // Allow pool to close idle connections quickly in serverless
-  allowExitOnIdle: isServerless,
+  allowExitOnIdle: !!isServerless,
 };
 
 // If the Supabase CA certificate is loaded, enforce SSL with it.

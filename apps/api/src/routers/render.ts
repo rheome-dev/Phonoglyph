@@ -137,7 +137,7 @@ export const renderRouter = router({
 
         // 2. Upload the heavy audioAnalysisData to R2 as a static file
         // We do this here so the Lambda doesn't have to talk to Supabase
-        await r2Client.send(new PutObjectCommand({
+        await (r2Client as any).send(new PutObjectCommand({
           Bucket: BUCKET_NAME,
           Key: analysisKey,
           Body: JSON.stringify(input.audioAnalysisData),
@@ -163,7 +163,7 @@ export const renderRouter = router({
 
           if (functions.length > 0) {
             // Prefer the function with the highest timeout to avoid orchestrator timeouts
-            const sorted = functions.sort((a, b) => {
+            const sorted = functions.sort((a: any, b: any) => {
               const aTimeout = parseInt(a.functionName.match(/(\d+)sec$/)?.[1] || '0');
               const bTimeout = parseInt(b.functionName.match(/(\d+)sec$/)?.[1] || '0');
               return bTimeout - aTimeout;
