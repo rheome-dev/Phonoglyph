@@ -58,7 +58,7 @@ export class ImageSlideshowEffect implements VisualEffect {
   private wasTriggered: boolean = false;
   private previousTriggerValue: number = 0; // Track previous value for edge detection
   private lastTriggerFrame: number = -999; // Frame when we last triggered (for cooldown)
-  private minFramesBetweenTriggers: number = 8; // Minimum ~133ms at 60fps between triggers
+  private minFramesBetweenTriggers: number = 3; // Minimum ~50ms at 60fps between triggers (allows very fast hi-hats/fills!)
   private textureLoader = new THREE.TextureLoader();
   private aspectRatio: number = 1;
   private failureCount = 0;
@@ -579,8 +579,8 @@ export class ImageSlideshowEffect implements VisualEffect {
   }
 
   private loadNextTextures(currentIndex: number) {
-    // Preload next 2 images to reduce concurrent network/decode pressure
-    for (let i = 1; i <= 2; i++) {
+    // Preload next 3 images to smooth out rapid sequential triggers
+    for (let i = 1; i <= 3; i++) {
       const idx = (currentIndex + i) % this.parameters.images.length;
       const url = this.parameters.images[idx];
       if (!this.textureCache.has(url) && !this.loadingImages.has(url)) {
@@ -902,10 +902,22 @@ export class ImageSlideshowEffect implements VisualEffect {
   }
 
   private cleanupCache() {
-    // Keep current and next 2 images (matching preload count)
+    // Keep up to 50 images in the cache to prevent thrashing GPU memory on looping slideshows
+    if (this.textureCache.size <= 50) return;
+
+    // If we exceed 50, keep current, 5 previous, and max forward
     const keepIndices = new Set<number>();
     keepIndices.add(this.currentImageIndex);
-    for (let i = 1; i <= 2; i++) {
+    
+    // Keep 5 previous (to handle loops backward or quick review)
+    for (let i = 1; i <= 5; i++) {
+        let prev = this.currentImageIndex - i;
+        if (prev < 0) prev += this.parameters.images.length;
+        keepIndices.add(prev);
+    }
+    
+    // Keep up to 44 forward
+    for (let i = 1; i <= 44; i++) {
       keepIndices.add((this.currentImageIndex + i) % this.parameters.images.length);
     }
 
@@ -914,7 +926,6 @@ export class ImageSlideshowEffect implements VisualEffect {
       if (this.parameters.images[idx]) keepUrls.add(this.parameters.images[idx]);
     });
 
-    // Don't dispose the texture currently in use by the material
     const currentMap = this.material.map;
 
     for (const [url, texture] of this.textureCache) {
