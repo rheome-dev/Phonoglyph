@@ -39,44 +39,34 @@ function getLogIndex(value: number, min: number, max: number, maxIndex: number) 
 
 function drawWaveform(ctx: CanvasRenderingContext2D, w: number, h: number, data?: number[], settings: any = {}) {
   const color = settings.color || '#4db3fa';
-  const lineWidth = settings.lineWidth || 2;
-  const showTransients = settings.showTransients;
+  const lineWidth = typeof settings.lineWidth === 'number' ? settings.lineWidth : 1;
   
   ctx.clearRect(0, 0, w, h);
+  
+  const midY = h / 2;
   
   // Center line
   ctx.strokeStyle = 'rgba(255,255,255,0.1)';
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(0, h/2);
-  ctx.lineTo(w, h/2);
+  ctx.moveTo(0, midY);
+  ctx.lineTo(w, midY);
   ctx.stroke();
 
-  const buffer = data || new Array(100).fill(0).map((_, i) => Math.sin(i * 0.1) * 0.5 + 0.5);
-  const sliceWidth = w / buffer.length;
+  const buffer = (data && data.length > 0) ? data : new Array(100).fill(0).map((_, i) => Math.sin(i * 0.1) * 0.5 + 0.5);
 
-  // Draw Filled Background style (Minimeters style)
+  // Draw bipolar waveform exactly like stem-waveform component
   ctx.beginPath();
-  ctx.moveTo(0, h / 2);
-  
-  for (let i = 0; i < buffer.length; i++) {
-    const v = buffer[i]; // assumed normalized 0-1
-    const y = v * h;
-    const x = i * sliceWidth;
-    
-    // Mirror effect for solid look
-    ctx.lineTo(x, y);
-  }
-  
-  // Create gradient fill
-  const grad = ctx.createLinearGradient(0, 0, 0, h);
-  grad.addColorStop(0, color);
-  grad.addColorStop(0.5, `${color}40`); // Transparent in middle
-  grad.addColorStop(1, color);
-  
   ctx.strokeStyle = color;
   ctx.lineWidth = lineWidth;
-  ctx.stroke();
+  
+  for (let i = 0; i < w; i++) {
+    const idx = Math.floor((i / w) * (buffer.length - 1));
+    const pointHeight = buffer[idx] * midY * 0.8; // Scale to 80% of half-height
+    const x = i;
+    ctx.moveTo(x, midY - pointHeight);
+    ctx.lineTo(x, midY + pointHeight);
+  }
   
   // Add glow
   ctx.shadowBlur = 10;
