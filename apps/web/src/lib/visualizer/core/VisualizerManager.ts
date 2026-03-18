@@ -462,19 +462,33 @@ export class VisualizerManager {
     // Update timeline current time to match
     this.timelineCurrentTime = timeInSeconds;
     
-    // 1. Sync all shaders to the EXACT frame-time
+    // 1. Sync all shaders to the EXACT frame-time, respecting layer start/end times
     this.effects.forEach((effect, layerId) => {
+      // Gate effect activation by timeline layer startTime/endTime
+      const effectLayer = this.timelineLayers.find(l => l.id === layerId);
+      const isLayerActive = effect.enabled && effectLayer
+        ? (timeInSeconds >= effectLayer.startTime && timeInSeconds <= effectLayer.endTime)
+        : false;
+
+      // Update compositor layer visibility based on timing
+      if (this.multiLayerCompositor) {
+        this.multiLayerCompositor.updateLayer(layerId, { enabled: isLayerActive });
+      }
+
+      // Only update active effects
+      if (!isLayerActive) return;
+
       // Set uTime directly (not incrementing) for deterministic behavior
       // Check if effect has uniforms property (BaseShaderEffect and custom effects)
       if ('uniforms' in effect && effect.uniforms && (effect as any).uniforms.uTime) {
         (effect as any).uniforms.uTime.value = timeInSeconds;
       }
-      
+
       // Use the frame number as a seed for any CPU-side randomness
       if ('setSeed' in effect && typeof (effect as any).setSeed === 'function') {
         (effect as any).setSeed(frame);
       }
-      
+
       // Update effect with deterministic time
       // Pass absolute time instead of deltaTime for deterministic updates
       if (typeof (effect as any).updateWithTime === 'function') {
