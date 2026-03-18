@@ -451,6 +451,8 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
   featureDecayTimes,
   featureSensitivities,
   analysisUrl,
+  backgroundColor,
+  isBackgroundVisible,
 }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
@@ -605,6 +607,14 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
 
       if (visualizationSettings) {
         manager.updateSettings(visualizationSettings as unknown as Record<string, number>);
+      }
+
+      // Apply background color settings from project
+      if (backgroundColor && typeof manager.setBackgroundColor === 'function') {
+        manager.setBackgroundColor(backgroundColor);
+      }
+      if (isBackgroundVisible !== undefined && typeof manager.setBackgroundVisibility === 'function') {
+        manager.setBackgroundVisibility(isBackgroundVisible);
       }
 
       const effectLayers = actualLayers.filter((l) => l.type === 'effect' && l.effectType);

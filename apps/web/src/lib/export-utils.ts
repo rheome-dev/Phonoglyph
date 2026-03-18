@@ -3,6 +3,7 @@ import {
   type FeatureMapping,
   useVisualizerStore,
 } from '@/stores/visualizerStore';
+import { useProjectSettingsStore } from '@/stores/projectSettingsStore';
 import type { RayboxCompositionProps } from '@/remotion/Root';
 import type { AudioAnalysisData } from '@/types/audio-analysis-data';
 import { DEFAULT_VISUALIZATION_SETTINGS } from 'phonoglyph-types';
@@ -34,6 +35,7 @@ export function getProjectExportPayload(
   // 1. Get Store State
   const timelineState = useTimelineStore.getState();
   const visualizerState = useVisualizerStore.getState();
+  const projectSettings = useProjectSettingsStore.getState();
 
   // 2. Extract and Hydrate Layers
   // Deep clone layers to avoid mutating the active store during hydration
@@ -134,6 +136,8 @@ export function getProjectExportPayload(
     baseParameterValues,
     featureDecayTimes,
     featureSensitivities,
+    backgroundColor: projectSettings.backgroundColor,
+    isBackgroundVisible: projectSettings.isBackgroundVisible,
   };
 }
 

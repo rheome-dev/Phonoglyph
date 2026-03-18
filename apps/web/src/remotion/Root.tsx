@@ -61,6 +61,10 @@ export interface RayboxCompositionProps extends Record<string, unknown> {
   featureSensitivities?: Record<string, number>;
   // URL to fetch analysis data from R2 (used when payload is too large for Lambda)
   analysisUrl?: string;
+  // Background color for the visualizer (hex string, e.g. '#1a0033')
+  backgroundColor?: string;
+  // Whether the background color layer is visible
+  isBackgroundVisible?: boolean;
 }
 
 const defaultProps: RayboxCompositionProps = {

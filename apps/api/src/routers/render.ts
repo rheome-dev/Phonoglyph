@@ -121,6 +121,9 @@ const triggerRenderSchema = z.object({
   // Audio modulation settings (TASK 4: previously stripped by Zod)
   featureDecayTimes: z.record(z.string(), z.number()).optional(),
   featureSensitivities: z.record(z.string(), z.number()).optional(),
+  // Background color settings
+  backgroundColor: z.string().optional(),
+  isBackgroundVisible: z.boolean().optional(),
 });
 
 export const renderRouter = router({
