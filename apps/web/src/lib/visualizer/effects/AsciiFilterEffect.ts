@@ -10,6 +10,8 @@ export interface AsciiFilterConfig {
   opacity: number; // 0.0 to 1.0 - overall effect opacity (audio reactive)
   contrast: number; // 0.0 to 2.0 - contrast boost (audio reactive)
   invert: number; // 0.0 or 1.0 - invert luminance (audio reactive)
+  threshold: number; // 0.0 to 1.0 - 0.5=all pixels, >0.5=highlights only, <0.5=shadows only (audio reactive)
+  feather: number; // 0.0 to 1.0 - softness of threshold edge (audio reactive)
   hideBackground: boolean; // If true, only show ASCII text without background
   textColor: [number, number, number]; // RGB color for ASCII characters (0-1 range)
   sourceTexture?: THREE.Texture; // Optional source texture to filter (deprecated - uses compositor)
@@ -49,6 +51,8 @@ export class AsciiFilterEffect implements VisualEffect {
       opacity: 0.87,
       contrast: 1.4,
       invert: 0.0,
+      threshold: 0.5, // Center = all pixels pass through (no filtering)
+      feather: 0.2, // Soft edge by default
       hideBackground: false,
       textColor: [1.0, 1.0, 1.0] as [number, number, number], // White by default
       sourceTexture: config?.sourceTexture,
@@ -153,6 +157,8 @@ export class AsciiFilterEffect implements VisualEffect {
       uOpacity: { value: this.parameters.opacity },
       uContrast: { value: this.parameters.contrast },
       uInvert: { value: this.parameters.invert },
+      uThreshold: { value: this.parameters.threshold },
+      uFeather: { value: this.parameters.feather },
       uHideBackground: { value: this.parameters.hideBackground ? 1.0 : 0.0 },
       uColor: { value: new THREE.Vector3(...this.parameters.textColor) },
     };
@@ -180,6 +186,8 @@ export class AsciiFilterEffect implements VisualEffect {
       uniform float uOpacity;
       uniform float uContrast;
       uniform float uInvert;
+      uniform float uThreshold;
+      uniform float uFeather;
       uniform float uHideBackground;
       uniform vec3 uColor;
 
@@ -187,42 +195,62 @@ export class AsciiFilterEffect implements VisualEffect {
 
       void main() {
         vec2 uv = vUv;
-        
+
         // 1. Aspect Ratio Correction
         float aspectRatio = uResolution.x / uResolution.y;
-        
+
         // Define the number of characters across the screen
         // uGridSize = 0.02 means ~50 characters wide
         float charsAcross = 1.0 / uGridSize;
         float charsDown = charsAcross / aspectRatio * 0.5; // 0.5 accounts for char aspect ratio (width/height)
 
         vec2 cellCount = vec2(charsAcross, charsDown);
-        
+
         // 2. Grid Calculation
         vec2 gridUV = floor(uv * cellCount) / cellCount; // The UV of the cell's top-left
         vec2 centerUV = gridUV + (0.5 / cellCount);      // The UV of the cell's center
-        
+
         // 3. Sample Luminance (only from non-transparent pixels)
         vec4 centerColor = texture2D(uTexture, centerUV);
-        
+
         // Check if the cell content is effectively transparent
         // If center is transparent, we treat the whole cell as empty
         if (centerColor.a < 0.1) {
           gl_FragColor = vec4(0.0);
           return;
         }
-        
+
         float gray = dot(centerColor.rgb, vec3(0.299, 0.587, 0.114)); // Standard Luma weights
-        
+
         // Apply Invert and Contrast
         gray = mix(gray, 1.0 - gray, uInvert);
         gray = pow(gray, uGamma); // Gamma corrects distribution
         gray = clamp((gray - 0.5) * uContrast + 0.5, 0.0, 1.0);
 
+        // 3b. Threshold gating
+        // uThreshold=0.5 means all pixels pass (no filtering).
+        // >0.5: highlights only — the further right, the brighter pixels must be to get ASCII.
+        // <0.5: shadows only — the further left, the darker pixels must be to get ASCII.
+        // uFeather controls the softness of the cutoff edge.
+        float thresholdMask = 1.0;
+        if (uThreshold > 0.501) {
+          // Highlights mode: only bright pixels get ASCII
+          // Map slider 0.5-1.0 to cutoff 0.0-1.0
+          float cutoff = (uThreshold - 0.5) * 2.0;
+          float featherHalf = max(uFeather * 0.5, 0.001);
+          thresholdMask = smoothstep(cutoff - featherHalf, cutoff + featherHalf, gray);
+        } else if (uThreshold < 0.499) {
+          // Shadows mode: only dark pixels get ASCII
+          // Map slider 0.0-0.5 to cutoff 1.0-0.0
+          float cutoff = (0.5 - uThreshold) * 2.0;
+          float featherHalf = max(uFeather * 0.5, 0.001);
+          thresholdMask = smoothstep(cutoff - featherHalf, cutoff + featherHalf, 1.0 - gray);
+        }
+
         // 4. Map Luminance to Character Index
         // Total characters in sprite sheet
-        float totalChars = uSpriteGrid.x * uSpriteGrid.y; 
-        
+        float totalChars = uSpriteGrid.x * uSpriteGrid.y;
+
         // Map 0.0-1.0 to 0-(totalChars-1)
         // We subtract 1.0 so white doesn't overflow the array
         float charIndex = floor(gray * (totalChars - 1.0));
@@ -249,29 +277,27 @@ export class AsciiFilterEffect implements VisualEffect {
         // If hideBackground is true, only show the ASCII text, otherwise blend with background
         vec3 asciiCellColor;
         float finalAlpha;
-        
+
         if (uHideBackground > 0.5) {
           // Hide background mode: only show ASCII text, make background transparent
-          // Use pure text color, no background blending
           asciiCellColor = uColor;
-          // Only show pixels where there's actual text (charColor.r > threshold)
-          // Use centerColor.a to respect source transparency, but multiply by charColor.r to only show text
           finalAlpha = centerColor.a * charColor.r;
         } else {
           // Normal mode: blend ASCII text with background
           asciiCellColor = mix(centerColor.rgb, uColor, charColor.r);
-          // We use the center alpha for the entire cell to maintain the blocky shape
           finalAlpha = centerColor.a;
         }
-        
+
         vec4 asciiResult = vec4(asciiCellColor, finalAlpha);
-        
+
         // Mix with original for opacity control
-        // If hideBackground is true, we don't blend with original (it's already transparent in asciiResult)
         vec4 original = texture2D(uTexture, uv);
         float blendFactor = uHideBackground > 0.5 ? 1.0 : uOpacity;
-        
-        gl_FragColor = mix(original, asciiResult, blendFactor);
+
+        // Apply threshold mask: where mask=0, show original; where mask=1, show ASCII
+        float finalBlend = blendFactor * thresholdMask;
+
+        gl_FragColor = mix(original, asciiResult, finalBlend);
       }
     `;
 
@@ -355,6 +381,8 @@ export class AsciiFilterEffect implements VisualEffect {
     if (this.uniforms.uOpacity) this.uniforms.uOpacity.value = this.parameters.opacity;
     if (this.uniforms.uContrast) this.uniforms.uContrast.value = this.parameters.contrast;
     if (this.uniforms.uInvert) this.uniforms.uInvert.value = this.parameters.invert;
+    if (this.uniforms.uThreshold) this.uniforms.uThreshold.value = this.parameters.threshold;
+    if (this.uniforms.uFeather) this.uniforms.uFeather.value = this.parameters.feather;
     if (this.uniforms.uHideBackground) this.uniforms.uHideBackground.value = this.parameters.hideBackground ? 1.0 : 0.0;
     if (this.uniforms.uColor) this.uniforms.uColor.value.set(...this.parameters.textColor);
     
@@ -447,6 +475,14 @@ export class AsciiFilterEffect implements VisualEffect {
       case 'invert':
         this.parameters.invert = typeof value === 'number' ? (value > 0.5 ? 1.0 : 0.0) : this.parameters.invert;
         this.uniforms.uInvert.value = this.parameters.invert;
+        break;
+      case 'threshold':
+        this.parameters.threshold = typeof value === 'number' ? Math.max(0.0, Math.min(1.0, value)) : this.parameters.threshold;
+        this.uniforms.uThreshold.value = this.parameters.threshold;
+        break;
+      case 'feather':
+        this.parameters.feather = typeof value === 'number' ? Math.max(0.0, Math.min(1.0, value)) : this.parameters.feather;
+        this.uniforms.uFeather.value = this.parameters.feather;
         break;
       case 'hideBackground':
         this.parameters.hideBackground = typeof value === 'boolean' ? value : this.parameters.hideBackground;

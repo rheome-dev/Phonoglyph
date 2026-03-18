@@ -99,6 +99,7 @@ function getSliderMax(paramName: string) {
     case 'gamma': return 2.2;
     case 'contrast': return 2.0;
     case 'invert': return 1.0;
+    case 'feather': return 1.0;
     // ConsoleFeed overlay parameters
     case 'fontSize': return 20;
     case 'maxLines': return 100;
@@ -142,6 +143,7 @@ function getSliderStep(paramName: string) {
     case 'gamma': return 0.01;
     case 'contrast': return 0.01;
     case 'invert': return 1.0;
+    case 'feather': return 0.01;
     // ConsoleFeed overlay parameters
     case 'fontSize': return 1;
     case 'maxLines': return 1;
