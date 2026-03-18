@@ -220,31 +220,28 @@ export class AsciiFilterEffect implements VisualEffect {
           return;
         }
 
-        float gray = dot(centerColor.rgb, vec3(0.299, 0.587, 0.114)); // Standard Luma weights
+        // Raw luminance for threshold gating (before any processing)
+        float rawGray = dot(centerColor.rgb, vec3(0.299, 0.587, 0.114));
 
-        // Apply Invert and Contrast
+        // Processed gray for character selection
+        float gray = rawGray;
         gray = mix(gray, 1.0 - gray, uInvert);
         gray = pow(gray, uGamma); // Gamma corrects distribution
         gray = clamp((gray - 0.5) * uContrast + 0.5, 0.0, 1.0);
 
-        // 3b. Threshold gating
-        // uThreshold=0.5 means all pixels pass (no filtering).
-        // >0.5: highlights only — the further right, the brighter pixels must be to get ASCII.
-        // <0.5: shadows only — the further left, the darker pixels must be to get ASCII.
-        // uFeather controls the softness of the cutoff edge.
+        // 3b. Threshold gating (uses rawGray so it gates on actual pixel brightness,
+        // not the processed value that drives character selection)
         float thresholdMask = 1.0;
         if (uThreshold > 0.501) {
           // Highlights mode: only bright pixels get ASCII
-          // Map slider 0.5-1.0 to cutoff 0.0-1.0
           float cutoff = (uThreshold - 0.5) * 2.0;
           float featherHalf = max(uFeather * 0.5, 0.001);
-          thresholdMask = smoothstep(cutoff - featherHalf, cutoff + featherHalf, gray);
+          thresholdMask = smoothstep(cutoff - featherHalf, cutoff + featherHalf, rawGray);
         } else if (uThreshold < 0.499) {
           // Shadows mode: only dark pixels get ASCII
-          // Map slider 0.0-0.5 to cutoff 1.0-0.0
           float cutoff = (0.5 - uThreshold) * 2.0;
           float featherHalf = max(uFeather * 0.5, 0.001);
-          thresholdMask = smoothstep(cutoff - featherHalf, cutoff + featherHalf, 1.0 - gray);
+          thresholdMask = smoothstep(cutoff - featherHalf, cutoff + featherHalf, 1.0 - rawGray);
         }
 
         // 4. Map Luminance to Character Index
