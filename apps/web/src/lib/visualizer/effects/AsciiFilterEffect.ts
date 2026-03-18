@@ -11,7 +11,7 @@ export interface AsciiFilterConfig {
   contrast: number; // 0.0 to 2.0 - contrast boost (audio reactive)
   invert: number; // 0.0 or 1.0 - invert luminance (audio reactive)
   threshold: number; // 0.0 to 1.0 - 0.5=all pixels, >0.5=highlights only, <0.5=shadows only (audio reactive)
-  feather: number; // 0.0 to 1.0 - softness of threshold edge (audio reactive)
+  falloff: number; // 0.0 to 1.0 - how tightly ASCII sticks to threshold cutoff (audio reactive)
   hideBackground: boolean; // If true, only show ASCII text without background
   textColor: [number, number, number]; // RGB color for ASCII characters (0-1 range)
   sourceTexture?: THREE.Texture; // Optional source texture to filter (deprecated - uses compositor)
@@ -52,7 +52,7 @@ export class AsciiFilterEffect implements VisualEffect {
       contrast: 1.4,
       invert: 0.0,
       threshold: 0.5, // Center = all pixels pass through (no filtering)
-      feather: 0.2, // Soft edge by default
+      falloff: 0.2, // Soft edge by default
       hideBackground: false,
       textColor: [1.0, 1.0, 1.0] as [number, number, number], // White by default
       sourceTexture: config?.sourceTexture,
@@ -158,7 +158,7 @@ export class AsciiFilterEffect implements VisualEffect {
       uContrast: { value: this.parameters.contrast },
       uInvert: { value: this.parameters.invert },
       uThreshold: { value: this.parameters.threshold },
-      uFeather: { value: this.parameters.feather },
+      uFalloff: { value: this.parameters.falloff },
       uHideBackground: { value: this.parameters.hideBackground ? 1.0 : 0.0 },
       uColor: { value: new THREE.Vector3(...this.parameters.textColor) },
     };
@@ -187,7 +187,7 @@ export class AsciiFilterEffect implements VisualEffect {
       uniform float uContrast;
       uniform float uInvert;
       uniform float uThreshold;
-      uniform float uFeather;
+      uniform float uFalloff;
       uniform float uHideBackground;
       uniform vec3 uColor;
 
@@ -229,19 +229,18 @@ export class AsciiFilterEffect implements VisualEffect {
         gray = pow(gray, uGamma); // Gamma corrects distribution
         gray = clamp((gray - 0.5) * uContrast + 0.5, 0.0, 1.0);
 
-        // 3b. Threshold gating (uses rawGray so it gates on actual pixel brightness,
-        // not the processed value that drives character selection)
+        // 3b. Threshold gating (uses rawGray — actual pixel brightness)
+        // thresholdMask is a cell selector: 1=ASCII, 0=show original
+        // falloff controls transition sharpness, NOT opacity
         float thresholdMask = 1.0;
         if (uThreshold > 0.501) {
-          // Highlights mode: only bright pixels get ASCII
           float cutoff = (uThreshold - 0.5) * 2.0;
-          float featherHalf = max(uFeather * 0.5, 0.001);
-          thresholdMask = smoothstep(cutoff - featherHalf, cutoff + featherHalf, rawGray);
+          float falloffHalf = max(uFalloff * 0.5, 0.001);
+          thresholdMask = smoothstep(cutoff - falloffHalf, cutoff + falloffHalf, rawGray);
         } else if (uThreshold < 0.499) {
-          // Shadows mode: only dark pixels get ASCII
           float cutoff = (0.5 - uThreshold) * 2.0;
-          float featherHalf = max(uFeather * 0.5, 0.001);
-          thresholdMask = smoothstep(cutoff - featherHalf, cutoff + featherHalf, 1.0 - rawGray);
+          float falloffHalf = max(uFalloff * 0.5, 0.001);
+          thresholdMask = smoothstep(cutoff - falloffHalf, cutoff + falloffHalf, 1.0 - rawGray);
         }
 
         // 4. Map Luminance to Character Index
@@ -287,14 +286,15 @@ export class AsciiFilterEffect implements VisualEffect {
 
         vec4 asciiResult = vec4(asciiCellColor, finalAlpha);
 
-        // Mix with original for opacity control
+        // Mix with original: opacity controls ASCII strength, threshold selects cells
         vec4 original = texture2D(uTexture, uv);
         float blendFactor = uHideBackground > 0.5 ? 1.0 : uOpacity;
 
-        // Apply threshold mask: where mask=0, show original; where mask=1, show ASCII
-        float finalBlend = blendFactor * thresholdMask;
+        // First blend ASCII with original at the opacity level
+        vec4 asciiWithOpacity = mix(original, asciiResult, blendFactor);
 
-        gl_FragColor = mix(original, asciiResult, finalBlend);
+        // Then use thresholdMask as a hard cell selector (ASCII or original)
+        gl_FragColor = mix(original, asciiWithOpacity, thresholdMask);
       }
     `;
 
@@ -379,7 +379,7 @@ export class AsciiFilterEffect implements VisualEffect {
     if (this.uniforms.uContrast) this.uniforms.uContrast.value = this.parameters.contrast;
     if (this.uniforms.uInvert) this.uniforms.uInvert.value = this.parameters.invert;
     if (this.uniforms.uThreshold) this.uniforms.uThreshold.value = this.parameters.threshold;
-    if (this.uniforms.uFeather) this.uniforms.uFeather.value = this.parameters.feather;
+    if (this.uniforms.uFalloff) this.uniforms.uFalloff.value = this.parameters.falloff;
     if (this.uniforms.uHideBackground) this.uniforms.uHideBackground.value = this.parameters.hideBackground ? 1.0 : 0.0;
     if (this.uniforms.uColor) this.uniforms.uColor.value.set(...this.parameters.textColor);
     
@@ -477,9 +477,9 @@ export class AsciiFilterEffect implements VisualEffect {
         this.parameters.threshold = typeof value === 'number' ? Math.max(0.0, Math.min(1.0, value)) : this.parameters.threshold;
         this.uniforms.uThreshold.value = this.parameters.threshold;
         break;
-      case 'feather':
-        this.parameters.feather = typeof value === 'number' ? Math.max(0.0, Math.min(1.0, value)) : this.parameters.feather;
-        this.uniforms.uFeather.value = this.parameters.feather;
+      case 'falloff':
+        this.parameters.falloff = typeof value === 'number' ? Math.max(0.0, Math.min(1.0, value)) : this.parameters.falloff;
+        this.uniforms.uFalloff.value = this.parameters.falloff;
         break;
       case 'hideBackground':
         this.parameters.hideBackground = typeof value === 'boolean' ? value : this.parameters.hideBackground;

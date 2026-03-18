@@ -112,7 +112,7 @@ EffectRegistry.register({
     contrast: 1.4,
     invert: 0.0,
     threshold: 0.5,
-    feather: 0.2,
+    falloff: 0.2,
     hideBackground: false,
     color: [1.0, 1.0, 1.0] // White by default
   }
