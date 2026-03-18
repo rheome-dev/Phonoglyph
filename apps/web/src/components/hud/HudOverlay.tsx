@@ -510,10 +510,6 @@ function drawVuMeter(ctx: CanvasRenderingContext2D, w: number, h: number, value:
   ctx.stroke();
   ctx.shadowBlur = 0;
   
-  // Draw Pivot Cover (The black box at the bottom)
-  ctx.fillStyle = '#111'; // Or match background color
-  ctx.beginPath();
-  ctx.fillRect(0, h * 0.85, w, h * 0.15);
 }
 
 function drawChromaWheel(ctx: CanvasRenderingContext2D, w: number, h: number, chroma: any, settings: any) {
