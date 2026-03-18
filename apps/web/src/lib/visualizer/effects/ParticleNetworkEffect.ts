@@ -544,8 +544,15 @@ export class ParticleNetworkEffect implements VisualEffect {
     const colorB = parseInt(connectionColorHex.slice(5, 7), 16) / 255;
 
     // Get cylinder radius from connectionLineWidth parameter
-    // Default to 0.02 if not set, scale by parameter
-    const cylinderRadius = 0.02 * Math.max(this.parameters.connectionLineWidth, 0.5);
+    // Mapping: slider=0 → 0.01 (1px equivalent), slider=25 → 0.02 (original 1px at linewidth=1), slider=50 → 0.04
+    // This keeps same visual width at 50% as the old linewidth=1 had
+    const minRadius = 0.01; // 1px equivalent at slider=0
+    const midRadius = 0.02; // original linewidth=1 at slider=0.5 (25)
+    const maxSliderValue = 50;
+    const sliderValue = this.parameters.connectionLineWidth;
+    const cylinderRadius = sliderValue <= 25
+      ? minRadius + (midRadius - minRadius) * (sliderValue / 25)
+      : midRadius + (midRadius) * ((sliderValue - 25) / 25);
 
     // Temporary vectors for cylinder transform calculations
     const midpoint = new THREE.Vector3();
