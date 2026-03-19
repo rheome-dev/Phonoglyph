@@ -119,7 +119,7 @@ export class MultiLayerCompositor {
         minFilter: THREE.LinearFilter,
         magFilter: THREE.LinearFilter,
         generateMipmaps: false,
-        samples: 4
+        samples: this.config.enableAntialiasing !== false ? 4 : 0
       }
     );
   }

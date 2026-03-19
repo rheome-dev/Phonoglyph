@@ -55,6 +55,9 @@ export class VisualizerManager {
   private consecutiveSlowFrames = 0;
   private maxSlowFrames = 10; // Emergency pause after 10 consecutive slow frames
   
+  // Rendering context flag (true when running inside Remotion Lambda)
+  private isRenderingContext = false;
+
   // Visualization parameters
   private visualParams = {
     globalScale: 1.0,
@@ -108,6 +111,7 @@ export class VisualizerManager {
     // Renderer setup with error handling and fallbacks
     // Detect if we are currently rendering a video or still
     const isRendering = getRemotionEnvironment().isRendering;
+    this.isRenderingContext = isRendering;
     
     try {
       // First, check if canvas already has a context to avoid conflicts
@@ -201,7 +205,7 @@ export class VisualizerManager {
     this.multiLayerCompositor = new MultiLayerCompositor(this.renderer, {
       width: config.canvas.width,
       height: config.canvas.height,
-      enableAntialiasing: true,
+      enableAntialiasing: !this.isRenderingContext,
       pixelRatio: Math.min(window.devicePixelRatio, config.canvas.pixelRatio || 2)
     });
     
