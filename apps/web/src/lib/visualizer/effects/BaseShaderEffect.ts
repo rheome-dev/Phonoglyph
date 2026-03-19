@@ -89,7 +89,8 @@ export abstract class BaseShaderEffect implements VisualEffect {
                 transparent: true,
                 side: THREE.DoubleSide,
                 depthWrite: false,
-                depthTest: false
+                depthTest: false,
+                toneMapped: false // Prevent ACES Filmic from compressing effect output
             });
         } catch (error) {
             debugLog.error(`❌ ${this.name} shader compilation error:`, error);

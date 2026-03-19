@@ -171,11 +171,21 @@ export class MultiLayerCompositor {
    */
   public render(): void {
     // Step 1: Render each layer to its render target
+    // IMPORTANT: For layers that depend on accumulated textures from layers below
+    // (e.g., bloom, ASCII filter), we must refresh their accumulation targets
+    // AFTER the prior layers have been rendered, so they read current-frame data
+    // instead of stale previous-frame data.
     let renderedLayers = 0;
     for (const layerId of this.layerOrder) {
       const layer = this.layers.get(layerId);
       if (!layer || !layer.enabled) continue;
-      
+
+      // If this layer has an accumulation target (it reads from layers below),
+      // refresh it now using the freshly-rendered prior layers' render targets
+      if (this.accumulationTargets.has(layerId)) {
+        this.refreshAccumulationTarget(layerId);
+      }
+
       this.renderer.setRenderTarget(layer.renderTarget);
       // Clear color/depth/stencil with transparent background
       this.renderer.clear(true, true, true);
@@ -268,7 +278,8 @@ export class MultiLayerCompositor {
       blending: blendMode,
       depthTest: false,
       depthWrite: false,
-      premultipliedAlpha: true // CRITICAL FIX: Changed from false to true for proper alpha blending
+      premultipliedAlpha: true, // CRITICAL FIX: Changed from false to true for proper alpha blending
+      toneMapped: false // Intermediate compositing must stay linear - tone map only at final output
     });
     
     const mesh = new THREE.Mesh(this.quadGeometry, material);
@@ -446,9 +457,40 @@ export class MultiLayerCompositor {
   }
 
   /**
+   * Refresh an accumulation target using the freshly-rendered layer render targets.
+   * Called during render() AFTER prior layers have been rendered to their render targets,
+   * ensuring the accumulation uses current-frame data instead of stale previous-frame data.
+   * This fixes bloom/filter effects showing one-frame-behind content in Lambda renders.
+   */
+  private refreshAccumulationTarget(layerId: string): void {
+    const targetIndex = this.layerOrder.indexOf(layerId);
+    if (targetIndex <= 0) return;
+
+    const accumulationTarget = this.accumulationTargets.get(layerId);
+    if (!accumulationTarget) return;
+
+    const previousRenderTarget = this.renderer.getRenderTarget();
+    const autoClear = this.renderer.autoClear;
+    this.renderer.autoClear = false;
+
+    this.renderer.setRenderTarget(accumulationTarget);
+    this.renderer.clear(true, true, true);
+
+    for (let i = 0; i < targetIndex; i++) {
+      const prevLayerId = this.layerOrder[i];
+      const layer = this.layers.get(prevLayerId);
+      if (!layer || !layer.enabled) continue;
+      this.renderLayerWithBlending(layer);
+    }
+
+    this.renderer.setRenderTarget(previousRenderTarget);
+    this.renderer.autoClear = autoClear;
+  }
+
+  /**
    * Get the accumulated texture from all layers before a specific layer
    * This composites all layers up to (but not including) the target layer
-   * 
+   *
    * FIXED: Uses a unique render target for each requesting layer ID.
    * This prevents feedback loops where multiple layers sharing 'tempRenderTarget'
    * overwrite each other's input textures within the same frame.

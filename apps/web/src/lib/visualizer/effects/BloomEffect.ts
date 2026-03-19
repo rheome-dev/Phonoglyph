@@ -34,7 +34,7 @@ export class BloomEffect extends BaseShaderEffect {
       uniform float uIntensity;
       uniform float uThreshold;
       uniform float uRadius;
-      
+
       varying vec2 vUv;
 
       float luma(vec3 color) {
@@ -44,35 +44,37 @@ export class BloomEffect extends BaseShaderEffect {
       void main() {
         vec4 color = texture2D(uTexture, vUv);
         vec3 bloom = vec3(0.0);
-        
-        // Single-pass bloom approximation
-        // We sample a few points around the pixel to simulate a blur
-        // This is less expensive than a full multi-pass Gaussian blur but effective for a single shader
-        
+
+        // Resolution-adaptive bloom: scale sample offsets so bloom radius
+        // is consistent across resolutions (reference: 720px height).
+        // Without this, a 4-pixel radius at 1080p is nearly invisible.
+        float resScale = max(uResolution.x, uResolution.y) / 720.0;
+
         float totalWeight = 0.0;
         vec2 texelSize = 1.0 / uResolution;
-        
-        // 9-tap box/gaussian hybrid blur
+
+        // 5x5 Gaussian-weighted blur with resolution-scaled offsets
         for(float x = -2.0; x <= 2.0; x += 1.0) {
             for(float y = -2.0; y <= 2.0; y += 1.0) {
-                vec2 offset = vec2(x, y) * uRadius * 2.0;
+                vec2 offset = vec2(x, y) * uRadius * 2.0 * resScale;
                 vec4 sampleColor = texture2D(uTexture, vUv + offset * texelSize);
-                
-                // Thresholding
+
+                // Thresholding with wider transition for smoother bloom edge
                 float brightness = luma(sampleColor.rgb);
-                float contribution = smoothstep(uThreshold, uThreshold + 0.1, brightness);
-                
-                // Weight decreases with distance
-                float weight = 1.0 / (1.0 + length(vec2(x, y)));
-                
+                float contribution = smoothstep(uThreshold, uThreshold + 0.2, brightness);
+
+                // Gaussian-like weight falloff
+                float dist = length(vec2(x, y));
+                float weight = exp(-dist * dist * 0.5);
+
                 bloom += sampleColor.rgb * contribution * weight;
                 totalWeight += weight;
             }
         }
-        
+
         bloom /= totalWeight;
-        
-        // Composite
+
+        // Composite: add bloom glow to original color
         gl_FragColor = vec4(color.rgb + bloom * uIntensity, color.a);
       }
     `;
