@@ -52,7 +52,10 @@ export class GodRaysEffect extends BaseShaderEffect {
       
       varying vec2 vUv;
       
-      const int MAX_ITERATIONS = 50;
+      // Reduced from 50 to 30 for Lambda/swangle performance.
+      // At 1080p, each iteration adds ~2M texture lookups in software rendering.
+      // 30 iterations provides good visual quality with ~40% less render time.
+      const int MAX_ITERATIONS = 30;
 
       float luma(vec3 color) {
         return dot(color, vec3(0.299, 0.587, 0.114));

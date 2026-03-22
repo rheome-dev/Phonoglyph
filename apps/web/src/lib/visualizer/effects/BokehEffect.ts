@@ -55,11 +55,15 @@ export class BokehEffect extends BaseShaderEffect {
         vec4 color = vec4(0.0);
         float totalWeight = 0.0;
         
+        // Resolution-adaptive: scale blur offsets so effect is consistent
+        // across resolutions (reference: 720px).
+        float resScale = max(uResolution.x, uResolution.y) / 720.0;
+
         // Hexagonal bokeh sampling pattern
         for (int angle = 0; angle < 6; angle++) {
           float theta = float(angle) * 1.047197551; // 60 degrees
           for (int ring = 1; ring <= 3; ring++) {
-            float r = float(ring) * blur * 0.01;
+            float r = float(ring) * blur * 0.01 * resScale;
             vec2 offset = r * vec2(cos(theta), sin(theta));
             color += texture2D(uTexture, uv + offset);
             totalWeight += 1.0;

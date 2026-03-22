@@ -39,7 +39,10 @@ export class ProgressiveBlurEffect extends BaseShaderEffect {
         float aspectRatio = uResolution.x / uResolution.y;
         
         float dist = length((uv - uCenter) * vec2(aspectRatio, 1.0));
-        float blurAmount = dist * uIntensity * 0.02;
+        // Resolution-adaptive: scale blur so effect is consistent
+        // across resolutions (reference: 720px).
+        float resScale = max(uResolution.x, uResolution.y) / 720.0;
+        float blurAmount = dist * uIntensity * 0.02 * resScale;
         
         vec4 color = vec4(0.0);
         vec2 pixelSize = vec2(1.0) / uResolution;

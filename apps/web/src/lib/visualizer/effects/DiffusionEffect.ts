@@ -36,7 +36,10 @@ export class DiffusionEffect extends BaseShaderEffect {
       void main() {
         vec4 color = vec4(0.0);
         vec2 pixelSize = vec2(1.0) / uResolution;
-        float radius = uSize * 0.005;
+        // Resolution-adaptive: scale radius so effect is consistent
+        // across resolutions (reference: 720px).
+        float resScale = max(uResolution.x, uResolution.y) / 720.0;
+        float radius = uSize * 0.005 * resScale;
         
         // Soft box blur with falloff
         for (float x = -2.0; x <= 2.0; x++) {

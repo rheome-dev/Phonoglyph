@@ -306,7 +306,8 @@ export class AsciiFilterEffect implements VisualEffect {
         transparent: true,
         side: THREE.DoubleSide,
         depthWrite: false,
-        depthTest: false
+        depthTest: false,
+        toneMapped: false
       });
     } catch (error) {
       debugLog.error('❌ ASCII Filter shader compilation error:', error);

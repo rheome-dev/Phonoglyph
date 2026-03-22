@@ -58,7 +58,10 @@ export class BlurEffect extends BaseShaderEffect {
         float totalWeight = 0.0;
         
         int samples = int(9.0 * uQuality);
-        float amount = uRadius * uIntensity * 0.001;
+        // Resolution-adaptive: scale blur so effect is consistent
+        // across resolutions (reference: 720px).
+        float resScale = max(uResolution.x, uResolution.y) / 720.0;
+        float amount = uRadius * uIntensity * 0.001 * resScale;
         
         // Center sample
         color += texture2D(uTexture, uv) * getGaussianWeight(0);
