@@ -19,7 +19,7 @@ import { parseParamKey } from '@/lib/visualizer/paramKeys';
 import { debugLog } from '@/lib/utils';
 import { RemotionOverlayRenderer } from './RemotionOverlayRenderer';
 
-const VALID_STEMS = new Set(['master', 'drums', 'bass', 'vocals', 'other']);
+const VALID_STEMS = new Set(['master', 'drums', 'bass', 'vocals', 'melody', 'other']);
 
 /**
  * Default decay times for stateless peaks calculation.
