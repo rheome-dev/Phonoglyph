@@ -47,9 +47,9 @@ export declare const audioAnalysisSandboxRouter: import("@trpc/server").CreateRo
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -72,8 +72,8 @@ export declare const audioAnalysisSandboxRouter: import("@trpc/server").CreateRo
                     analysisParams?: any;
                 };
                 rms: {
-                    value: number;
                     time: number;
+                    value: number;
                 }[];
                 transients: {
                     time: number;
@@ -90,8 +90,8 @@ export declare const audioAnalysisSandboxRouter: import("@trpc/server").CreateRo
             };
             fileMetadataId: string;
             waveformData: {
-                points: number[];
                 sampleRate: number;
+                points: number[];
                 duration: number;
                 markers: any[];
             };
@@ -114,8 +114,8 @@ export declare const audioAnalysisSandboxRouter: import("@trpc/server").CreateRo
                     analysisParams?: any;
                 };
                 rms: {
-                    value: number;
                     time: number;
+                    value: number;
                 }[];
                 transients: {
                     time: number;
@@ -132,8 +132,8 @@ export declare const audioAnalysisSandboxRouter: import("@trpc/server").CreateRo
             };
             fileMetadataId: string;
             waveformData: {
-                points: number[];
                 sampleRate: number;
+                points: number[];
                 duration: number;
                 markers: any[];
             };
@@ -157,9 +157,9 @@ export declare const audioAnalysisSandboxRouter: import("@trpc/server").CreateRo
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -201,9 +201,9 @@ export declare const audioAnalysisSandboxRouter: import("@trpc/server").CreateRo
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -247,9 +247,9 @@ export declare const audioAnalysisSandboxRouter: import("@trpc/server").CreateRo
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -278,9 +278,9 @@ export declare const audioAnalysisSandboxRouter: import("@trpc/server").CreateRo
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;

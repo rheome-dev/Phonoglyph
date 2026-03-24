@@ -21,9 +21,9 @@ export declare const userRouter: import("@trpc/server").CreateRouterInner<import
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -52,20 +52,20 @@ export declare const userRouter: import("@trpc/server").CreateRouterInner<import
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
         };
         _input_in: {
-            avatar_url?: string | undefined;
             name?: string | undefined;
+            avatar_url?: string | undefined;
         };
         _input_out: {
-            avatar_url?: string | undefined;
             name?: string | undefined;
+            avatar_url?: string | undefined;
         };
         _output_in: typeof import("@trpc/server").unsetMarker;
         _output_out: typeof import("@trpc/server").unsetMarker;
@@ -86,9 +86,9 @@ export declare const userRouter: import("@trpc/server").CreateRouterInner<import
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -118,9 +118,9 @@ export declare const userRouter: import("@trpc/server").CreateRouterInner<import
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;

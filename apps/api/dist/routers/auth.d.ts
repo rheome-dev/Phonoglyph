@@ -46,9 +46,9 @@ export declare const authRouter: import("@trpc/server").CreateRouterInner<import
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;

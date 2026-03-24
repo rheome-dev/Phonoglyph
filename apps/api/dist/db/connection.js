@@ -35,11 +35,20 @@ catch (error) {
     caCert = undefined;
 }
 const connectionString = process.env.DATABASE_URL;
+// Serverless environments need different connection settings
+// Note: For Supabase, use connection pooler (port 6543) for better serverless performance
+// Direct connection (port 5432) has connection limits that can cause timeouts
+const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
 const prodDbConfig = {
     connectionString: connectionString,
-    max: 20,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 10000,
+    // Reduce pool size for serverless (each function invocation is isolated)
+    max: isServerless ? 1 : 20,
+    // Shorter idle timeout for serverless to release connections faster
+    idleTimeoutMillis: isServerless ? 10000 : 30000,
+    // Longer connection timeout for serverless cold starts
+    connectionTimeoutMillis: isServerless ? 30000 : 10000,
+    // Allow pool to close idle connections quickly in serverless
+    allowExitOnIdle: !!isServerless,
 };
 // If the Supabase CA certificate is loaded, enforce SSL with it.
 // This is the recommended and most secure way to connect to Supabase.
@@ -64,19 +73,39 @@ const dbConfig = connectionString
     };
 // Create connection pool
 exports.pool = new pg_1.Pool(dbConfig);
-// Test database connection
-async function testConnection() {
-    try {
-        const client = await exports.pool.connect();
-        const result = await client.query('SELECT NOW()');
-        client.release();
-        logger_1.logger.log('✅ Database connected successfully:', result.rows[0]);
-        return true;
+// Test database connection with retry logic for serverless
+async function testConnection(retries = 2) {
+    const isServerlessEnv = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+            const client = await exports.pool.connect();
+            const result = await client.query('SELECT NOW()');
+            client.release();
+            logger_1.logger.log('✅ Database connected successfully:', result.rows[0]);
+            return true;
+        }
+        catch (err) {
+            const isLastAttempt = attempt === retries;
+            const errorMessage = err?.message || String(err);
+            // Log error but don't fail initialization in serverless (non-blocking)
+            if (isServerlessEnv && isLastAttempt) {
+                console.error('⚠️  Database connection test failed (non-blocking in serverless):', errorMessage);
+                console.error('⚠️  Connection will be established on first query if database is available');
+                console.error('💡 Tip: For better serverless performance, use Supabase connection pooler (port 6543)');
+                return false; // Don't throw, allow serverless function to start
+            }
+            if (isLastAttempt) {
+                logger_1.logger.error('❌ Database connection failed after retries:', err);
+                // In non-serverless, we might want to throw, but for now return false
+                return false;
+            }
+            // Wait before retry (exponential backoff)
+            const delay = Math.min(1000 * Math.pow(2, attempt), 5000);
+            logger_1.logger.log(`⏳ Database connection attempt ${attempt + 1} failed, retrying in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
     }
-    catch (err) {
-        logger_1.logger.error('❌ Database connection failed:', err);
-        return false;
-    }
+    return false;
 }
 exports.testConnection = testConnection;
 // Graceful shutdown

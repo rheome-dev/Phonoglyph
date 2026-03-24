@@ -51,9 +51,9 @@ export declare const protectedProcedure: import("@trpc/server").ProcedureBuilder
     }>;
     _meta: object;
     _ctx_out: {
+        user: User;
         req: any;
         res: any;
-        user: User;
         session: any;
         supabase: any;
         isGuest: boolean;
@@ -76,9 +76,9 @@ export declare const flexibleProcedure: import("@trpc/server").ProcedureBuilder<
     }>;
     _meta: object;
     _ctx_out: {
+        user: User;
         req: any;
         res: any;
-        user: User;
         session: any;
         supabase: any;
         isGuest: boolean;
@@ -101,9 +101,9 @@ export declare const guestFriendlyProcedure: import("@trpc/server").ProcedureBui
     }>;
     _meta: object;
     _ctx_out: {
+        user: User | null;
         req: any;
         res: any;
-        user: User | null;
         session: any;
         supabase: any;
         isGuest: boolean;

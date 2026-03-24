@@ -93,9 +93,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -133,9 +133,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -164,20 +164,20 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
             };
             _input_in: {
-                avatar_url?: string | undefined;
                 name?: string | undefined;
+                avatar_url?: string | undefined;
             };
             _input_out: {
-                avatar_url?: string | undefined;
                 name?: string | undefined;
+                avatar_url?: string | undefined;
             };
             _output_in: typeof import("@trpc/server").unsetMarker;
             _output_out: typeof import("@trpc/server").unsetMarker;
@@ -198,9 +198,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -230,9 +230,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -272,9 +272,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User | null;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User | null;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -331,9 +331,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -381,9 +381,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -406,9 +406,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -435,9 +435,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -476,9 +476,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -521,9 +521,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -553,9 +553,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -592,9 +592,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -625,17 +625,17 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
             };
             _input_in: {
                 project_id: string;
-                access_type?: "view" | "embed" | undefined;
                 expires_at?: string | undefined;
+                access_type?: "view" | "embed" | undefined;
             };
             _input_out: {
                 project_id: string;
@@ -658,9 +658,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -693,9 +693,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -726,9 +726,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -759,9 +759,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -793,9 +793,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -837,27 +837,33 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
             };
             _input_in: {
                 fileName: string;
-                mimeType: string;
                 fileSize: number;
+                mimeType: string;
+                projectId?: string | undefined;
+                isMaster?: boolean | undefined;
+                stemType?: string | undefined;
             };
             _input_out: {
                 fileName: string;
-                mimeType: string;
                 fileSize: number;
+                mimeType: string;
+                projectId?: string | undefined;
+                isMaster?: boolean | undefined;
+                stemType?: string | undefined;
             };
             _output_in: typeof import("@trpc/server").unsetMarker;
             _output_out: typeof import("@trpc/server").unsetMarker;
         }, {
-            fileId: string;
+            fileId: `${string}-${string}-${string}-${string}-${string}`;
             uploadUrl: string;
             s3Key: string;
             expiresIn: number;
@@ -880,18 +886,18 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
             };
             _input_in: {
                 fileName: string;
-                fileType: "midi" | "audio" | "video" | "image";
-                mimeType: string;
                 fileSize: number;
+                mimeType: string;
+                fileType: "midi" | "audio" | "video" | "image";
                 fileData: string;
                 projectId?: string | undefined;
                 isMaster?: boolean | undefined;
@@ -899,9 +905,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             };
             _input_out: {
                 fileName: string;
-                fileType: "midi" | "audio" | "video" | "image";
-                mimeType: string;
                 fileSize: number;
+                mimeType: string;
+                fileType: "midi" | "audio" | "video" | "image";
                 fileData: string;
                 projectId?: string | undefined;
                 isMaster?: boolean | undefined;
@@ -931,9 +937,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -966,9 +972,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -999,9 +1005,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -1037,9 +1043,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -1059,6 +1065,40 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             fileType: any;
             expiresIn: number;
         }>;
+        getDownloadUrls: import("@trpc/server").BuildProcedure<"mutation", {
+            _config: import("@trpc/server").RootConfig<{
+                ctx: import("phonoglyph-types").AuthContext & {
+                    req: any;
+                    res: any;
+                    isGuest: boolean;
+                };
+                meta: object;
+                errorShape: import("@trpc/server").DefaultErrorShape;
+                transformer: import("@trpc/server").DefaultDataTransformer;
+            }>;
+            _meta: object;
+            _ctx_out: {
+                user: import("phonoglyph-types").User;
+                req: any;
+                res: any;
+                session: any;
+                supabase: any;
+                isGuest: boolean;
+            };
+            _input_in: {
+                fileIds: string[];
+            };
+            _input_out: {
+                fileIds: string[];
+            };
+            _output_in: typeof import("@trpc/server").unsetMarker;
+            _output_out: typeof import("@trpc/server").unsetMarker;
+        }, Record<string, {
+            downloadUrl: string;
+            fileName: string;
+            fileSize: number;
+            fileType: string;
+        }>>;
         deleteFile: import("@trpc/server").BuildProcedure<"mutation", {
             _config: import("@trpc/server").RootConfig<{
                 ctx: import("phonoglyph-types").AuthContext & {
@@ -1072,9 +1112,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -1104,9 +1144,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -1133,9 +1173,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -1167,18 +1207,18 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
             };
             _input_in: {
                 projectId: string;
+                search?: string | undefined;
                 limit?: number | undefined;
                 offset?: number | undefined;
-                search?: string | undefined;
                 assetType?: "midi" | "audio" | "video" | "image" | "all" | undefined;
                 usageStatus?: "active" | "referenced" | "unused" | "all" | undefined;
                 folderId?: string | undefined;
@@ -1213,9 +1253,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -1250,9 +1290,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -1281,9 +1321,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -1310,9 +1350,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -1345,9 +1385,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -1374,9 +1414,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -1407,9 +1447,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -1436,9 +1476,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -1469,9 +1509,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -1502,9 +1542,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -1524,6 +1564,139 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
         }, {
             success: boolean;
         }>;
+    }>;
+    asset: import("@trpc/server").CreateRouterInner<import("@trpc/server").RootConfig<{
+        ctx: import("phonoglyph-types").AuthContext & {
+            req: any;
+            res: any;
+            isGuest: boolean;
+        };
+        meta: object;
+        errorShape: import("@trpc/server").DefaultErrorShape;
+        transformer: import("@trpc/server").DefaultDataTransformer;
+    }>, {
+        createCollection: import("@trpc/server").BuildProcedure<"mutation", {
+            _config: import("@trpc/server").RootConfig<{
+                ctx: import("phonoglyph-types").AuthContext & {
+                    req: any;
+                    res: any;
+                    isGuest: boolean;
+                };
+                meta: object;
+                errorShape: import("@trpc/server").DefaultErrorShape;
+                transformer: import("@trpc/server").DefaultDataTransformer;
+            }>;
+            _meta: object;
+            _ctx_out: {
+                user: import("phonoglyph-types").User;
+                req: any;
+                res: any;
+                session: any;
+                supabase: any;
+                isGuest: boolean;
+            };
+            _input_in: {
+                name: string;
+                projectId: string;
+                type?: "image_slideshow" | "generic" | undefined;
+            };
+            _input_out: {
+                type: "image_slideshow" | "generic";
+                name: string;
+                projectId: string;
+            };
+            _output_in: typeof import("@trpc/server").unsetMarker;
+            _output_out: typeof import("@trpc/server").unsetMarker;
+        }, any>;
+        addFileToCollection: import("@trpc/server").BuildProcedure<"mutation", {
+            _config: import("@trpc/server").RootConfig<{
+                ctx: import("phonoglyph-types").AuthContext & {
+                    req: any;
+                    res: any;
+                    isGuest: boolean;
+                };
+                meta: object;
+                errorShape: import("@trpc/server").DefaultErrorShape;
+                transformer: import("@trpc/server").DefaultDataTransformer;
+            }>;
+            _meta: object;
+            _ctx_out: {
+                user: import("phonoglyph-types").User;
+                req: any;
+                res: any;
+                session: any;
+                supabase: any;
+                isGuest: boolean;
+            };
+            _input_in: {
+                fileId: string;
+                collectionId: string;
+            };
+            _input_out: {
+                fileId: string;
+                collectionId: string;
+            };
+            _output_in: typeof import("@trpc/server").unsetMarker;
+            _output_out: typeof import("@trpc/server").unsetMarker;
+        }, any>;
+        getCollection: import("@trpc/server").BuildProcedure<"query", {
+            _config: import("@trpc/server").RootConfig<{
+                ctx: import("phonoglyph-types").AuthContext & {
+                    req: any;
+                    res: any;
+                    isGuest: boolean;
+                };
+                meta: object;
+                errorShape: import("@trpc/server").DefaultErrorShape;
+                transformer: import("@trpc/server").DefaultDataTransformer;
+            }>;
+            _meta: object;
+            _ctx_out: {
+                user: import("phonoglyph-types").User;
+                req: any;
+                res: any;
+                session: any;
+                supabase: any;
+                isGuest: boolean;
+            };
+            _input_in: {
+                collectionId: string;
+            };
+            _input_out: {
+                collectionId: string;
+            };
+            _output_in: typeof import("@trpc/server").unsetMarker;
+            _output_out: typeof import("@trpc/server").unsetMarker;
+        }, any>;
+        getProjectCollections: import("@trpc/server").BuildProcedure<"query", {
+            _config: import("@trpc/server").RootConfig<{
+                ctx: import("phonoglyph-types").AuthContext & {
+                    req: any;
+                    res: any;
+                    isGuest: boolean;
+                };
+                meta: object;
+                errorShape: import("@trpc/server").DefaultErrorShape;
+                transformer: import("@trpc/server").DefaultDataTransformer;
+            }>;
+            _meta: object;
+            _ctx_out: {
+                user: import("phonoglyph-types").User;
+                req: any;
+                res: any;
+                session: any;
+                supabase: any;
+                isGuest: boolean;
+            };
+            _input_in: {
+                projectId: string;
+            };
+            _input_out: {
+                projectId: string;
+            };
+            _output_in: typeof import("@trpc/server").unsetMarker;
+            _output_out: typeof import("@trpc/server").unsetMarker;
+        }, any>;
     }>;
     midi: import("@trpc/server").CreateRouterInner<import("@trpc/server").RootConfig<{
         ctx: import("phonoglyph-types").AuthContext & {
@@ -1548,9 +1721,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -1582,9 +1755,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -1624,9 +1797,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -1672,9 +1845,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -1721,9 +1894,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -1784,9 +1957,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -1820,9 +1993,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -1851,9 +2024,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -1864,13 +2037,22 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
                     duration: number;
                     bufferSize: number;
                     featuresExtracted: string[];
+                    bpm?: number | undefined;
                 };
                 stemType: string;
-                analysisData: Record<string, number[]>;
+                analysisData: Record<string, number | number[] | {
+                    type: string;
+                    time: number;
+                    intensity: number;
+                }[] | Record<string, {
+                    originalMin: number;
+                    originalMax: number;
+                    wasNormalized: boolean;
+                }>>;
                 fileMetadataId: string;
                 waveformData: {
-                    points: number[];
                     sampleRate: number;
+                    points: number[];
                     duration: number;
                     markers: {
                         type: "beat" | "onset" | "peak" | "drop";
@@ -1886,13 +2068,22 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
                     duration: number;
                     bufferSize: number;
                     featuresExtracted: string[];
+                    bpm?: number | undefined;
                 };
                 stemType: string;
-                analysisData: Record<string, number[]>;
+                analysisData: Record<string, number | number[] | {
+                    type: string;
+                    time: number;
+                    intensity: number;
+                }[] | Record<string, {
+                    originalMin: number;
+                    originalMax: number;
+                    wasNormalized: boolean;
+                }>>;
                 fileMetadataId: string;
                 waveformData: {
-                    points: number[];
                     sampleRate: number;
+                    points: number[];
                     duration: number;
                     markers: {
                         type: "beat" | "onset" | "peak" | "drop";
@@ -1928,9 +2119,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -1970,9 +2161,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -2003,9 +2194,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -2032,9 +2223,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -2061,9 +2252,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -2094,9 +2285,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -2125,9 +2316,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -2193,9 +2384,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -2218,8 +2409,8 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
                         analysisParams?: any;
                     };
                     rms: {
-                        value: number;
                         time: number;
+                        value: number;
                     }[];
                     transients: {
                         time: number;
@@ -2236,8 +2427,8 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
                 };
                 fileMetadataId: string;
                 waveformData: {
-                    points: number[];
                     sampleRate: number;
+                    points: number[];
                     duration: number;
                     markers: any[];
                 };
@@ -2260,8 +2451,8 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
                         analysisParams?: any;
                     };
                     rms: {
-                        value: number;
                         time: number;
+                        value: number;
                     }[];
                     transients: {
                         time: number;
@@ -2278,8 +2469,8 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
                 };
                 fileMetadataId: string;
                 waveformData: {
-                    points: number[];
                     sampleRate: number;
+                    points: number[];
                     duration: number;
                     markers: any[];
                 };
@@ -2303,9 +2494,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -2347,9 +2538,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -2393,9 +2584,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -2424,9 +2615,9 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
             }>;
             _meta: object;
             _ctx_out: {
+                user: import("phonoglyph-types").User;
                 req: any;
                 res: any;
-                user: import("phonoglyph-types").User;
                 session: any;
                 supabase: any;
                 isGuest: boolean;
@@ -2442,6 +2633,395 @@ export declare const appRouter: import("@trpc/server").CreateRouterInner<import(
         }, {
             success: boolean;
             message: string;
+        }>;
+    }>;
+    render: import("@trpc/server").CreateRouterInner<import("@trpc/server").RootConfig<{
+        ctx: import("phonoglyph-types").AuthContext & {
+            req: any;
+            res: any;
+            isGuest: boolean;
+        };
+        meta: object;
+        errorShape: import("@trpc/server").DefaultErrorShape;
+        transformer: import("@trpc/server").DefaultDataTransformer;
+    }>, {
+        triggerRender: import("@trpc/server").BuildProcedure<"mutation", {
+            _config: import("@trpc/server").RootConfig<{
+                ctx: import("phonoglyph-types").AuthContext & {
+                    req: any;
+                    res: any;
+                    isGuest: boolean;
+                };
+                meta: object;
+                errorShape: import("@trpc/server").DefaultErrorShape;
+                transformer: import("@trpc/server").DefaultDataTransformer;
+            }>;
+            _meta: object;
+            _ctx_out: {
+                user: import("phonoglyph-types").User;
+                req: any;
+                res: any;
+                session: any;
+                supabase: any;
+                isGuest: boolean;
+            };
+            _input_in: {
+                layers: {
+                    id: string;
+                    type: string;
+                    name: string;
+                    duration: number;
+                    blendMode: "multiply" | "normal" | "screen" | "overlay";
+                    position: {
+                        x: number;
+                        y: number;
+                    };
+                    scale: {
+                        x: number;
+                        y: number;
+                    };
+                    rotation: number;
+                    opacity: number;
+                    audioBindings: {
+                        feature: string;
+                        inputRange: [number, number];
+                        outputRange: [number, number];
+                        blendMode: "replace" | "add" | "multiply";
+                        modulationAmount?: number | undefined;
+                    }[];
+                    midiBindings: {
+                        inputRange: [number, number];
+                        outputRange: [number, number];
+                        blendMode: "replace" | "add" | "multiply";
+                        source: "velocity" | "cc" | "pitchBend" | "channelPressure";
+                    }[];
+                    zIndex: number;
+                    startTime: number;
+                    endTime: number;
+                    settings?: any;
+                    isDeletable?: boolean | undefined;
+                    src?: string | undefined;
+                    effectType?: string | undefined;
+                }[];
+                audioAnalysisData: {
+                    id: string;
+                    metadata: {
+                        sampleRate: number;
+                        duration: number;
+                        bufferSize: number;
+                        featuresExtracted: string[];
+                        analysisDuration: number;
+                        bpm?: number | undefined;
+                    };
+                    stemType: string;
+                    analysisData: {
+                        bass?: any;
+                        rms?: any;
+                        spectralCentroid?: any;
+                        spectralRolloff?: any;
+                        spectralFlatness?: any;
+                        zcr?: any;
+                        loudness?: any;
+                        markers?: any;
+                        bpm?: number | undefined;
+                        transients?: any[] | undefined;
+                        chroma?: any[] | undefined;
+                        frameTimes?: any;
+                        fft?: any;
+                        fftFrequencies?: any;
+                        amplitudeSpectrum?: any;
+                        volume?: any;
+                        mid?: any;
+                        treble?: any;
+                        features?: any;
+                        frequencies?: any;
+                        timeData?: any;
+                        stereoWindow_left?: any;
+                        stereoWindow_right?: any;
+                    };
+                    fileMetadataId: string;
+                    waveformData: {
+                        sampleRate: number;
+                        points: number[];
+                        duration: number;
+                        markers?: any[] | undefined;
+                    };
+                    bpm?: number | undefined;
+                }[];
+                visualizationSettings: {
+                    colorScheme?: string | undefined;
+                    pixelsPerSecond?: number | undefined;
+                    showTrackLabels?: boolean | undefined;
+                    showVelocity?: boolean | undefined;
+                    minKey?: number | undefined;
+                    maxKey?: number | undefined;
+                    aspectRatio?: string | undefined;
+                };
+                masterAudioUrl: string;
+                mappings?: Record<string, {
+                    modulationAmount: number;
+                    featureId: string | null;
+                }> | undefined;
+                baseParameterValues?: Record<string, Record<string, any>> | undefined;
+                featureDecayTimes?: Record<string, number> | undefined;
+                featureSensitivities?: Record<string, number> | undefined;
+                backgroundColor?: string | undefined;
+                isBackgroundVisible?: boolean | undefined;
+            };
+            _input_out: {
+                layers: {
+                    id: string;
+                    type: string;
+                    name: string;
+                    duration: number;
+                    blendMode: "multiply" | "normal" | "screen" | "overlay";
+                    position: {
+                        x: number;
+                        y: number;
+                    };
+                    scale: {
+                        x: number;
+                        y: number;
+                    };
+                    rotation: number;
+                    opacity: number;
+                    audioBindings: {
+                        feature: string;
+                        inputRange: [number, number];
+                        outputRange: [number, number];
+                        blendMode: "replace" | "add" | "multiply";
+                        modulationAmount?: number | undefined;
+                    }[];
+                    midiBindings: {
+                        inputRange: [number, number];
+                        outputRange: [number, number];
+                        blendMode: "replace" | "add" | "multiply";
+                        source: "velocity" | "cc" | "pitchBend" | "channelPressure";
+                    }[];
+                    zIndex: number;
+                    startTime: number;
+                    endTime: number;
+                    settings?: any;
+                    isDeletable?: boolean | undefined;
+                    src?: string | undefined;
+                    effectType?: string | undefined;
+                }[];
+                audioAnalysisData: {
+                    id: string;
+                    metadata: {
+                        sampleRate: number;
+                        duration: number;
+                        bufferSize: number;
+                        featuresExtracted: string[];
+                        analysisDuration: number;
+                        bpm?: number | undefined;
+                    };
+                    stemType: string;
+                    analysisData: {
+                        bass?: any;
+                        rms?: any;
+                        spectralCentroid?: any;
+                        spectralRolloff?: any;
+                        spectralFlatness?: any;
+                        zcr?: any;
+                        loudness?: any;
+                        markers?: any;
+                        bpm?: number | undefined;
+                        transients?: any[] | undefined;
+                        chroma?: any[] | undefined;
+                        frameTimes?: any;
+                        fft?: any;
+                        fftFrequencies?: any;
+                        amplitudeSpectrum?: any;
+                        volume?: any;
+                        mid?: any;
+                        treble?: any;
+                        features?: any;
+                        frequencies?: any;
+                        timeData?: any;
+                        stereoWindow_left?: any;
+                        stereoWindow_right?: any;
+                    };
+                    fileMetadataId: string;
+                    waveformData: {
+                        sampleRate: number;
+                        points: number[];
+                        duration: number;
+                        markers?: any[] | undefined;
+                    };
+                    bpm?: number | undefined;
+                }[];
+                visualizationSettings: {
+                    colorScheme?: string | undefined;
+                    pixelsPerSecond?: number | undefined;
+                    showTrackLabels?: boolean | undefined;
+                    showVelocity?: boolean | undefined;
+                    minKey?: number | undefined;
+                    maxKey?: number | undefined;
+                    aspectRatio?: string | undefined;
+                };
+                masterAudioUrl: string;
+                mappings?: Record<string, {
+                    modulationAmount: number;
+                    featureId: string | null;
+                }> | undefined;
+                baseParameterValues?: Record<string, Record<string, any>> | undefined;
+                featureDecayTimes?: Record<string, number> | undefined;
+                featureSensitivities?: Record<string, number> | undefined;
+                backgroundColor?: string | undefined;
+                isBackgroundVisible?: boolean | undefined;
+            };
+            _output_in: typeof import("@trpc/server").unsetMarker;
+            _output_out: typeof import("@trpc/server").unsetMarker;
+        }, {
+            renderId: string;
+            bucketName: string;
+            functionName: string;
+            cloudWatchLogs: any;
+        }>;
+        getRenderStatus: import("@trpc/server").BuildProcedure<"mutation", {
+            _config: import("@trpc/server").RootConfig<{
+                ctx: import("phonoglyph-types").AuthContext & {
+                    req: any;
+                    res: any;
+                    isGuest: boolean;
+                };
+                meta: object;
+                errorShape: import("@trpc/server").DefaultErrorShape;
+                transformer: import("@trpc/server").DefaultDataTransformer;
+            }>;
+            _meta: object;
+            _ctx_out: {
+                user: import("phonoglyph-types").User;
+                req: any;
+                res: any;
+                session: any;
+                supabase: any;
+                isGuest: boolean;
+            };
+            _input_in: {
+                renderId: string;
+                bucketName: string;
+                functionName: string;
+            };
+            _input_out: {
+                renderId: string;
+                bucketName: string;
+                functionName: string;
+            };
+            _output_in: typeof import("@trpc/server").unsetMarker;
+            _output_out: typeof import("@trpc/server").unsetMarker;
+        }, import("@remotion/lambda").RenderProgress>;
+    }>;
+    apiKey: import("@trpc/server").CreateRouterInner<import("@trpc/server").RootConfig<{
+        ctx: import("phonoglyph-types").AuthContext & {
+            req: any;
+            res: any;
+            isGuest: boolean;
+        };
+        meta: object;
+        errorShape: import("@trpc/server").DefaultErrorShape;
+        transformer: import("@trpc/server").DefaultDataTransformer;
+    }>, {
+        create: import("@trpc/server").BuildProcedure<"mutation", {
+            _config: import("@trpc/server").RootConfig<{
+                ctx: import("phonoglyph-types").AuthContext & {
+                    req: any;
+                    res: any;
+                    isGuest: boolean;
+                };
+                meta: object;
+                errorShape: import("@trpc/server").DefaultErrorShape;
+                transformer: import("@trpc/server").DefaultDataTransformer;
+            }>;
+            _meta: object;
+            _ctx_out: {
+                user: import("phonoglyph-types").User;
+                req: any;
+                res: any;
+                session: any;
+                supabase: any;
+                isGuest: boolean;
+            };
+            _input_in: {
+                name: string;
+                scopes?: ("read" | "write" | "render")[] | undefined;
+                expiresAt?: string | undefined;
+            };
+            _input_out: {
+                scopes: ("read" | "write" | "render")[];
+                name: string;
+                expiresAt?: string | undefined;
+            };
+            _output_in: typeof import("@trpc/server").unsetMarker;
+            _output_out: typeof import("@trpc/server").unsetMarker;
+        }, {
+            id: string;
+            user_id: string;
+            name: string;
+            key_prefix: string;
+            scopes: string[];
+            last_used_at: string | null;
+            expires_at: string | null;
+            revoked_at: string | null;
+            created_at: string;
+            key: string;
+        }>;
+        list: import("@trpc/server").BuildProcedure<"query", {
+            _config: import("@trpc/server").RootConfig<{
+                ctx: import("phonoglyph-types").AuthContext & {
+                    req: any;
+                    res: any;
+                    isGuest: boolean;
+                };
+                meta: object;
+                errorShape: import("@trpc/server").DefaultErrorShape;
+                transformer: import("@trpc/server").DefaultDataTransformer;
+            }>;
+            _meta: object;
+            _ctx_out: {
+                user: import("phonoglyph-types").User;
+                req: any;
+                res: any;
+                session: any;
+                supabase: any;
+                isGuest: boolean;
+            };
+            _input_in: typeof import("@trpc/server").unsetMarker;
+            _input_out: typeof import("@trpc/server").unsetMarker;
+            _output_in: typeof import("@trpc/server").unsetMarker;
+            _output_out: typeof import("@trpc/server").unsetMarker;
+        }, import("../services/api-key").ApiKeyRecord[]>;
+        revoke: import("@trpc/server").BuildProcedure<"mutation", {
+            _config: import("@trpc/server").RootConfig<{
+                ctx: import("phonoglyph-types").AuthContext & {
+                    req: any;
+                    res: any;
+                    isGuest: boolean;
+                };
+                meta: object;
+                errorShape: import("@trpc/server").DefaultErrorShape;
+                transformer: import("@trpc/server").DefaultDataTransformer;
+            }>;
+            _meta: object;
+            _ctx_out: {
+                user: import("phonoglyph-types").User;
+                req: any;
+                res: any;
+                session: any;
+                supabase: any;
+                isGuest: boolean;
+            };
+            _input_in: {
+                id: string;
+            };
+            _input_out: {
+                id: string;
+            };
+            _output_in: typeof import("@trpc/server").unsetMarker;
+            _output_out: typeof import("@trpc/server").unsetMarker;
+        }, {
+            success: boolean;
         }>;
     }>;
 }>;

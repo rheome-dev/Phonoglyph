@@ -12,6 +12,9 @@ const midi_1 = require("./midi");
 const stem_1 = require("./stem");
 const auto_save_1 = require("./auto-save");
 const audio_analysis_sandbox_1 = require("./audio-analysis-sandbox");
+const asset_1 = require("./asset");
+const render_1 = require("./render");
+const api_key_1 = require("./api-key");
 exports.appRouter = (0, trpc_1.router)({
     health: health_1.healthRouter,
     auth: auth_1.authRouter,
@@ -19,9 +22,12 @@ exports.appRouter = (0, trpc_1.router)({
     guest: guest_1.guestRouter,
     project: project_1.projectRouter,
     file: file_1.fileRouter,
+    asset: asset_1.assetRouter,
     midi: midi_1.midiRouter,
     stem: stem_1.stemRouter,
     autoSave: auto_save_1.autoSaveRouter,
     audioAnalysisSandbox: audio_analysis_sandbox_1.audioAnalysisSandboxRouter,
+    render: render_1.renderRouter,
+    apiKey: api_key_1.apiKeyRouter,
 });
 //# sourceMappingURL=index.js.map

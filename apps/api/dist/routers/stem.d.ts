@@ -21,9 +21,9 @@ export declare const stemRouter: import("@trpc/server").CreateRouterInner<import
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -84,9 +84,9 @@ export declare const stemRouter: import("@trpc/server").CreateRouterInner<import
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -120,9 +120,9 @@ export declare const stemRouter: import("@trpc/server").CreateRouterInner<import
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -151,9 +151,9 @@ export declare const stemRouter: import("@trpc/server").CreateRouterInner<import
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -164,13 +164,22 @@ export declare const stemRouter: import("@trpc/server").CreateRouterInner<import
                 duration: number;
                 bufferSize: number;
                 featuresExtracted: string[];
+                bpm?: number | undefined;
             };
             stemType: string;
-            analysisData: Record<string, number[]>;
+            analysisData: Record<string, number | number[] | {
+                type: string;
+                time: number;
+                intensity: number;
+            }[] | Record<string, {
+                originalMin: number;
+                originalMax: number;
+                wasNormalized: boolean;
+            }>>;
             fileMetadataId: string;
             waveformData: {
-                points: number[];
                 sampleRate: number;
+                points: number[];
                 duration: number;
                 markers: {
                     type: "beat" | "onset" | "peak" | "drop";
@@ -186,13 +195,22 @@ export declare const stemRouter: import("@trpc/server").CreateRouterInner<import
                 duration: number;
                 bufferSize: number;
                 featuresExtracted: string[];
+                bpm?: number | undefined;
             };
             stemType: string;
-            analysisData: Record<string, number[]>;
+            analysisData: Record<string, number | number[] | {
+                type: string;
+                time: number;
+                intensity: number;
+            }[] | Record<string, {
+                originalMin: number;
+                originalMax: number;
+                wasNormalized: boolean;
+            }>>;
             fileMetadataId: string;
             waveformData: {
-                points: number[];
                 sampleRate: number;
+                points: number[];
                 duration: number;
                 markers: {
                     type: "beat" | "onset" | "peak" | "drop";
@@ -228,9 +246,9 @@ export declare const stemRouter: import("@trpc/server").CreateRouterInner<import
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;

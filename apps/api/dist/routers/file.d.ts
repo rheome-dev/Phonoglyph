@@ -21,27 +21,33 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
         };
         _input_in: {
             fileName: string;
-            mimeType: string;
             fileSize: number;
+            mimeType: string;
+            projectId?: string | undefined;
+            isMaster?: boolean | undefined;
+            stemType?: string | undefined;
         };
         _input_out: {
             fileName: string;
-            mimeType: string;
             fileSize: number;
+            mimeType: string;
+            projectId?: string | undefined;
+            isMaster?: boolean | undefined;
+            stemType?: string | undefined;
         };
         _output_in: typeof import("@trpc/server").unsetMarker;
         _output_out: typeof import("@trpc/server").unsetMarker;
     }, {
-        fileId: string;
+        fileId: `${string}-${string}-${string}-${string}-${string}`;
         uploadUrl: string;
         s3Key: string;
         expiresIn: number;
@@ -64,18 +70,18 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
         };
         _input_in: {
             fileName: string;
-            fileType: "midi" | "audio" | "video" | "image";
-            mimeType: string;
             fileSize: number;
+            mimeType: string;
+            fileType: "midi" | "audio" | "video" | "image";
             fileData: string;
             projectId?: string | undefined;
             isMaster?: boolean | undefined;
@@ -83,9 +89,9 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         };
         _input_out: {
             fileName: string;
-            fileType: "midi" | "audio" | "video" | "image";
-            mimeType: string;
             fileSize: number;
+            mimeType: string;
+            fileType: "midi" | "audio" | "video" | "image";
             fileData: string;
             projectId?: string | undefined;
             isMaster?: boolean | undefined;
@@ -115,9 +121,9 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -150,9 +156,9 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -183,9 +189,9 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -221,9 +227,9 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -243,6 +249,40 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         fileType: any;
         expiresIn: number;
     }>;
+    getDownloadUrls: import("@trpc/server").BuildProcedure<"mutation", {
+        _config: import("@trpc/server").RootConfig<{
+            ctx: import("phonoglyph-types").AuthContext & {
+                req: any;
+                res: any;
+                isGuest: boolean;
+            };
+            meta: object;
+            errorShape: import("@trpc/server").DefaultErrorShape;
+            transformer: import("@trpc/server").DefaultDataTransformer;
+        }>;
+        _meta: object;
+        _ctx_out: {
+            user: import("phonoglyph-types").User;
+            req: any;
+            res: any;
+            session: any;
+            supabase: any;
+            isGuest: boolean;
+        };
+        _input_in: {
+            fileIds: string[];
+        };
+        _input_out: {
+            fileIds: string[];
+        };
+        _output_in: typeof import("@trpc/server").unsetMarker;
+        _output_out: typeof import("@trpc/server").unsetMarker;
+    }, Record<string, {
+        downloadUrl: string;
+        fileName: string;
+        fileSize: number;
+        fileType: string;
+    }>>;
     deleteFile: import("@trpc/server").BuildProcedure<"mutation", {
         _config: import("@trpc/server").RootConfig<{
             ctx: import("phonoglyph-types").AuthContext & {
@@ -256,9 +296,9 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -288,9 +328,9 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -317,9 +357,9 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -351,18 +391,18 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
         };
         _input_in: {
             projectId: string;
+            search?: string | undefined;
             limit?: number | undefined;
             offset?: number | undefined;
-            search?: string | undefined;
             assetType?: "midi" | "audio" | "video" | "image" | "all" | undefined;
             usageStatus?: "active" | "referenced" | "unused" | "all" | undefined;
             folderId?: string | undefined;
@@ -397,9 +437,9 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -434,9 +474,9 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -465,9 +505,9 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -494,9 +534,9 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -529,9 +569,9 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -558,9 +598,9 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -591,9 +631,9 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -620,9 +660,9 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -653,9 +693,9 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -686,9 +726,9 @@ export declare const fileRouter: import("@trpc/server").CreateRouterInner<import
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;

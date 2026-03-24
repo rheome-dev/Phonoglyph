@@ -237,7 +237,21 @@ exports.stemRouter = (0, trpc_1.router)({
         .input(zod_1.z.object({
         fileMetadataId: zod_1.z.string(),
         stemType: zod_1.z.string(),
-        analysisData: zod_1.z.record(zod_1.z.string(), zod_1.z.array(zod_1.z.number())),
+        // Allow scalar values like bpm, numeric arrays, transient objects, and normalization metadata
+        analysisData: zod_1.z.record(zod_1.z.string(), zod_1.z.union([
+            zod_1.z.array(zod_1.z.number()), // Time-series arrays
+            zod_1.z.number(), // Scalar values
+            zod_1.z.array(zod_1.z.object({
+                time: zod_1.z.number(),
+                intensity: zod_1.z.number(),
+                type: zod_1.z.string(), // 'kick', 'snare', 'hat', 'generic', etc. - always provided by worker as 'generic'
+            })),
+            zod_1.z.record(zod_1.z.string(), zod_1.z.object({
+                originalMin: zod_1.z.number(),
+                originalMax: zod_1.z.number(),
+                wasNormalized: zod_1.z.boolean(),
+            }))
+        ])),
         waveformData: zod_1.z.object({
             points: zod_1.z.array(zod_1.z.number()),
             sampleRate: zod_1.z.number(),
@@ -254,6 +268,7 @@ exports.stemRouter = (0, trpc_1.router)({
             duration: zod_1.z.number(),
             bufferSize: zod_1.z.number(),
             featuresExtracted: zod_1.z.array(zod_1.z.string()),
+            bpm: zod_1.z.number().optional(),
         }),
     }))
         .mutation(async ({ ctx, input }) => {

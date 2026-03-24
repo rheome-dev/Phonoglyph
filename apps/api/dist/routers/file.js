@@ -10,6 +10,7 @@ const file_validation_1 = require("../lib/file-validation");
 const media_processor_1 = require("../services/media-processor");
 const asset_manager_1 = require("../services/asset-manager");
 const logger_1 = require("../lib/logger");
+const crypto_1 = require("crypto");
 // Create rate limiter instance
 const uploadRateLimit = (0, file_validation_1.createUploadRateLimit)();
 // File metadata schema for database storage - EXTENDED
@@ -26,7 +27,11 @@ const FileMetadataSchema = zod_1.z.object({
 exports.fileRouter = (0, trpc_1.router)({
     // Generate pre-signed URL for file upload - EXTENDED
     getUploadUrl: trpc_1.protectedProcedure
-        .input(file_validation_1.FileUploadSchema)
+        .input(file_validation_1.FileUploadSchema.extend({
+        projectId: zod_1.z.string().optional(), // Associate with project
+        isMaster: zod_1.z.boolean().optional(), // Tag as master track
+        stemType: zod_1.z.string().optional(), // Tag stem type
+    }))
         .mutation(async ({ ctx, input }) => {
         const userId = ctx.user.id;
         try {
@@ -58,7 +63,7 @@ exports.fileRouter = (0, trpc_1.router)({
             // Generate pre-signed URL
             const uploadUrl = await (0, r2_storage_1.generateUploadUrl)(s3Key, input.mimeType, 3600); // 1 hour expiry
             // Create file metadata record in database
-            const fileId = `file_${Date.now()}_${Math.random().toString(36).substring(2)}`;
+            const fileId = (0, crypto_1.randomUUID)();
             const { error: dbError } = await ctx.supabase
                 .from('file_metadata')
                 .insert({
@@ -69,8 +74,12 @@ exports.fileRouter = (0, trpc_1.router)({
                 mime_type: input.mimeType,
                 file_size: input.fileSize,
                 s3_key: s3Key,
-                s3_bucket: process.env.CLOUDFLARE_R2_BUCKET || 'phonoglyph-uploads',
+                s3_bucket: process.env.CLOUDFLARE_R2_BUCKET || 'raybox-uploads',
+                upload_status: 'uploading',
                 processing_status: media_processor_1.MediaProcessor.requiresProcessing(validation.fileType) ? 'pending' : 'completed',
+                project_id: input.projectId, // Associate with project
+                is_master: input.isMaster || false, // Store master tag
+                stem_type: input.stemType || null, // Store stem type
             });
             if (dbError) {
                 logger_1.logger.error('Database error creating file metadata:', dbError);
@@ -373,7 +382,7 @@ exports.fileRouter = (0, trpc_1.router)({
     getUserFiles: trpc_1.protectedProcedure
         .input(zod_1.z.object({
         fileType: zod_1.z.enum(['midi', 'audio', 'video', 'image', 'all']).optional().default('all'), // EXTENDED
-        limit: zod_1.z.number().min(1).max(50).optional().default(20),
+        limit: zod_1.z.number().min(1).max(1000).optional().default(50),
         offset: zod_1.z.number().min(0).optional().default(0),
         projectId: zod_1.z.string().optional(), // NEW: Filter by project
     }))
@@ -467,6 +476,46 @@ exports.fileRouter = (0, trpc_1.router)({
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to generate download URL',
+            });
+        }
+    }),
+    // Batch get download URLs for multiple files (used by CLI for render payload)
+    getDownloadUrls: trpc_1.protectedProcedure
+        .input(zod_1.z.object({ fileIds: zod_1.z.array(zod_1.z.string()) }))
+        .mutation(async ({ ctx, input }) => {
+        const userId = ctx.user.id;
+        if (input.fileIds.length === 0) {
+            return {};
+        }
+        try {
+            const { data: files, error } = await ctx.supabase
+                .from('file_metadata')
+                .select('id, file_name, file_type, file_size, s3_key')
+                .in('id', input.fileIds)
+                .eq('user_id', userId)
+                .eq('upload_status', 'completed');
+            if (error) {
+                throw error;
+            }
+            const urlMap = {};
+            await Promise.all((files || []).map(async (file) => {
+                const downloadUrl = await (0, r2_storage_1.generateDownloadUrl)(file.s3_key, 3600);
+                urlMap[file.id] = {
+                    downloadUrl,
+                    fileName: file.file_name,
+                    fileSize: file.file_size,
+                    fileType: file.file_type,
+                };
+            }));
+            return urlMap;
+        }
+        catch (error) {
+            if (error instanceof server_1.TRPCError)
+                throw error;
+            logger_1.logger.error('Error batch generating download URLs:', error);
+            throw new server_1.TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: 'Failed to batch generate download URLs',
             });
         }
     }),

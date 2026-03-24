@@ -22,9 +22,9 @@ export declare const guestRouter: import("@trpc/server").CreateRouterInner<impor
         }>;
         _meta: object;
         _ctx_out: {
+            user: User | null;
             req: any;
             res: any;
-            user: User | null;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -81,9 +81,9 @@ export declare const guestRouter: import("@trpc/server").CreateRouterInner<impor
         }>;
         _meta: object;
         _ctx_out: {
+            user: User;
             req: any;
             res: any;
-            user: User;
             session: any;
             supabase: any;
             isGuest: boolean;

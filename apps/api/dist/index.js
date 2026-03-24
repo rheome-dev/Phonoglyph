@@ -109,7 +109,7 @@ const corsOptions = {
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH', 'HEAD'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-guest-session', 'Accept'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-guest-session', 'x-api-key', 'Accept'],
     exposedHeaders: ['Authorization'],
     preflightContinue: false,
     optionsSuccessStatus: 204,
@@ -172,11 +172,21 @@ app.get('/', (req, res) => {
 // Initialize services (for serverless, this runs on cold start)
 const initializeServices = async () => {
     try {
-        await (0, connection_1.testConnection)();
+        // Test connection but don't block if it fails in serverless
+        const dbConnected = await (0, connection_1.testConnection)();
+        if (!dbConnected && process.env.VERCEL) {
+            console.log('⚠️  Database connection test failed, but continuing (will connect on first query)');
+        }
         await (0, r2_storage_1.initializeS3)();
     }
     catch (error) {
-        console.error('Service initialization warning:', error);
+        // In serverless, don't fail initialization - services will connect on first use
+        if (process.env.VERCEL) {
+            console.error('⚠️  Service initialization warning (non-blocking):', error);
+        }
+        else {
+            console.error('❌ Service initialization error:', error);
+        }
     }
 };
 // For serverless deployment (Vercel), initialize on cold start

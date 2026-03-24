@@ -18,7 +18,7 @@ const r2Config = {
 };
 exports.r2Client = new client_s3_1.S3Client(r2Config);
 exports.s3Client = exports.r2Client;
-exports.BUCKET_NAME = process.env.CLOUDFLARE_R2_BUCKET || 'phonoglyph-uploads';
+exports.BUCKET_NAME = process.env.CLOUDFLARE_R2_BUCKET || 'raybox-uploads';
 // Validate required environment variables
 function validateR2Config() {
     const required = ['CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_R2_ACCESS_KEY_ID', 'CLOUDFLARE_R2_SECRET_ACCESS_KEY', 'CLOUDFLARE_R2_BUCKET'];
@@ -56,13 +56,31 @@ async function createBucketIfNotExists() {
 exports.createBucketIfNotExists = createBucketIfNotExists;
 // Configure CORS for web uploads
 async function configureBucketCors() {
+    // Build allowed origins list
+    const allowedOrigins = [
+        'http://localhost:3000', // Local development
+        'https://phonoglyph.rheome.tools', // Production domain
+    ];
+    // Add FRONTEND_URL if provided and not already in list
+    if (process.env.FRONTEND_URL) {
+        const frontendUrl = process.env.FRONTEND_URL.trim();
+        if (!allowedOrigins.includes(frontendUrl)) {
+            allowedOrigins.push(frontendUrl);
+        }
+    }
+    // Add additional origins from env if provided (comma-separated)
+    if (process.env.R2_CORS_ORIGINS) {
+        const additionalOrigins = process.env.R2_CORS_ORIGINS.split(',').map(o => o.trim()).filter(Boolean);
+        additionalOrigins.forEach(origin => {
+            if (!allowedOrigins.includes(origin)) {
+                allowedOrigins.push(origin);
+            }
+        });
+    }
     const corsConfiguration = {
         CORSRules: [
             {
-                AllowedOrigins: [
-                    process.env.FRONTEND_URL || 'http://localhost:3000',
-                    'https://*.vercel.app', // For preview deployments
-                ],
+                AllowedOrigins: allowedOrigins,
                 AllowedMethods: ['GET', 'PUT', 'POST', 'DELETE', 'HEAD'],
                 AllowedHeaders: [
                     'Origin',
@@ -74,7 +92,7 @@ async function configureBucketCors() {
                     'x-amz-date',
                     'x-amz-security-token',
                 ],
-                ExposeHeaders: ['ETag'],
+                ExposeHeaders: ['ETag', 'Content-Length', 'Content-Type', 'Date'],
                 MaxAgeSeconds: 3000,
             },
         ],
@@ -85,8 +103,15 @@ async function configureBucketCors() {
             CORSConfiguration: corsConfiguration,
         }));
         logger_1.logger.log(`✅ Configured CORS for R2 bucket '${exports.BUCKET_NAME}'`);
+        logger_1.logger.log(`   Allowed origins: ${allowedOrigins.join(', ')}`);
     }
     catch (error) {
+        // Always log CORS errors - this is critical for production
+        console.error('❌ Failed to configure CORS for R2 bucket:', error);
+        console.error('   Error code:', error.Code || error.name);
+        console.error('   Error message:', error.message);
+        console.error('   Allowed origins attempted:', allowedOrigins.join(', '));
+        console.error('   ⚠️  If this fails, CORS must be configured manually in Cloudflare dashboard');
         logger_1.logger.error('❌ Failed to configure CORS:', error);
         throw error;
     }
@@ -109,20 +134,13 @@ async function generateUploadUrl(key, contentType, expiresIn = 3600) {
     }
 }
 exports.generateUploadUrl = generateUploadUrl;
-// Generate pre-signed URL for file download
+// Generate direct URL for file download (for Remotion/reading)
+// Uses assets.raybox.fm custom domain instead of signed URLs for stability
 async function generateDownloadUrl(key, expiresIn = 3600) {
-    const command = new client_s3_2.GetObjectCommand({
-        Bucket: exports.BUCKET_NAME,
-        Key: key,
-    });
-    try {
-        const url = await (0, s3_request_presigner_1.getSignedUrl)(exports.r2Client, command, { expiresIn });
-        return url;
-    }
-    catch (error) {
-        logger_1.logger.error('❌ Failed to generate download URL:', error);
-        throw error;
-    }
+    // For reading (GET requests from Remotion), use direct URL via custom domain
+    // This is more stable than signed URLs and works better with bots/Remotion
+    const directUrl = `https://assets.raybox.fm/${key}`;
+    return directUrl;
 }
 exports.generateDownloadUrl = generateDownloadUrl;
 // Get file data as Buffer for processing
@@ -203,8 +221,10 @@ async function uploadThumbnail(thumbnailKey, thumbnailBuffer) {
 }
 exports.uploadThumbnail = uploadThumbnail;
 // Generate download URL for thumbnails
+// Uses direct URL via assets.raybox.fm custom domain
 async function generateThumbnailUrl(thumbnailKey, expiresIn = 3600) {
     try {
+        // Use direct URL for thumbnails as well
         const url = await generateDownloadUrl(thumbnailKey, expiresIn);
         return url;
     }
@@ -225,11 +245,19 @@ async function initializeR2() {
             await configureBucketCors();
         }
         catch (corsError) {
-            if (corsError.Code === 'AccessDenied') {
+            // Always log CORS errors - critical for debugging production issues
+            console.error('⚠️  CORS configuration failed:', corsError.Code || corsError.name, corsError.message);
+            if (corsError.Code === 'AccessDenied' || corsError.name === 'AccessDenied') {
+                console.error('⚠️  CORS configuration skipped (insufficient permissions)');
+                console.error('⚠️  You must configure CORS manually in Cloudflare R2 dashboard:');
+                console.error('   1. Go to Cloudflare Dashboard > R2 > Your Bucket > Settings');
+                console.error('   2. Add CORS policy with allowed origins: https://phonoglyph.rheome.tools');
                 logger_1.logger.log('⚠️  CORS configuration skipped (insufficient permissions - this is OK for development)');
             }
             else {
-                throw corsError;
+                // Log other errors but don't fail initialization
+                console.error('⚠️  CORS configuration error (non-fatal):', corsError);
+                logger_1.logger.error('⚠️  CORS configuration error:', corsError);
             }
         }
         logger_1.logger.log('✅ R2 service initialized successfully');

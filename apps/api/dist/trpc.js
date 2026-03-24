@@ -5,8 +5,9 @@ const server_1 = require("@trpc/server");
 const supabase_1 = require("./lib/supabase");
 const phonoglyph_types_1 = require("phonoglyph-types");
 const guest_1 = require("./types/guest");
+const api_key_1 = require("./services/api-key");
 const logger_1 = require("./lib/logger");
-// Create tRPC context with Supabase authentication and guest support for Express
+// Create tRPC context with Supabase authentication, API key auth, and guest support for Express
 const createTRPCContext = async (opts) => {
     const { req, res } = opts;
     // Debug all headers
@@ -16,15 +17,36 @@ const createTRPCContext = async (opts) => {
     // Extract authorization header
     const authHeader = req.headers?.authorization;
     const accessToken = authHeader?.replace('Bearer ', '');
+    // Extract API key header
+    const apiKey = req.headers?.['x-api-key'];
     logger_1.logger.auth('Backend - Auth header present:', !!authHeader);
     logger_1.logger.auth('Backend - Access token present:', !!accessToken);
-    // Create Supabase client with user session
-    const supabase = (0, supabase_1.createSupabaseServerClient)(accessToken);
+    logger_1.logger.auth('Backend - API key present:', !!apiKey);
     let user = null;
     let session = null;
     let isGuest = false;
-    // Try to get authenticated user session first
-    if (accessToken) {
+    let supabase = (0, supabase_1.createSupabaseServerClient)(accessToken);
+    // Priority 1: API Key authentication (for CLI/programmatic access)
+    if (apiKey) {
+        const apiKeyResult = await (0, api_key_1.validateApiKey)(apiKey);
+        if (apiKeyResult) {
+            // Look up user via admin client
+            const { data: { user: supabaseUser }, error } = await supabase_1.supabaseAdmin.auth.admin.getUserById(apiKeyResult.userId);
+            if (!error && supabaseUser) {
+                user = (0, phonoglyph_types_1.transformSupabaseUser)(supabaseUser);
+                // Use admin client for API key sessions (no user token available)
+                supabase = supabase_1.supabaseAdmin;
+                session = {
+                    user: supabaseUser,
+                    access_token: 'api-key-session',
+                    apiKeyScopes: apiKeyResult.scopes,
+                };
+                logger_1.logger.auth('Backend - User authenticated via API key:', user.email);
+            }
+        }
+    }
+    // Priority 2: Supabase Bearer token authentication
+    if (!user && accessToken) {
         try {
             // Try different approaches for getting user data
             let supabaseUser = null;
@@ -62,7 +84,7 @@ const createTRPCContext = async (opts) => {
             logger_1.logger.error('Error retrieving user session:', error);
         }
     }
-    // If no authenticated user, check for guest session
+    // Priority 3: Guest session
     if (!user) {
         const guestSession = (0, guest_1.extractGuestSession)(req);
         if (guestSession && (0, guest_1.isValidGuestSession)(guestSession.sessionId)) {

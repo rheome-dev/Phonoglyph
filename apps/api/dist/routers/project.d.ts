@@ -22,9 +22,9 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -47,9 +47,9 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -76,9 +76,9 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -117,9 +117,9 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -162,9 +162,9 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -194,9 +194,9 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -233,9 +233,9 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -266,17 +266,17 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
         };
         _input_in: {
             project_id: string;
-            access_type?: "view" | "embed" | undefined;
             expires_at?: string | undefined;
+            access_type?: "view" | "embed" | undefined;
         };
         _input_out: {
             project_id: string;
@@ -299,9 +299,9 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -334,9 +334,9 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -367,9 +367,9 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -400,9 +400,9 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;
@@ -434,9 +434,9 @@ export declare const projectRouter: import("@trpc/server").CreateRouterInner<imp
         }>;
         _meta: object;
         _ctx_out: {
+            user: import("phonoglyph-types").User;
             req: any;
             res: any;
-            user: import("phonoglyph-types").User;
             session: any;
             supabase: any;
             isGuest: boolean;

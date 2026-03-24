@@ -34,12 +34,6 @@ exports.autoSaveRouter = (0, trpc_1.router)({
         .input(saveStateSchema)
         .mutation(async ({ input, ctx }) => {
         try {
-            // First, mark all existing states for this project as not current
-            await ctx.supabase
-                .from('edit_states')
-                .update({ is_current: false })
-                .eq('project_id', input.projectId)
-                .eq('user_id', ctx.user.id);
             // Get the next version number
             const { data: latestState } = await ctx.supabase
                 .from('edit_states')
@@ -58,7 +52,6 @@ exports.autoSaveRouter = (0, trpc_1.router)({
                 project_id: input.projectId,
                 data: input.data,
                 version: nextVersion,
-                is_current: true,
             })
                 .select()
                 .single();
@@ -68,6 +61,28 @@ exports.autoSaveRouter = (0, trpc_1.router)({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to save edit state',
                 });
+            }
+            // Clean up old states (keep max 10)
+            const maxHistory = 10;
+            const { count } = await ctx.supabase
+                .from('edit_states')
+                .select('*', { count: 'exact', head: true })
+                .eq('project_id', input.projectId)
+                .eq('user_id', ctx.user.id);
+            if (count && count > maxHistory) {
+                const { data: statesToDelete } = await ctx.supabase
+                    .from('edit_states')
+                    .select('id')
+                    .eq('project_id', input.projectId)
+                    .eq('user_id', ctx.user.id)
+                    .order('timestamp', { ascending: true })
+                    .limit(count - maxHistory);
+                if (statesToDelete && statesToDelete.length > 0) {
+                    await ctx.supabase
+                        .from('edit_states')
+                        .delete()
+                        .in('id', statesToDelete.map((s) => s.id));
+                }
             }
             // Log audit event
             await ctx.supabase.rpc('log_audit_event', {
@@ -94,30 +109,31 @@ exports.autoSaveRouter = (0, trpc_1.router)({
         .input(zod_1.z.object({ projectId: zod_1.z.string().min(1, 'Project ID is required') }))
         .query(async ({ input, ctx }) => {
         try {
-            const { data: editState, error } = await ctx.supabase
+            logger_1.logger.info(`[autoSave] 🔍 getCurrentState CALLED: projectId=${input.projectId}, userId=${ctx.user.id}`);
+            // FIXED: Ignore 'is_current' flag which can be unreliable.
+            // Always return the absolute latest state by timestamp.
+            const { data: latestState, error } = await ctx.supabase
                 .from('edit_states')
                 .select('*')
                 .eq('project_id', input.projectId)
                 .eq('user_id', ctx.user.id)
-                .eq('is_current', true)
-                .single();
+                .order('timestamp', { ascending: false })
+                .limit(1)
+                .maybeSingle(); // Use maybeSingle to return null instead of error if empty
             if (error) {
-                if (error.code === 'PGRST116') {
-                    // No current state found, return null
-                    return null;
-                }
-                logger_1.logger.error('Database error fetching current state:', error);
+                logger_1.logger.error('[autoSave] ❌ getCurrentState: Database error:', error);
                 throw new server_1.TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to fetch current state',
                 });
             }
-            return editState;
+            logger_1.logger.info(`[autoSave] ✅ getCurrentState RESULT: version=${latestState?.version || 'NULL'}, timestamp=${latestState?.timestamp || 'NULL'}, id=${latestState?.id || 'NULL'}`);
+            return latestState;
         }
         catch (error) {
             if (error instanceof server_1.TRPCError)
                 throw error;
-            logger_1.logger.error('Error fetching current state:', error);
+            logger_1.logger.error('[autoSave] ❌ getCurrentState: unexpected error:', error);
             throw new server_1.TRPCError({
                 code: 'INTERNAL_SERVER_ERROR',
                 message: 'Failed to fetch current state',
@@ -149,12 +165,16 @@ exports.autoSaveRouter = (0, trpc_1.router)({
                     message: 'Failed to fetch edit state',
                 });
             }
-            // Mark all existing states for this project as not current
-            await ctx.supabase
+            // Get next version number
+            const { data: latestState } = await ctx.supabase
                 .from('edit_states')
-                .update({ is_current: false })
+                .select('version')
                 .eq('project_id', editState.project_id)
-                .eq('user_id', ctx.user.id);
+                .eq('user_id', ctx.user.id)
+                .order('version', { ascending: false })
+                .limit(1)
+                .single();
+            const nextVersion = (latestState?.version || 0) + 1;
             // Create a new state based on the restored one
             const { data: newState, error: createError } = await ctx.supabase
                 .from('edit_states')
@@ -162,8 +182,7 @@ exports.autoSaveRouter = (0, trpc_1.router)({
                 user_id: ctx.user.id,
                 project_id: editState.project_id,
                 data: editState.data,
-                version: editState.version + 1,
-                is_current: true,
+                version: nextVersion,
             })
                 .select()
                 .single();
@@ -234,10 +253,10 @@ exports.autoSaveRouter = (0, trpc_1.router)({
         .input(deleteStateSchema)
         .mutation(async ({ input, ctx }) => {
         try {
-            // Check if this is the current state
+            // Get state info for audit log
             const { data: editState, error: fetchError } = await ctx.supabase
                 .from('edit_states')
-                .select('is_current, project_id')
+                .select('project_id')
                 .eq('id', input.stateId)
                 .eq('user_id', ctx.user.id)
                 .single();
@@ -267,33 +286,13 @@ exports.autoSaveRouter = (0, trpc_1.router)({
                     message: 'Failed to delete edit state',
                 });
             }
-            // If this was the current state, make the most recent state current
-            if (editState.is_current) {
-                const { data: latestState } = await ctx.supabase
-                    .from('edit_states')
-                    .select('id')
-                    .eq('project_id', editState.project_id)
-                    .eq('user_id', ctx.user.id)
-                    .order('timestamp', { ascending: false })
-                    .limit(1)
-                    .single();
-                if (latestState) {
-                    await ctx.supabase
-                        .from('edit_states')
-                        .update({ is_current: true })
-                        .eq('id', latestState.id);
-                }
-            }
             // Log audit event
             await ctx.supabase.rpc('log_audit_event', {
                 p_user_id: ctx.user.id,
                 p_action: 'auto_save.delete_state',
                 p_resource_type: 'edit_state',
                 p_resource_id: input.stateId,
-                p_metadata: {
-                    was_current: editState.is_current,
-                    project_id: editState.project_id
-                },
+                p_metadata: { project_id: editState.project_id },
             });
             return { success: true };
         }
