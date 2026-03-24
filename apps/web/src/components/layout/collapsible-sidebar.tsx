@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { ChevronLeft, ChevronRight, Home, Folder, User, UploadCloud } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Home, Folder, Settings, UploadCloud } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { RayboxLogo } from '@/components/ui/phonoglyph-logo';
 
@@ -48,7 +48,7 @@ export function CollapsibleSidebar({ children }: CollapsibleSidebarProps) {
           <nav className="flex-grow space-y-2">
             <NavLink href="/dashboard" icon={Home} label="Home" isCollapsed={isCollapsed} />
             <NavLink href="/files" icon={Folder} label="Files" isCollapsed={isCollapsed} />
-            <NavLink href="/profile" icon={User} label="Profile" isCollapsed={isCollapsed} />
+            <NavLink href="/settings" icon={Settings} label="Settings" isCollapsed={isCollapsed} />
           </nav>
 
           <div className="flex-shrink-0">

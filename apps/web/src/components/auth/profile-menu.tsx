@@ -97,8 +97,8 @@ export function ProfileMenu({ user }: ProfileMenuProps) {
           Dashboard
         </DropdownMenuItem>
         
-        <DropdownMenuItem onClick={() => window.location.href = "/profile"}>
-          Profile Settings
+        <DropdownMenuItem onClick={() => window.location.href = "/settings"}>
+          Settings
         </DropdownMenuItem>
         
         <DropdownMenuSeparator />
