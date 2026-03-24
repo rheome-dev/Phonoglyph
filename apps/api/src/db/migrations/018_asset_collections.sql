@@ -1,5 +1,8 @@
 -- Create asset_collections table
-CREATE TYPE collection_type AS ENUM ('image_slideshow', 'generic');
+DO $$ BEGIN
+  CREATE TYPE collection_type AS ENUM ('image_slideshow', 'generic');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 CREATE TABLE asset_collections (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

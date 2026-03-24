@@ -1,18 +1,19 @@
 import { initTRPC, TRPCError } from '@trpc/server'
 import type { CreateExpressContextOptions } from '@trpc/server/adapters/express'
 import { z } from 'zod'
-import { createSupabaseServerClient } from './lib/supabase'
+import { createSupabaseServerClient, supabaseAdmin } from './lib/supabase'
 import { transformSupabaseUser, type User, type AuthContext } from 'phonoglyph-types'
-import { 
-  extractGuestSession, 
-  createGuestUserFromSession, 
-  isValidGuestSession, 
+import {
+  extractGuestSession,
+  createGuestUserFromSession,
+  isValidGuestSession,
   isGuestUser,
-  type GuestUser 
+  type GuestUser
 } from './types/guest'
+import { validateApiKey } from './services/api-key'
 import { logger } from './lib/logger'
 
-// Create tRPC context with Supabase authentication and guest support for Express
+// Create tRPC context with Supabase authentication, API key auth, and guest support for Express
 export const createTRPCContext = async (opts: CreateExpressContextOptions) => {
   const { req, res } = opts
 
@@ -25,23 +26,45 @@ export const createTRPCContext = async (opts: CreateExpressContextOptions) => {
   const authHeader = (req as any).headers?.authorization
   const accessToken = authHeader?.replace('Bearer ', '')
 
+  // Extract API key header
+  const apiKey = (req as any).headers?.['x-api-key'] as string | undefined
+
   logger.auth('Backend - Auth header present:', !!authHeader)
   logger.auth('Backend - Access token present:', !!accessToken)
-
-  // Create Supabase client with user session
-  const supabase = createSupabaseServerClient(accessToken)
+  logger.auth('Backend - API key present:', !!apiKey)
 
   let user: User | GuestUser | null = null
   let session: any = null
   let isGuest = false
+  let supabase = createSupabaseServerClient(accessToken)
 
-  // Try to get authenticated user session first
-  if (accessToken) {
+  // Priority 1: API Key authentication (for CLI/programmatic access)
+  if (apiKey) {
+    const apiKeyResult = await validateApiKey(apiKey)
+    if (apiKeyResult) {
+      // Look up user via admin client
+      const { data: { user: supabaseUser }, error } = await supabaseAdmin.auth.admin.getUserById(apiKeyResult.userId)
+      if (!error && supabaseUser) {
+        user = transformSupabaseUser(supabaseUser)
+        // Use admin client for API key sessions (no user token available)
+        supabase = supabaseAdmin
+        session = {
+          user: supabaseUser,
+          access_token: 'api-key-session',
+          apiKeyScopes: apiKeyResult.scopes,
+        }
+        logger.auth('Backend - User authenticated via API key:', user.email)
+      }
+    }
+  }
+
+  // Priority 2: Supabase Bearer token authentication
+  if (!user && accessToken) {
     try {
       // Try different approaches for getting user data
       let supabaseUser: any = null;
       let error: any = null;
-      
+
       try {
         // Use type assertion to access auth methods
         const authClient = supabase.auth as any;
@@ -56,9 +79,9 @@ export const createTRPCContext = async (opts: CreateExpressContextOptions) => {
       } catch (authError) {
         error = authError;
       }
-      
+
       logger.auth('Backend - Supabase user lookup result:', { user: !!supabaseUser, error: !!error })
-      
+
       if (!error && supabaseUser) {
         user = transformSupabaseUser(supabaseUser)
         // For server-side, we create a session object from the user data
@@ -75,7 +98,7 @@ export const createTRPCContext = async (opts: CreateExpressContextOptions) => {
     }
   }
 
-  // If no authenticated user, check for guest session
+  // Priority 3: Guest session
   if (!user) {
     const guestSession = extractGuestSession(req)
     if (guestSession && isValidGuestSession(guestSession.sessionId)) {
@@ -85,10 +108,10 @@ export const createTRPCContext = async (opts: CreateExpressContextOptions) => {
     }
   }
 
-  logger.auth('Backend - Final context:', { 
-    hasUser: !!user, 
-    hasSession: !!session, 
-    isGuest 
+  logger.auth('Backend - Final context:', {
+    hasUser: !!user,
+    hasSession: !!session,
+    isGuest
   })
 
   return {

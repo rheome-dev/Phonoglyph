@@ -11,6 +11,7 @@ import { autoSaveRouter } from './auto-save';
 import { audioAnalysisSandboxRouter } from './audio-analysis-sandbox';
 import { assetRouter } from './asset';
 import { renderRouter } from './render';
+import { apiKeyRouter } from './api-key';
 
 export const appRouter = router({
   health: healthRouter,
@@ -25,6 +26,7 @@ export const appRouter = router({
   autoSave: autoSaveRouter,
   audioAnalysisSandbox: audioAnalysisSandboxRouter,
   render: renderRouter,
+  apiKey: apiKeyRouter,
 });
 
 export type AppRouter = typeof appRouter; 
