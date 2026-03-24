@@ -14,7 +14,8 @@ import { testConnection } from './db/connection'
 import { initializeS3 } from './services/r2-storage'
 import { logger } from './lib/logger';
 
-const app = express()
+import type { Express } from 'express';
+const app: Express = express()
 const PORT = process.env.PORT || 3001
 
 // Security middleware

@@ -536,11 +536,64 @@ export const fileRouter = router({
 
       } catch (error) {
         if (error instanceof TRPCError) throw error
-        
+
         logger.error('Error generating download URL:', error)
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to generate download URL',
+        })
+      }
+    }),
+
+  // Batch get download URLs for multiple files (used by CLI for render payload)
+  getDownloadUrls: protectedProcedure
+    .input(z.object({ fileIds: z.array(z.string()) }))
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.user.id
+
+      if (input.fileIds.length === 0) {
+        return {};
+      }
+
+      try {
+        const { data: files, error } = await ctx.supabase
+          .from('file_metadata')
+          .select('id, file_name, file_type, file_size, s3_key')
+          .in('id', input.fileIds)
+          .eq('user_id', userId)
+          .eq('upload_status', 'completed')
+
+        if (error) {
+          throw error;
+        }
+
+        const urlMap: Record<string, {
+          downloadUrl: string;
+          fileName: string;
+          fileSize: number;
+          fileType: string;
+        }> = {};
+
+        await Promise.all(
+          (files || []).map(async (file: any) => {
+            const downloadUrl = await generateDownloadUrl(file.s3_key, 3600);
+            urlMap[file.id] = {
+              downloadUrl,
+              fileName: file.file_name,
+              fileSize: file.file_size,
+              fileType: file.file_type,
+            };
+          })
+        );
+
+        return urlMap;
+      } catch (error) {
+        if (error instanceof TRPCError) throw error
+
+        logger.error('Error batch generating download URLs:', error)
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to batch generate download URLs',
         })
       }
     }),
