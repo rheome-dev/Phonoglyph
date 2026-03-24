@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { router, protectedProcedure } from '../trpc';
 import { TRPCError } from '@trpc/server';
-import { renderMediaOnLambda, getFunctions, getRenderProgress } from '@remotion/lambda';
+import { renderMediaOnLambda, getRenderProgress } from '@remotion/lambda';
 import { logger } from '../lib/logger';
 import { r2Client, BUCKET_NAME } from '../services/r2-storage';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
@@ -155,32 +155,11 @@ export const renderRouter = router({
           dataSize: JSON.stringify(input.audioAnalysisData).length,
         });
 
-        // Try to get the function name dynamically, prefer highest timeout, fallback to 300s function
-        let functionName = 'remotion-render-4-0-390-mem3008mb-disk2048mb-300sec';
-
-        try {
-          const functions = await getFunctions({
-            region,
-            compatibleOnly: true,
-          });
-
-          if (functions.length > 0) {
-            // Prefer the function with the highest timeout to avoid orchestrator timeouts
-            // Skip 4-0-436 (nodejs24.x) — has compatibility issues with bundled Chromium
-            const stableFunctions = functions.filter((f: any) => !f.functionName.includes('4-0-436'));
-            const sorted = (stableFunctions.length > 0 ? stableFunctions : functions).sort((a: any, b: any) => {
-              const aTimeout = parseInt(a.functionName.match(/(\d+)sec$/)?.[1] || '0');
-              const bTimeout = parseInt(b.functionName.match(/(\d+)sec$/)?.[1] || '0');
-              return bTimeout - aTimeout;
-            });
-            functionName = sorted[0]!.functionName;
-            logger.log(`Using Remotion function: ${functionName}`);
-          } else {
-            logger.warn(`No compatible functions found, using default: ${functionName}`);
-          }
-        } catch (error) {
-          logger.warn(`Failed to get functions dynamically, using default: ${functionName}`, error);
-        }
+        // Hardcoded to stable nodejs20.x function — 4-0-436 (nodejs24.x) has
+        // Chromium sandbox failures causing all renders to crash. Do not change this
+        // to a dynamic selector until the nodejs24 issue is resolved.
+        const functionName = 'remotion-render-4-0-390-mem3008mb-disk2048mb-300sec';
+        logger.log(`Using stable Remotion function: ${functionName}`);
 
         logger.log('Triggering Remotion render:', {
           region,
