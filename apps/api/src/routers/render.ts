@@ -166,7 +166,9 @@ export const renderRouter = router({
 
           if (functions.length > 0) {
             // Prefer the function with the highest timeout to avoid orchestrator timeouts
-            const sorted = functions.sort((a: any, b: any) => {
+            // Skip 4-0-436 (nodejs24.x) — has compatibility issues with bundled Chromium
+            const stableFunctions = functions.filter((f: any) => !f.functionName.includes('4-0-436'));
+            const sorted = (stableFunctions.length > 0 ? stableFunctions : functions).sort((a: any, b: any) => {
               const aTimeout = parseInt(a.functionName.match(/(\d+)sec$/)?.[1] || '0');
               const bTimeout = parseInt(b.functionName.match(/(\d+)sec$/)?.[1] || '0');
               return bTimeout - aTimeout;
