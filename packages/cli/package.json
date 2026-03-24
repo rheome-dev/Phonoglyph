@@ -1,0 +1,24 @@
+{
+  "name": "@raybox/cli",
+  "version": "0.1.0",
+  "description": "Raybox CLI - Create audio-reactive videos from the command line",
+  "bin": {
+    "raybox": "./dist/index.js"
+  },
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "commander": "^12.1.0",
+    "ora": "^5.4.1",
+    "chalk": "^4.1.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.5",
+    "tsx": "^4.7.0",
+    "typescript": "5.3.3"
+  }
+}
