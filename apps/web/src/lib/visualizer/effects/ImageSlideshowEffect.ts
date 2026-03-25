@@ -805,78 +805,61 @@ export class ImageSlideshowEffect implements VisualEffect {
    * @param duration - Optional total render duration in seconds. If provided, pre-loads
    *                   all images that will be shown during the render for Lambda compatibility.
    */
-  public async waitForImages(duration?: number, startFrame?: number, fps?: number): Promise<void> {
+  public async waitForImages(duration?: number): Promise<void> {
     if (this.parameters.images.length === 0) return;
 
     const remotionEnv = getRemotionEnvironment();
     const isInRemotionContext = remotionEnv.isRendering || remotionEnv.isStudio;
 
-    // STATELESS: In Lambda, pre-load only the images needed for this chunk's frame range.
+    // STATELESS: In Lambda, pre-load all images that will be needed based on slideEvents and duration
     if (isInRemotionContext && this.parameters.slideEvents.length > 0 && duration) {
       const slideEvents = this.parameters.slideEvents;
-      const images = this.parameters.images;
+
+      // Find how many slides will be shown during this render
+      const relevantEvents = slideEvents.filter(e => e.time <= duration);
+
+      // Pre-load all images that will be cycled through.
+      // If there are more events than images, all images will appear at some point.
+      // If fewer events than images, only the first N images are needed.
       const imagesToPreload = new Set<number>();
+      imagesToPreload.add(this.currentImageIndex >= 0 ? this.currentImageIndex : 0);
 
-      if (startFrame !== undefined && fps !== undefined) {
-        // CHUNK-AWARE: Each Lambda chunk renders ~20 frames. Only preload images
-        // that actually appear in this chunk's frame range, plus a generous buffer.
-        // This prevents OOM from loading all N images into memory per chunk.
-        const startTime = startFrame / fps;
-        const lookAheadSec = 5; // 5-second window — covers this chunk + plenty of buffer
-        const windowEnd = Math.min(startTime + lookAheadSec, duration);
-
-        // Count events before our window to find the starting image index
-        const eventsBefore = slideEvents.filter(e => e.time < startTime).length;
-        const eventsAtEnd = slideEvents.filter(e => e.time <= windowEnd).length;
-
-        // Include 1 image before window start (the image currently showing at chunk start)
-        imagesToPreload.add(Math.max(0, eventsBefore - 1) % images.length);
-        // Include all images that will appear during the window
-        for (let count = eventsBefore; count <= eventsAtEnd + 1; count++) {
-          imagesToPreload.add(count % images.length);
+      if (relevantEvents.length >= this.parameters.images.length) {
+        // All images will be shown — preload everything
+        for (let i = 0; i < this.parameters.images.length; i++) {
+          imagesToPreload.add(i);
         }
-
-        console.log('[Slideshow] Chunk-aware preload', {
-          startFrame, fps, startTime: startTime.toFixed(2), windowEnd: windowEnd.toFixed(2),
-          eventsBefore, eventsAtEnd,
-          imagesToPreload: Array.from(imagesToPreload),
-          totalImages: images.length,
-        });
       } else {
-        // FULL PRELOAD fallback (no frame context): load all images sequentially.
-        // In Lambda rendering mode, SKIP this — the chunk-aware call (with frame+fps)
-        // handles preloading. Running a full preload here causes all N images to load
-        // concurrently with frame rendering, exhausting GPU process memory.
-        if (remotionEnv.isRendering) {
-          console.log('[Slideshow] Skipping full preload in rendering mode (chunk-aware call handles it)');
-          return;
+        // Only some images will be shown — preload exactly those indices
+        for (let i = 0; i <= relevantEvents.length; i++) {
+          imagesToPreload.add(i % this.parameters.images.length);
         }
-        const relevantEvents = slideEvents.filter(e => e.time <= duration);
-        if (relevantEvents.length >= images.length) {
-          for (let i = 0; i < images.length; i++) imagesToPreload.add(i);
-        } else {
-          for (let i = 0; i <= relevantEvents.length; i++) {
-            imagesToPreload.add(i % images.length);
-          }
-        }
-        console.log('[Slideshow] Full preload (no frame context)', { count: imagesToPreload.size });
       }
 
-      // Load sequentially to avoid OOM — even a few images can be large
-      for (const idx of Array.from(imagesToPreload)) {
-        const url = images[idx];
+      slideshowLog.log('waitForImages: Pre-loading images for Lambda render', {
+        duration,
+        relevantEvents: relevantEvents.length,
+        imagesToPreload: Array.from(imagesToPreload)
+      });
+
+      // Load all needed images in parallel
+      const loadPromises = Array.from(imagesToPreload).map(async (idx) => {
+        const url = this.parameters.images[idx];
         if (url && !this.textureCache.has(url)) {
           try {
             await this.loadTexture(url);
           } catch (e) {
+            // Continue loading other images even if one fails
             slideshowLog.warn(`waitForImages: Failed to preload image ${idx}`, e);
           }
         }
-      }
+      });
 
-      // Apply current image
+      await Promise.all(loadPromises);
+
+      // Apply first image if not already applied
       const firstIndex = this.currentImageIndex >= 0 ? this.currentImageIndex : 0;
-      const firstUrl = images[firstIndex];
+      const firstUrl = this.parameters.images[firstIndex];
       if (firstUrl) {
         const texture = this.textureCache.get(firstUrl);
         if (texture) {
