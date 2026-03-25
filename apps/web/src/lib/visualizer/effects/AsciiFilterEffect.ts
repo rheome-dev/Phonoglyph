@@ -95,7 +95,8 @@ export class AsciiFilterEffect implements VisualEffect {
     // Font paths to try (browser vs Lambda S3 bundle)
     const fontPaths = [
       '/fonts/JetBrainsMono-Regular.ttf',
-      '/sites/raybox-renderer/fonts/JetBrainsMono-Regular.ttf',
+      // S3 path: public/ directory is included in the bucket path
+      '/sites/raybox-renderer/public/fonts/JetBrainsMono-Regular.ttf',
     ];
 
     for (const path of fontPaths) {
