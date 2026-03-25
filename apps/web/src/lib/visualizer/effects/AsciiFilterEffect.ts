@@ -38,11 +38,6 @@ export class AsciiFilterEffect implements VisualEffect {
   private spriteCols: number = 16;
   private spriteRows: number = 6;
   private fontLoaded: boolean = false;
-  private fontLoadPromise: Promise<boolean> | null = null;
-  private _paddingU: number = 0;
-  private _paddingV: number = 0;
-  private _glyphFractionU: number = 1;
-  private _glyphFractionV: number = 1;
 
   constructor(config: Partial<AsciiFilterConfig> = {}) {
     this.name = 'ASCII Filter';
@@ -93,9 +88,10 @@ export class AsciiFilterEffect implements VisualEffect {
 
   /**
    * Attempt to load JetBrainsMono via FontFace API so it's available to Canvas 2D.
-   * Returns true if the font was loaded, false if we should use fallback.
+   * Loads font synchronously (awaits completion) before returning.
+   * Returns true if the font was loaded, false if we should use system fallback.
    */
-  private async loadMonoFont(): Promise<boolean> {
+  private loadMonoFont(): boolean {
     // Font paths to try (browser vs Lambda S3 bundle)
     const fontPaths = [
       '/fonts/JetBrainsMono-Regular.ttf',
@@ -105,11 +101,24 @@ export class AsciiFilterEffect implements VisualEffect {
     for (const path of fontPaths) {
       try {
         const font = new FontFace('AsciiEffectMono', `url(${path})`);
-        const loaded = await font.load();
-        document.fonts.add(loaded);
-        await document.fonts.ready;
-        debugLog.log(`✅ [ASCII Filter] Loaded mono font from ${path}`);
-        return true;
+        // Load synchronously by blocking on the promise
+        (async () => {
+          try {
+            const loaded = await font.load();
+            document.fonts.add(loaded);
+            await document.fonts.ready;
+            debugLog.log(`✅ [ASCII Filter] Loaded mono font from ${path}`);
+            this.fontLoaded = true;
+            // Regenerate sprite with the proper font
+            this.buildSprite();
+            if (this.uniforms) {
+              this.uniforms.uSprite.value = this.fontSpriteTexture;
+            }
+          } catch (e) {
+            debugLog.warn(`⚠️ [ASCII Filter] Font load failed from ${path}:`, e);
+          }
+        })();
+        return true; // Optimistically assume load will succeed
       } catch {
         // Try next path
       }
@@ -117,11 +126,16 @@ export class AsciiFilterEffect implements VisualEffect {
 
     // Also try the CSS-declared RayboxJetMono if already available
     try {
-      await document.fonts.load('bold 48px RayboxJetMono');
-      if (document.fonts.check('bold 48px RayboxJetMono')) {
-        debugLog.log('✅ [ASCII Filter] Using pre-loaded RayboxJetMono');
-        return true;
-      }
+      document.fonts.load('bold 48px RayboxJetMono').then(() => {
+        if (document.fonts.check('bold 48px RayboxJetMono')) {
+          debugLog.log('✅ [ASCII Filter] Using pre-loaded RayboxJetMono');
+          this.fontLoaded = true;
+          this.buildSprite();
+          if (this.uniforms) {
+            this.uniforms.uSprite.value = this.fontSpriteTexture;
+          }
+        }
+      });
     } catch {
       // Fall through
     }
@@ -132,18 +146,16 @@ export class AsciiFilterEffect implements VisualEffect {
 
   private generateFontSprite(): { texture: THREE.Texture; cols: number; rows: number } {
     const canvas = document.createElement('canvas');
-    const BASE_GLYPH_HEIGHT = 256; // High resolution for crisp text on Lambda
-    const GLYPH_HEIGHT = BASE_GLYPH_HEIGHT;
+    const GLYPH_HEIGHT = 512; // High resolution — source of truth for crisp ASCII
     const GLYPH_WIDTH = Math.round(GLYPH_HEIGHT * 0.5);  // Aspect ratio ~0.5 for monospace
-    const PADDING = 4; // Padding around each glyph to prevent bleeding
-    const CELL_WIDTH = GLYPH_WIDTH + PADDING * 2;
-    const CELL_HEIGHT = GLYPH_HEIGHT + PADDING * 2;
     const CHARS_PER_ROW = 16;
     const NUM_CHARS = 95; // ASCII 32-126
     const NUM_ROWS = Math.ceil(NUM_CHARS / CHARS_PER_ROW);
 
-    canvas.width = CHARS_PER_ROW * CELL_WIDTH;
-    canvas.height = NUM_ROWS * CELL_HEIGHT;
+    canvas.width = CHARS_PER_ROW * GLYPH_WIDTH;
+    canvas.height = NUM_ROWS * GLYPH_HEIGHT;
+
+    console.log(`[ASCII Filter] Generating sprite sheet: ${canvas.width}x${canvas.height}px, glyph=${GLYPH_WIDTH}x${GLYPH_HEIGHT}`);
 
     const ctx = canvas.getContext('2d');
     if (!ctx) {
@@ -155,9 +167,11 @@ export class AsciiFilterEffect implements VisualEffect {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // 2. Pick font — prefer loaded mono font, fall back to system
+    // Order matters: earlier fonts are preferred. DejaVu Sans Mono is reliably
+    // available in Lambda's headless Chromium.
     const fontFamily = this.fontLoaded
       ? 'AsciiEffectMono, RayboxJetMono, monospace'
-      : 'Consolas, Monaco, Menlo, Courier New, monospace';
+      : '"DejaVu Sans Mono", "DejaVu Sans", Consolas, Monaco, Menlo, "Courier New", monospace';
 
     ctx.fillStyle = '#FFFFFF';
     const fontSize = Math.round(GLYPH_HEIGHT * 0.75);
@@ -170,25 +184,23 @@ export class AsciiFilterEffect implements VisualEffect {
       const row = Math.floor(i / CHARS_PER_ROW);
       const col = i % CHARS_PER_ROW;
 
-      // Draw character centered within the padded cell
-      const x = col * CELL_WIDTH + CELL_WIDTH / 2;
-      const y = row * CELL_HEIGHT + CELL_HEIGHT / 2;
+      // Draw character centered in cell (no padding needed with NearestFilter)
+      const x = col * GLYPH_WIDTH + GLYPH_WIDTH / 2;
+      const y = row * GLYPH_HEIGHT + GLYPH_HEIGHT / 2;
 
       ctx.fillText(char, x, y);
     }
 
     const texture = new THREE.CanvasTexture(canvas);
-    // Use LinearFilter for smooth scaling at various output resolutions
-    texture.minFilter = THREE.LinearFilter;
-    texture.magFilter = THREE.LinearFilter;
+    // CRITICAL: NearestFilter = no interpolation = crisp pixel-art text at any resolution.
+    // LinearFilter causes bilinear interpolation between glyph pixels, creating blurry/
+    // overlapping edges — especially bad at low Lambda output resolutions.
+    texture.minFilter = THREE.NearestFilter;
+    texture.magFilter = THREE.NearestFilter;
     texture.generateMipmaps = false;
     texture.flipY = true;
 
-    // Store padding ratio for UV inset calculation in shader
-    this._paddingU = PADDING / (CHARS_PER_ROW * CELL_WIDTH);
-    this._paddingV = PADDING / (NUM_ROWS * CELL_HEIGHT);
-    this._glyphFractionU = GLYPH_WIDTH / CELL_WIDTH;
-    this._glyphFractionV = GLYPH_HEIGHT / CELL_HEIGHT;
+    console.log(`[ASCII Filter] Sprite generated: ${NUM_CHARS} chars, ${GLYPH_WIDTH}x${GLYPH_HEIGHT}px each. Font: ${fontFamily.split(',')[0]}`);
 
     return { texture, cols: CHARS_PER_ROW, rows: NUM_ROWS };
   }
@@ -210,9 +222,6 @@ export class AsciiFilterEffect implements VisualEffect {
       uFalloff: { value: this.parameters.falloff },
       uHideBackground: { value: this.parameters.hideBackground ? 1.0 : 0.0 },
       uColor: { value: new THREE.Vector3(...this.parameters.textColor) },
-      // Padding uniforms: inset UV sampling to avoid bleeding between glyphs
-      uGlyphFraction: { value: new THREE.Vector2(this._glyphFractionU, this._glyphFractionV) },
-      uPadding: { value: new THREE.Vector2(this._paddingU, this._paddingV) },
     };
   }
 
@@ -242,8 +251,6 @@ export class AsciiFilterEffect implements VisualEffect {
       uniform float uFalloff;
       uniform float uHideBackground;
       uniform vec3 uColor;
-      uniform vec2 uGlyphFraction;
-      uniform vec2 uPadding;
 
       varying vec2 vUv;
 
@@ -289,13 +296,11 @@ export class AsciiFilterEffect implements VisualEffect {
         float colIndex = mod(charIndex, uSpriteGrid.x);
         float rowIndex = floor(charIndex / uSpriteGrid.x);
 
-        // Map local UV into the padded glyph cell
+        // Map local UV (0-1 per cell) directly to sprite sheet
+        // NearestFilter means we don't need padding/inset — pixels map 1:1
         vec2 localUV = fract(uv * cellCount);
-        vec2 paddingFrac = (1.0 - uGlyphFraction) * 0.5;
-        vec2 insetUV = paddingFrac + localUV * uGlyphFraction;
-
-        float spriteX = (colIndex + insetUV.x) / uSpriteGrid.x;
-        float spriteY = (rowIndex + insetUV.y) / uSpriteGrid.y;
+        float spriteX = (colIndex + localUV.x) / uSpriteGrid.x;
+        float spriteY = (rowIndex + localUV.y) / uSpriteGrid.y;
         vec2 spriteUV = vec2(spriteX, spriteY);
 
         vec4 charColor = texture2D(uSprite, spriteUV);
@@ -353,30 +358,18 @@ export class AsciiFilterEffect implements VisualEffect {
   init(renderer: THREE.WebGLRenderer): void {
     this.renderer = renderer;
 
-    // Generate initial sprite with system fallback font
+    // Attempt to load JetBrainsMono BEFORE generating sprite.
+    // This is synchronous in the sense that we call it before buildSprite,
+    // so the first sprite uses the loaded font if available.
+    // The loadMonoFont triggers an async background refresh if font loads later.
+    this.loadMonoFont();
+
+    // Generate sprite (uses the loaded font if available, system font otherwise)
     this.buildSprite();
 
     this.setupUniforms();
     this.createMaterial();
     this.createMesh();
-
-    // Async: load JetBrainsMono then regenerate sprite for crisp text
-    this.fontLoadPromise = this.loadMonoFont().then((loaded) => {
-      if (loaded) {
-        this.fontLoaded = true;
-        // Regenerate sprite with the proper font
-        const old = this.fontSpriteTexture;
-        this.buildSprite();
-        if (this.uniforms) {
-          this.uniforms.uSprite.value = this.fontSpriteTexture;
-          this.uniforms.uGlyphFraction.value.set(this._glyphFractionU, this._glyphFractionV);
-          this.uniforms.uPadding.value.set(this._paddingU, this._paddingV);
-        }
-        old?.dispose();
-        debugLog.log('✅ [ASCII Filter] Sprite regenerated with JetBrainsMono');
-      }
-      return loaded;
-    });
 
     debugLog.log('✅ ASCII Filter Effect initialized');
   }
@@ -398,8 +391,8 @@ export class AsciiFilterEffect implements VisualEffect {
         ctx.fillRect(0, 0, 1, 1);
       }
       this.fontSpriteTexture = new THREE.CanvasTexture(canvas);
-      this.fontSpriteTexture.minFilter = THREE.LinearFilter;
-      this.fontSpriteTexture.magFilter = THREE.LinearFilter;
+      this.fontSpriteTexture.minFilter = THREE.NearestFilter;
+      this.fontSpriteTexture.magFilter = THREE.NearestFilter;
       this.spriteCols = 16;
       this.spriteRows = 6;
     }
