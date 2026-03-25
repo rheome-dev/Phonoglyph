@@ -193,10 +193,6 @@ export const renderRouter = router({
               logLevel: 'verbose',
               chromiumOptions: {
                 gl: 'swangle', // Software WebGL via ANGLE+SwiftShader for no-GPU Lambda
-                // Required: explicit flag to allow software WebGL fallback.
-                // Without this, Chromium's passthrough decoder crashes (exit_code=9)
-                // when automatic fallback to SwiftShader is attempted and blocked.
-                args: ['--enable-unsafe-swiftshader'],
               },
             } as any);
 

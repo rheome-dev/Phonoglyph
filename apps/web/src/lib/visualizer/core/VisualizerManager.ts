@@ -126,7 +126,10 @@ export class VisualizerManager {
         alpha: true,
         // CRITICAL: Only true during Remotion rendering
         preserveDrawingBuffer: isRendering,
-        powerPreference: isRendering ? 'high-performance' : 'default',
+        // 'low-power' during Lambda rendering: prevents ANGLE's passthrough decoder
+        // from attempting hardware GPU init (which crashes with exit_code=9 in no-GPU Lambda).
+        // 'high-performance' triggers the hardware passthrough path even with swangle mode.
+        powerPreference: isRendering ? 'low-power' : 'default',
         failIfMajorPerformanceCaveat: false // Allow software rendering
       });
       
