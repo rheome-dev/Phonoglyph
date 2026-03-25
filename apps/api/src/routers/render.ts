@@ -194,6 +194,10 @@ export const renderRouter = router({
               timeoutInMilliseconds: 120000, // 120s — must exceed component's delayRender timeouts (60s slideshow, 120s init)
               chromiumOptions: {
                 gl: 'swangle', // Software WebGL via ANGLE+SwiftShader for no-GPU Lambda
+                // Required: explicit flag to allow software WebGL fallback.
+                // Without this, Chromium's passthrough decoder crashes (exit_code=9)
+                // when automatic fallback to SwiftShader is attempted and blocked.
+                args: ['--enable-unsafe-swiftshader'],
               },
             } as any);
 
