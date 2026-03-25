@@ -148,15 +148,22 @@ export class AsciiFilterEffect implements VisualEffect {
   private generateFontSprite(): { texture: THREE.Texture; cols: number; rows: number } {
     const canvas = document.createElement('canvas');
     const GLYPH_HEIGHT = 512; // High resolution — source of truth for crisp ASCII
-    const GLYPH_WIDTH = Math.round(GLYPH_HEIGHT * 0.5);  // Aspect ratio ~0.5 for monospace
+    const GLYPH_WIDTH = 256;   // Cell width in pixels
     const CHARS_PER_ROW = 16;
     const NUM_CHARS = 95; // ASCII 32-126
     const NUM_ROWS = Math.ceil(NUM_CHARS / CHARS_PER_ROW);
 
+    // CELL_MARGIN reserves space so characters don't bleed into adjacent cells.
+    // The previous code used fontSize = 384px in a 256px-wide cell (1.5x overflow),
+    // causing adjacent glyphs to overlap in the sprite sheet. When NearestFilter
+    // samples the sprite, overlapping pixels from neighboring cells bleed through.
+    const CELL_MARGIN = 16; // pixels of safety margin on each side
+    const CELL_CONTENT_WIDTH = GLYPH_WIDTH - CELL_MARGIN * 2; // = 224px usable width
+
     canvas.width = CHARS_PER_ROW * GLYPH_WIDTH;
     canvas.height = NUM_ROWS * GLYPH_HEIGHT;
 
-    console.log(`[ASCII Filter] Generating sprite sheet: ${canvas.width}x${canvas.height}px, glyph=${GLYPH_WIDTH}x${GLYPH_HEIGHT}`);
+    console.log(`[ASCII Filter] Generating sprite sheet: ${canvas.width}x${canvas.height}px, cell=${GLYPH_WIDTH}x${GLYPH_HEIGHT}`);
 
     const ctx = canvas.getContext('2d');
     if (!ctx) {
@@ -168,24 +175,47 @@ export class AsciiFilterEffect implements VisualEffect {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // 2. Pick font — prefer loaded mono font, fall back to system
-    // Order matters: earlier fonts are preferred. DejaVu Sans Mono is reliably
-    // available in Lambda's headless Chromium.
+    // DejaVu Sans Mono is reliably available in Lambda's headless Chromium.
     const fontFamily = this.fontLoaded
       ? 'AsciiEffectMono, RayboxJetMono, monospace'
       : '"DejaVu Sans Mono", "DejaVu Sans", Consolas, Monaco, Menlo, "Courier New", monospace';
 
     ctx.fillStyle = '#FFFFFF';
-    const fontSize = Math.round(GLYPH_HEIGHT * 0.75);
+
+    // 3. Measure all characters to find the maximum width, then scale so the
+    // widest character fits within CELL_CONTENT_WIDTH with safety margin.
+    // This prevents glyph overflow into adjacent sprite cells.
+    let baseFontSize = GLYPH_HEIGHT;
+    ctx.font = `bold ${baseFontSize}px ${fontFamily}`;
+
+    let maxWidth = 0;
+    for (let i = 0; i < NUM_CHARS; i++) {
+      const char = String.fromCharCode(32 + i);
+      const metrics = ctx.measureText(char);
+      // actualBoundingBoxLeft + actualBoundingBoxRight gives the true glyph width
+      // including any overhang beyond the advance width
+      const charWidth = (metrics.actualBoundingBoxLeft || 0) + (metrics.actualBoundingBoxRight || 0);
+      maxWidth = Math.max(maxWidth, charWidth);
+    }
+
+    // Scale so the widest character fits in CELL_CONTENT_WIDTH
+    // Use only 95% of the space to leave margin for anti-aliasing edge bleed
+    const scaleFactor = (CELL_CONTENT_WIDTH * 0.95) / Math.max(maxWidth, 1);
+    const fontSize = Math.round(baseFontSize * Math.min(scaleFactor, 1.0));
+
+    console.log(`[ASCII Filter] Font metrics: maxCharWidth=${maxWidth.toFixed(0)}px, scale=${scaleFactor.toFixed(2)}, fontSize=${fontSize}px`);
+
     ctx.font = `bold ${fontSize}px ${fontFamily}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
+    // 4. Draw characters centered within their padded cells
     for (let i = 0; i < NUM_CHARS; i++) {
       const char = String.fromCharCode(32 + i);
       const row = Math.floor(i / CHARS_PER_ROW);
       const col = i % CHARS_PER_ROW;
 
-      // Draw character centered in cell (no padding needed with NearestFilter)
+      // Center in cell with margin padding
       const x = col * GLYPH_WIDTH + GLYPH_WIDTH / 2;
       const y = row * GLYPH_HEIGHT + GLYPH_HEIGHT / 2;
 
@@ -193,15 +223,15 @@ export class AsciiFilterEffect implements VisualEffect {
     }
 
     const texture = new THREE.CanvasTexture(canvas);
-    // CRITICAL: NearestFilter = no interpolation = crisp pixel-art text at any resolution.
-    // LinearFilter causes bilinear interpolation between glyph pixels, creating blurry/
-    // overlapping edges — especially bad at low Lambda output resolutions.
+    // CRITICAL: NearestFilter = no interpolation = crisp pixel-art text.
+    // LinearFilter causes bilinear interpolation between glyph pixels, creating
+    // blurry/overlapping edges at the reduced sprite resolution.
     texture.minFilter = THREE.NearestFilter;
     texture.magFilter = THREE.NearestFilter;
     texture.generateMipmaps = false;
     texture.flipY = true;
 
-    console.log(`[ASCII Filter] Sprite generated: ${NUM_CHARS} chars, ${GLYPH_WIDTH}x${GLYPH_HEIGHT}px each. Font: ${fontFamily.split(',')[0]}`);
+    console.log(`[ASCII Filter] Sprite generated: ${NUM_CHARS} chars, ${GLYPH_WIDTH}x${GLYPH_HEIGHT}px. FontSize: ${fontSize}px`);
 
     return { texture, cols: CHARS_PER_ROW, rows: NUM_ROWS };
   }
