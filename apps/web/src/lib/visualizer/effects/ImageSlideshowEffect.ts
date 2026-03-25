@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { VisualEffect } from '@/types/visualizer';
 import { debugLog } from '@/lib/utils';
-import { getRemotionEnvironment } from 'remotion';
+import { getRemotionEnvironment, delayRender, continueRender } from 'remotion';
 
 // Use standard debugLog for ImageSlideshowEffect to allow suppression
 const slideshowLog = {
@@ -455,7 +455,7 @@ export class ImageSlideshowEffect implements VisualEffect {
       // Calculate which image should be shown (wrap around)
       const newIndex = eventsSoFar % this.parameters.images.length;
 
-      // When index changes: update state and kick off texture load if not cached
+      // When index changes: update state and load texture, blocking frame if needed
       if (newIndex !== this.lastCalculatedIndex) {
         this.lastCalculatedIndex = newIndex;
         this.currentImageIndex = newIndex;
@@ -467,17 +467,34 @@ export class ImageSlideshowEffect implements VisualEffect {
         // Load the texture if not already cached
         const imageUrl = this.parameters.images[newIndex];
         if (imageUrl && !this.textureCache.has(imageUrl)) {
-          // In Lambda, try to load - if it fails, we'll show what's cached
-          this.loadTexture(imageUrl).catch(() => {
-            // Silently fail - keep showing previous texture
-          });
+          if (this.isRemotionRendering) {
+            // BLOCK FRAME: Tell Remotion to wait for this image before capturing
+            const handle = delayRender(`Loading slideshow image ${newIndex}`, {
+              timeoutInMilliseconds: 15000,
+            });
+            this.loadTexture(imageUrl)
+              .then((texture) => {
+                this.applyTexture(texture);
+                continueRender(handle);
+              })
+              .catch(() => {
+                // Don't block forever — continue with whatever texture is showing
+                continueRender(handle);
+              });
+          } else {
+            this.loadTexture(imageUrl).catch(() => {});
+          }
+        }
+
+        // Also preload next image so the NEXT transition is instant
+        const nextIndex = (newIndex + 1) % this.parameters.images.length;
+        const nextUrl = this.parameters.images[nextIndex];
+        if (nextUrl && !this.textureCache.has(nextUrl) && !this.loadingImages.has(nextUrl)) {
+          this.loadTexture(nextUrl).catch(() => {});
         }
       }
 
       // EVERY FRAME: Apply texture for current index if it's now in cache.
-      // This is critical for Lambda: loadTexture is async, so the texture won't be
-      // in cache on the same frame the index changes. We check every frame so it gets
-      // applied as soon as it loads (within one frame of the load completing).
       if (this.currentImageIndex >= 0) {
         const imageUrl = this.parameters.images[this.currentImageIndex];
         const texture = imageUrl ? this.textureCache.get(imageUrl) : undefined;
