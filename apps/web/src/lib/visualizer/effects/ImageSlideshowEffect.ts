@@ -455,8 +455,10 @@ export class ImageSlideshowEffect implements VisualEffect {
       // Calculate which image should be shown (wrap around)
       const newIndex = eventsSoFar % this.parameters.images.length;
 
-      // When index changes: update state and load texture, blocking frame if needed
+      // When index changes: update state and load texture
       if (newIndex !== this.lastCalculatedIndex) {
+        const oldIdx = this.lastCalculatedIndex;
+
         this.lastCalculatedIndex = newIndex;
         this.currentImageIndex = newIndex;
 
@@ -470,11 +472,16 @@ export class ImageSlideshowEffect implements VisualEffect {
           this.loadTexture(imageUrl).catch(() => {});
         }
 
-        // Look-ahead: preload next image so the NEXT transition is instant
-        const nextIndex = (newIndex + 1) % this.parameters.images.length;
-        const nextUrl = this.parameters.images[nextIndex];
-        if (nextUrl && !this.textureCache.has(nextUrl) && !this.loadingImages.has(nextUrl)) {
-          this.loadTexture(nextUrl).catch(() => {});
+        // Look-ahead: preload the image that will be shown on the NEXT transition.
+        // Use oldIdx (previous index before this transition) so the math works out:
+        // 0→1 transition: oldIdx=0, look-ahead preloads image 1 ✓
+        // 1→2 transition: oldIdx=1, look-ahead preloads image 2 ✓
+        // First call (-1→0): oldIdx=-1 wraps to last image, but waitForImages
+        //   already preloaded image 0 so this is a harmless duplicate.
+        const lookAheadIdx = (oldIdx + 1 + this.parameters.images.length) % this.parameters.images.length;
+        const lookAheadUrl = this.parameters.images[lookAheadIdx];
+        if (lookAheadUrl && !this.textureCache.has(lookAheadUrl) && !this.loadingImages.has(lookAheadUrl)) {
+          this.loadTexture(lookAheadUrl).catch(() => {});
         }
       }
 
