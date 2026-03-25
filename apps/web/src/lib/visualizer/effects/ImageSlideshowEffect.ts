@@ -811,55 +811,30 @@ export class ImageSlideshowEffect implements VisualEffect {
     const remotionEnv = getRemotionEnvironment();
     const isInRemotionContext = remotionEnv.isRendering || remotionEnv.isStudio;
 
-    // STATELESS: In Lambda, pre-load all images that will be needed based on slideEvents and duration
+    // STATELESS: In Lambda, only pre-load the FIRST image to avoid OOM.
+    // Each Lambda chunk renders ~20 frames (~0.67s at 30fps) and only needs 1-2 images.
+    // The rest load lazily via updateWithTime() which calls loadTexture() on demand.
+    // Previously preloading ALL images (e.g. 34) crashed 3008MB Lambda with SwiftShader.
     if (isInRemotionContext && this.parameters.slideEvents.length > 0 && duration) {
-      const slideEvents = this.parameters.slideEvents;
+      const firstIndex = this.currentImageIndex >= 0 ? this.currentImageIndex : 0;
+      const firstUrl = this.parameters.images[firstIndex];
 
-      // Find how many slides will be shown during this render
-      const relevantEvents = slideEvents.filter(e => e.time <= duration);
+      slideshowLog.log('waitForImages: Pre-loading first image only (lazy load rest)', {
+        duration,
+        totalImages: this.parameters.images.length,
+        slideEvents: this.parameters.slideEvents.length,
+        firstIndex,
+      });
 
-      // Pre-load all images that will be cycled through.
-      // If there are more events than images, all images will appear at some point.
-      // If fewer events than images, only the first N images are needed.
-      const imagesToPreload = new Set<number>();
-      imagesToPreload.add(this.currentImageIndex >= 0 ? this.currentImageIndex : 0);
-
-      if (relevantEvents.length >= this.parameters.images.length) {
-        // All images will be shown — preload everything
-        for (let i = 0; i < this.parameters.images.length; i++) {
-          imagesToPreload.add(i);
-        }
-      } else {
-        // Only some images will be shown — preload exactly those indices
-        for (let i = 0; i <= relevantEvents.length; i++) {
-          imagesToPreload.add(i % this.parameters.images.length);
+      if (firstUrl && !this.textureCache.has(firstUrl)) {
+        try {
+          await this.loadTexture(firstUrl);
+        } catch (e) {
+          slideshowLog.warn(`waitForImages: Failed to preload first image`, e);
         }
       }
 
-      slideshowLog.log('waitForImages: Pre-loading images for Lambda render', {
-        duration,
-        relevantEvents: relevantEvents.length,
-        imagesToPreload: Array.from(imagesToPreload)
-      });
-
-      // Load all needed images in parallel
-      const loadPromises = Array.from(imagesToPreload).map(async (idx) => {
-        const url = this.parameters.images[idx];
-        if (url && !this.textureCache.has(url)) {
-          try {
-            await this.loadTexture(url);
-          } catch (e) {
-            // Continue loading other images even if one fails
-            slideshowLog.warn(`waitForImages: Failed to preload image ${idx}`, e);
-          }
-        }
-      });
-
-      await Promise.all(loadPromises);
-
-      // Apply first image if not already applied
-      const firstIndex = this.currentImageIndex >= 0 ? this.currentImageIndex : 0;
-      const firstUrl = this.parameters.images[firstIndex];
+      // Apply first image
       if (firstUrl) {
         const texture = this.textureCache.get(firstUrl);
         if (texture) {
