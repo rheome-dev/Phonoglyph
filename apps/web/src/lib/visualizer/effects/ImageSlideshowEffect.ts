@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { VisualEffect } from '@/types/visualizer';
 import { debugLog } from '@/lib/utils';
-import { getRemotionEnvironment, delayRender, continueRender } from 'remotion';
+import { getRemotionEnvironment } from 'remotion';
 
 // Use standard debugLog for ImageSlideshowEffect to allow suppression
 const slideshowLog = {
@@ -464,29 +464,13 @@ export class ImageSlideshowEffect implements VisualEffect {
           console.log(`[Slideshow Stateless] time=${absoluteTime.toFixed(2)}s, events=${eventsSoFar}, index=${newIndex}`);
         }
 
-        // Load the texture if not already cached
+        // Load the texture if not already cached (async — old image stays visible until loaded)
         const imageUrl = this.parameters.images[newIndex];
         if (imageUrl && !this.textureCache.has(imageUrl)) {
-          if (this.isRemotionRendering) {
-            // BLOCK FRAME: Tell Remotion to wait for this image before capturing
-            const handle = delayRender(`Loading slideshow image ${newIndex}`, {
-              timeoutInMilliseconds: 15000,
-            });
-            this.loadTexture(imageUrl)
-              .then((texture) => {
-                this.applyTexture(texture);
-                continueRender(handle);
-              })
-              .catch(() => {
-                // Don't block forever — continue with whatever texture is showing
-                continueRender(handle);
-              });
-          } else {
-            this.loadTexture(imageUrl).catch(() => {});
-          }
+          this.loadTexture(imageUrl).catch(() => {});
         }
 
-        // Also preload next image so the NEXT transition is instant
+        // Look-ahead: preload next image so the NEXT transition is instant
         const nextIndex = (newIndex + 1) % this.parameters.images.length;
         const nextUrl = this.parameters.images[nextIndex];
         if (nextUrl && !this.textureCache.has(nextUrl) && !this.loadingImages.has(nextUrl)) {
