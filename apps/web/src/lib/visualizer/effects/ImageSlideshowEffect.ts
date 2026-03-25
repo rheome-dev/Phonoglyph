@@ -469,7 +469,11 @@ export class ImageSlideshowEffect implements VisualEffect {
         // Load the texture if not already cached (async — old image stays visible until loaded)
         const imageUrl = this.parameters.images[newIndex];
         if (imageUrl && !this.textureCache.has(imageUrl)) {
-          this.loadTexture(imageUrl).catch(() => {});
+          this.loadTexture(imageUrl).then((texture) => {
+            if (texture) {
+              this.applyTexture(texture);
+            }
+          }).catch(() => {});
         }
 
         // Look-ahead: preload the image that will be shown on the NEXT transition.
@@ -481,7 +485,11 @@ export class ImageSlideshowEffect implements VisualEffect {
         const lookAheadIdx = (oldIdx + 1 + this.parameters.images.length) % this.parameters.images.length;
         const lookAheadUrl = this.parameters.images[lookAheadIdx];
         if (lookAheadUrl && !this.textureCache.has(lookAheadUrl) && !this.loadingImages.has(lookAheadUrl)) {
-          this.loadTexture(lookAheadUrl).catch(() => {});
+          this.loadTexture(lookAheadUrl).then((texture) => {
+            if (texture) {
+              this.applyTexture(texture);
+            }
+          }).catch(() => {});
         }
       }
 
