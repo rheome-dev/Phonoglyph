@@ -192,7 +192,11 @@ export const renderRouter = router({
               framesPerLambda: 20, // Match working render (w3sheoepsg) - 20 frames per Lambda works
               logLevel: 'verbose',
               chromiumOptions: {
-                gl: 'swangle' // Default on Lambda, recommended for no-GPU cloud instances
+                gl: 'swangle', // Software WebGL via ANGLE+SwiftShader for no-GPU Lambda
+                // Required: explicit flag to allow software WebGL fallback.
+                // Without this, Chromium's passthrough decoder crashes (exit_code=9)
+                // when automatic fallback to SwiftShader is attempted and blocked.
+                args: ['--enable-unsafe-swiftshader'],
               },
             } as any);
 
