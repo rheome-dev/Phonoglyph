@@ -515,17 +515,22 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
   const actualAudioAnalysisData = fetchedAudioAnalysisData || audioAnalysisData || [];
 
   // Pre-populate slideEvents on slideshow effects and preload images once audio data arrives.
-  // This effect handles the Lambda case where audio data is fetched async via analysisUrl,
-  // so slideEvents are empty during the first render. We hold rendering paused (via
-  // slideshowPreloadHandle) until the first slideshow image is loaded.
+  // This effect handles the Lambda case where audio data arrives via props (calculateMetadata
+  // injects audioAnalysisData into chunk props) or via async fetch from analysisUrl.
   //
-  // Key: No circular state dependencies. We directly check the manager ref and data state.
+  // Key: Check actualAudioAnalysisData (not fetchedAudioAnalysisData) because:
+  // - In main Lambda: actualAudioAnalysisData = fetchedAudioAnalysisData (populated from S3 fetch)
+  // - In Lambda chunks: actualAudioAnalysisData = audioAnalysisData (injected by calculateMetadata)
+  // - In CLI/standalone: actualAudioAnalysisData = audioAnalysisData (passed directly)
+  //
+  // Note: waitForAssets (in useLayoutEffect) also sets slideEvents as a safety net, but this
+  // effect ensures slideshowPreloadHandle is always properly released.
   useEffect(() => {
     if (!slideshowPreloadHandle) return; // No handle = no blocking needed
     if (slideshowPreloadDoneRef.current) return; // Already released
 
     // Need both audio data AND the manager to be ready
-    if (!fetchedAudioAnalysisData || fetchedAudioAnalysisData.length === 0) return;
+    if (!actualAudioAnalysisData || actualAudioAnalysisData.length === 0) return;
     const manager = visualizerManagerRef.current;
     if (!manager) return; // Manager not yet created by useLayoutEffect
 
@@ -545,7 +550,7 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
     // Set slideEvents on each slideshow effect so waitForImages can preload correctly
     for (const layer of slideshowLayers) {
       const stemType = (layer.settings?.stemType as string) || 'drums';
-      const stemAnalysis = (fetchedAudioAnalysisData as any[]).find(
+      const stemAnalysis = (actualAudioAnalysisData as any[]).find(
         (a: any) => a.stemType === stemType
       );
       if (stemAnalysis?.analysisData) {
@@ -580,7 +585,7 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
         continueRender(slideshowPreloadHandle);
       }
     });
-  }, [fetchedAudioAnalysisData, slideshowPreloadHandle]);
+  }, [actualAudioAnalysisData, slideshowPreloadHandle]);
 
   // Safety timeout: if slideshowPreloadHandle exists but data never arrives (e.g. fetch fails),
   // release the handle after 30s so the Lambda render doesn't time out at 58s.
