@@ -46,9 +46,9 @@ export class ImageSlideshowEffect implements VisualEffect {
       this.material.color.setHex(0x000000); // Back to black
     }
     
-    if (wasNull !== isNowNull) {
-      this.material.needsUpdate = true;
-    }
+    // Always signal material update when texture changes — swangle (Lambda software WebGL)
+    // may not auto-detect map changes without needsUpdate, causing stale texture to linger.
+    this.material.needsUpdate = true;
   }
   private material: THREE.MeshBasicMaterial;
 
