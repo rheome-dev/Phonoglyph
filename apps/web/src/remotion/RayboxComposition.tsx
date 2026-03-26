@@ -509,10 +509,16 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
   // Pre-populate slideEvents on slideshow effects and preload images once audio data arrives.
   // This is the key fix for Lambda rendering: in Lambda, audio data is fetched async via
   // analysisUrl, so slideEvents are empty during init. We hold rendering paused (via
-  // slideshowPreloadHandle) until all slideshow images are loaded based on the real slideEvents.
+  // slideshowPreloadHandle) until all slideshow images are preloaded and slideEvents are set.
+  //
+  // IMPORTANT: This effect uses fetchedAudioAnalysisData directly (not actualAudioAnalysisData)
+  // to ensure we read the CURRENT state at effect execution time, not the stale closure value
+  // captured when waitForAssets was first called. This fixes the race where waitForAssets
+  // captured empty audioData and skipped slideEvents, but then couldn't re-run because
+  // isInitializedRef.current was already true.
   useEffect(() => {
     if (!slideshowPreloadHandle || slideshowPreloadDoneRef.current) return;
-    if (!actualAudioAnalysisData || actualAudioAnalysisData.length === 0) return;
+    if (!fetchedAudioAnalysisData || fetchedAudioAnalysisData.length === 0) return;
     if (!visualizerManagerRef.current) return;
 
     const manager = visualizerManagerRef.current;
@@ -529,7 +535,7 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
     // Set slideEvents on each slideshow effect so waitForImages can preload correctly
     for (const layer of slideshowLayers) {
       const stemType = (layer.settings?.stemType as string) || 'drums';
-      const stemAnalysis = (actualAudioAnalysisData as any[]).find(
+      const stemAnalysis = (fetchedAudioAnalysisData as any[]).find(
         (a: any) => a.stemType === stemType
       );
       if (stemAnalysis?.analysisData) {
@@ -546,7 +552,7 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
     }
 
     // Now preload all images for each slideshow effect
-    const totalDuration = (actualAudioAnalysisData as any[])[0]?.metadata?.duration || 30;
+    const totalDuration = (fetchedAudioAnalysisData as any[])[0]?.metadata?.duration || 30;
     const slideshowEffects = slideshowLayers
       .map(l => effectInstancesRef.current.get(l.id))
       .filter(Boolean)
@@ -556,7 +562,7 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
 
     Promise.race([
       Promise.all(slideshowEffects.map(effect => (effect as any).waitForImages(totalDuration))),
-      new Promise(r => setTimeout(r, 10000)), // 10s safety timeout — keeps us well under 120s Lambda limit
+      new Promise(r => setTimeout(r, 10000)), // 10s safety timeout
     ]).finally(() => {
       if (!slideshowPreloadDoneRef.current) {
         slideshowPreloadDoneRef.current = true;
@@ -564,7 +570,7 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
         continueRender(slideshowPreloadHandle);
       }
     });
-  }, [actualAudioAnalysisData, slideshowPreloadHandle]);
+  }, [fetchedAudioAnalysisData, slideshowPreloadHandle]);
 
   // 1. Initialize Visualizer (useLayoutEffect) - runs once on mount
   useLayoutEffect(() => {
@@ -646,19 +652,42 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
 
         console.log(`[RayboxComposition] Waiting for ${asyncEffects.length} effects with images...`);
 
-        // Get the total render duration for pre-loading images in Lambda
-        const totalDuration = (actualAudioAnalysisData as any[])[0]?.metadata?.duration || 30;
+        // CRITICAL FIX: Read fetchedAudioAnalysisData directly at runtime (not from stale closure)
+        // to fix the race where actualAudioAnalysisData is empty on first render because
+        // fetchedAudioAnalysisData hasn't arrived yet (Lambda case).
+        // If we don't have data yet, wait for it before continuing.
+        let currentAudioData = actualAudioAnalysisData;
+        if ((!currentAudioData || currentAudioData.length === 0) && fetchedAudioAnalysisData && fetchedAudioAnalysisData.length > 0) {
+          currentAudioData = fetchedAudioAnalysisData;
+        }
 
-        // If audio analysis data is available now (prop-based, not fetched async),
-        // pre-populate slideEvents on slideshow effects so waitForImages can preload
+        // If still no audio data, wait for it (poll for up to 25s before giving up)
+        if (!currentAudioData || currentAudioData.length === 0) {
+          console.log('[RayboxComposition] No audio analysis data yet, waiting for fetch...');
+          const maxWait = 25000;
+          const pollInterval = 500;
+          let waited = 0;
+          while ((!fetchedAudioAnalysisData || fetchedAudioAnalysisData.length === 0) && waited < maxWait) {
+            await new Promise(r => setTimeout(r, pollInterval));
+            waited += pollInterval;
+          }
+          currentAudioData = fetchedAudioAnalysisData as typeof audioAnalysisData;
+          if (currentAudioData && currentAudioData.length > 0) {
+            console.log(`[RayboxComposition] Audio data arrived after ${waited}ms`);
+          }
+        }
+
+        const totalDuration = currentAudioData?.[0]?.metadata?.duration || 30;
+
+        // Pre-populate slideEvents on slideshow effects so waitForImages can preload
         // all needed images rather than just image 0.
-        if (actualAudioAnalysisData && actualAudioAnalysisData.length > 0 && manager) {
+        if (currentAudioData && currentAudioData.length > 0 && manager) {
           const slideshowLayers = actualLayers.filter(
             l => l.type === 'effect' && l.effectType === 'imageSlideshow'
           );
           for (const layer of slideshowLayers) {
             const stemType = (layer.settings?.stemType as string) || 'drums';
-            const stemAnalysis = (actualAudioAnalysisData as any[]).find(
+            const stemAnalysis = (currentAudioData as any[]).find(
               (a: any) => a.stemType === stemType
             );
             if (stemAnalysis?.analysisData) {
@@ -677,7 +706,6 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
 
         if (asyncEffects.length > 0) {
           // 8s timeout safety to prevent hanging forever on bad URLs
-          // (reduced from 10s to give more margin before 33s Remotion timeout)
           await Promise.race([
             Promise.all(asyncEffects.map((effect) => (effect as any).waitForImages(totalDuration))),
             new Promise((r) => setTimeout(r, 8000)),
@@ -691,6 +719,12 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
           isInitializedRef.current = true;
           console.log('[RayboxComposition] Calling continueRender from waitForAssets');
           continueRender(handle);
+        }
+        // Release slideshow preload handle if still pending (slideshowPreloadHandle
+        // has its own effect that handles this, but cover edge cases here too)
+        if (slideshowPreloadHandle && !slideshowPreloadDoneRef.current) {
+          slideshowPreloadDoneRef.current = true;
+          continueRender(slideshowPreloadHandle);
         }
         // Clear safety timeout since we're done
         if (safetyTimeout) {
@@ -706,6 +740,11 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
         isInitializedRef.current = true;
         continueRender(handle);
       }
+      // Release slideshow preload handle on error to avoid blocking render
+      if (slideshowPreloadHandle && !slideshowPreloadDoneRef.current) {
+        slideshowPreloadDoneRef.current = true;
+        continueRender(slideshowPreloadHandle);
+      }
       if (safetyTimeout) {
         clearTimeout(safetyTimeout);
         safetyTimeout = null;
@@ -719,6 +758,12 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
         console.warn('[RayboxComposition] Safety timeout: forcing continueRender after 15s');
         isInitializedRef.current = true;
         continueRender(handle);
+      }
+      // Also release slideshow preload handle so render isn't blocked indefinitely
+      // (can happen if fetchedAudioAnalysisData arrives after safety timeout fires)
+      if (slideshowPreloadHandle && !slideshowPreloadDoneRef.current) {
+        slideshowPreloadDoneRef.current = true;
+        continueRender(slideshowPreloadHandle);
       }
     }, 15000);
 

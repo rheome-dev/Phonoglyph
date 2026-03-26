@@ -737,6 +737,9 @@ export class ImageSlideshowEffect implements VisualEffect {
           texture.generateMipmaps = false;
           texture.matrixAutoUpdate = true;
           texture.flipY = false;
+          // Explicit needsUpdate ensures swangle's software WebGL picks up
+          // the new texture data immediately on the next render call.
+          texture.needsUpdate = true;
 
           slideshowLog.log('Texture loaded via ImageBitmap:', {
             url: url.substring(0, 50),
