@@ -92,17 +92,20 @@ export class AsciiFilterEffect implements VisualEffect {
    * Returns true if the font was loaded, false if we should use system fallback.
    */
   private loadMonoFont(): boolean {
-    // Font paths to try (browser vs Lambda S3 bundle)
+    // Font paths to try: correct S3 path first (includes public/ directory),
+    // then browser dev path as fallback
     const fontPaths = [
-      '/fonts/JetBrainsMono-Regular.ttf',
-      // S3 path: public/ directory is included in the bucket path
+      // Lambda S3 bundle path — must include 'public/' directory prefix
       '/sites/raybox-renderer/public/fonts/JetBrainsMono-Regular.ttf',
+      // Browser dev / Lambda root path (no public/ prefix)
+      '/fonts/JetBrainsMono-Regular.ttf',
     ];
 
     for (const path of fontPaths) {
       try {
         const font = new FontFace('AsciiEffectMono', `url(${path})`);
-        // Load synchronously by blocking on the promise
+        // Fire-and-forget async load; return optimistically.
+        // If load succeeds, buildSprite() is called in the success handler.
         (async () => {
           try {
             const loaded = await font.load();
