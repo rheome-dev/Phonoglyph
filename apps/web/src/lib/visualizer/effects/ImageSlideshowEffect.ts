@@ -75,6 +75,9 @@ export class ImageSlideshowEffect implements VisualEffect {
 
   // STATELESS: Track last calculated index to avoid redundant texture loads
   private lastCalculatedIndex: number = -1;
+  // STATELESS: Guard to prevent updateWithTime from running before slideEvents are set.
+  // On Lambda chunk restarts, initializedRef stays false until waitForImages confirms setup.
+  private slideEventsInitialized: boolean = false;
 
   constructor(config?: any) {
     this.id = config?.id || `imageSlideshow_${Math.random().toString(36).substr(2, 9)}`;
@@ -446,6 +449,11 @@ export class ImageSlideshowEffect implements VisualEffect {
 
     // STATELESS: Use slideEvents if available (Lambda mode)
     const slideEvents = this.parameters.slideEvents;
+
+    // GUARD: On Lambda chunk restarts, slideEvents may not be set yet when updateWithTime
+    // first runs (waitForImages runs after the first few frames). Skip to avoid resetting
+    // lastCalculatedIndex to -1 and briefly flashing the wrong slide.
+    if (this.isInRemotionContext && !this.slideEventsInitialized) return;
 
     if (slideEvents && slideEvents.length > 0) {
       // Count how many events have occurred by this time
@@ -862,8 +870,14 @@ export class ImageSlideshowEffect implements VisualEffect {
         }
       }
 
+      // STATELESS: Mark initialized so updateWithTime can run.
+      this.slideEventsInitialized = true;
       return;
     }
+
+    // STATELESS: Mark initialized even when slideEvents.length === 0 (fallback path).
+    // This ensures updateWithTime will run on subsequent frames once slideEvents are set.
+    this.slideEventsInitialized = true;
 
     // LEGACY: Single image load for live preview
     // Determine which images we need.

@@ -519,16 +519,27 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
   // captured when waitForAssets was first called. This fixes the race where waitForAssets
   // captured empty audioData and skipped slideEvents, but then couldn't re-run because
   // isInitializedRef.current was already true.
+  // Track when visualizer manager is ready — useState to trigger re-render
+  const [isManagerReady, setIsManagerReady] = useState(false);
+
+  // Set isManagerReady once the manager is available
   useEffect(() => {
-    if (!slideshowPreloadHandle) return; // No handle = no blocking needed (default: done=true)
+    if (visualizerManagerRef.current && !isManagerReady) {
+      setIsManagerReady(true);
+    }
+  }, [isManagerReady]);
+
+  useEffect(() => {
+    if (!slideshowPreloadHandle) return; // No handle = no blocking needed
     if (slideshowPreloadDoneRef.current) return; // Already released
     if (!fetchedAudioAnalysisData || fetchedAudioAnalysisData.length === 0) return;
-    if (!visualizerManagerRef.current) return;
+    if (!isManagerReady) return; // Manager not ready yet
+
+    const manager = visualizerManagerRef.current;
+    if (!manager) return; // Safety: manager should be ready when isManagerReady is true
 
     // We have a handle and data: signal that we're now blocking on image preloading
     slideshowPreloadDoneRef.current = false;
-
-    const manager = visualizerManagerRef.current;
     const slideshowLayers = actualLayers.filter(
       l => l.type === 'effect' && l.effectType === 'imageSlideshow'
     );
@@ -577,7 +588,21 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
         continueRender(slideshowPreloadHandle);
       }
     });
-  }, [fetchedAudioAnalysisData, slideshowPreloadHandle]);
+  }, [fetchedAudioAnalysisData, slideshowPreloadHandle, isManagerReady]);
+
+  // Safety timeout: if slideshowPreloadHandle exists but data never arrives (e.g. fetch fails),
+  // release the handle after 30s so the Lambda render doesn't time out at 58s.
+  useEffect(() => {
+    if (!slideshowPreloadHandle) return;
+    const timeout = setTimeout(() => {
+      if (!slideshowPreloadDoneRef.current) {
+        console.warn('[SlideshowPreload] Safety timeout: data never arrived, releasing handle');
+        slideshowPreloadDoneRef.current = true;
+        continueRender(slideshowPreloadHandle);
+      }
+    }, 30000);
+    return () => clearTimeout(timeout);
+  }, [slideshowPreloadHandle]);
 
   // 1. Initialize Visualizer (useLayoutEffect) - runs once on mount
   useLayoutEffect(() => {
