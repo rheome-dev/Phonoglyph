@@ -484,20 +484,12 @@ export class ImageSlideshowEffect implements VisualEffect {
           }).catch(() => {});
         }
 
-        // Look-ahead: preload the image that will be shown on the NEXT transition.
-        // Use oldIdx (previous index before this transition) so the math works out:
-        // 0→1 transition: oldIdx=0, look-ahead preloads image 1 ✓
-        // 1→2 transition: oldIdx=1, look-ahead preloads image 2 ✓
-        // First call (-1→0): oldIdx=-1 wraps to last image, but waitForImages
-        //   already preloaded image 0 so this is a harmless duplicate.
-        const lookAheadIdx = (oldIdx + 1 + this.parameters.images.length) % this.parameters.images.length;
+        // Look-ahead: preload the NEXT image so it's ready before the next transition.
+        // Do NOT apply it — just cache it. Premature applyTexture causes single-frame flicker.
+        const lookAheadIdx = (newIndex + 1) % this.parameters.images.length;
         const lookAheadUrl = this.parameters.images[lookAheadIdx];
         if (lookAheadUrl && !this.textureCache.has(lookAheadUrl) && !this.loadingImages.has(lookAheadUrl)) {
-          this.loadTexture(lookAheadUrl).then((texture) => {
-            if (texture) {
-              this.applyTexture(texture);
-            }
-          }).catch(() => {});
+          this.loadTexture(lookAheadUrl).catch(() => {});
         }
       }
 
@@ -832,75 +824,80 @@ export class ImageSlideshowEffect implements VisualEffect {
    * @param duration - Optional total render duration in seconds. If provided, pre-loads
    *                   all images that will be shown during the render for Lambda compatibility.
    */
-  public async waitForImages(duration?: number): Promise<void> {
+  public async waitForImages(duration?: number, currentTime?: number): Promise<void> {
     if (this.parameters.images.length === 0) return;
 
     const remotionEnv = getRemotionEnvironment();
     const isInRemotionContext = remotionEnv.isRendering || remotionEnv.isStudio;
 
-    // STATELESS: In Lambda, only pre-load the FIRST image to avoid OOM.
+    // STATELESS: In Lambda, pre-load the correct starting image for this chunk's time
+    // plus the next image so the first transition doesn't flicker.
     // Each Lambda chunk renders ~20 frames (~0.67s at 30fps) and only needs 1-2 images.
-    // The rest load lazily via updateWithTime() which calls loadTexture() on demand.
-    // Previously preloading ALL images (e.g. 34) crashed 3008MB Lambda with SwiftShader.
-    if (isInRemotionContext && this.parameters.slideEvents.length > 0 && duration) {
-      const firstIndex = this.currentImageIndex >= 0 ? this.currentImageIndex : 0;
-      const firstUrl = this.parameters.images[firstIndex];
-
-      slideshowLog.log('waitForImages: Pre-loading first image only (lazy load rest)', {
-        duration,
-        totalImages: this.parameters.images.length,
-        slideEvents: this.parameters.slideEvents.length,
-        firstIndex,
-      });
-
-      if (firstUrl && !this.textureCache.has(firstUrl)) {
-        try {
-          await this.loadTexture(firstUrl);
-        } catch (e) {
-          slideshowLog.warn(`waitForImages: Failed to preload first image`, e);
-        }
+    if (isInRemotionContext && this.parameters.slideEvents.length > 0) {
+      // Calculate the correct starting index from the chunk's current time
+      let firstIndex = 0;
+      if (currentTime !== undefined) {
+        const eventsSoFar = this.parameters.slideEvents.filter(e => e.time <= currentTime).length;
+        firstIndex = eventsSoFar % this.parameters.images.length;
+      } else if (this.currentImageIndex >= 0) {
+        firstIndex = this.currentImageIndex;
       }
 
-      // Apply first image
+      const firstUrl = this.parameters.images[firstIndex];
+
+      slideshowLog.log('waitForImages: Pre-loading chunk starting image', {
+        duration,
+        currentTime,
+        firstIndex,
+        totalImages: this.parameters.images.length,
+        slideEvents: this.parameters.slideEvents.length,
+      });
+
+      // Load current + next image in parallel
+      const promises: Promise<any>[] = [];
+      if (firstUrl && !this.textureCache.has(firstUrl)) {
+        promises.push(this.loadTexture(firstUrl).catch(e => slideshowLog.warn('waitForImages: Failed to preload first image', e)));
+      }
+      const nextIndex = (firstIndex + 1) % this.parameters.images.length;
+      const nextUrl = this.parameters.images[nextIndex];
+      if (nextUrl && !this.textureCache.has(nextUrl)) {
+        promises.push(this.loadTexture(nextUrl).catch(e => slideshowLog.warn('waitForImages: Failed to preload next image', e)));
+      }
+      await Promise.all(promises);
+
+      // Apply the correct starting image and sync all state
       if (firstUrl) {
         const texture = this.textureCache.get(firstUrl);
         if (texture) {
           this.currentImageIndex = firstIndex;
+          this.lastCalculatedIndex = firstIndex;
           this.applyTexture(texture);
         }
       }
 
-      // STATELESS: Mark initialized so updateWithTime can run.
       this.slideEventsInitialized = true;
       return;
     }
 
-    // STATELESS: Mark initialized even when slideEvents.length === 0 (fallback path).
-    // This ensures updateWithTime will run on subsequent frames once slideEvents are set.
+    // Mark initialized even when slideEvents.length === 0 (fallback path).
     this.slideEventsInitialized = true;
 
-    // LEGACY: Single image load for live preview
-    // Determine which images we need.
-    // If we have a current index, we need that one.
-    // If not, we need the first one.
+    // Live preview: single image load
     const targetIndex = this.currentImageIndex >= 0 ? this.currentImageIndex : 0;
     const url = this.parameters.images[targetIndex];
 
     if (!url) return;
-
-    // If already cached, we're good
     if (this.textureCache.has(url)) return;
 
-    // Otherwise, try to load it
     try {
       slideshowLog.log('waitForImages: Waiting for', url.substring(0, 50));
       await this.loadTexture(url);
 
-      // Also ensure it's applied to the material if it's the current target
       if (this.currentImageIndex === -1 || this.currentImageIndex === targetIndex) {
         const texture = this.textureCache.get(url);
         if (texture) {
           this.currentImageIndex = targetIndex;
+          this.lastCalculatedIndex = targetIndex;
           this.applyTexture(texture);
         }
       }

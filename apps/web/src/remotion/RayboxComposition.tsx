@@ -455,7 +455,7 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
   isBackgroundVisible,
 }) => {
   const frame = useCurrentFrame();
-  const { fps, width, height } = useVideoConfig();
+  const { fps, width, height, durationInFrames } = useVideoConfig();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const visualizerManagerRef = useRef<VisualizerManager | null>(null);
   const effectInstancesRef = useRef<Map<string, any>>(new Map());
@@ -603,10 +603,12 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
         }
 
         if (asyncEffects.length > 0) {
-          console.log(`[RayboxComposition] Calling waitForImages on ${asyncEffects.length} effects (8s timeout)...`);
+          const currentTime = frame / fps;
+          const videoDuration = durationInFrames / fps;
+          console.log(`[RayboxComposition] Calling waitForImages on ${asyncEffects.length} effects (8s timeout), time=${currentTime.toFixed(2)}s...`);
           const startTime = Date.now();
           await Promise.race([
-            Promise.all(asyncEffects.map((effect) => (effect as any).waitForImages())),
+            Promise.all(asyncEffects.map((effect) => (effect as any).waitForImages(videoDuration, currentTime))),
             new Promise((r) => setTimeout(r, 8000)),
           ]);
           console.log(`[RayboxComposition] waitForImages resolved after ${Date.now() - startTime}ms`);
