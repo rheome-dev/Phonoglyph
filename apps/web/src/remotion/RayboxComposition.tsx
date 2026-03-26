@@ -475,7 +475,10 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
       ? delayRender('Preloading Slideshow Images', { timeoutInMilliseconds: 60000 })
       : null
   );
-  const slideshowPreloadDoneRef = useRef(false);
+  // Default to true: no preloading handle means no blocking needed.
+  // The effect below sets this to false ONLY when it creates a real delayRender
+  // handle that must be waited on before rendering proceeds.
+  const slideshowPreloadDoneRef = useRef(true);
 
   // Fetch analysis data from R2 if analysisUrl exists and audioAnalysisData is empty
   // This is needed because Remotion Lambda doesn't pass calculateMetadata results to chunk renders
@@ -517,9 +520,13 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
   // captured empty audioData and skipped slideEvents, but then couldn't re-run because
   // isInitializedRef.current was already true.
   useEffect(() => {
-    if (!slideshowPreloadHandle || slideshowPreloadDoneRef.current) return;
+    if (!slideshowPreloadHandle) return; // No handle = no blocking needed (default: done=true)
+    if (slideshowPreloadDoneRef.current) return; // Already released
     if (!fetchedAudioAnalysisData || fetchedAudioAnalysisData.length === 0) return;
     if (!visualizerManagerRef.current) return;
+
+    // We have a handle and data: signal that we're now blocking on image preloading
+    slideshowPreloadDoneRef.current = false;
 
     const manager = visualizerManagerRef.current;
     const slideshowLayers = actualLayers.filter(
