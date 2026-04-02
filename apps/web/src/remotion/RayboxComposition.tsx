@@ -216,7 +216,6 @@ function getFeatureValueFromCached(
 
     if (VALID_STEMS.has(potentialStem.toLowerCase())) {
       parsedStem = potentialStem;
-
       featureName = parts.slice(1).join('-');
     }
   }
@@ -592,18 +591,12 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
             if (stemAnalysis?.analysisData) {
               const transients = (stemAnalysis.analysisData as any).transients;
               if (transients && Array.isArray(transients)) {
-                const featureId = `${stemType}-peaks`;
-                const sensitivity = featureSensitivities?.[featureId]
-                  ?? DEFAULT_PEAK_SENSITIVITIES[featureId]
-                  ?? 0.5;
-                const filteredTransients = filterTransientsBySensitivity(transients, sensitivity);
-
-                const slideEvents = filteredTransients.map((t: any) => ({
+                const slideEvents = transients.map((t: any) => ({
                   time: t.time,
                   intensity: t.intensity || 1.0,
                 }));
                 manager.updateEffectParameter(layer.id, 'slideEvents', slideEvents);
-                console.log(`[RayboxComposition] Pre-populated ${slideEvents.length} slideEvents for layer ${layer.id} (sensitivity=${sensitivity})`);
+                console.log(`[RayboxComposition] Pre-populated ${slideEvents.length} slideEvents for layer ${layer.id}`);
               }
             }
           }
