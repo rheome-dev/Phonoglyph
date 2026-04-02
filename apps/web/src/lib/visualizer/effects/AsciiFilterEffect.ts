@@ -150,7 +150,9 @@ export class AsciiFilterEffect implements VisualEffect {
 
   private generateFontSprite(): { texture: THREE.Texture; cols: number; rows: number } {
     const canvas = document.createElement('canvas');
-    const GLYPH_HEIGHT = 512; // High resolution — source of truth for crisp ASCII
+    const GLYPH_HEIGHT = 256; // Crisp at output resolutions up to 4K. Cells are sized for the
+                               // font, not for raw resolution. Previous 512px cell was 57% empty
+                               // (220px font / 512px cell) — wasted GPU memory for no quality gain.
     const GLYPH_WIDTH = 256;   // Cell width in pixels
     const CHARS_PER_ROW = 16;
     const NUM_CHARS = 95; // ASCII 32-126
