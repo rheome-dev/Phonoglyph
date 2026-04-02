@@ -15,7 +15,7 @@ export function AutoSaveTopBar() {
 
   return (
     <div className="flex items-center gap-2">
-      <div className="mr-[-4px]">
+      <div className="mr-[-8px]">
         <AutoSaveIndicator
           isSaving={autoSave.isSaving}
           lastSaved={autoSave.lastSaved}

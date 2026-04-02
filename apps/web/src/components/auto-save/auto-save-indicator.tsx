@@ -58,7 +58,7 @@ export function AutoSaveIndicator({
         style={style}
       />
       {showTooltip && (
-        <span className="absolute bottom-full left-0 mb-2 px-2 py-1 text-xs font-mono text-stone-200 bg-stone-800 border border-stone-600 rounded whitespace-nowrap pointer-events-none z-50">
+        <span className="absolute top-full left-0 mt-2 px-2 py-1 text-xs font-mono text-stone-200 bg-stone-800 border border-stone-600 rounded whitespace-nowrap pointer-events-none z-50">
           {getTooltip()}
         </span>
       )}
