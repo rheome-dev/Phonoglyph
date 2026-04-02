@@ -845,23 +845,35 @@ export class ImageSlideshowEffect implements VisualEffect {
 
       const firstUrl = this.parameters.images[firstIndex];
 
-      slideshowLog.log('waitForImages: Pre-loading chunk starting image', {
+      // Calculate how many indices to look ahead
+      // Find how many events occur in the next 10 seconds to ensure we have enough images for the whole chunk
+      let lookaheadCount = 5; // Default minimum
+      if (currentTime !== undefined) {
+        const eventsSoFar = this.parameters.slideEvents.filter(e => e.time <= currentTime).length;
+        const eventsAtChunkEnd = this.parameters.slideEvents.filter(e => e.time <= currentTime + 10).length;
+        lookaheadCount = Math.max(5, eventsAtChunkEnd - eventsSoFar + 1);
+      }
+      
+      // Cap at 15 to avoid excessive preloading
+      lookaheadCount = Math.min(lookaheadCount, this.parameters.images.length, 15);
+      
+      slideshowLog.log('waitForImages: Pre-loading chunk starting image and lookahead', {
         duration,
         currentTime,
         firstIndex,
+        lookaheadCount,
         totalImages: this.parameters.images.length,
         slideEvents: this.parameters.slideEvents.length,
       });
 
-      // Load current + next image in parallel
+      // Load required images in parallel
       const promises: Promise<any>[] = [];
-      if (firstUrl && !this.textureCache.has(firstUrl)) {
-        promises.push(this.loadTexture(firstUrl).catch(e => slideshowLog.warn('waitForImages: Failed to preload first image', e)));
-      }
-      const nextIndex = (firstIndex + 1) % this.parameters.images.length;
-      const nextUrl = this.parameters.images[nextIndex];
-      if (nextUrl && !this.textureCache.has(nextUrl)) {
-        promises.push(this.loadTexture(nextUrl).catch(e => slideshowLog.warn('waitForImages: Failed to preload next image', e)));
+      for (let i = 0; i < lookaheadCount; i++) {
+        const idx = (firstIndex + i) % this.parameters.images.length;
+        const url = this.parameters.images[idx];
+        if (url && !this.textureCache.has(url)) {
+          promises.push(this.loadTexture(url).catch(e => slideshowLog.warn(`waitForImages: Failed to preload image idx ${idx}`, e)));
+        }
       }
       await Promise.all(promises);
 
