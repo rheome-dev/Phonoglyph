@@ -80,13 +80,16 @@ interface UnifiedTimelineProps {
   
   // Handler for double-clicking on effect layers to open inspector
   onLayerDoubleClick?: (layerId: string) => void;
-  
+
+  // Handler for visibility toggle (syncs with selectedEffects for live preview)
+  onLayerVisibilityChange?: (layerId: string, enabled: boolean) => void;
+
   // Collapsible sections
   className?: string;
 }
 
 // Header for composition layers in the fixed left column
-const CompositionLayerHeader: React.FC<{ layer: Layer }> = ({ layer }) => {
+const CompositionLayerHeader: React.FC<{ layer: Layer; onLayerVisibilityChange?: (layerId: string, enabled: boolean) => void }> = ({ layer, onLayerVisibilityChange }) => {
   const { selectLayer, deleteLayer, selectedLayerId, updateLayer } = useTimelineStore();
   const isEffectOrOverlay = layer.type === 'effect' || layer.type === 'overlay';
   const isEmpty = !isEffectOrOverlay && !layer.src;
@@ -123,7 +126,9 @@ const CompositionLayerHeader: React.FC<{ layer: Layer }> = ({ layer }) => {
             className="h-6 w-6 p-0 text-stone-400 hover:text-white"
             onClick={(e) => {
               e.stopPropagation();
-              updateLayer(layer.id, { enabled: !layer.enabled });
+              const newEnabled = !layer.enabled;
+              updateLayer(layer.id, { enabled: newEnabled });
+              onLayerVisibilityChange?.(layer.id, newEnabled);
             }}
           >
             {layer.enabled !== false ? (
@@ -617,6 +622,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
   stemError = null,
   onSeek,
   onLayerDoubleClick,
+  onLayerVisibilityChange,
   className
 }) => {
   const {
@@ -1150,7 +1156,7 @@ export const UnifiedTimeline: React.FC<UnifiedTimelineProps> = ({
               </Button>
             </div>
             {sortedLayers.map((layer) => (
-              <CompositionLayerHeader key={layer.id} layer={layer} />
+              <CompositionLayerHeader key={layer.id} layer={layer} onLayerVisibilityChange={onLayerVisibilityChange} />
             ))}
 
             {/* Background control header row (rendered after layers so it sits at the bottom of the Composition section) */}

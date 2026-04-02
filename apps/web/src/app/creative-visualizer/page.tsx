@@ -1663,6 +1663,14 @@ function CreativeVisualizerPage() {
     }));
   };
 
+  // Handles visibility toggle from timeline — sets selectedEffects directly
+  const handleLayerVisibilityChange = (layerId: string, enabled: boolean) => {
+    setSelectedEffects(prev => ({
+      ...prev,
+      [layerId]: enabled
+    }));
+  };
+
   const handleEffectDoubleClick = (effectId: string) => {
     // Check if this is a layer ID (from timeline clip) or an effect type (from library)
     const existingLayer = layers.find(l => l.id === effectId);
@@ -3008,6 +3016,7 @@ function CreativeVisualizerPage() {
                           stemError={audioAnalysis.error}
                           onSeek={useTimelineStore.getState().setCurrentTime}
                           onLayerDoubleClick={handleEffectDoubleClick}
+                          onLayerVisibilityChange={handleLayerVisibilityChange}
                           className="bg-stone-800 border border-gray-700"
                         />
                       </div>

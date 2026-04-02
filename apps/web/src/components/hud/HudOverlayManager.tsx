@@ -74,6 +74,7 @@ export function HudOverlayRenderer({ stemUrlMap = {}, cachedAnalysis = [] }: Hud
     () =>
       overlayLayers.filter(
         (layer) =>
+          (layer.enabled !== false) &&
           currentTime >= (layer.startTime ?? 0) &&
           currentTime <= (layer.endTime ?? Number.POSITIVE_INFINITY),
       ),
