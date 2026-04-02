@@ -43,15 +43,25 @@ export function AutoSaveIndicator({
     return 'Not saved'
   }
 
+  const [showTooltip, setShowTooltip] = useState(false)
+
   return (
     <div
-      className={cn("flex items-center gap-1.5 text-xs font-mono uppercase tracking-wider text-stone-400", className)}
-      style={style}
-      title={getTooltip()}
+      className="relative flex items-center gap-1.5"
+      onMouseEnter={() => setShowTooltip(true)}
+      onMouseLeave={() => setShowTooltip(false)}
+      onFocus={() => setShowTooltip(true)}
+      onBlur={() => setShowTooltip(false)}
     >
       <span
-        className={cn("inline-block w-2 h-2 rounded-full", getDotColor())}
+        className={cn("inline-block w-2 h-2 rounded-full cursor-default", getDotColor(), className)}
+        style={style}
       />
+      {showTooltip && (
+        <span className="absolute bottom-full left-0 mb-2 px-2 py-1 text-xs font-mono text-stone-200 bg-stone-800 border border-stone-600 rounded whitespace-nowrap pointer-events-none z-50">
+          {getTooltip()}
+        </span>
+      )}
     </div>
   )
 }
