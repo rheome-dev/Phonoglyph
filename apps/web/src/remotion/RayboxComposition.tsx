@@ -591,12 +591,20 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
             if (stemAnalysis?.analysisData) {
               const transients = (stemAnalysis.analysisData as any).transients;
               if (transients && Array.isArray(transients)) {
-                const slideEvents = transients.map((t: any) => ({
+                // Apply the same sensitivity filtering used in the per-frame path
+                // so waitForImages preloads the correct image index.
+                const featureId = `${stemType}-peaks`;
+                const sensitivity = featureSensitivities?.[featureId]
+                  ?? DEFAULT_PEAK_SENSITIVITIES[featureId]
+                  ?? 0.5;
+                const filteredTransients = filterTransientsBySensitivity(transients, sensitivity);
+
+                const slideEvents = filteredTransients.map((t: any) => ({
                   time: t.time,
                   intensity: t.intensity || 1.0,
                 }));
                 manager.updateEffectParameter(layer.id, 'slideEvents', slideEvents);
-                console.log(`[RayboxComposition] Pre-populated ${slideEvents.length} slideEvents for layer ${layer.id}`);
+                console.log(`[RayboxComposition] Pre-populated ${slideEvents.length} slideEvents for layer ${layer.id} (${transients.length} raw, sensitivity=${sensitivity})`);
               }
             }
           }
