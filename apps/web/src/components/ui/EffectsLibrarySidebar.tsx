@@ -627,7 +627,10 @@ export function EffectsLibrarySidebar({
               <Label className="text-white/80 text-xs font-mono">Effect Enabled</Label>
               <Switch
                 checked={selectedEffects[editingEffectId] ?? selectedEffects['imageSlideshow']}
-                onCheckedChange={(checked) => onEffectToggle(editingEffectId)}
+                onCheckedChange={(checked) => {
+                  onEffectToggle(editingEffectId);
+                  onLayerUpdate?.(editingEffectId, { enabled: checked });
+                }}
               />
             </div>
           </div>
@@ -960,7 +963,10 @@ export function EffectsLibrarySidebar({
               <Label className="text-white/80 text-xs font-mono">Effect Enabled</Label>
               <Switch
                 checked={selectedEffects[editingEffectId]}
-                onCheckedChange={(checked) => onEffectToggle(editingEffectId)}
+                onCheckedChange={(checked) => {
+                  onEffectToggle(editingEffectId);
+                  onLayerUpdate?.(editingEffectId, { enabled: checked });
+                }}
               />
             </div>
           </div>
@@ -1185,7 +1191,10 @@ export function EffectsLibrarySidebar({
               <Label className="text-white/80 text-xs font-mono">Effect Enabled</Label>
               <Switch
                 checked={selectedEffects[editingEffectId]}
-                onCheckedChange={(checked) => onEffectToggle(editingEffectId)}
+                onCheckedChange={(checked) => {
+                  onEffectToggle(editingEffectId);
+                  onLayerUpdate?.(editingEffectId, { enabled: checked });
+                }}
               />
             </div>
           </div>

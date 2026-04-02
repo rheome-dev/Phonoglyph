@@ -294,6 +294,19 @@ export function ThreeVisualizer({
     syncParametersToEffects();
   }, [syncParametersToEffects, layers, isInitialized, activeSliderValues, baseParameterValues]);
 
+  // Sync selectedEffects to visualizer engine for real-time toggling
+  useEffect(() => {
+    const manager = internalVisualizerRef.current;
+    if (!manager) return;
+    Object.entries(selectedEffects).forEach(([effectId, enabled]) => {
+      if (enabled) {
+        manager.enableEffect(effectId);
+      } else {
+        manager.disableEffect(effectId);
+      }
+    });
+  }, [selectedEffects, internalVisualizerRef.current]);
+
   // Expose visualizer ref to parent
   useEffect(() => {
     if (externalVisualizerRef && internalVisualizerRef.current) {

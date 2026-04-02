@@ -34,6 +34,7 @@ export interface Layer {
   startTime: number;
   endTime: number;
   duration: number;
+  enabled?: boolean;
 }
 
 export type OverlayType =

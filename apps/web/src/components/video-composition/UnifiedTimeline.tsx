@@ -87,7 +87,7 @@ interface UnifiedTimelineProps {
 
 // Header for composition layers in the fixed left column
 const CompositionLayerHeader: React.FC<{ layer: Layer }> = ({ layer }) => {
-  const { selectLayer, deleteLayer, selectedLayerId } = useTimelineStore();
+  const { selectLayer, deleteLayer, selectedLayerId, updateLayer } = useTimelineStore();
   const isEffectOrOverlay = layer.type === 'effect' || layer.type === 'overlay';
   const isEmpty = !isEffectOrOverlay && !layer.src;
   const isSelected = selectedLayerId === layer.id;
@@ -116,17 +116,34 @@ const CompositionLayerHeader: React.FC<{ layer: Layer }> = ({ layer }) => {
         <span className="text-sm font-medium text-stone-300 truncate">{layer.name}</span>
       </div>
       {layer.isDeletable !== false && (
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-6 w-6 p-0 text-stone-400 hover:text-red-400"
-          onClick={(e) => {
-            e.stopPropagation();
-            deleteLayer(layer.id);
-          }}
-        >
-          <Trash2 className="h-3 w-3" />
-        </Button>
+        <>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 w-6 p-0 text-stone-400 hover:text-white"
+            onClick={(e) => {
+              e.stopPropagation();
+              updateLayer(layer.id, { enabled: !layer.enabled });
+            }}
+          >
+            {layer.enabled !== false ? (
+              <Eye className="h-3 w-3" />
+            ) : (
+              <EyeOff className="h-3 w-3" />
+            )}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 w-6 p-0 text-stone-400 hover:text-red-400"
+            onClick={(e) => {
+              e.stopPropagation();
+              deleteLayer(layer.id);
+            }}
+          >
+            <Trash2 className="h-3 w-3" />
+          </Button>
+        </>
       )}
     </div>
   );

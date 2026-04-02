@@ -144,6 +144,7 @@ export const RemotionOverlayRenderer: React.FC<RemotionOverlayRendererProps> = (
     () =>
       overlayLayers.filter(
         (layer) =>
+          (layer.enabled !== false) &&
           currentTime >= (layer.startTime ?? 0) &&
           currentTime <= (layer.endTime ?? Number.POSITIVE_INFINITY),
       ),

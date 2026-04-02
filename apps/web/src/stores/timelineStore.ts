@@ -60,7 +60,11 @@ export const useTimelineStore = create<TimelineState & TimelineActions>((set) =>
       (max, l) => (l.zIndex > max ? l.zIndex : max),
       -1
     );
-    const newLayer = { ...layer, zIndex: maxZIndex + 1 } as Layer;
+    const newLayer = {
+      ...layer,
+      zIndex: maxZIndex + 1,
+      ...(layer.enabled === undefined ? { enabled: true } : {}),
+    } as Layer;
     return { layers: [...state.layers, newLayer] };
   }),
   updateLayer: (layerId, updates) => set((state) => ({
