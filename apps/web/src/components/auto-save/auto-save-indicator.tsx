@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect } from 'react'
-import { CheckCircle, Clock, AlertCircle, Save } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export interface AutoSaveIndicatorProps {
@@ -12,16 +11,15 @@ export interface AutoSaveIndicatorProps {
   style?: React.CSSProperties
 }
 
-export function AutoSaveIndicator({ 
-  isSaving, 
-  lastSaved, 
-  error, 
+export function AutoSaveIndicator({
+  isSaving,
+  lastSaved,
+  error,
   className,
   style
 }: AutoSaveIndicatorProps) {
   const [showSaved, setShowSaved] = useState(false)
 
-  // Show "Saved" message briefly when save completes
   useEffect(() => {
     if (lastSaved && !isSaving) {
       setShowSaved(true)
@@ -30,66 +28,40 @@ export function AutoSaveIndicator({
     }
   }, [lastSaved, isSaving])
 
-  const getStatusIcon = () => {
-    if (error) {
-      return <AlertCircle className="h-4 w-4 text-red-500" />
-    }
-    if (isSaving) {
-      return <Clock className="h-4 w-4 text-yellow-500 animate-pulse" />
-    }
-    if (showSaved) {
-      return <CheckCircle className="h-4 w-4 text-green-500" />
-    }
-    return <Save className="h-4 w-4 text-gray-400" />
+  const getDotColor = () => {
+    if (error) return 'bg-red-500'
+    if (isSaving) return 'bg-yellow-400 animate-pulse'
+    if (showSaved) return 'bg-green-400'
+    return 'bg-stone-500'
   }
 
-  const getStatusText = () => {
-    if (error) {
-      return 'Save failed'
-    }
-    if (isSaving) {
-      return 'Saving...'
-    }
-    if (showSaved) {
-      return 'Saved'
-    }
-    if (lastSaved) {
-      return `Last saved ${formatTimeAgo(lastSaved)}`
-    }
+  const getTooltip = () => {
+    if (error) return `Save failed${error ? `: ${error}` : ''}`
+    if (isSaving) return 'Saving...'
+    if (showSaved) return 'Saved'
+    if (lastSaved) return `Saved ${formatTimeAgo(lastSaved)}`
     return 'Not saved'
   }
 
   return (
-    <div className={cn(
-      "flex items-center gap-2 text-sm text-gray-600",
-      className
-    )} style={style}>
-      {getStatusIcon()}
-      <span className="font-medium">{getStatusText()}</span>
-      {error && (
-        <span className="text-xs text-red-500 ml-2">
-          {error}
-        </span>
-      )}
+    <div
+      className={cn("flex items-center gap-1.5 text-xs font-mono uppercase tracking-wider text-stone-400", className)}
+      style={style}
+      title={getTooltip()}
+    >
+      <span
+        className={cn("inline-block w-2 h-2 rounded-full", getDotColor())}
+      />
     </div>
   )
 }
 
-// Helper function to format time ago
 function formatTimeAgo(date: Date): string {
   const now = new Date()
   const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)
 
-  if (diffInSeconds < 60) {
-    return 'just now'
-  } else if (diffInSeconds < 3600) {
-    const minutes = Math.floor(diffInSeconds / 60)
-    return `${minutes}m ago`
-  } else if (diffInSeconds < 86400) {
-    const hours = Math.floor(diffInSeconds / 3600)
-    return `${hours}h ago`
-  } else {
-    const days = Math.floor(diffInSeconds / 86400)
-    return `${days}d ago`
-  }
+  if (diffInSeconds < 60) return 'just now'
+  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`
+  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`
+  return `${Math.floor(diffInSeconds / 86400)}d ago`
 } 
