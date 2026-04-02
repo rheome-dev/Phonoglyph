@@ -15,13 +15,11 @@ export function AutoSaveTopBar() {
 
   return (
     <div className="flex items-center gap-2">
-      <div className="mr-[-8px]">
-        <AutoSaveIndicator
-          isSaving={autoSave.isSaving}
-          lastSaved={autoSave.lastSaved}
-          error={autoSave.error || undefined}
-        />
-      </div>
+      <AutoSaveIndicator
+        isSaving={autoSave.isSaving}
+        lastSaved={autoSave.lastSaved}
+        error={autoSave.error || undefined}
+      />
       <Button
         variant="outline"
         size="sm"
