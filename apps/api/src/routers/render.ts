@@ -3,6 +3,7 @@ import { router, protectedProcedure } from '../trpc';
 import { TRPCError } from '@trpc/server';
 import { renderMediaOnLambda, getRenderProgress } from '@remotion/lambda';
 import { logger } from '../lib/logger';
+import { supabaseAdmin } from '../lib/supabase';
 import { r2Client, BUCKET_NAME } from '../services/r2-storage';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 
@@ -263,8 +264,9 @@ export const renderRouter = router({
             const { renderId, bucketName } = renderResult;
             const cloudWatchLogs = (renderResult as any).cloudWatchLogs;
 
-            // 4. Persist render record to DB
-            await ctx.supabase.from('renders').insert({
+            // 4. Persist render record to DB (use admin client to bypass RLS;
+            //    user is already authenticated via protectedProcedure)
+            const { error: insertError } = await supabaseAdmin.from('renders').insert({
               id: renderId,
               user_id: ctx.user.id,
               project_id: input.projectId ?? null,
@@ -278,6 +280,11 @@ export const renderRouter = router({
                 serveUrl,
               },
             });
+
+            if (insertError) {
+              logger.error('Failed to persist render record:', insertError.message, insertError.code, insertError.details);
+              throw new Error(`Failed to save render record: ${insertError.message}`);
+            }
 
             logger.log('Render triggered successfully:', { renderId, bucketName, functionName, cloudWatchLogs });
 
