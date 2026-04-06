@@ -157,6 +157,35 @@ export const renderRouter = router({
       };
     }),
 
+  // Update render status/output (used by frontend after polling)
+  updateRender: protectedProcedure
+    .input(z.object({
+      renderId: z.string(),
+      status: z.enum(['queued', 'in_progress', 'completed', 'failed']).optional(),
+      outputUrl: z.string().optional(),
+      errorMessage: z.string().optional(),
+      metadata: z.record(z.any()).optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const updates: Record<string, any> = {};
+      if (input.status) updates.status = input.status;
+      if (input.outputUrl) updates.output_url = input.outputUrl;
+      if (input.errorMessage) updates.error_message = input.errorMessage;
+      if (input.metadata) updates.metadata = input.metadata;
+
+      const { error } = await ctx.supabase
+        .from('renders')
+        .update(updates)
+        .eq('id', input.renderId)
+        .eq('user_id', ctx.user.id);
+
+      if (error) {
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to update render' });
+      }
+
+      return { success: true };
+    }),
+
   triggerRender: protectedProcedure
     .input(triggerRenderSchema)
     .mutation(async ({ input, ctx }) => {

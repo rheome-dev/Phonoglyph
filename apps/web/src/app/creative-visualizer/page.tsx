@@ -890,6 +890,7 @@ function CreativeVisualizerPage() {
 
   const triggerRenderMutation = trpc.render.triggerRender.useMutation();
   const getStatus = trpc.render.getRenderStatus.useMutation();
+  const updateRenderMutation = trpc.render.updateRender.useMutation();
 
   // State for rendering progress
   const [isRendering, setIsRendering] = useState(false);
@@ -954,14 +955,19 @@ function CreativeVisualizerPage() {
           if (status.done && status.outputFile) {
             setIsDownloadReady(true);
 
-            const link = document.createElement('a');
-            link.href = status.outputFile;
-            link.download = 'render.mp4';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            // Save the output URL to the DB so the result page can display it
+            try {
+              await updateRenderMutation.mutateAsync({
+                renderId,
+                status: 'completed',
+                outputUrl: status.outputFile,
+              });
+            } catch (e) {
+              console.warn('Failed to save render output URL:', e);
+            }
 
-            await new Promise(r => setTimeout(r, 2000));
+            // Navigate to the render result page instead of downloading
+            router.push(`/renders/${renderId}/result`);
             setIsRendering(false);
             setRenderProgress(0);
             setIsDownloadReady(false);
