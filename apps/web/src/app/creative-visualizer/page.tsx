@@ -962,17 +962,17 @@ function CreativeVisualizerPage() {
               const { data: { session } } = await supabase.auth.getSession();
               const userId = session?.user?.id ?? guestUserService.getCurrentGuestUser()?.id ?? null;
 
-              if (userId) {
-                await fetch(`/api/renders/${renderId}`, {
-                  method: 'PATCH',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    status: 'completed',
-                    outputUrl: status.outputFile,
-                    userId,
-                  }),
-                });
-              }
+              await fetch(`/api/renders/${renderId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  status: 'completed',
+                  outputUrl: status.outputFile,
+                  userId: userId || undefined,
+                  bucketName,
+                  functionName,
+                }),
+              });
             } catch (e) {
               console.warn('Failed to save render output URL:', e);
             }
