@@ -1,6 +1,6 @@
 'use client';
 
-import React, { use, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Download, ExternalLink, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -31,8 +31,8 @@ interface RenderData {
   created_at: string;
 }
 
-export default function RenderSharePage({ params }: { params: Promise<{ renderId: string }> }) {
-  const { renderId } = use(params);
+export default function RenderSharePage({ params }: { params: { renderId: string } }) {
+  const { renderId } = params;
   const router = useRouter();
   const [render, setRender] = useState<RenderData | null>(null);
   const [isLoading, setIsLoading] = useState(true);

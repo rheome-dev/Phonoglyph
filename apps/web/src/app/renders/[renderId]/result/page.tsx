@@ -1,6 +1,6 @@
 'use client';
 
-import React, { use } from 'react';
+import React from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Download, Link2, Share2, Instagram, Youtube, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -40,8 +40,8 @@ function timeAgo(dateStr: string): string {
   return date.toLocaleDateString();
 }
 
-export default function RenderResultPage({ params }: { params: Promise<{ renderId: string }> }) {
-  const { renderId } = use(params);
+export default function RenderResultPage({ params }: { params: { renderId: string } }) {
+  const { renderId } = params;
   const router = useRouter();
   const [copied, setCopied] = React.useState(false);
   const [fileSize, setFileSize] = React.useState<number | null>(null);

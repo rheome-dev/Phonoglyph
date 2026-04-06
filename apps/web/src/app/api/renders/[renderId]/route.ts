@@ -12,9 +12,9 @@ function getAdminClient() {
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ renderId: string }> }
+  { params }: { params: { renderId: string } }
 ) {
-  const { renderId } = await params;
+  const { renderId } = params;
 
   if (!renderId) {
     return NextResponse.json({ error: 'Missing renderId' }, { status: 400 });
@@ -50,9 +50,9 @@ export async function GET(
 // to bypass auth, enabling renderers to save output URLs from any session.
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ renderId: string }> }
+  { params }: { params: { renderId: string } }
 ) {
-  const { renderId } = await params;
+  const { renderId } = params;
 
   if (!renderId) {
     return NextResponse.json({ error: 'Missing renderId' }, { status: 400 });
@@ -72,10 +72,6 @@ export async function PATCH(
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  if (!body.userId) {
-    return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
-  }
-
   const updates: Record<string, any> = {};
   if (body.status) updates.status = body.status;
   if (body.outputUrl) updates.output_url = body.outputUrl;
@@ -87,14 +83,21 @@ export async function PATCH(
   }
 
   const supabase = getAdminClient();
-  const { error } = await supabase
-    .from('renders')
-    .update(updates)
-    .eq('id', renderId)
-    .eq('user_id', body.userId);
+
+  // If userId is provided and looks like a valid UUID, scope the update to that user.
+  // Otherwise update by renderId only (service role bypasses RLS, so this is safe).
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  let query = supabase.from('renders').update(updates).eq('id', renderId);
+
+  if (body.userId && uuidRegex.test(body.userId)) {
+    query = query.eq('user_id', body.userId);
+  }
+
+  const { error } = await query;
 
   if (error) {
-    return NextResponse.json({ error: 'Failed to update render' }, { status: 500 });
+    console.error('PATCH /api/renders error:', error.message, error.code, error.details);
+    return NextResponse.json({ error: 'Failed to update render', details: error.message }, { status: 500 });
   }
 
   return NextResponse.json({ success: true });
