@@ -266,7 +266,7 @@ export const renderRouter = router({
 
             // 4. Persist render record to DB (use admin client to bypass RLS;
             //    user is already authenticated via protectedProcedure)
-            const { error: insertError } = await supabaseAdmin.from('renders').insert({
+            const renderRecord = {
               id: renderId,
               user_id: ctx.user.id,
               project_id: input.projectId ?? null,
@@ -279,11 +279,25 @@ export const renderRouter = router({
                 composition,
                 serveUrl,
               },
-            });
+            };
+
+            let { error: insertError } = await supabaseAdmin.from('renders').insert(renderRecord);
+
+            // If insert fails (likely FK constraint on project_id), retry without project_id
+            if (insertError) {
+              logger.warn('Render record insert failed, retrying without project_id:', JSON.stringify(insertError));
+              const { error: retryError } = await supabaseAdmin.from('renders').insert({
+                ...renderRecord,
+                project_id: null,
+              });
+              insertError = retryError;
+            }
 
             if (insertError) {
-              logger.error('Failed to persist render record:', insertError.message, insertError.code, insertError.details);
-              throw new Error(`Failed to save render record: ${insertError.message}`);
+              logger.error('Failed to persist render record:', JSON.stringify(insertError));
+              // Don't throw — the Lambda render is already running. Log the error
+              // and return the renderId so the client can still poll for completion.
+              logger.warn('Render will continue without DB record. renderId:', renderId);
             }
 
             logger.log('Render triggered successfully:', { renderId, bucketName, functionName, cloudWatchLogs });
