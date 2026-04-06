@@ -12,6 +12,51 @@ const updateProfileSchema = z.object({
 });
 
 export const userRouter = router({
+  // Get user's credit balance
+  getCredits: protectedProcedure.query(async ({ ctx }) => {
+    const { data, error } = await ctx.supabase
+      .from('user_profiles')
+      .select('credit_balance')
+      .eq('id', ctx.user.id)
+      .single();
+
+    if (error || !data) {
+      return { credits: 10 }; // fallback default
+    }
+
+    return { credits: data.credit_balance ?? 10 };
+  }),
+
+  // Spend credits (decrement balance)
+  spendCredits: protectedProcedure
+    .input(z.object({ amount: z.number().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const { data, error } = await ctx.supabase
+        .from('user_profiles')
+        .select('credit_balance')
+        .eq('id', ctx.user.id)
+        .single();
+
+      if (error || !data) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'User profile not found' });
+      }
+
+      const currentBalance = data.credit_balance ?? 0;
+      if (currentBalance < input.amount) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Insufficient credits' });
+      }
+
+      const { error: updateError } = await ctx.supabase
+        .from('user_profiles')
+        .update({ credit_balance: currentBalance - input.amount })
+        .eq('id', ctx.user.id);
+
+      if (updateError) {
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to deduct credits' });
+      }
+
+      return { credits: currentBalance - input.amount };
+    }),
   // Get user profile
   profile: protectedProcedure
     .query(({ ctx }) => {

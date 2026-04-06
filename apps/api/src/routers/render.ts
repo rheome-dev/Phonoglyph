@@ -101,6 +101,8 @@ const audioAnalysisDataSchema = z.object({
 });
 
 const triggerRenderSchema = z.object({
+  projectId: z.string().optional(),
+  projectName: z.string().optional(),
   layers: z.array(layerSchema),
   audioAnalysisData: z.array(audioAnalysisDataSchema),
   visualizationSettings: visualizationSettingsSchema,
@@ -127,6 +129,34 @@ const triggerRenderSchema = z.object({
 });
 
 export const renderRouter = router({
+  // Get a render by ID (public — used by share page)
+  getRender: protectedProcedure
+    .input(z.object({ renderId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      const { data, error } = await ctx.supabase
+        .from('renders')
+        .select('*')
+        .eq('id', input.renderId)
+        .single();
+
+      if (error || !data) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Render not found' });
+      }
+
+      return {
+        id: data.id,
+        user_id: data.user_id,
+        project_id: data.project_id,
+        project_name: data.project_name,
+        status: data.status,
+        output_url: data.output_url,
+        error_message: data.error_message,
+        credits_spent: data.credits_spent,
+        metadata: data.metadata,
+        created_at: data.created_at,
+      };
+    }),
+
   triggerRender: protectedProcedure
     .input(triggerRenderSchema)
     .mutation(async ({ input, ctx }) => {
@@ -203,6 +233,22 @@ export const renderRouter = router({
 
             const { renderId, bucketName } = renderResult;
             const cloudWatchLogs = (renderResult as any).cloudWatchLogs;
+
+            // 4. Persist render record to DB
+            await ctx.supabase.from('renders').insert({
+              id: renderId,
+              user_id: ctx.user.id,
+              project_id: input.projectId ?? null,
+              project_name: input.projectName ?? null,
+              bucket_name: bucketName,
+              function_name: functionName,
+              status: 'in_progress',
+              metadata: {
+                analysisUrl,
+                composition,
+                serveUrl,
+              },
+            });
 
             logger.log('Render triggered successfully:', { renderId, bucketName, functionName, cloudWatchLogs });
 
