@@ -16,6 +16,8 @@ import { MIDIData, VisualizationSettings, DEFAULT_VISUALIZATION_SETTINGS } from 
 import { VisualizationPreset, StemVisualizationMapping } from '@/types/stem-visualization';
 import { AudioAnalysisData, LiveMIDIData } from '@/types/visualizer';
 import { trpc } from '@/lib/trpc';
+import { supabase } from '@/lib/supabase';
+import { guestUserService } from '@/lib/guest-user';
 import { CollapsibleSidebar } from '@/components/layout/collapsible-sidebar';
 import { ProjectPickerModal } from '@/components/projects/project-picker-modal';
 import { debugLog } from '@/lib/utils';
@@ -890,7 +892,6 @@ function CreativeVisualizerPage() {
 
   const triggerRenderMutation = trpc.render.triggerRender.useMutation();
   const getStatus = trpc.render.getRenderStatus.useMutation();
-  const updateRenderMutation = trpc.render.updateRender.useMutation();
 
   // State for rendering progress
   const [isRendering, setIsRendering] = useState(false);
@@ -957,11 +958,21 @@ function CreativeVisualizerPage() {
 
             // Save the output URL to the DB so the result page can display it
             try {
-              await updateRenderMutation.mutateAsync({
-                renderId,
-                status: 'completed',
-                outputUrl: status.outputFile,
-              });
+              // Get the user ID from the current session (authenticated or guest)
+              const { data: { session } } = await supabase.auth.getSession();
+              const userId = session?.user?.id ?? guestUserService.getCurrentGuestUser()?.id ?? null;
+
+              if (userId) {
+                await fetch(`/api/renders/${renderId}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    status: 'completed',
+                    outputUrl: status.outputFile,
+                    userId,
+                  }),
+                });
+              }
             } catch (e) {
               console.warn('Failed to save render output URL:', e);
             }
