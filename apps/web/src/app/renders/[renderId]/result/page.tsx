@@ -3,7 +3,6 @@
 import React, { use } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Download, Link2, Share2, Instagram, Youtube, Loader2 } from 'lucide-react';
-import { trpc } from '@/lib/trpc';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -46,11 +45,27 @@ export default function RenderResultPage({ params }: { params: Promise<{ renderI
   const router = useRouter();
   const [copied, setCopied] = React.useState(false);
   const [fileSize, setFileSize] = React.useState<number | null>(null);
+  const [render, setRender] = React.useState<any>(null);
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [error, setError] = React.useState<any>(null);
 
-  const { data: render, isLoading, error } = trpc.render.getRender.useQuery(
-    { renderId },
-    { enabled: !!renderId }
-  );
+  // Fetch render data from public API (no auth required)
+  React.useEffect(() => {
+    if (!renderId) return;
+    fetch(`/api/renders/${renderId}`)
+      .then(res => {
+        if (!res.ok) throw new Error('Render not found');
+        return res.json();
+      })
+      .then(data => {
+        setRender(data);
+        setIsLoading(false);
+      })
+      .catch(err => {
+        setError(err);
+        setIsLoading(false);
+      });
+  }, [renderId]);
 
   // Fetch file size from S3 via HEAD request
   React.useEffect(() => {
