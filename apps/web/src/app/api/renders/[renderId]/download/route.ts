@@ -2,11 +2,26 @@ import { NextRequest, NextResponse } from 'next/server';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { createClient } from '@supabase/supabase-js';
+import { createServerClient } from '@supabase/ssr';
 
 function getAdminClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
+
+function getAuthClient(request: NextRequest) {
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return request.cookies.get(name)?.value;
+        },
+      },
+    }
   );
 }
 
@@ -33,16 +48,27 @@ export async function GET(
     return NextResponse.json({ error: 'Missing renderId' }, { status: 400 });
   }
 
-  // Fetch render from DB
+  // Authenticate the requesting user
+  const authClient = getAuthClient(request);
+  const { data: { user } } = await authClient.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // Fetch render from DB — verify the user owns it
   const supabase = getAdminClient();
   const { data: render, error } = await supabase
     .from('renders')
-    .select('id, project_name, output_url, bucket_name')
+    .select('id, project_name, output_url, bucket_name, user_id')
     .eq('id', renderId)
     .single();
 
   if (error || !render || !render.output_url) {
     return NextResponse.json({ error: 'Render not found' }, { status: 404 });
+  }
+
+  if (render.user_id !== user.id) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   // Extract S3 key from output_url
