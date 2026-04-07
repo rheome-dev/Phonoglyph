@@ -59,7 +59,7 @@ export const polarRouter = router({
       logger.error('Error fetching user credits:', userError)
       throw new TRPCError({
         code: 'INTERNAL_SERVER_ERROR',
-        message: 'Failed to fetch credit balance',
+        message: `Failed to fetch credit balance: ${userError.message} (${userError.code})`,
       })
     }
 

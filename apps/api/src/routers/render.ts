@@ -200,7 +200,7 @@ export const renderRouter = router({
       if (creditError || !userData) {
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: 'Failed to check credit balance',
+          message: `Failed to check credit balance: ${creditError?.message ?? 'no data'} (${creditError?.code ?? 'unknown'})`,
         });
       }
 
