@@ -962,7 +962,7 @@ function CreativeVisualizerPage() {
               const { data: { session } } = await supabase.auth.getSession();
               const userId = session?.user?.id ?? guestUserService.getCurrentGuestUser()?.id ?? null;
 
-              await fetch(`/api/renders/${renderId}`, {
+              const patchRes = await fetch(`/api/renders/${renderId}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -973,12 +973,21 @@ function CreativeVisualizerPage() {
                   functionName,
                 }),
               });
+
+              if (!patchRes.ok) {
+                const errBody = await patchRes.json().catch(() => ({}));
+                console.warn('Failed to save render output URL:', patchRes.status, errBody);
+              }
             } catch (e) {
               console.warn('Failed to save render output URL:', e);
             }
 
-            // Navigate to the render result page instead of downloading
-            router.push(`/renders/${renderId}/result`);
+            // Navigate to the render result page.
+            // Pass the output URL as a fallback query param so the result
+            // page can display the video even if the DB record is missing.
+            const resultUrl = new URL(`/renders/${renderId}/result`, window.location.origin);
+            resultUrl.searchParams.set('outputUrl', status.outputFile);
+            router.push(resultUrl.pathname + resultUrl.search);
             setIsRendering(false);
             setRenderProgress(0);
             setIsDownloadReady(false);

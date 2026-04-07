@@ -47,6 +47,7 @@ export async function GET(
 
 // Public endpoint for updating render status/output (used by frontend after polling).
 // If the render record doesn't exist yet (triggerRender insert failed), creates it.
+// Uses upsert to atomically insert-or-update in a single operation.
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { renderId: string } }
@@ -75,70 +76,41 @@ export async function PATCH(
 
   const supabase = getAdminClient();
 
-  // First, check if the render record exists
-  const { data: existing } = await supabase
-    .from('renders')
-    .select('id')
-    .eq('id', renderId)
-    .single();
+  // Validate userId is a real UUID before inserting into UUID column.
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const userId = body.userId && uuidRegex.test(body.userId) ? body.userId : null;
 
-  if (!existing) {
-    // Record doesn't exist — create it (triggerRender insert likely failed).
-    // Validate userId is a real UUID before inserting into UUID column.
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    const userId = body.userId && uuidRegex.test(body.userId) ? body.userId : null;
+  // Build the upsert record — includes all fields needed for INSERT,
+  // and on conflict (id already exists) only the mutable fields are updated.
+  const record: Record<string, any> = {
+    id: renderId,
+    user_id: userId,
+    bucket_name: body.bucketName || 'unknown',
+    function_name: body.functionName || 'unknown',
+    status: body.status || 'completed',
+    output_url: body.outputUrl || null,
+    error_message: body.errorMessage || null,
+    metadata: body.metadata || {},
+  };
 
-    const insertRecord: Record<string, any> = {
-      id: renderId,
-      user_id: userId,
-      bucket_name: body.bucketName || 'unknown',
-      function_name: body.functionName || 'unknown',
-      status: body.status || 'completed',
-      output_url: body.outputUrl || null,
-      error_message: body.errorMessage || null,
-      metadata: body.metadata || {},
-    };
-
-    const { error: insertError } = await supabase
-      .from('renders')
-      .insert(insertRecord);
-
-    if (insertError) {
-      console.error('PATCH /api/renders upsert-insert error:', insertError.message, insertError.code, insertError.details);
-
-      // If insert fails (FK constraint on user_id), retry without user_id
-      const { error: retryError } = await supabase
-        .from('renders')
-        .insert({ ...insertRecord, user_id: null });
-
-      if (retryError) {
-        console.error('PATCH /api/renders retry-insert error:', retryError.message, retryError.code, retryError.details);
-        return NextResponse.json({ error: 'Failed to create render record', details: retryError.message }, { status: 500 });
-      }
-    }
-
-    return NextResponse.json({ success: true, created: true });
-  }
-
-  // Record exists — update it
-  const updates: Record<string, any> = {};
-  if (body.status) updates.status = body.status;
-  if (body.outputUrl) updates.output_url = body.outputUrl;
-  if (body.errorMessage) updates.error_message = body.errorMessage;
-  if (body.metadata) updates.metadata = body.metadata;
-
-  if (Object.keys(updates).length === 0) {
-    return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
-  }
-
+  // Use upsert: if the row exists, update it; if not, insert it.
+  // onConflict: 'id' tells Supabase to match on the primary key.
   const { error } = await supabase
     .from('renders')
-    .update(updates)
-    .eq('id', renderId);
+    .upsert(record, { onConflict: 'id' });
 
   if (error) {
-    console.error('PATCH /api/renders update error:', error.message, error.code, error.details);
-    return NextResponse.json({ error: 'Failed to update render', details: error.message }, { status: 500 });
+    console.error('PATCH /api/renders upsert error:', error.message, error.code, error.details);
+
+    // If upsert fails (likely FK constraint on user_id), retry without user_id
+    const { error: retryError } = await supabase
+      .from('renders')
+      .upsert({ ...record, user_id: null }, { onConflict: 'id' });
+
+    if (retryError) {
+      console.error('PATCH /api/renders retry-upsert error:', retryError.message, retryError.code, retryError.details);
+      return NextResponse.json({ error: 'Failed to save render record', details: retryError.message }, { status: 500 });
+    }
   }
 
   return NextResponse.json({ success: true });

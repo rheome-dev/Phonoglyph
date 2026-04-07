@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Download, Link2, Share2, Instagram, Youtube, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -43,6 +43,7 @@ function timeAgo(dateStr: string): string {
 export default function RenderResultPage({ params }: { params: { renderId: string } }) {
   const { renderId } = params;
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [copied, setCopied] = React.useState(false);
   const [fileSize, setFileSize] = React.useState<number | null>(null);
   const [render, setRender] = React.useState<any>(null);
@@ -50,6 +51,7 @@ export default function RenderResultPage({ params }: { params: { renderId: strin
   const [error, setError] = React.useState<any>(null);
 
   // Fetch render data from public API (no auth required)
+  // Falls back to outputUrl query parameter if the DB record doesn't exist
   React.useEffect(() => {
     if (!renderId) return;
     fetch(`/api/renders/${renderId}`)
@@ -62,10 +64,24 @@ export default function RenderResultPage({ params }: { params: { renderId: strin
         setIsLoading(false);
       })
       .catch(err => {
-        setError(err);
-        setIsLoading(false);
+        // Fallback: if the DB record is missing but we have the output URL
+        // from the query string, create a synthetic render object
+        const fallbackUrl = searchParams.get('outputUrl');
+        if (fallbackUrl) {
+          setRender({
+            id: renderId,
+            status: 'completed',
+            output_url: fallbackUrl,
+            created_at: new Date().toISOString(),
+            metadata: {},
+          });
+          setIsLoading(false);
+        } else {
+          setError(err);
+          setIsLoading(false);
+        }
       });
-  }, [renderId]);
+  }, [renderId, searchParams]);
 
   // Fetch file size from S3 via HEAD request
   React.useEffect(() => {
