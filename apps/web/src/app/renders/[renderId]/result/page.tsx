@@ -124,13 +124,9 @@ export default function RenderResultPage({ params }: { params: { renderId: strin
   const metadata = render?.metadata as Record<string, any> | null;
 
   const handleDownload = () => {
-    if (!render?.output_url) return;
-    const a = document.createElement('a');
-    a.href = render.output_url;
-    a.download = `${projectName || 'render'}.mp4`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    if (!render?.id) return;
+    // Use the signed download endpoint for proper Content-Disposition: attachment
+    window.location.href = `/api/renders/${render.id}/download`;
   };
 
   // Build the canonical shareable URL for this render

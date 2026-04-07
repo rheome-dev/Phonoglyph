@@ -1,153 +1,135 @@
 'use client'
 
 import { useState } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { trpc } from '@/lib/trpc'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { 
-  FileMusic, 
-  Music, 
-  Video, 
-  Download, 
-  Trash2, 
+import {
+  FileMusic,
+  Music,
+  Video,
+  Download,
+  Trash2,
   Upload,
   Search,
   Filter,
-  MoreVertical
+  MoreVertical,
+  Film,
+  Loader2,
+  ExternalLink,
+  Clock,
+  AlertCircle,
 } from 'lucide-react'
-import Link from 'next/link'
-import { debugLog } from '@/lib/utils'
 
-// Mock data for now - will be replaced with real data from API
-const mockFiles = [
-  {
-    id: 'file_1',
-    fileName: 'beethoven_symphony_5.mid',
-    fileType: 'midi' as const,
-    fileSize: 1024 * 45, // 45KB
-    uploadStatus: 'completed' as const,
-    createdAt: new Date('2024-01-15T10:30:00Z'),
-    r2Key: 'midi/user123/1642248600000_beethoven_symphony_5.mid'
-  },
-  {
-    id: 'file_2', 
-    fileName: 'jazz_piano_recording.mp3',
-    fileType: 'audio' as const,
-    fileSize: 1024 * 1024 * 8.5, // 8.5MB
-    uploadStatus: 'completed' as const,
-    createdAt: new Date('2024-01-14T15:45:00Z'),
-    r2Key: 'audio/user123/1642162700000_jazz_piano_recording.mp3'
-  },
-  {
-    id: 'file_3',
-    fileName: 'concert_video.mp4',
-    fileType: 'video' as const,
-    fileSize: 1024 * 1024 * 125, // 125MB
-    uploadStatus: 'completed' as const,
-    createdAt: new Date('2024-01-13T20:15:00Z'),
-    r2Key: 'video/user123/1642076100000_concert_video.mp4'
-  },
-  {
-    id: 'file_4',
-    fileName: 'new_composition.mid',
-    fileType: 'midi' as const,
-    fileSize: 1024 * 23, // 23KB
-    uploadStatus: 'uploading' as const,
-    createdAt: new Date('2024-01-16T08:20:00Z'),
-    r2Key: 'midi/user123/1642334400000_new_composition.mid'
-  },
-  {
-    id: 'file_5',
-    fileName: 'corrupted_file.mid',
-    fileType: 'midi' as const,
-    fileSize: 1024 * 5, // 5KB
-    uploadStatus: 'failed' as const,
-    createdAt: new Date('2024-01-16T09:00:00Z'),
-    r2Key: 'midi/user123/1642336800000_corrupted_file.mid'
-  }
-]
-
-type FileType = 'midi' | 'audio' | 'video'
+type FileType = 'midi' | 'audio' | 'video' | 'image'
 type UploadStatus = 'uploading' | 'completed' | 'failed'
 
-export default function FilesPage() {
-  const [files] = useState(mockFiles)
-  const [searchTerm, setSearchTerm] = useState('')
-  const [filterType, setFilterType] = useState<FileType | 'all'>('all')
-  const [filterStatus, setFilterStatus] = useState<UploadStatus | 'all'>('all')
+function formatFileSize(bytes: number) {
+  const sizes = ['Bytes', 'KB', 'MB', 'GB']
+  if (bytes === 0) return '0 Bytes'
+  const i = Math.floor(Math.log(bytes) / Math.log(1024))
+  return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i]
+}
 
-  // Filter files based on search and filters
-  const filteredFiles = files.filter(file => {
-    const matchesSearch = file.fileName.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesType = filterType === 'all' || file.fileType === filterType
-    const matchesStatus = filterStatus === 'all' || file.uploadStatus === filterStatus
-    return matchesSearch && matchesType && matchesStatus
+function formatDate(dateStr: string) {
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(dateStr))
+}
+
+function timeAgo(dateStr: string): string {
+  const date = new Date(dateStr)
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffMins = Math.floor(diffMs / 60000)
+  const diffHours = Math.floor(diffMins / 60)
+  const diffDays = Math.floor(diffHours / 24)
+  if (diffMins < 1) return 'just now'
+  if (diffMins < 60) return `${diffMins}m ago`
+  if (diffHours < 24) return `${diffHours}h ago`
+  if (diffDays < 7) return `${diffDays}d ago`
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`
+  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date)
+}
+
+function getFileIcon(fileType: FileType) {
+  switch (fileType) {
+    case 'midi': return <FileMusic className="h-5 w-5 text-blue-600" />
+    case 'audio': return <Music className="h-5 w-5 text-green-600" />
+    case 'video': return <Video className="h-5 w-5 text-purple-600" />
+    default: return <FileMusic className="h-5 w-5" />
+  }
+}
+
+function getStatusBadge(status: UploadStatus) {
+  switch (status) {
+    case 'completed': return <Badge className="bg-green-100 text-green-800">Completed</Badge>
+    case 'uploading': return <Badge className="bg-blue-100 text-blue-800">Uploading</Badge>
+    case 'failed': return <Badge variant="destructive">Failed</Badge>
+    default: return <Badge variant="outline">Unknown</Badge>
+  }
+}
+
+function getRenderStatusBadge(status: string) {
+  switch (status) {
+    case 'completed': return <Badge className="bg-emerald-600">Completed</Badge>
+    case 'in_progress': return <Badge className="bg-blue-600">Rendering</Badge>
+    case 'queued': return <Badge className="bg-stone-600">Queued</Badge>
+    case 'failed': return <Badge variant="destructive">Failed</Badge>
+    default: return <Badge variant="outline">{status}</Badge>
+  }
+}
+
+type Tab = 'renders' | 'audio' | 'midi' | 'all'
+
+export default function FilesPage() {
+  const router = useRouter()
+  const [searchTerm, setSearchTerm] = useState('')
+  const [activeTab, setActiveTab] = useState<Tab>('renders')
+
+  // Fetch renders
+  const { data: rendersData, isLoading: rendersLoading } = trpc.render.listRenders.useQuery(
+    { limit: 50 },
+    { refetchOnWindowFocus: false }
+  )
+
+  // Fetch user files
+  const { data: filesData, isLoading: filesLoading } = trpc.file.getUserFiles.useQuery(
+    { limit: 100 },
+    { refetchOnWindowFocus: false }
+  )
+
+  const renders = rendersData?.renders ?? []
+  const allFiles = filesData?.files ?? []
+
+  // Filter renders
+  const filteredRenders = renders.filter(r =>
+    (r.project_name ?? 'Untitled').toLowerCase().includes(searchTerm.toLowerCase())
+  )
+
+  // Filter files by type and search
+  const filteredFiles = allFiles.filter(f => {
+    const matchesSearch = f.file_name.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesTab =
+      activeTab === 'all' ? true :
+      activeTab === 'midi' ? f.file_type === 'midi' :
+      activeTab === 'audio' ? f.file_type === 'audio' || f.file_type === 'video' :
+      true
+    return matchesSearch && matchesTab
   })
 
-  const getFileIcon = (fileType: FileType) => {
-    switch (fileType) {
-      case 'midi':
-        return <FileMusic className="h-5 w-5 text-blue-600" />
-      case 'audio':
-        return <Music className="h-5 w-5 text-green-600" />
-      case 'video':
-        return <Video className="h-5 w-5 text-purple-600" />
-      default:
-        return <FileMusic className="h-5 w-5" />
-    }
-  }
-
-  const getStatusBadge = (status: UploadStatus) => {
-    switch (status) {
-      case 'completed':
-        return <Badge variant="default" className="bg-green-100 text-green-800">Completed</Badge>
-      case 'uploading':
-        return <Badge variant="secondary" className="bg-blue-100 text-blue-800">Uploading</Badge>
-      case 'failed':
-        return <Badge variant="destructive">Failed</Badge>
-      default:
-        return <Badge variant="outline">Unknown</Badge>
-    }
-  }
-
-  const formatFileSize = (bytes: number) => {
-    const sizes = ['Bytes', 'KB', 'MB', 'GB']
-    if (bytes === 0) return '0 Bytes'
-    const i = Math.floor(Math.log(bytes) / Math.log(1024))
-    return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i]
-  }
-
-  const formatDate = (date: Date) => {
-    return new Intl.DateTimeFormat('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    }).format(date)
-  }
-
-  const handleDownload = (file: typeof mockFiles[0]) => {
-    // Note: Download functionality placeholder - tRPC integration pending
-    debugLog.log('Downloading file:', file.fileName)
-    alert(`Download functionality coming soon for: ${file.fileName}`)
-  }
-
-  const handleDelete = (file: typeof mockFiles[0]) => {
-    // Note: Delete functionality placeholder - tRPC integration pending
-    if (confirm(`Are you sure you want to delete "${file.fileName}"?`)) {
-      debugLog.log('Deleting file:', file.fileName)
-      alert(`Delete functionality coming soon for: ${file.fileName}`)
-    }
-  }
-
-  const getFileTypeColor = (fileType: FileType) => {
-    switch (fileType) {
-      case 'midi': return 'bg-blue-50 border-blue-200'
-      case 'audio': return 'bg-green-50 border-green-200'
-      case 'video': return 'bg-purple-50 border-purple-200'
-      default: return 'bg-gray-50 border-gray-200'
-    }
+  const stats = {
+    renders: renders.length,
+    midi: allFiles.filter(f => f.file_type === 'midi').length,
+    audio: allFiles.filter(f => f.file_type === 'audio').length,
+    video: allFiles.filter(f => f.file_type === 'video').length,
   }
 
   return (
@@ -156,230 +138,276 @@ export default function FilesPage() {
       <div className="mb-8">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold mb-2">My Files 📁</h1>
+            <h1 className="text-3xl font-bold mb-2">My Files</h1>
             <p className="text-muted-foreground">
-              Manage your uploaded MIDI, audio, and video files
+              Your renders, stems, and uploaded files
             </p>
           </div>
-          <Link href="/upload-demo">
-            <Button className="flex items-center gap-2">
-              <Upload className="h-4 w-4" />
-              Upload Files
-            </Button>
-          </Link>
+          <Button onClick={() => router.push('/creative-visualizer')}>
+            <Upload className="h-4 w-4 mr-2" />
+            New Render
+          </Button>
         </div>
       </div>
 
-      {/* Filters and Search */}
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="text-lg">Filter & Search</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col sm:flex-row gap-4">
-            {/* Search */}
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search files..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
+      {/* Tabs */}
+      <div className="flex gap-1 mb-6 border-b border-stone-200">
+        {([
+          ['renders', 'Renders', stats.renders],
+          ['audio', 'Songs & Stems', stats.audio],
+          ['midi', 'MIDI', stats.midi],
+          ['all', 'All Files', allFiles.length],
+        ] as [Tab, string, number][]).map(([tab, label, count]) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              activeTab === tab
+                ? 'border-stone-900 text-stone-900'
+                : 'border-transparent text-stone-500 hover:text-stone-700'
+            }`}
+          >
+            {label} <span className="text-stone-400 ml-1">{count}</span>
+          </button>
+        ))}
+      </div>
 
-            {/* File Type Filter */}
-            <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4 text-gray-500" />
-              <select
-                value={filterType}
-                onChange={(e) => setFilterType(e.target.value as FileType | 'all')}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="all">All Types</option>
-                <option value="midi">MIDI</option>
-                <option value="audio">Audio</option>
-                <option value="video">Video</option>
-              </select>
-            </div>
+      {/* Search */}
+      <div className="relative mb-6">
+        <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+        <input
+          type="text"
+          placeholder="Search files..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full pl-10 pr-4 py-2 border border-stone-300 rounded-lg bg-white focus:ring-2 focus:ring-stone-900 focus:border-transparent"
+        />
+      </div>
 
-            {/* Status Filter */}
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value as UploadStatus | 'all')}
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="all">All Status</option>
-              <option value="completed">Completed</option>
-              <option value="uploading">Uploading</option>
-              <option value="failed">Failed</option>
-            </select>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Files List */}
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            Files ({filteredFiles.length})
-          </CardTitle>
-          <CardDescription>
-            Your uploaded files with download and management options
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {filteredFiles.length === 0 ? (
-            <div className="text-center py-12">
-              <FileMusic className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No files found</h3>
-              <p className="text-gray-500 mb-4">
-                {searchTerm || filterType !== 'all' || filterStatus !== 'all'
-                  ? 'Try adjusting your search or filters'
-                  : 'Upload your first file to get started'
-                }
-              </p>
-              <Link href="/upload-demo">
-                <Button>
-                  <Upload className="h-4 w-4 mr-2" />
-                  Upload Files
+      {/* Content */}
+      {activeTab === 'renders' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Film className="h-5 w-5" />
+              Rendered Videos ({filteredRenders.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {rendersLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-6 h-6 animate-spin text-stone-400" />
+              </div>
+            ) : filteredRenders.length === 0 ? (
+              <div className="text-center py-12">
+                <Film className="h-12 w-12 text-stone-300 mx-auto mb-3" />
+                <p className="text-stone-500 mb-4">
+                  {searchTerm ? 'No renders match your search' : 'No renders yet — create your first visual!'}
+                </p>
+                <Button onClick={() => router.push('/creative-visualizer')}>
+                  Open Editor
                 </Button>
-              </Link>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {filteredFiles.map((file) => (
-                <div
-                  key={file.id}
-                  className={`p-4 rounded-lg border-2 ${getFileTypeColor(file.fileType)} hover:shadow-md transition-shadow`}
-                >
-                  <div className="flex items-center justify-between">
-                    {/* File Info */}
-                    <div className="flex items-center gap-4 flex-1">
-                      <div className="flex-shrink-0">
-                        {getFileIcon(file.fileType)}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {filteredRenders.map((render) => (
+                  <div
+                    key={render.id}
+                    className="flex items-center justify-between p-4 rounded-lg border border-stone-200 hover:border-stone-300 hover:bg-stone-50 transition-colors"
+                  >
+                    <div className="flex items-center gap-4 flex-1 min-w-0">
+                      <div className="flex-shrink-0 w-10 h-10 rounded bg-stone-100 flex items-center justify-center">
+                        <Video className="h-5 w-5 text-stone-500" />
                       </div>
-                      
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-gray-900 truncate">
-                          {file.fileName}
-                        </h3>
-                        <div className="flex items-center gap-4 text-sm text-gray-600 mt-1">
-                          <span>{formatFileSize(file.fileSize)}</span>
-                          <span>•</span>
-                          <span>{formatDate(file.createdAt)}</span>
-                          <span>•</span>
-                          <span className="capitalize">{file.fileType}</span>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-stone-900 truncate">
+                            {render.project_name ?? 'Untitled Render'}
+                          </p>
+                          {getRenderStatusBadge(render.status)}
+                        </div>
+                        <div className="flex items-center gap-3 text-sm text-stone-500 mt-0.5">
+                          <span className="flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {timeAgo(render.created_at)}
+                          </span>
+                          {render.output_url && (
+                            <span className="flex items-center gap-1">
+                              <span>{formatDate(render.created_at)}</span>
+                            </span>
+                          )}
                         </div>
                       </div>
-
-                      <div className="flex items-center gap-3">
-                        {getStatusBadge(file.uploadStatus)}
-                      </div>
                     </div>
-
-                    {/* Actions */}
                     <div className="flex items-center gap-2 ml-4">
-                      {file.uploadStatus === 'completed' && (
+                      {render.status === 'completed' && render.output_url && (
                         <>
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleDownload(file)}
-                            className="flex items-center gap-1"
+                            onClick={() => window.location.href = `/api/renders/${render.id}/download`}
                           >
-                            <Download className="h-3 w-3" />
+                            <Download className="h-3 w-3 mr-1" />
                             Download
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleDelete(file)}
-                            className="flex items-center gap-1 text-red-600 hover:text-red-700"
+                            onClick={() => router.push(`/renders/${render.id}/result`)}
                           >
-                            <Trash2 className="h-3 w-3" />
-                            Delete
+                            <ExternalLink className="h-3 w-3 mr-1" />
+                            View
                           </Button>
                         </>
                       )}
-                      
-                      {file.uploadStatus === 'failed' && (
+                      {render.status !== 'completed' && (
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleDelete(file)}
-                          className="flex items-center gap-1 text-red-600 hover:text-red-700"
+                          onClick={() => router.push(`/renders/${render.id}/result`)}
                         >
-                          <Trash2 className="h-3 w-3" />
-                          Remove
+                          <ExternalLink className="h-3 w-3 mr-1" />
+                          View Status
                         </Button>
                       )}
-
-                      <Button variant="ghost" size="sm">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
-      {/* Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
+      {activeTab !== 'renders' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              {activeTab === 'midi' ? 'MIDI Files' : activeTab === 'audio' ? 'Songs & Stems' : 'All Files'}
+              {' '}({filteredFiles.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {filesLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-6 h-6 animate-spin text-stone-400" />
+              </div>
+            ) : filteredFiles.length === 0 ? (
+              <div className="text-center py-12">
+                <FileMusic className="h-12 w-12 text-stone-300 mx-auto mb-3" />
+                <p className="text-stone-500 mb-4">
+                  {searchTerm ? 'No files match your search' : 'No files uploaded yet'}
+                </p>
+                <Button onClick={() => router.push('/creative-visualizer')}>
+                  Upload Files
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {filteredFiles.map((file) => (
+                  <div
+                    key={file.id}
+                    className={`p-4 rounded-lg border-2 ${
+                      file.file_type === 'midi' ? 'bg-blue-50 border-blue-200' :
+                      file.file_type === 'audio' ? 'bg-green-50 border-green-200' :
+                      'bg-purple-50 border-purple-200'
+                    } hover:shadow-sm transition-shadow`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4 flex-1 min-w-0">
+                        <div className="flex-shrink-0">
+                          {getFileIcon(file.file_type as FileType)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="font-semibold text-stone-900 truncate">
+                              {file.file_name}
+                            </p>
+                            {getStatusBadge(file.upload_status as UploadStatus)}
+                          </div>
+                          <div className="flex items-center gap-3 text-sm text-stone-600 mt-0.5">
+                            <span>{formatFileSize(file.file_size)}</span>
+                            <span>•</span>
+                            <span>{formatDate(file.created_at)}</span>
+                            <span>•</span>
+                            <span className="capitalize">{file.file_type}</span>
+                            {file.is_master && (
+                              <Badge variant="outline" className="text-xs">Master</Badge>
+                            )}
+                            {file.stem_type && file.stem_type !== 'master' && (
+                              <Badge variant="outline" className="text-xs">{file.stem_type}</Badge>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 ml-4">
+                        {file.upload_status === 'completed' && (
+                          <>
+                            <Button variant="outline" size="sm">
+                              <Download className="h-3 w-3 mr-1" />
+                              Download
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => router.push('/creative-visualizer')}
+                            >
+                              Use in Render
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Stats footer */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+        <Card className="bg-stone-50 border-stone-200">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2">
+              <Film className="h-5 w-5 text-stone-600" />
+              <div>
+                <p className="text-sm font-medium text-stone-900">Renders</p>
+                <p className="text-lg font-bold text-stone-700">{stats.renders}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
         <Card className="bg-blue-50 border-blue-200">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
               <FileMusic className="h-5 w-5 text-blue-600" />
               <div>
-                <p className="text-sm font-medium text-blue-900">MIDI Files</p>
-                <p className="text-lg font-bold text-blue-700">
-                  {files.filter(f => f.fileType === 'midi').length}
-                </p>
+                <p className="text-sm font-medium text-blue-900">MIDI</p>
+                <p className="text-lg font-bold text-blue-700">{stats.midi}</p>
               </div>
             </div>
           </CardContent>
         </Card>
-
         <Card className="bg-green-50 border-green-200">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
               <Music className="h-5 w-5 text-green-600" />
               <div>
-                <p className="text-sm font-medium text-green-900">Audio Files</p>
-                <p className="text-lg font-bold text-green-700">
-                  {files.filter(f => f.fileType === 'audio').length}
-                </p>
+                <p className="text-sm font-medium text-green-900">Songs & Stems</p>
+                <p className="text-lg font-bold text-green-700">{stats.audio}</p>
               </div>
             </div>
           </CardContent>
         </Card>
-
         <Card className="bg-purple-50 border-purple-200">
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
               <Video className="h-5 w-5 text-purple-600" />
               <div>
-                <p className="text-sm font-medium text-purple-900">Video Files</p>
-                <p className="text-lg font-bold text-purple-700">
-                  {files.filter(f => f.fileType === 'video').length}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-gray-50 border-gray-200">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2">
-              <div>
-                <p className="text-sm font-medium text-gray-900">Total Storage</p>
-                <p className="text-lg font-bold text-gray-700">
-                  {formatFileSize(files.reduce((total, file) => total + file.fileSize, 0))}
-                </p>
+                <p className="text-sm font-medium text-purple-900">Videos</p>
+                <p className="text-lg font-bold text-purple-700">{stats.video}</p>
               </div>
             </div>
           </CardContent>
@@ -387,4 +415,4 @@ export default function FilesPage() {
       </div>
     </div>
   )
-} 
+}
