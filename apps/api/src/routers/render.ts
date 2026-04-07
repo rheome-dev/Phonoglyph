@@ -153,6 +153,7 @@ export const renderRouter = router({
         output_url: data.output_url,
         error_message: data.error_message,
         credits_spent: data.credits_spent,
+        expires_at: data.expires_at,
         metadata: data.metadata,
         created_at: data.created_at,
       };
@@ -173,6 +174,10 @@ export const renderRouter = router({
       if (input.outputUrl) updates.output_url = input.outputUrl;
       if (input.errorMessage) updates.error_message = input.errorMessage;
       if (input.metadata) updates.metadata = input.metadata;
+      // Set 30-day expiration when render completes
+      if (input.status === 'completed') {
+        updates.expires_at = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      }
 
       const { error } = await ctx.supabase
         .from('renders')
@@ -384,6 +389,41 @@ export const renderRouter = router({
           message: error instanceof Error ? error.message : 'Failed to trigger render',
         });
       }
+    }),
+
+  listRenders: protectedProcedure
+    .input(
+      z.object({
+        limit: z.number().min(1).max(50).default(20),
+        cursor: z.string().optional(),
+      })
+    )
+    .query(async ({ input, ctx }) => {
+      const limit = input.limit ?? 20;
+
+      let query = ctx.supabase
+        .from('renders')
+        .select('*')
+        .eq('user_id', ctx.user.id)
+        .order('created_at', { ascending: false })
+        .limit(limit + 1);
+
+      if (input.cursor) {
+        query = query.lt('created_at', input.cursor);
+      }
+
+      const { data: renders, error } = await query;
+
+      if (error) {
+        logger.error('Failed to list renders:', error);
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to list renders' });
+      }
+
+      const hasMore = (renders?.length ?? 0) > limit;
+      const items = hasMore ? (renders ?? []).slice(0, -1) : (renders ?? []);
+      const nextCursor = hasMore ? (items[items.length - 1]?.created_at ?? null) : null;
+
+      return { renders: items, nextCursor };
     }),
 
   getRenderStatus: protectedProcedure
