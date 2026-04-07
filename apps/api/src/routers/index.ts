@@ -12,6 +12,7 @@ import { audioAnalysisSandboxRouter } from './audio-analysis-sandbox';
 import { assetRouter } from './asset';
 import { renderRouter } from './render';
 import { apiKeyRouter } from './api-key';
+import { polarRouter } from './polar';
 
 export const appRouter = router({
   health: healthRouter,
@@ -27,6 +28,7 @@ export const appRouter = router({
   audioAnalysisSandbox: audioAnalysisSandboxRouter,
   render: renderRouter,
   apiKey: apiKeyRouter,
+  polar: polarRouter,
 });
 
 export type AppRouter = typeof appRouter; 
