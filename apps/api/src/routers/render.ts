@@ -190,6 +190,22 @@ export const renderRouter = router({
   triggerRender: protectedProcedure
     .input(triggerRenderSchema)
     .mutation(async ({ input, ctx }) => {
+      // Ensure user_profiles row exists (create if trigger never fired)
+      const { data: existingProfile } = await supabaseAdmin
+        .from('user_profiles')
+        .select('id,credits')
+        .eq('id', ctx.user.id)
+        .maybeSingle();
+
+      if (!existingProfile) {
+        logger.log('user_profiles row missing for user, creating with 5 free credits');
+        await supabaseAdmin.from('user_profiles').insert({
+          id: ctx.user.id,
+          display_name: ctx.user.email?.split('@')[0] || 'User',
+          credits: 5,
+        });
+      }
+
       // Check credit balance before doing any expensive work
       const { data: userData, error: creditError } = await supabaseAdmin
         .from('user_profiles')

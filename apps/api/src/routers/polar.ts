@@ -47,6 +47,24 @@ export const polarRouter = router({
    */
   getCredits: protectedProcedure.query(async ({ ctx }) => {
     const userId = ctx.user.id
+    const userEmail = ctx.user.email
+    const userName = (ctx.user as any).name || userEmail?.split('@')[0] || 'User'
+
+    // Ensure user_profiles row exists (create if trigger never fired)
+    const { data: existingProfile } = await supabaseAdmin
+      .from('user_profiles')
+      .select('id')
+      .eq('id', userId)
+      .maybeSingle()
+
+    if (!existingProfile) {
+      logger.log('user_profiles row missing for user, creating with 5 free credits')
+      await supabaseAdmin.from('user_profiles').insert({
+        id: userId,
+        display_name: userName,
+        credits: 5,
+      })
+    }
 
     // Get user's current credits from user_profiles table
     const { data: userData, error: userError } = await supabaseAdmin
