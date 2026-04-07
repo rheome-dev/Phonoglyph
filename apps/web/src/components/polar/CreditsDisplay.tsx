@@ -1,41 +1,38 @@
-'use client';
+'use client'
 
-import React from 'react';
-import { Coins } from 'lucide-react';
-import { trpc } from '@/lib/trpc';
-import { Button } from '@/components/ui/button';
+import { trpc } from '@/lib/trpc'
 
-interface CreditsDisplayProps {
-  onOpenPurchase: () => void;
+type CreditsDisplayProps = {
+  onOpenPurchase: () => void
 }
 
-/**
- * Displays the user's current credit balance with a button to purchase more.
- * Shows a loading state while fetching credits, and falls back gracefully if
- * the query fails (credits feature not yet wired up on the backend).
- */
 export function CreditsDisplay({ onOpenPurchase }: CreditsDisplayProps) {
-  const { data, isLoading } = trpc.user.getCredits.useQuery(undefined, {
-    retry: false,
-  });
+  const { data: creditsData, isLoading } = trpc.polar.getCredits.useQuery()
 
-  const credits = data?.credits ?? null;
+  const balance = creditsData?.balance ?? 0
+  const hasCredits = balance > 0
+
+  if (isLoading) {
+    return (
+      <div className="bg-stone-800 text-stone-300 rounded-full px-3 py-1 text-sm inline-flex items-center gap-1.5">
+        <span>●</span>
+        <span>...</span>
+      </div>
+    )
+  }
 
   return (
-    <Button
-      variant="ghost"
-      size="sm"
-      onClick={onOpenPurchase}
-      className="text-stone-400 hover:text-white gap-1.5"
-    >
-      <Coins className="w-4 h-4" />
-      {isLoading ? (
-        <span className="text-xs font-mono">—</span>
-      ) : credits !== null ? (
-        <span className="text-xs font-mono">{credits} credits</span>
-      ) : (
-        <span className="text-xs font-mono">Get credits</span>
-      )}
-    </Button>
-  );
+    <div className="bg-stone-800 text-stone-300 rounded-full px-3 py-1 text-sm inline-flex items-center gap-1.5">
+      <span
+        className={`w-2 h-2 rounded-full flex-shrink-0 ${hasCredits ? 'bg-green-500' : 'bg-stone-500'}`}
+      />
+      <button
+        type="button"
+        onClick={onOpenPurchase}
+        className="hover:text-white transition-colors cursor-pointer"
+      >
+        {balance} render{balance !== 1 ? 's' : ''} left
+      </button>
+    </div>
+  )
 }
