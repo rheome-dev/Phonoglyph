@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { use } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Download, ExternalLink, Loader2 } from 'lucide-react';
+import { trpc } from '@/lib/trpc';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
@@ -22,37 +23,14 @@ function formatDuration(seconds: number | null | undefined): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-interface RenderData {
-  id: string;
-  project_name: string | null;
-  status: string;
-  output_url: string | null;
-  metadata: Record<string, any> | null;
-  created_at: string;
-}
-
-export default function RenderSharePage({ params }: { params: { renderId: string } }) {
-  const { renderId } = params;
+export default function RenderSharePage({ params }: { params: Promise<{ renderId: string }> }) {
+  const { renderId } = use(params);
   const router = useRouter();
-  const [render, setRender] = useState<RenderData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(false);
 
-  useEffect(() => {
-    fetch(`/api/renders/${renderId}`)
-      .then(res => {
-        if (!res.ok) throw new Error('not found');
-        return res.json();
-      })
-      .then(data => {
-        setRender(data);
-        setIsLoading(false);
-      })
-      .catch(() => {
-        setError(true);
-        setIsLoading(false);
-      });
-  }, [renderId]);
+  const { data: render, isLoading, error } = trpc.render.getRender.useQuery(
+    { renderId },
+    { enabled: !!renderId }
+  );
 
   const metadata = render?.metadata as Record<string, any> | null;
 
