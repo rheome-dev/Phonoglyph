@@ -98,9 +98,9 @@ export async function POST(req: NextRequest) {
         if (data.metadata?.userId) {
           userId = data.metadata.userId
         } else if (data.customer_id) {
-          // Look up user by polar_customer_id in our users table
+          // Look up user by polar_customer_id in our user_profiles table
           const { data: userData } = await supabaseAdmin
-            .from('users')
+            .from('user_profiles')
             .select('id')
             .eq('polar_customer_id', data.customer_id)
             .single()
@@ -119,8 +119,8 @@ export async function POST(req: NextRequest) {
 
         // Add credits to user
         const { data: updatedUser, error: updateError } = await supabaseAdmin.rpc('increment_credits', {
-          p_user_id: userId,
-          p_amount: creditsToAdd,
+          uid: userId,
+          amount: creditsToAdd,
         }).single()
 
         if (updateError) {
@@ -128,7 +128,7 @@ export async function POST(req: NextRequest) {
           logger.log('increment_credits RPC not found, using manual update')
 
           const { data: currentUser } = await supabaseAdmin
-            .from('users')
+            .from('user_profiles')
             .select('credits')
             .eq('id', userId)
             .single()
@@ -136,7 +136,7 @@ export async function POST(req: NextRequest) {
           const newBalance = (currentUser?.credits ?? 0) + creditsToAdd
 
           await supabaseAdmin
-            .from('users')
+            .from('user_profiles')
             .update({ credits: newBalance })
             .eq('id', userId)
         }

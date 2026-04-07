@@ -190,6 +190,28 @@ export const renderRouter = router({
   triggerRender: protectedProcedure
     .input(triggerRenderSchema)
     .mutation(async ({ input, ctx }) => {
+      // Check credit balance before doing any expensive work
+      const { data: userData, error: creditError } = await supabaseAdmin
+        .from('user_profiles')
+        .select('credits')
+        .eq('id', ctx.user.id)
+        .single();
+
+      if (creditError || !userData) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to check credit balance',
+        });
+      }
+
+      const currentCredits = userData.credits ?? 0;
+      if (currentCredits < 1) {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Insufficient credits. Purchase render credits to continue.',
+        });
+      }
+
       try {
         const region = 'us-east-1';
         const serveUrl = 'https://remotionlambda-useast1-zq6uoa8xhi.s3.us-east-1.amazonaws.com/sites/raybox-renderer/';
@@ -298,6 +320,19 @@ export const renderRouter = router({
               // Don't throw — the Lambda render is already running. Log the error
               // and return the renderId so the client can still poll for completion.
               logger.warn('Render will continue without DB record. renderId:', renderId);
+            }
+
+            // Deduct 1 credit now that the render is confirmed running
+            const { error: deductError } = await supabaseAdmin.rpc('decrement_credits', { uid: ctx.user.id });
+            if (deductError) {
+              logger.error('Failed to deduct credit (render still running):', JSON.stringify(deductError));
+            } else {
+              // Record the transaction
+              await supabaseAdmin.from('credit_transactions').insert({
+                user_id: ctx.user.id,
+                amount: -1,
+                type: 'spend',
+              });
             }
 
             logger.log('Render triggered successfully:', { renderId, bucketName, functionName, cloudWatchLogs });

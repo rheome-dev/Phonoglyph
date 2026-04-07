@@ -46,6 +46,8 @@ import { AutoSaveProvider, useAutoSaveContext } from '@/components/auto-save/aut
 import { AutoSaveIndicator } from '@/components/auto-save/auto-save-indicator';
 import { AutoSaveTopBar } from '@/components/auto-save/auto-save-top-bar';
 import { getProjectExportPayload } from '@/lib/export-utils';
+import { CreditsDisplay } from '@/components/polar/CreditsDisplay';
+import { CreditsPurchaseModal } from '@/components/polar/CreditsPurchaseModal';
 
 // Derived boolean: are stem URLs ready?
 // const stemUrlsReady = Object.keys(asyncStemUrlMap).length > 0; // This line was moved
@@ -897,6 +899,7 @@ function CreativeVisualizerPage() {
   const [isRendering, setIsRendering] = useState(false);
   const [renderProgress, setRenderProgress] = useState(0);
   const [isDownloadReady, setIsDownloadReady] = useState(false);
+  const [showPurchaseModal, setShowPurchaseModal] = useState(false);
 
   const handleExport = async () => {
     if (!currentProjectId) {
@@ -1009,9 +1012,14 @@ function CreativeVisualizerPage() {
 
         await new Promise(r => setTimeout(r, pollInterval));
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Export error:', error);
-      alert(`Failed to export: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      // If the server returned insufficient credits, show the purchase modal
+      if (error?.data?.code === 'FORBIDDEN' || error?.message?.includes('Insufficient credits')) {
+        setShowPurchaseModal(true);
+      } else {
+        alert(`Failed to export: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
       setIsRendering(false);
       setRenderProgress(0);
       setIsDownloadReady(false);
@@ -2951,6 +2959,7 @@ function CreativeVisualizerPage() {
                           onAspectRatioChange={setVisualizerAspectRatio}
                           disabled={stemLoadingState}
                         />
+                        <CreditsDisplay onOpenPurchase={() => setShowPurchaseModal(true)} />
                         <Button
                           variant="outline"
                           size="sm"
@@ -3136,6 +3145,10 @@ function CreativeVisualizerPage() {
             </main>
           </div>
         </DndProvider>
+      )}
+
+      {showPurchaseModal && (
+        <CreditsPurchaseModal onClose={() => setShowPurchaseModal(false)} />
       )}
     </>
   );

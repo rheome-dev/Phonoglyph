@@ -1,13 +1,15 @@
 'use client'
 
 import { Suspense, useState, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { AuthGuard } from '@/components/auth/auth-guard'
 import { UserDisplay } from '@/components/auth/profile-menu'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useToast } from '@/hooks/use-toast'
 import { trpc } from '@/lib/trpc'
-import { Key, Copy, Trash2, Plus, Eye, EyeOff, Shield } from 'lucide-react'
+import { Key, Copy, Trash2, Plus, Eye, EyeOff, Shield, CreditCard, Coins } from 'lucide-react'
+import { CreditsPurchaseModal } from '@/components/polar/CreditsPurchaseModal'
 
 function ApiKeysSection() {
   const { toast } = useToast()
@@ -233,8 +235,117 @@ function ApiKeysSection() {
   )
 }
 
+function BillingSection() {
+  const [showPurchaseModal, setShowPurchaseModal] = useState(false)
+  const { data, isLoading, refetch } = trpc.polar.getCredits.useQuery(undefined, {
+    retry: false,
+  })
+  const searchParams = useSearchParams()
+  const { toast } = useToast()
+
+  // Handle Polar checkout redirect query params
+  useEffect(() => {
+    const creditsParam = searchParams.get('credits')
+    if (creditsParam === 'success') {
+      toast({ title: 'Credits purchased successfully!' })
+      refetch()
+    } else if (creditsParam === 'cancelled') {
+      toast({ title: 'Checkout cancelled', variant: 'destructive' })
+    }
+  }, [searchParams, toast, refetch])
+
+  const balance = data?.balance ?? 0
+  const transactions = data?.transactions ?? []
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-medium text-gray-900">Render Credits</h3>
+          <p className="text-sm text-gray-500">
+            Each video render costs 1 credit. Credits never expire.
+          </p>
+        </div>
+        <Button size="sm" onClick={() => setShowPurchaseModal(true)}>
+          <Plus className="w-4 h-4 mr-1" />
+          Buy Credits
+        </Button>
+      </div>
+
+      {/* Balance card */}
+      <div className="bg-gray-50 border rounded-lg p-6">
+        <div className="flex items-center gap-3">
+          <Coins className="w-8 h-8 text-indigo-500" />
+          <div>
+            {isLoading ? (
+              <p className="text-2xl font-bold text-gray-900">—</p>
+            ) : (
+              <p className="text-2xl font-bold text-gray-900">{balance}</p>
+            )}
+            <p className="text-sm text-gray-500">
+              {balance === 1 ? 'render credit remaining' : 'render credits remaining'}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Transaction history */}
+      {transactions.length > 0 && (
+        <div>
+          <h4 className="text-sm font-medium text-gray-700 mb-3">Transaction History</h4>
+          <div className="border rounded-lg divide-y">
+            {transactions.map((tx: any) => (
+              <div key={tx.id} className="flex items-center justify-between px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <div className={`w-2 h-2 rounded-full ${
+                    tx.type === 'purchase' || tx.type === 'grant' ? 'bg-green-500' : 'bg-red-400'
+                  }`} />
+                  <div>
+                    <p className="text-sm text-gray-900 capitalize">{tx.type}</p>
+                    <p className="text-xs text-gray-500">
+                      {new Date(tx.created_at).toLocaleDateString(undefined, {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </p>
+                  </div>
+                </div>
+                <span className={`text-sm font-mono font-medium ${
+                  tx.amount > 0 ? 'text-green-600' : 'text-red-500'
+                }`}>
+                  {tx.amount > 0 ? '+' : ''}{tx.amount}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {transactions.length === 0 && !isLoading && (
+        <div className="border border-dashed rounded-lg p-8 text-center">
+          <CreditCard className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+          <p className="text-sm text-gray-500">No transactions yet.</p>
+          <p className="text-xs text-gray-400 mt-1">
+            Purchase credits to start rendering videos.
+          </p>
+        </div>
+      )}
+
+      {showPurchaseModal && (
+        <CreditsPurchaseModal onClose={() => {
+          setShowPurchaseModal(false)
+          refetch()
+        }} />
+      )}
+    </div>
+  )
+}
+
 function SettingsPageContent() {
-  const [activeTab, setActiveTab] = useState<'account' | 'api-keys'>('account')
+  const [activeTab, setActiveTab] = useState<'account' | 'billing' | 'api-keys'>('account')
 
   return (
     <AuthGuard>
@@ -259,6 +370,16 @@ function SettingsPageContent() {
                 Account
               </button>
               <button
+                onClick={() => setActiveTab('billing')}
+                className={`py-2 px-1 border-b-2 text-sm font-medium ${
+                  activeTab === 'billing'
+                    ? 'border-indigo-500 text-indigo-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Billing
+              </button>
+              <button
                 onClick={() => setActiveTab('api-keys')}
                 className={`py-2 px-1 border-b-2 text-sm font-medium ${
                   activeTab === 'api-keys'
@@ -281,6 +402,8 @@ function SettingsPageContent() {
                 </p>
               </>
             )}
+
+            {activeTab === 'billing' && <BillingSection />}
 
             {activeTab === 'api-keys' && <ApiKeysSection />}
           </div>

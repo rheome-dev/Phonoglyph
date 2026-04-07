@@ -16,16 +16,16 @@ const CREDIT_PACKS = [
   {
     id: 'starter',
     name: 'Starter Pack',
-    credits: 10,
-    priceInCents: 2200,
+    credits: 3,
+    priceInCents: 900,
     polarProductId: process.env.POLAR_STARTER_PACK_ID || '',
   },
   {
-    id: 'pro',
-    name: 'Pro Pack',
-    credits: 50,
-    priceInCents: 9000,
-    polarProductId: process.env.POLAR_PRO_PACK_ID || '',
+    id: 'value',
+    name: 'Value Pack',
+    credits: 10,
+    priceInCents: 2500,
+    polarProductId: process.env.POLAR_VALUE_PACK_ID || '',
   },
 ]
 
@@ -48,9 +48,9 @@ export const polarRouter = router({
   getCredits: protectedProcedure.query(async ({ ctx }) => {
     const userId = ctx.user.id
 
-    // Get user's current credits from users table
+    // Get user's current credits from user_profiles table
     const { data: userData, error: userError } = await supabaseAdmin
-      .from('users')
+      .from('user_profiles')
       .select('credits')
       .eq('id', userId)
       .single()
@@ -173,9 +173,9 @@ export const polarRouter = router({
       })
     }
 
-    // Grant 5 credits to user
+    // Grant 5 credits to user via RPC
     const { data: updatedUser, error: updateError } = await supabaseAdmin.rpc('increment_credits', {
-      user_id: userId,
+      uid: userId,
       amount: 5,
     })
 
@@ -185,7 +185,7 @@ export const polarRouter = router({
 
       // Get current credits
       const { data: currentUser, error: fetchError } = await supabaseAdmin
-        .from('users')
+        .from('user_profiles')
         .select('credits')
         .eq('id', userId)
         .single()
@@ -201,7 +201,7 @@ export const polarRouter = router({
       const newBalance = (currentUser?.credits ?? 0) + 5
 
       const { error: setError } = await supabaseAdmin
-        .from('users')
+        .from('user_profiles')
         .update({ credits: newBalance })
         .eq('id', userId)
 
