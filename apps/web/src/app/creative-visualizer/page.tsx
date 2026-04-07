@@ -983,10 +983,12 @@ function CreativeVisualizerPage() {
             }
 
             // Navigate to the render result page.
-            // Pass the output URL as a fallback query param so the result
-            // page can display the video even if the DB record is missing.
+            // Pass fallback query params so the result page works even
+            // if the DB record is missing or incomplete.
             const resultUrl = new URL(`/renders/${renderId}/result`, window.location.origin);
             resultUrl.searchParams.set('outputUrl', status.outputFile);
+            if (currentProjectId) resultUrl.searchParams.set('projectId', currentProjectId);
+            if (projectData?.name) resultUrl.searchParams.set('projectName', projectData.name);
             router.push(resultUrl.pathname + resultUrl.search);
             setIsRendering(false);
             setRenderProgress(0);

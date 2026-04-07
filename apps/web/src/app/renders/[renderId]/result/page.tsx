@@ -3,9 +3,6 @@
 import React from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Download, Link2, Share2, Instagram, Youtube, Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
 import { CreditsDisplay } from '@/components/polar/CreditsDisplay';
 
 /** Format bytes to human-readable string */
@@ -46,9 +43,15 @@ export default function RenderResultPage({ params }: { params: { renderId: strin
   const searchParams = useSearchParams();
   const [copied, setCopied] = React.useState(false);
   const [fileSize, setFileSize] = React.useState<number | null>(null);
+  const [videoDuration, setVideoDuration] = React.useState<number | null>(null);
   const [render, setRender] = React.useState<any>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<any>(null);
+  const videoRef = React.useRef<HTMLVideoElement>(null);
+
+  // Resolve projectId and projectName from DB data or query params
+  const projectId = render?.project_id || searchParams.get('projectId') || null;
+  const projectName = render?.project_name || searchParams.get('projectName') || null;
 
   // Fetch render data from public API (no auth required)
   // Falls back to outputUrl query parameter if the DB record doesn't exist
@@ -72,6 +75,8 @@ export default function RenderResultPage({ params }: { params: { renderId: strin
             id: renderId,
             status: 'completed',
             output_url: fallbackUrl,
+            project_id: searchParams.get('projectId') || null,
+            project_name: searchParams.get('projectName') || null,
             created_at: new Date().toISOString(),
             metadata: {},
           });
@@ -83,13 +88,35 @@ export default function RenderResultPage({ params }: { params: { renderId: strin
       });
   }, [renderId, searchParams]);
 
-  // Fetch file size from S3 via HEAD request
+  // Get duration and file size from the video element once loaded
+  React.useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const handleMetadata = () => {
+      if (video.duration && isFinite(video.duration)) {
+        setVideoDuration(video.duration);
+      }
+    };
+
+    video.addEventListener('loadedmetadata', handleMetadata);
+    // If already loaded (e.g. cached)
+    if (video.readyState >= 1 && video.duration && isFinite(video.duration)) {
+      setVideoDuration(video.duration);
+    }
+
+    return () => video.removeEventListener('loadedmetadata', handleMetadata);
+  }, [render?.output_url]);
+
+  // Fetch file size — try HEAD request, fall back to fetching the whole response for size
   React.useEffect(() => {
     if (!render?.output_url) return;
     fetch(render.output_url, { method: 'HEAD' })
       .then(res => {
         const size = parseInt(res.headers.get('content-length') ?? '0', 10);
-        setFileSize(size > 0 ? size : null);
+        if (size > 0) {
+          setFileSize(size);
+        }
       })
       .catch(() => setFileSize(null));
   }, [render?.output_url]);
@@ -100,7 +127,7 @@ export default function RenderResultPage({ params }: { params: { renderId: strin
     if (!render?.output_url) return;
     const a = document.createElement('a');
     a.href = render.output_url;
-    a.download = 'render.mp4';
+    a.download = `${projectName || 'render'}.mp4`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -124,7 +151,7 @@ export default function RenderResultPage({ params }: { params: { renderId: strin
    */
   const handleNativeShare = async (platform: 'tiktok' | 'instagram' | 'youtube') => {
     const shareUrl = getShareableUrl();
-    const title = render?.project_name ?? 'My Raybox Render';
+    const title = projectName ?? 'My Raybox Render';
     const text = `Check out my ${title} — made with Raybox`;
 
     // Web Share API is available on mobile and some desktop browsers
@@ -157,12 +184,17 @@ export default function RenderResultPage({ params }: { params: { renderId: strin
   const handleShareInstagram = () => handleNativeShare('instagram');
   const handleShareYouTube = () => handleNativeShare('youtube');
 
-  const handleRenderAgain = () => {
-    if (render?.project_id) {
-      router.push(`/creative-visualizer?projectId=${render.project_id}`);
+  /** Navigate back to the editor for this specific project */
+  const navigateToEditor = () => {
+    if (projectId) {
+      router.push(`/creative-visualizer?projectId=${projectId}`);
     } else {
       router.push('/creative-visualizer');
     }
+  };
+
+  const handleRenderAgain = () => {
+    navigateToEditor();
   };
 
   if (isLoading) {
@@ -184,27 +216,32 @@ export default function RenderResultPage({ params }: { params: { renderId: strin
           <p className="text-stone-400 mb-6">
             This render doesn&apos;t exist or you don&apos;t have access to it.
           </p>
-          <Button onClick={() => router.push('/creative-visualizer')} variant="outline">
-            <ArrowLeft className="w-4 h-4 mr-2" />
+          <button
+            onClick={navigateToEditor}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-stone-700 text-stone-300 hover:bg-stone-800 hover:text-white transition-colors text-sm font-medium"
+          >
+            <ArrowLeft className="w-4 h-4" />
             Back to Editor
-          </Button>
+          </button>
         </div>
       </div>
     );
   }
 
+  // Resolve display duration: video element > metadata > null
+  const displayDuration = videoDuration ?? metadata?.duration ?? null;
+
   return (
     <div className="min-h-screen bg-stone-950 text-white">
       {/* Top bar */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-stone-800">
-        <Button
-          variant="ghost"
-          onClick={() => router.push('/creative-visualizer')}
-          className="text-stone-400 hover:text-white"
+        <button
+          onClick={navigateToEditor}
+          className="inline-flex items-center gap-2 px-3 py-2 rounded-md text-stone-400 hover:bg-stone-800 hover:text-white transition-colors text-sm font-medium"
         >
-          <ArrowLeft className="w-4 h-4 mr-2" />
+          <ArrowLeft className="w-4 h-4" />
           Back to Editor
-        </Button>
+        </button>
         <CreditsDisplay onOpenPurchase={() => router.push('/settings?tab=credits')} />
       </div>
 
@@ -213,21 +250,25 @@ export default function RenderResultPage({ params }: { params: { renderId: strin
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-semibold text-white">
-              {render.project_name ?? 'Untitled Render'}
+              {projectName ?? 'Untitled'}
             </h1>
             <p className="text-stone-500 text-sm mt-0.5">{timeAgo(render.created_at)}</p>
           </div>
-          <Badge
-            variant={render.status === 'completed' ? 'default' : 'outline'}
-            className={render.status === 'completed' ? 'bg-emerald-600' : 'text-stone-400'}
+          <span
+            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+              render.status === 'completed'
+                ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-600/30'
+                : 'border border-stone-700 text-stone-400'
+            }`}
           >
             {render.status}
-          </Badge>
+          </span>
         </div>
 
         {/* Video player */}
         <div className="rounded-xl overflow-hidden bg-black">
           <video
+            ref={videoRef}
             key={render.output_url}
             src={render.output_url}
             controls
@@ -236,83 +277,95 @@ export default function RenderResultPage({ params }: { params: { renderId: strin
           />
         </div>
 
-        {/* Action buttons */}
+        {/* Action buttons — explicitly styled for dark background */}
         <div className="flex flex-wrap gap-3">
-          <Button variant="outline" onClick={handleDownload} className="flex-1 min-w-[140px]">
-            <Download className="w-4 h-4 mr-2" />
+          <button
+            onClick={handleDownload}
+            className="flex-1 min-w-[140px] inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md border border-stone-700 text-stone-300 hover:bg-stone-800 hover:text-white transition-colors text-sm font-medium"
+          >
+            <Download className="w-4 h-4" />
             Download
-          </Button>
-          <Button variant="outline" onClick={handleCopyLink} className="flex-1 min-w-[140px]">
-            <Link2 className="w-4 h-4 mr-2" />
+          </button>
+          <button
+            onClick={handleCopyLink}
+            className="flex-1 min-w-[140px] inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md border border-stone-700 text-stone-300 hover:bg-stone-800 hover:text-white transition-colors text-sm font-medium"
+          >
+            <Link2 className="w-4 h-4" />
             {copied ? 'Copied!' : 'Copy Link'}
-          </Button>
-          <Button variant="outline" onClick={handleShareTikTok} className="flex-1 min-w-[140px]">
-            <Share2 className="w-4 h-4 mr-2" />
+          </button>
+          <button
+            onClick={handleShareTikTok}
+            className="flex-1 min-w-[140px] inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md border border-stone-700 text-stone-300 hover:bg-stone-800 hover:text-white transition-colors text-sm font-medium"
+          >
+            <Share2 className="w-4 h-4" />
             TikTok
-          </Button>
-          <Button variant="outline" onClick={handleShareInstagram} className="flex-1 min-w-[140px]">
-            <Instagram className="w-4 h-4 mr-2" />
+          </button>
+          <button
+            onClick={handleShareInstagram}
+            className="flex-1 min-w-[140px] inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md border border-stone-700 text-stone-300 hover:bg-stone-800 hover:text-white transition-colors text-sm font-medium"
+          >
+            <Instagram className="w-4 h-4" />
             Instagram
-          </Button>
-          <Button variant="outline" onClick={handleShareYouTube} className="flex-1 min-w-[140px]">
-            <Youtube className="w-4 h-4 mr-2" />
+          </button>
+          <button
+            onClick={handleShareYouTube}
+            className="flex-1 min-w-[140px] inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md border border-stone-700 text-stone-300 hover:bg-stone-800 hover:text-white transition-colors text-sm font-medium"
+          >
+            <Youtube className="w-4 h-4" />
             YouTube
-          </Button>
+          </button>
         </div>
 
         {/* Metadata */}
-        <Card className="bg-stone-900 border-stone-800">
-          <CardContent className="py-4 px-5">
-            <h2 className="text-sm font-semibold text-stone-300 uppercase tracking-wide mb-3">
-              Render Details
-            </h2>
-            <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-              <div>
-                <span className="text-stone-500">Duration</span>
-                <p className="text-white font-medium">
-                  {formatDuration(metadata?.duration)}
-                </p>
-              </div>
-              <div>
-                <span className="text-stone-500">Resolution</span>
-                <p className="text-white font-medium">
-                  {metadata?.resolution ?? '1080×1920'}
-                </p>
-              </div>
-              <div>
-                <span className="text-stone-500">Format</span>
-                <p className="text-white font-medium">MP4 (H.264)</p>
-              </div>
-              <div>
-                <span className="text-stone-500">File size</span>
-                <p className="text-white font-medium">
-                  {fileSize ? formatBytes(fileSize) : '—'}
-                </p>
-              </div>
-              <div>
-                <span className="text-stone-500">Credits spent</span>
-                <p className="text-white font-medium">{render.credits_spent ?? 1}</p>
-              </div>
+        <div className="rounded-xl border border-stone-800 bg-stone-900 p-5">
+          <h2 className="text-sm font-semibold text-stone-300 uppercase tracking-wide mb-3">
+            Render Details
+          </h2>
+          <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+            <div>
+              <span className="text-stone-500">Duration</span>
+              <p className="text-white font-medium">
+                {formatDuration(displayDuration)}
+              </p>
             </div>
-          </CardContent>
-        </Card>
+            <div>
+              <span className="text-stone-500">Resolution</span>
+              <p className="text-white font-medium">
+                {metadata?.resolution ?? '1080×1920'}
+              </p>
+            </div>
+            <div>
+              <span className="text-stone-500">Format</span>
+              <p className="text-white font-medium">MP4 (H.264)</p>
+            </div>
+            <div>
+              <span className="text-stone-500">File size</span>
+              <p className="text-white font-medium">
+                {fileSize ? formatBytes(fileSize) : '—'}
+              </p>
+            </div>
+            <div>
+              <span className="text-stone-500">Credits spent</span>
+              <p className="text-white font-medium">{render.credits_spent ?? 1}</p>
+            </div>
+          </div>
+        </div>
 
         {/* Navigation buttons */}
         <div className="flex gap-3 pt-2">
-          <Button
+          <button
             onClick={handleRenderAgain}
-            className="flex-1 bg-white text-stone-900 hover:bg-stone-200"
+            className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md bg-white text-stone-900 hover:bg-stone-200 transition-colors text-sm font-medium"
           >
             Render Again
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => router.push('/creative-visualizer')}
-            className="flex-1"
+          </button>
+          <button
+            onClick={navigateToEditor}
+            className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md border border-stone-700 text-stone-300 hover:bg-stone-800 hover:text-white transition-colors text-sm font-medium"
           >
-            <ArrowLeft className="w-4 h-4 mr-2" />
+            <ArrowLeft className="w-4 h-4" />
             Back to Editor
-          </Button>
+          </button>
         </div>
       </div>
     </div>
