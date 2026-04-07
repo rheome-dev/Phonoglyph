@@ -110,12 +110,12 @@ export default function FilesPage() {
   const allFiles = filesData?.files ?? []
 
   // Filter renders
-  const filteredRenders = renders.filter(r =>
+  const filteredRenders = renders.filter((r: any) =>
     (r.project_name ?? 'Untitled').toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   // Filter files by type and search
-  const filteredFiles = allFiles.filter(f => {
+  const filteredFiles = allFiles.filter((f: any) => {
     const matchesSearch = f.file_name.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesTab =
       activeTab === 'all' ? true :
@@ -210,7 +210,7 @@ export default function FilesPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {filteredRenders.map((render) => (
+                {filteredRenders.map((render: any) => (
                   <div
                     key={render.id}
                     className="flex items-center justify-between p-4 rounded-lg border border-stone-200 hover:border-stone-300 hover:bg-stone-50 transition-colors"
@@ -304,7 +304,7 @@ export default function FilesPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {filteredFiles.map((file) => (
+                {filteredFiles.map((file: any) => (
                   <div
                     key={file.id}
                     className={`p-4 rounded-lg border-2 ${
