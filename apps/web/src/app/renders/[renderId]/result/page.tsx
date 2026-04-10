@@ -47,6 +47,7 @@ export default function RenderResultPage({ params }: { params: { renderId: strin
   const [render, setRender] = React.useState<any>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<any>(null);
+  const [isDownloading, setIsDownloading] = React.useState(false);
   const videoRef = React.useRef<HTMLVideoElement>(null);
 
   // Resolve projectId and projectName from DB data or query params
@@ -123,19 +124,27 @@ export default function RenderResultPage({ params }: { params: { renderId: strin
 
   const metadata = render?.metadata as Record<string, any> | null;
 
-  const handleDownload = () => {
-    if (!render?.output_url) return;
-    // If the render came from the DB, use the signed download endpoint for
-    // Content-Disposition: attachment. If it came from the fallback query-param
-    // path (no DB record), download the output URL directly.
-    const isFallback = !render._fromDb;
-    if (isFallback) {
+  const handleDownload = async () => {
+    if (!render?.output_url || isDownloading) return;
+    setIsDownloading(true);
+    try {
+      // Fetch the video as a blob so we get a same-origin object URL.
+      // Cross-origin S3/R2 URLs ignore the <a download> attribute,
+      // so this is the only reliable way to trigger an actual file download.
+      const res = await fetch(render.output_url);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = render.output_url;
+      a.href = url;
       a.download = `${(render.project_name || 'render').replace(/[^a-z0-9]/gi, '_')}.mp4`;
       a.click();
-    } else {
-      window.location.href = `/api/renders/${render.id}/download`;
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Download failed:', err);
+      // Fallback: open the URL directly
+      window.open(render.output_url, '_blank');
+    } finally {
+      setIsDownloading(false);
     }
   };
 
@@ -287,10 +296,11 @@ export default function RenderResultPage({ params }: { params: { renderId: strin
         <div className="flex flex-wrap gap-3">
           <button
             onClick={handleDownload}
-            className="flex-1 min-w-[140px] inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md border border-stone-700 text-stone-300 hover:bg-stone-800 hover:text-white transition-colors text-sm font-medium"
+            disabled={isDownloading}
+            className="flex-1 min-w-[140px] inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md border border-stone-700 text-stone-300 hover:bg-stone-800 hover:text-white transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Download className="w-4 h-4" />
-            Download
+            {isDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            {isDownloading ? 'Downloading...' : 'Download'}
           </button>
           <button
             onClick={handleCopyLink}
