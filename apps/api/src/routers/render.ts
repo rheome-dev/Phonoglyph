@@ -295,6 +295,10 @@ export const renderRouter = router({
               framesPerLambda: 20, // Match working render (w3sheoepsg) - 20 frames per Lambda works
               logLevel: 'verbose',
               timeoutInMilliseconds: 120000, // 120s — must exceed component's delayRender timeouts (60s slideshow, 120s init)
+              downloadBehavior: {
+                type: 'download',
+                fileName: `${(input.projectName || 'render').replace(/[^a-z0-9]/gi, '_')}.mp4`,
+              },
               chromiumOptions: {
                 gl: 'swangle', // Software WebGL via ANGLE+SwiftShader for no-GPU Lambda
                 // Required: explicit flag to allow software WebGL fallback.

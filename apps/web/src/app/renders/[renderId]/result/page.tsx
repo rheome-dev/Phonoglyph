@@ -128,10 +128,13 @@ export default function RenderResultPage({ params }: { params: { renderId: strin
     if (!render?.output_url || isDownloading) return;
     setIsDownloading(true);
     try {
-      // Fetch the video as a blob so we get a same-origin object URL.
-      // Cross-origin S3/R2 URLs ignore the <a download> attribute,
-      // so this is the only reliable way to trigger an actual file download.
-      const res = await fetch(render.output_url);
+      // Use our API proxy which streams the file with Content-Disposition: attachment.
+      // This avoids cross-origin S3 CORS issues that prevent blob fetch + <a download>.
+      const downloadUrl = render._fromDb
+        ? `/api/renders/${render.id}/download`
+        : render.output_url;
+
+      const res = await fetch(downloadUrl);
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -141,7 +144,6 @@ export default function RenderResultPage({ params }: { params: { renderId: strin
       URL.revokeObjectURL(url);
     } catch (err) {
       console.error('Download failed:', err);
-      // Fallback: open the URL directly
       window.open(render.output_url, '_blank');
     } finally {
       setIsDownloading(false);
