@@ -468,10 +468,11 @@ export class VisualizerManager {
     
     // 1. Sync all shaders to the EXACT frame-time, respecting layer start/end times
     this.effects.forEach((effect, layerId) => {
-      // Gate effect activation by timeline layer startTime/endTime
+      // Gate effect activation by timeline layer startTime/endTime AND visibility toggle
       const effectLayer = this.timelineLayers.find(l => l.id === layerId);
       const isLayerActive = effect.enabled && effectLayer
-        ? (timeInSeconds >= effectLayer.startTime && timeInSeconds <= effectLayer.endTime)
+        ? (effectLayer.enabled !== false) &&
+          (timeInSeconds >= effectLayer.startTime && timeInSeconds <= effectLayer.endTime)
         : false;
 
       // Update compositor layer visibility based on timing
@@ -548,8 +549,9 @@ export class VisualizerManager {
       const effectLayer = this.timelineLayers.find(l => l.id === layerId);
 
       // Determine if the layer should be active.
-      const isLayerActive = effect.enabled && effectLayer 
-        ? (this.timelineCurrentTime >= effectLayer.startTime && this.timelineCurrentTime <= effectLayer.endTime)
+      const isLayerActive = effect.enabled && effectLayer
+        ? (effectLayer.enabled !== false) &&
+          (this.timelineCurrentTime >= effectLayer.startTime && this.timelineCurrentTime <= effectLayer.endTime)
         : false;
 
       // Debug logging for first few frames
