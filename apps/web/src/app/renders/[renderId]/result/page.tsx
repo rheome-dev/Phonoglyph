@@ -63,7 +63,7 @@ export default function RenderResultPage({ params }: { params: { renderId: strin
         return res.json();
       })
       .then(data => {
-        setRender(data);
+        setRender({ ...data, _fromDb: true });
         setIsLoading(false);
       })
       .catch(err => {
@@ -124,9 +124,19 @@ export default function RenderResultPage({ params }: { params: { renderId: strin
   const metadata = render?.metadata as Record<string, any> | null;
 
   const handleDownload = () => {
-    if (!render?.id) return;
-    // Use the signed download endpoint for proper Content-Disposition: attachment
-    window.location.href = `/api/renders/${render.id}/download`;
+    if (!render?.output_url) return;
+    // If the render came from the DB, use the signed download endpoint for
+    // Content-Disposition: attachment. If it came from the fallback query-param
+    // path (no DB record), download the output URL directly.
+    const isFallback = !render._fromDb;
+    if (isFallback) {
+      const a = document.createElement('a');
+      a.href = render.output_url;
+      a.download = `${(render.project_name || 'render').replace(/[^a-z0-9]/gi, '_')}.mp4`;
+      a.click();
+    } else {
+      window.location.href = `/api/renders/${render.id}/download`;
+    }
   };
 
   // Build the canonical shareable URL for this render
