@@ -42,6 +42,7 @@ const layerSchema = z.object({
   startTime: z.number(),
   endTime: z.number(),
   duration: z.number(),
+  enabled: z.boolean().optional(),
 });
 
 const visualizationSettingsSchema = z.object({
