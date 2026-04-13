@@ -93,9 +93,10 @@ export const RemotionOverlayRenderer: React.FC<RemotionOverlayRendererProps> = (
   const currentTime = fps > 0 ? frame / fps : 0;
   const cachedAnalysis = audioAnalysisData as CachedAudioAnalysisData[];
 
-  // Decode the master audio to an AudioBuffer for real stereo data (stereometer).
-  // This runs once on mount, cached across all frames within this Lambda chunk.
-  const audioBufferRef = useRef<AudioBuffer | null>(null);
+  // Pre-computed stereo windows for the stereometer overlay.
+  // Maps frame number → {left, right} PCM sample arrays.
+  // Pre-computed once after decode to avoid ~8KB/frame JS heap churn during Lambda render.
+  const audioWindowsRef = useRef<Map<number, { left: number[]; right: number[] }> | null>(null);
   const [audioReady, setAudioReady] = useState(!masterAudioUrl);
   const [delayHandle] = useState(() => {
     // Only delay render if we have a stereometer overlay and a master audio URL
@@ -118,11 +119,24 @@ export const RemotionOverlayRenderer: React.FC<RemotionOverlayRendererProps> = (
         // OfflineAudioContext is available in headless Chrome (Lambda)
         const offlineCtx = new OfflineAudioContext(2, 1, 44100);
         const decoded = await offlineCtx.decodeAudioData(arrayBuffer);
-        if (!cancelled) {
-          audioBufferRef.current = decoded;
-          setAudioReady(true);
-          continueRender(delayHandle);
+        if (cancelled) return;
+
+        // Pre-compute stereo windows for every frame upfront.
+        // One-time ~73MB allocation (9,000 frames × 2 × 1024 × 4 bytes) instead of
+        // ~8KB/frame JS heap churn that crashes Lambda Chromium.
+        const windows = new Map<number, { left: number[]; right: number[] }>();
+        const totalFrames = durationInFrames;
+        const windowSize = 1024;
+        for (let f = 0; f < totalFrames; f++) {
+          const frameTime = f / fps;
+          const stereoWindow = extractStereoWindow(decoded, frameTime, windowSize);
+          if (stereoWindow) {
+            windows.set(f, stereoWindow);
+          }
         }
+        audioWindowsRef.current = windows;
+        setAudioReady(true);
+        continueRender(delayHandle);
       } catch (err) {
         console.error('Failed to decode master audio for stereometer:', err);
         if (!cancelled) {
@@ -259,12 +273,12 @@ export const RemotionOverlayRenderer: React.FC<RemotionOverlayRendererProps> = (
         return null;
       }
 
-      // For stereometer: Extract real stereo channel data from the decoded AudioBuffer.
+      // For stereometer: use pre-computed stereo window from Map (O(1), zero allocation).
       // This mirrors the live preview's getStereoWindow() from use-stem-audio-controller.ts —
       // reading actual left/right PCM samples from the audio file at the current playback time.
       if (overlayType === 'stereometer') {
-        if (audioBufferRef.current) {
-          const stereoWindow = extractStereoWindow(audioBufferRef.current, currentTime, 1024);
+        if (audioWindowsRef.current) {
+          const stereoWindow = audioWindowsRef.current.get(frame);
           if (stereoWindow) {
             return { stereoWindow };
           }
