@@ -480,9 +480,6 @@ export class VisualizerManager {
         this.multiLayerCompositor.updateLayer(layerId, { enabled: isLayerActive });
       }
 
-      // Only update active effects
-      if (!isLayerActive) return;
-
       // Set uTime directly (not incrementing) for deterministic behavior
       // Check if effect has uniforms property (BaseShaderEffect and custom effects)
       if ('uniforms' in effect && effect.uniforms && (effect as any).uniforms.uTime) {
@@ -568,32 +565,36 @@ export class VisualizerManager {
       // Update the compositor's render state for this layer
       this.multiLayerCompositor.updateLayer(layerId, { enabled: isLayerActive });
 
-      // Run the effect's update logic if it's active
+      // Always update effect state so it stays current (e.g., ImageSlideshow needs
+      // to keep advancing its slide index even when invisible, so the right image
+      // appears immediately when the layer becomes visible again).
+      // The compositor's layer.enabled (set above) controls whether the effect
+      // is actually rendered.
       if (isLayerActive) {
-          activeEffectCount++;
-          
-          try {
-            // In Remotion mode, use deterministic time
-            // In live editor mode, use deltaTime for smooth animation
-            if (isRendering && this.deterministicTime !== undefined) {
-              // Set uTime directly for deterministic behavior
-              // Check if effect has uniforms property
-              if ('uniforms' in effect && effect.uniforms && (effect as any).uniforms.uTime) {
-                (effect as any).uniforms.uTime.value = this.deterministicTime;
-              }
-              // Use updateWithTime if available, otherwise fallback to update
-              if (typeof (effect as any).updateWithTime === 'function') {
-                (effect as any).updateWithTime(this.deterministicTime);
-              } else {
-                effect.update(deltaTime);
-              }
-            } else {
-              // Live editor: use deltaTime for smooth animation
-              effect.update(deltaTime);
-            }
-          } catch (error) {
-            debugLog.error(`❌ Effect ${layerId} update failed:`, error);
+        activeEffectCount++;
+      }
+
+      try {
+        // In Remotion mode, use deterministic time
+        // In live editor mode, use deltaTime for smooth animation
+        if (isRendering && this.deterministicTime !== undefined) {
+          // Set uTime directly for deterministic behavior
+          // Check if effect has uniforms property
+          if ('uniforms' in effect && effect.uniforms && (effect as any).uniforms.uTime) {
+            (effect as any).uniforms.uTime.value = this.deterministicTime;
           }
+          // Use updateWithTime if available, otherwise fallback to update
+          if (typeof (effect as any).updateWithTime === 'function') {
+            (effect as any).updateWithTime(this.deterministicTime);
+          } else {
+            effect.update(deltaTime);
+          }
+        } else {
+          // Live editor: use deltaTime for smooth animation
+          effect.update(deltaTime);
+        }
+      } catch (error) {
+        debugLog.error(`❌ Effect ${layerId} update failed:`, error);
       }
     });
     
