@@ -33,51 +33,47 @@ function getFeatureKeyForOverlay(type: string): string[] {
   }
 }
 
+const STEREO_WINDOW_SIZE = 256;
+
 /**
- * Extract a stereo window from a decoded AudioBuffer at a given time.
- * Returns an interleaved Float32Array [L0,R0,L1,R1,...] to minimize heap overhead.
- * Uses windowSize=256 (vs live preview's 1024) — at HUD overlay scale, visually
- * identical while cutting memory 4x. Float32Array (4 bytes/elem) instead of
- * number[] (8 bytes/elem) halves cost again. Total: ~18MB for 9000 frames vs ~144MB.
+ * Fill an interleaved Float32Array [L0,R0,L1,R1,...] with a stereo window from
+ * a decoded AudioBuffer at a given time. Writes into the caller's `out` buffer
+ * so a single allocation can be reused across all frames in a Lambda chunk
+ * (avoids both per-frame GC churn and upfront pre-computation cost).
  */
-function extractStereoWindow(
+function fillStereoWindow(
   buffer: AudioBuffer,
   currentTime: number,
-  windowSize: number = 256,
-): Float32Array | null {
+  out: Float32Array,
+): void {
+  const windowSize = out.length >> 1;
   const sampleRate = buffer.sampleRate;
   const playbackTime = buffer.duration > 0 ? currentTime % buffer.duration : 0;
   const currentSample = Math.floor(playbackTime * sampleRate);
   const start = currentSample - windowSize;
   const end = currentSample;
   const numChannels = buffer.numberOfChannels;
-
-  // Interleaved: [L0,R0,L1,R1,...] — single TypedArray, zero boxing overhead
-  const result = new Float32Array(windowSize * 2);
   const leftChannel = buffer.getChannelData(0);
+  const rightChannel = numChannels >= 2 ? buffer.getChannelData(1) : leftChannel;
 
   if (start < 0) {
-    // Wrap around buffer start
     for (let i = 0; i < windowSize; i++) {
       const idx = i < end ? buffer.length + start + i : i - end;
-      result[i * 2] = leftChannel[idx] ?? 0;
-      result[i * 2 + 1] = numChannels >= 2 ? (buffer.getChannelData(1)[idx] ?? 0) : result[i * 2];
+      out[i * 2] = leftChannel[idx] ?? 0;
+      out[i * 2 + 1] = rightChannel[idx] ?? 0;
     }
   } else if (end > buffer.length) {
-    // Wrap around buffer end
     for (let i = 0; i < windowSize; i++) {
       const srcIdx = start + i < buffer.length ? start + i : i - (end - buffer.length);
-      result[i * 2] = leftChannel[srcIdx] ?? 0;
-      result[i * 2 + 1] = numChannels >= 2 ? (buffer.getChannelData(1)[srcIdx] ?? 0) : result[i * 2];
+      out[i * 2] = leftChannel[srcIdx] ?? 0;
+      out[i * 2 + 1] = rightChannel[srcIdx] ?? 0;
     }
   } else {
     for (let i = 0; i < windowSize; i++) {
-      result[i * 2] = leftChannel[start + i];
-      result[i * 2 + 1] = numChannels >= 2 ? buffer.getChannelData(1)[start + i] : result[i * 2];
+      out[i * 2] = leftChannel[start + i];
+      out[i * 2 + 1] = rightChannel[start + i];
     }
   }
-
-  return result;
 }
 
 export const RemotionOverlayRenderer: React.FC<RemotionOverlayRendererProps> = ({
@@ -92,10 +88,12 @@ export const RemotionOverlayRenderer: React.FC<RemotionOverlayRendererProps> = (
   const currentTime = fps > 0 ? frame / fps : 0;
   const cachedAnalysis = audioAnalysisData as CachedAudioAnalysisData[];
 
-  // Pre-computed stereo windows for the stereometer overlay.
-  // Maps frame number → interleaved Float32Array [L0,R0,L1,R1,...].
-  // Pre-computed once after decode: ~18MB for 9000 frames × 256 samples × 2ch × 4 bytes.
-  const audioWindowsRef = useRef<Map<number, Float32Array> | null>(null);
+  // Decoded master AudioBuffer — kept in memory so we can extract stereo windows
+  // lazily per-frame without pre-computing all 9000 frames upfront.
+  const decodedAudioRef = useRef<AudioBuffer | null>(null);
+  // Single reusable buffer — filled in-place each frame by fillStereoWindow.
+  // Eliminates both per-frame allocation (GC churn) and upfront pre-computation (Lambda timeout).
+  const stereoBufRef = useRef<Float32Array>(new Float32Array(STEREO_WINDOW_SIZE * 2));
   const [audioReady, setAudioReady] = useState(!masterAudioUrl);
   const [delayHandle] = useState(() => {
     // Only delay render if we have a stereometer overlay and a master audio URL
@@ -120,19 +118,7 @@ export const RemotionOverlayRenderer: React.FC<RemotionOverlayRendererProps> = (
         const decoded = await offlineCtx.decodeAudioData(arrayBuffer);
         if (cancelled) return;
 
-        // Pre-compute stereo windows for every frame upfront.
-        // ~18MB total: 9000 frames × 256 samples × 2ch × 4 bytes (Float32Array).
-        const windows = new Map<number, Float32Array>();
-        const totalFrames = durationInFrames;
-        const windowSize = 256;
-        for (let f = 0; f < totalFrames; f++) {
-          const frameTime = f / fps;
-          const stereoWindow = extractStereoWindow(decoded, frameTime, windowSize);
-          if (stereoWindow) {
-            windows.set(f, stereoWindow);
-          }
-        }
-        audioWindowsRef.current = windows;
+        decodedAudioRef.current = decoded;
         setAudioReady(true);
         continueRender(delayHandle);
       } catch (err) {
@@ -271,14 +257,14 @@ export const RemotionOverlayRenderer: React.FC<RemotionOverlayRendererProps> = (
         return null;
       }
 
-      // For stereometer: use pre-computed interleaved Float32Array [L0,R0,...].
-      // Return it directly — drawStereometer is updated to read Float32Array.
+      // For stereometer: lazily extract the current frame's window from the
+      // decoded AudioBuffer into our single reusable buffer. Each Lambda chunk
+      // only pays the cost of ~20 extractions (its actual frame range) instead
+      // of all 9000 upfront.
       if (overlayType === 'stereometer') {
-        if (audioWindowsRef.current) {
-          const stereoData = audioWindowsRef.current.get(frame);
-          if (stereoData) {
-            return { stereoWindow: stereoData };
-          }
+        if (decodedAudioRef.current) {
+          fillStereoWindow(decodedAudioRef.current, currentTime, stereoBufRef.current);
+          return { stereoWindow: stereoBufRef.current };
         }
         return null;
       }
@@ -367,7 +353,7 @@ export const RemotionOverlayRenderer: React.FC<RemotionOverlayRendererProps> = (
       // Default: single scalar
       return featureArr[idx];
     },
-    [cachedAnalysis, currentTime, audioReady],
+    [cachedAnalysis, currentTime, decodedAudioRef, stereoBufRef],
   );
 
   if (activeOverlays.length === 0) {
