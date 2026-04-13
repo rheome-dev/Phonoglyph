@@ -176,11 +176,23 @@ function drawPeakMeter(ctx: CanvasRenderingContext2D, w: number, h: number, feat
   ctx.fillText('PEAK', w * 0.72, h - 2);
 }
 function drawStereometer(ctx: CanvasRenderingContext2D, w: number, h: number, featureData: any, settings: any) {
-  // Need stereo data. If featureData contains stereoWindow object
-  const left = featureData?.stereoWindow?.left || [];
-  const right = featureData?.stereoWindow?.right || [];
+  // Accept both {left, right} number[] (live preview) and interleaved Float32Array (Lambda render)
+  const stereoWindow = featureData?.stereoWindow;
 
-  if (!left.length || !right.length) return;
+  let left: Float32Array | number[];
+  let right: Float32Array | number[];
+
+  if (stereoWindow instanceof Float32Array) {
+    // Interleaved Float32Array [L0,R0,L1,R1,...] — read directly from TypedArray
+    left = stereoWindow;
+    right = stereoWindow; // stride-2 accessor below handles both
+  } else {
+    left = stereoWindow?.left || [];
+    right = stereoWindow?.right || [];
+  }
+
+  const leftLen = left instanceof Float32Array ? left.length / 2 : left.length;
+  if (leftLen === 0) return;
 
   const color = settings.traceColor || '#ff00ff';
   // Scale glow down for opacity calculation (glow 0-100 maps to useful opacity range)
@@ -262,10 +274,12 @@ function drawStereometer(ctx: CanvasRenderingContext2D, w: number, h: number, fe
   // Draw dots
   ctx.fillStyle = color;
   const step = 2; // Skip points for performance if buffer is huge
+  const isTypedArray = left instanceof Float32Array;
 
   for(let i=0; i<left.length; i+=step) {
-    const l = (left[i]); // assumed -1 to 1
-    const r = (right[i]);
+    // Read L/R — Float32Array uses stride-2, number[] uses direct index
+    const l = isTypedArray ? (left as Float32Array)[i] : (left as number[])[i];
+    const r = isTypedArray ? (left as Float32Array)[i+1] : (right as number[])[i];
 
     // M/S processing for Goniometer
     const mid = (l + r) / 2;

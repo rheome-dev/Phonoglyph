@@ -35,14 +35,16 @@ function getFeatureKeyForOverlay(type: string): string[] {
 
 /**
  * Extract a stereo window from a decoded AudioBuffer at a given time.
- * Mirrors the live preview's getStereoWindow() from use-stem-audio-controller.ts
- * so the stereometer shows identical real audio data in Lambda renders.
+ * Returns an interleaved Float32Array [L0,R0,L1,R1,...] to minimize heap overhead.
+ * Uses windowSize=256 (vs live preview's 1024) — at HUD overlay scale, visually
+ * identical while cutting memory 4x. Float32Array (4 bytes/elem) instead of
+ * number[] (8 bytes/elem) halves cost again. Total: ~18MB for 9000 frames vs ~144MB.
  */
 function extractStereoWindow(
   buffer: AudioBuffer,
   currentTime: number,
-  windowSize: number = 1024,
-): { left: number[]; right: number[] } | null {
+  windowSize: number = 256,
+): Float32Array | null {
   const sampleRate = buffer.sampleRate;
   const playbackTime = buffer.duration > 0 ? currentTime % buffer.duration : 0;
   const currentSample = Math.floor(playbackTime * sampleRate);
@@ -50,35 +52,32 @@ function extractStereoWindow(
   const end = currentSample;
   const numChannels = buffer.numberOfChannels;
 
-  const extractChannel = (channelData: Float32Array): number[] => {
-    if (start < 0) {
-      // Wrap around buffer start
-      const fromEnd = Array.from(channelData.slice(buffer.length + start, buffer.length));
-      const fromStart = Array.from(channelData.slice(0, end));
-      return fromEnd.concat(fromStart);
-    } else if (end > buffer.length) {
-      // Wrap around buffer end
-      const beforeWrap = Array.from(channelData.slice(start, buffer.length));
-      const afterWrap = Array.from(channelData.slice(0, end - buffer.length));
-      return beforeWrap.concat(afterWrap);
-    } else {
-      return Array.from(channelData.slice(start, end));
-    }
-  };
-
+  // Interleaved: [L0,R0,L1,R1,...] — single TypedArray, zero boxing overhead
+  const result = new Float32Array(windowSize * 2);
   const leftChannel = buffer.getChannelData(0);
-  const left = extractChannel(leftChannel);
 
-  let right: number[];
-  if (numChannels >= 2) {
-    const rightChannel = buffer.getChannelData(1);
-    right = extractChannel(rightChannel);
+  if (start < 0) {
+    // Wrap around buffer start
+    for (let i = 0; i < windowSize; i++) {
+      const idx = i < end ? buffer.length + start + i : i - end;
+      result[i * 2] = leftChannel[idx] ?? 0;
+      result[i * 2 + 1] = numChannels >= 2 ? (buffer.getChannelData(1)[idx] ?? 0) : result[i * 2];
+    }
+  } else if (end > buffer.length) {
+    // Wrap around buffer end
+    for (let i = 0; i < windowSize; i++) {
+      const srcIdx = start + i < buffer.length ? start + i : i - (end - buffer.length);
+      result[i * 2] = leftChannel[srcIdx] ?? 0;
+      result[i * 2 + 1] = numChannels >= 2 ? (buffer.getChannelData(1)[srcIdx] ?? 0) : result[i * 2];
+    }
   } else {
-    // Mono: duplicate to both channels (same as live preview)
-    right = [...left];
+    for (let i = 0; i < windowSize; i++) {
+      result[i * 2] = leftChannel[start + i];
+      result[i * 2 + 1] = numChannels >= 2 ? buffer.getChannelData(1)[start + i] : result[i * 2];
+    }
   }
 
-  return { left, right };
+  return result;
 }
 
 export const RemotionOverlayRenderer: React.FC<RemotionOverlayRendererProps> = ({
@@ -94,9 +93,9 @@ export const RemotionOverlayRenderer: React.FC<RemotionOverlayRendererProps> = (
   const cachedAnalysis = audioAnalysisData as CachedAudioAnalysisData[];
 
   // Pre-computed stereo windows for the stereometer overlay.
-  // Maps frame number → {left, right} PCM sample arrays.
-  // Pre-computed once after decode to avoid ~8KB/frame JS heap churn during Lambda render.
-  const audioWindowsRef = useRef<Map<number, { left: number[]; right: number[] }> | null>(null);
+  // Maps frame number → interleaved Float32Array [L0,R0,L1,R1,...].
+  // Pre-computed once after decode: ~18MB for 9000 frames × 256 samples × 2ch × 4 bytes.
+  const audioWindowsRef = useRef<Map<number, Float32Array> | null>(null);
   const [audioReady, setAudioReady] = useState(!masterAudioUrl);
   const [delayHandle] = useState(() => {
     // Only delay render if we have a stereometer overlay and a master audio URL
@@ -122,11 +121,10 @@ export const RemotionOverlayRenderer: React.FC<RemotionOverlayRendererProps> = (
         if (cancelled) return;
 
         // Pre-compute stereo windows for every frame upfront.
-        // One-time ~73MB allocation (9,000 frames × 2 × 1024 × 4 bytes) instead of
-        // ~8KB/frame JS heap churn that crashes Lambda Chromium.
-        const windows = new Map<number, { left: number[]; right: number[] }>();
+        // ~18MB total: 9000 frames × 256 samples × 2ch × 4 bytes (Float32Array).
+        const windows = new Map<number, Float32Array>();
         const totalFrames = durationInFrames;
-        const windowSize = 1024;
+        const windowSize = 256;
         for (let f = 0; f < totalFrames; f++) {
           const frameTime = f / fps;
           const stereoWindow = extractStereoWindow(decoded, frameTime, windowSize);
@@ -273,14 +271,13 @@ export const RemotionOverlayRenderer: React.FC<RemotionOverlayRendererProps> = (
         return null;
       }
 
-      // For stereometer: use pre-computed stereo window from Map (O(1), zero allocation).
-      // This mirrors the live preview's getStereoWindow() from use-stem-audio-controller.ts —
-      // reading actual left/right PCM samples from the audio file at the current playback time.
+      // For stereometer: use pre-computed interleaved Float32Array [L0,R0,...].
+      // Return it directly — drawStereometer is updated to read Float32Array.
       if (overlayType === 'stereometer') {
         if (audioWindowsRef.current) {
-          const stereoWindow = audioWindowsRef.current.get(frame);
-          if (stereoWindow) {
-            return { stereoWindow };
+          const stereoData = audioWindowsRef.current.get(frame);
+          if (stereoData) {
+            return { stereoWindow: stereoData };
           }
         }
         return null;
