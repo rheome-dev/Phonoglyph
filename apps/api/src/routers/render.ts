@@ -262,7 +262,7 @@ export const renderRouter = router({
         // Hardcoded to stable nodejs20.x function — 4-0-436 (nodejs24.x) has
         // Chromium sandbox failures causing all renders to crash. Do not change this
         // to a dynamic selector until the nodejs24 issue is resolved.
-        const functionName = 'remotion-render-4-0-390-mem3008mb-disk2048mb-300sec';
+        const functionName = 'remotion-render-4-0-390-mem3008mb-disk2048mb-600sec';
         logger.log(`Using stable Remotion function: ${functionName}`);
 
         logger.log('Triggering Remotion render:', {
@@ -293,7 +293,7 @@ export const renderRouter = router({
               },
               codec: 'h264',
               concurrencyPerRender: 1000,
-              framesPerLambda: 20, // Match working render (w3sheoepsg) - 20 frames per Lambda works
+              framesPerLambda: 8, // Reduced from 20 — each chunk ~46s at 3.3s/frame, avoids 300s wall-clock exhaustion under warm-reuse
               logLevel: 'verbose',
               timeoutInMilliseconds: 240000, // 240s — increased from 120s to give chunks more time when GPU rendering at certain frame positions causes Chromium to crash and retry
               downloadBehavior: {
