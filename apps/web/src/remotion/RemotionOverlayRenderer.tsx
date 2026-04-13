@@ -356,7 +356,7 @@ export const RemotionOverlayRenderer: React.FC<RemotionOverlayRendererProps> = (
       // Default: single scalar
       return featureArr[idx];
     },
-    [cachedAnalysis, currentTime],
+    [cachedAnalysis, currentTime, audioReady],
   );
 
   if (activeOverlays.length === 0) {
