@@ -295,7 +295,7 @@ export const renderRouter = router({
               concurrencyPerRender: 1000,
               framesPerLambda: 20, // Match working render (w3sheoepsg) - 20 frames per Lambda works
               logLevel: 'verbose',
-              timeoutInMilliseconds: 120000, // 120s — must exceed component's delayRender timeouts (60s slideshow, 120s init)
+              timeoutInMilliseconds: 240000, // 240s — increased from 120s to give chunks more time when GPU rendering at certain frame positions causes Chromium to crash and retry
               downloadBehavior: {
                 type: 'download',
                 fileName: `${(input.projectName || 'render').replace(/[^a-z0-9]/gi, '_')}.mp4`,
