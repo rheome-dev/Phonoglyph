@@ -44,6 +44,11 @@ export class MultiLayerCompositor {
   // Blend mode shaders
   private blendShaders: Map<string, string> = new Map();
 
+  // Cached ShaderMaterial per blend mode — created once, reused every frame
+  // Prevents shader program accumulation under SwiftShader (Lambda/swangle) which
+  // causes gl.createShader() to return null when the program cache overflows.
+  private blendMaterials: Map<string, THREE.ShaderMaterial> = new Map();
+
   // Post-processing
   private postProcessingComposer!: EffectComposer;
   private texturePass!: TexturePass;
@@ -249,49 +254,28 @@ export class MultiLayerCompositor {
    * Render a single layer with blending
    */
   private renderLayerWithBlending(layer: LayerRenderTarget): void {
-    const blendShader = this.getBlendModeShader(layer.blendMode);
-    
-    // Determine THREE.js blending mode based on layer blend mode
-    let blendMode: THREE.Blending = THREE.NormalBlending;
-    if (layer.blendMode === 'add') {
-      blendMode = THREE.AdditiveBlending as THREE.Blending;
-    } else if (layer.blendMode === 'multiply') {
-      blendMode = THREE.MultiplyBlending as THREE.Blending;
-    } else if (layer.blendMode === 'screen') {
-      blendMode = THREE.CustomBlending as THREE.Blending;
-    }
-    
-    const material = new THREE.ShaderMaterial({
-      vertexShader: `
-        varying vec2 vUv;
-        void main() {
-          vUv = uv;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-      `,
-      fragmentShader: blendShader,
-      uniforms: {
-        tDiffuse: new THREE.Uniform(layer.renderTarget.texture),
-        opacity: new THREE.Uniform(layer.opacity)
-      },
-      transparent: true,
-      blending: blendMode,
-      depthTest: false,
-      depthWrite: false,
-      premultipliedAlpha: true, // CRITICAL FIX: Changed from false to true for proper alpha blending
-      toneMapped: false // Intermediate compositing must stay linear - tone map only at final output
-    });
-    
+    // Reuse the pre-compiled ShaderMaterial for this blend mode — never allocate a new
+    // program per frame. Creating a new ShaderMaterial every call causes GL program handle
+    // accumulation under SwiftShader (Lambda/swangle), eventually causing gl.createShader()
+    // to return null and crashing with "parameter 1 is not of type 'WebGLShader'".
+    const material = this.blendMaterials.get(layer.blendMode)
+      ?? this.blendMaterials.get('normal')!;
+
+    // Update uniforms for this layer — no allocation
+    material.uniforms.tDiffuse.value = layer.renderTarget.texture;
+    material.uniforms.opacity.value  = layer.opacity;
+    material.needsUpdate = false;
+
     const mesh = new THREE.Mesh(this.quadGeometry, material);
     const scene = new THREE.Scene();
-    scene.background = null; // Ensure transparent background
+    scene.background = null;
     scene.add(mesh);
-    
+
     this.renderer.render(scene, this.quadCamera);
-    
-    // Cleanup
-    material.dispose();
-    mesh.geometry.dispose();
+
+    // Do NOT dispose material — it is owned by blendMaterials cache, disposed in dispose()
+    // Only detach the mesh to release the scene reference
+    scene.remove(mesh);
   }
   
   // Initialize post-processing chain
@@ -427,12 +411,46 @@ export class MultiLayerCompositor {
       uniform sampler2D tDiffuse;
       uniform float opacity;
       varying vec2 vUv;
-      
+
       void main() {
         vec4 texel = texture2D(tDiffuse, vUv);
         gl_FragColor = vec4(max(texel.rgb - texel.rgb, 0.0), texel.a * opacity);
       }
     `);
+
+    // Pre-compile one ShaderMaterial per blend mode so renderLayerWithBlending()
+    // can reuse them every frame instead of allocating a new program each call.
+    const blendingMap: Record<string, THREE.Blending> = {
+      normal:   THREE.NormalBlending,
+      multiply: THREE.MultiplyBlending,
+      screen:   THREE.CustomBlending,
+      overlay:  THREE.NormalBlending,
+      add:      THREE.AdditiveBlending,
+      subtract: THREE.NormalBlending,
+    };
+    const vertexShader = `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `;
+    for (const [mode, fragmentShader] of this.blendShaders) {
+      this.blendMaterials.set(mode, new THREE.ShaderMaterial({
+        vertexShader,
+        fragmentShader,
+        uniforms: {
+          tDiffuse: new THREE.Uniform(null),
+          opacity:  new THREE.Uniform(1.0),
+        },
+        transparent:       true,
+        blending:          blendingMap[mode] ?? THREE.NormalBlending,
+        depthTest:         false,
+        depthWrite:        false,
+        premultipliedAlpha: true,
+        toneMapped:        false,
+      }));
+    }
   }
   
   /**
@@ -574,6 +592,12 @@ export class MultiLayerCompositor {
     this.accumulationTargets.clear();
     
     this.quadGeometry.dispose();
+
+    for (const mat of this.blendMaterials.values()) {
+      mat.dispose();
+    }
+    this.blendMaterials.clear();
+
     this.layers.clear();
     this.layerOrder = [];
   }

@@ -662,11 +662,16 @@ export const RayboxComposition: React.FC<RayboxCompositionProps> = ({
       }
     }, 15000);
 
-    // Cleanup function to clear timeout on unmount
+    // Cleanup function to clear timeout on unmount and release GPU resources.
+    // dispose() flushes Three.js's internal shader program cache — critical for
+    // Lambda warm-reuse: without this, programs accumulate across chunk invocations.
     return () => {
       if (safetyTimeout) {
         clearTimeout(safetyTimeout);
       }
+      visualizerManagerRef.current?.dispose();
+      visualizerManagerRef.current = null;
+      isInitializedRef.current = false;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [width, height, fps]); // Removed actualLayers to prevent re-runs during init
