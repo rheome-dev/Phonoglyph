@@ -127,53 +127,16 @@ const calculateMetadata: CalculateMetadataFunction<RayboxCompositionProps> = asy
 
   // If the API gave us a URL because the data was too big for the trigger payload:
   if (props.analysisUrl) {
-    console.log('☁️ Fetching heavy analysis from R2...');
+    console.log('☁️ Fetching pre-compressed analysis from R2...');
     try {
       const res = await fetch(props.analysisUrl);
       if (!res.ok) {
         throw new Error(`Failed to fetch analysis data: ${res.status} ${res.statusText}`);
       }
-      const rawData = await res.json();
-      
-      // Debloat the payload! Remove massive arrays that hang Puppeteer IPC (Fix #3)
-      finalAudioData = rawData.map((stem: any) => {
-        if (stem.analysisData) {
-          // Stereometer lazily extracts its own buffers locally, so these can be safely dropped
-          delete stem.analysisData.stereoWindow_left;
-          delete stem.analysisData.stereoWindow_right;
-          
-          if (stem.analysisData.fft && Array.isArray(stem.analysisData.fft)) {
-            // Compress FFT to fix memory limit but preserve visualizer functionality:
-            // 1. Truncate floats to 2 decimal places
-            // 2. Reduce frequency resolution if the array is huge
-            const fftLength = stem.analysisData.fft.length;
-            const originalFft = stem.analysisData.fft;
-            const N = stem.analysisData.frameTimes?.length || Math.floor(fftLength / 256);
-            const binsPerFrame = Math.floor(fftLength / N);
-            
-            if (binsPerFrame > 64) {
-              const compressedFft = [];
-              const stride = Math.max(1, Math.floor(binsPerFrame / 64)); // Target max 64 bins
-              
-              for (let i = 0; i < N; i++) {
-                const frameStart = i * binsPerFrame;
-                for (let b = 0; b < binsPerFrame; b += stride) {
-                  const val = originalFft[frameStart + b] || 0;
-                  compressedFft.push(Math.round(val * 100) / 100);
-                }
-              }
-              stem.analysisData.fft = compressedFft;
-              // Also update bin resolution so extractAudioDataAtTime interprets it correctly
-              stem.analysisData.binsPerFrame = Math.ceil(binsPerFrame / stride);
-            } else {
-              // Just truncate decimals
-              stem.analysisData.fft = originalFft.map((v: number) => Math.round((v || 0) * 100) / 100);
-            }
-          }
-        }
-        return stem;
-      });
-      console.log(`✅ Fetched and stripped ${finalAudioData.length} analysis entries from R2`);
+      // Data is pre-compressed server-side (render.ts) — no need to re-process.
+      // Stereo windows are already stripped and FFTs are already down-sampled.
+      finalAudioData = await res.json();
+      console.log(`✅ Fetched ${finalAudioData.length} pre-compressed analysis entries from R2`);
     } catch (error) {
       console.error('❌ Failed to fetch analysis data from R2:', error);
       // Fall back to empty array if fetch fails

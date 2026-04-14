@@ -242,21 +242,61 @@ export const renderRouter = router({
         // 1. Generate a unique key for this render's analysis
         const analysisKey = `analysis-cache/${ctx.user.id}-${Date.now()}.json`;
 
-        // 2. Upload the heavy audioAnalysisData to R2 as a static file
-        // We do this here so the Lambda doesn't have to talk to Supabase
+        // 2. PRE-COMPRESS analysis data server-side before R2 upload.
+        // This eliminates the need for Lambda chunks to parse + compress the full
+        // multi-MB JSON themselves, saving ~200-400MB of intermediate array memory
+        // per chunk (previously done in Root.tsx calculateMetadata).
+        const compressedData = input.audioAnalysisData.map((stem: any) => {
+          const result = { ...stem };
+          if (result.analysisData) {
+            // Strip stereo window data — stereometer extracts its own lazily (or skips in Lambda)
+            delete result.analysisData.stereoWindow_left;
+            delete result.analysisData.stereoWindow_right;
+
+            // Compress FFT arrays: truncate precision and down-sample bins
+            if (result.analysisData.fft && Array.isArray(result.analysisData.fft)) {
+              const fftLength = result.analysisData.fft.length;
+              const originalFft = result.analysisData.fft;
+              const N = result.analysisData.frameTimes?.length || Math.floor(fftLength / 256);
+              const binsPerFrame = N > 0 ? Math.floor(fftLength / N) : 256;
+
+              if (binsPerFrame > 32) {
+                const compressedFft: number[] = [];
+                const stride = Math.max(1, Math.floor(binsPerFrame / 32)); // Target max 32 bins
+                for (let i = 0; i < N; i++) {
+                  const frameStart = i * binsPerFrame;
+                  for (let b = 0; b < binsPerFrame; b += stride) {
+                    const val = originalFft[frameStart + b] || 0;
+                    compressedFft.push(Math.round(val * 100) / 100);
+                  }
+                }
+                result.analysisData.fft = compressedFft;
+                result.analysisData.binsPerFrame = Math.ceil(binsPerFrame / stride);
+              } else {
+                result.analysisData.fft = originalFft.map((v: number) => Math.round((v || 0) * 100) / 100);
+              }
+            }
+          }
+          return result;
+        });
+
+        const compressedBody = JSON.stringify(compressedData);
+
+        // Upload the pre-compressed data to R2
         await (r2Client as any).send(new PutObjectCommand({
           Bucket: BUCKET_NAME,
           Key: analysisKey,
-          Body: JSON.stringify(input.audioAnalysisData),
+          Body: compressedBody,
           ContentType: 'application/json',
         }));
 
         const analysisUrl = `https://assets.raybox.fm/${analysisKey}`;
 
-        logger.log('Uploaded analysis data to R2:', {
+        logger.log('Uploaded pre-compressed analysis data to R2:', {
           key: analysisKey,
           url: analysisUrl,
-          dataSize: JSON.stringify(input.audioAnalysisData).length,
+          originalSize: JSON.stringify(input.audioAnalysisData).length,
+          compressedSize: compressedBody.length,
         });
 
         // Hardcoded to stable nodejs20.x function — 4-0-436 (nodejs24.x) has

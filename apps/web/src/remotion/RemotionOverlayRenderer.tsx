@@ -1,5 +1,5 @@
 import React, { useMemo, useCallback, useEffect, useRef, useState } from 'react';
-import { useCurrentFrame, useVideoConfig, delayRender, continueRender } from 'remotion';
+import { useCurrentFrame, useVideoConfig, delayRender, continueRender, getRemotionEnvironment } from 'remotion';
 import { HudOverlay } from '@/components/hud/HudOverlay';
 import type { Layer } from '@/types/video-composition';
 import type { AudioAnalysisData as CachedAudioAnalysisData } from '@/types/audio-analysis-data';
@@ -94,6 +94,15 @@ export const RemotionOverlayRenderer: React.FC<RemotionOverlayRendererProps> = (
   // Single reusable buffer — filled in-place each frame by fillStereoWindow.
   // Eliminates both per-frame allocation (GC churn) and upfront pre-computation (Lambda timeout).
   const stereoBufRef = useRef<Float32Array>(new Float32Array(STEREO_WINDOW_SIZE * 2));
+
+  // MEMORY FIX: In Lambda, decode at 8kHz instead of 44.1kHz.
+  // The stereometer only needs waveform shape (not frequency content), so 8kHz
+  // is more than adequate. This reduces the AudioBuffer from ~40MB to ~7MB
+  // for a 2-minute track, saving ~33MB per chunk.
+  const isLambdaRendering = (() => {
+    try { return getRemotionEnvironment().isRendering; } catch { return false; }
+  })();
+
   const [audioReady, setAudioReady] = useState(!masterAudioUrl);
   const [delayHandle] = useState(() => {
     // Only delay render if we have a stereometer overlay and a master audio URL
@@ -113,8 +122,10 @@ export const RemotionOverlayRenderer: React.FC<RemotionOverlayRendererProps> = (
       try {
         const response = await fetch(masterAudioUrl);
         const arrayBuffer = await response.arrayBuffer();
-        // OfflineAudioContext is available in headless Chrome (Lambda)
-        const offlineCtx = new OfflineAudioContext(2, 1, 44100);
+        // In Lambda: decode at 8kHz to save ~33MB (stereometer only needs waveform shape).
+        // In browser: decode at full 44.1kHz for maximum quality.
+        const sampleRate = isLambdaRendering ? 8000 : 44100;
+        const offlineCtx = new OfflineAudioContext(2, 1, sampleRate);
         const decoded = await offlineCtx.decodeAudioData(arrayBuffer);
         if (cancelled) return;
 
