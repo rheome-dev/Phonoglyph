@@ -1,0 +1,118 @@
+// This shader is a Hologram Effect that uses texture-based normal mapping and a basic lighting model to simulate the appearance of a shimmering, colorful, and slightly glitching holographic surface. It dynamically generates a pseudo-normal map from the luminance of the texture.
+
+// Here is the formatted code for both the Vertex and Fragment shaders.
+
+// 1. Vertex Shader
+// This is the standard pass-through shader, handling basic transformations and passing UVs.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Attributes
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+// Uniforms
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uTextureMatrix;
+
+// Outputs
+out vec2 vTextureCoord;
+out vec3 vVertexPosition;
+
+void main() {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = (uTextureMatrix * vec4(aTextureCoord, 0.0, 1.0)).xy;
+}
+
+// 2. Fragment Shader
+// This shader implements procedural normal generation, calculates basic lighting, and mixes the original texture with a time-animated iridescent color based on the light intensity.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Inputs
+in vec3 vVertexPosition;
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform sampler2D uTexture;
+uniform float uTime;
+
+// Output
+out vec4 fragColor;
+
+// --- Helper Functions ---
+
+// Calculates the luminance (grayscale) of a color
+float luma(vec3 color) {
+    return dot(color, vec3(0.299, 0.587, 0.114));
+}
+
+// Generates an iridescent color based on a phase (h) and angle
+vec3 hue(float h, float angle) {
+    const float PI = 3.14159265358979323846;
+    // Uses a sine wave offset across R, G, B channels to produce rainbow effect
+    return vec3(0.5) + 0.5 * cos(h + 2.0 * PI * angle + vec3(0, 2, 4));
+}
+
+// Generates a normal vector using central differences (sampling nearby pixels)
+// This simulates a normal map derived from the input texture's height data.
+vec3 getNormal(vec2 uv, float scale) {
+    const vec2 offset1 = vec2(0.0, 0.001);
+    const vec2 offset2 = vec2(0.001, 0.0);
+    
+    // Sample luminance around the current UV coordinate
+    float luma1 = luma(texture(uTexture, uv + offset1.xy).rgb);
+    float luma2 = luma(texture(uTexture, uv + offset2.yx).rgb);
+    float luma3 = luma(texture(uTexture, uv - offset1.xy).rgb);
+    float luma4 = luma(texture(uTexture, uv - offset2.yx).rgb);
+    
+    // Calculate the X and Y slope components (luminance differences)
+    // Z component (scale) determines the perceived flatness (higher scale = flatter surface)
+    vec3 normal = vec3(luma1 - luma3, luma2 - luma4, scale);
+    
+    return normalize(normal);
+}
+
+// --- Main ---
+
+void main() {
+    vec2 uv = vTextureCoord;
+    vec4 bg = texture(uTexture, uv);
+
+    // 1. Calculate Surface Normal
+    vec3 normal = getNormal(uv, 0.5000 + 0.0001);
+    
+    // 2. Animate Light Direction
+    // The light source orbits the scene over time
+    vec3 lightDir = normalize(vec3(cos(uTime * 0.1), sin(uTime * 0.05), 0.8));
+    
+    // 3. Lighting Calculation (N dot L)
+    // ndl represents the intensity of light falling on the surface (Lambertian reflection)
+    float ndl = dot(normal, lightDir);
+    
+    // 4. Generate Hologram Color
+    // The color is iridescent, controlled by the red channel of the background and animated by uTime
+    vec3 holoColor = hue(bg.r * 0.5000 * 10., 0.0000 + uTime * 0.05);
+    
+    // 5. Final Color Mix
+    // Mix the original background (bg.rgb) with the iridescent holoColor,
+    // where the mixing factor is scaled by the light intensity (ndl * 0.5000).
+    vec3 finalColor = mix(bg.rgb, holoColor, ndl * 0.5000);
+    
+    vec4 color = vec4(finalColor, bg.a);
+    fragColor = color;
+}
+// This shader is fully functional and creates a simple, animated holographic reflection on your texture. The color shift and movement are driven by uTime.
+
+// To control the appearance, you can adjust the following:
+
+// 0.5000 in the final mix: Controls the intensity of the holographic color blend (ndl * 0.5000).
+
+// 0.5000 * 10. in holoColor: Controls the speed and frequency of the color cycling based on the texture's original red channel.

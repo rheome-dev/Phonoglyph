@@ -1,0 +1,104 @@
+// This shader creates a Swirl or Vortex Distortion effect by radially rotating the texture coordinates around a central point, with the rotation strength decreasing as the distance from the center increases.
+
+// 1. Vertex Shader (Shared)
+// This is a standard vertex shader, transforming the mesh vertices and texture coordinates.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Attributes
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+// Uniforms
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uTextureMatrix;
+
+// Outputs
+out vec2 vTextureCoord;
+out vec3 vVertexPosition;
+
+void main() {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = (uTextureMatrix * vec4(aTextureCoord, 0.0, 1.0)).xy;
+}
+
+// 2. Fragment Shader (Swirl Distortion)
+// The fragment shader calculates the distance and angle of each pixel relative to the center, rotates the angle by an amount dependent on the distance (strongest at the center), and then converts the polar coordinates back to UV space.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Inputs
+in vec3 vVertexPosition;
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform sampler2D uTexture;
+uniform float uTime;
+uniform vec2 uMousePos;
+uniform vec2 uResolution;
+
+out vec4 fragColor;
+
+void main() {
+    vec2 uv = vTextureCoord;
+    vec2 originalUV = uv;
+    
+    // --- 1. Setup Center and Coordinates ---
+    
+    // Swirl Angle: 0.5000 * 10 = 5.0 radians (constant swirl)
+    float angle = 0.5000 * 10.;
+    
+    // Center of swirl (Mouse interaction disabled 0.0000, defaults to (0.5, 0.5))
+    vec2 pos = vec2(0.5, 0.5) + mix(vec2(0), (uMousePos - 0.5), 0.0000);
+    
+    // Translate coordinates so 'pos' is the origin (uv is now in [-0.5, 0.5] range)
+    uv -= pos;
+    
+    // Aspect ratio correction (R is the coordinate vector scaled by aspect ratio)
+    vec2 R = vec2(uv.x * uResolution.x / uResolution.y, uv.y);
+    
+    // Distance from center
+    float distanceToCenter = length(R);
+    distanceToCenter += 0.0000 * 0.5; // (Disabled)
+    
+    // --- 2. Apply Swirl (Polar Rotation) ---
+    
+    // Only apply distortion within a radius of 0.5000
+    if (distanceToCenter <= 0.5000) {
+        // Calculate the initial angle (rot) of the pixel in polar coordinates
+        float rot = atan(R.y, R.x);
+        
+        // Add rotation amount: 'angle' scaled by a smoothstep falloff function.
+        // Rotation is strongest at distance=0 and drops to 0 at distance=0.5000.
+        rot += angle * smoothstep(0.5000, 0., distanceToCenter);
+        
+        // Add time-based rotation (uTime / 20.)
+        rot += uTime / 20. + 0.0000 * 6.28;
+        
+        // Convert polar (distanceToCenter, rot) back to Cartesian coordinates (uv)
+        uv = vec2(cos(rot), sin(rot));
+        uv = distanceToCenter * uv + pos; // Scale by distance and translate back to [0, 1] range
+    }
+    
+    // --- 3. Blend Distorted and Original UVs ---
+    
+    // t: Blend factor determined by distance from center, using smoothstep falloff
+    // Blend goes from 0 at distance 0 (full distortion) to 1 at distance 0.5000 (no distortion).
+    float t = smoothstep(0., 0.5000, distanceToCenter);
+    
+    // Use the smoothstep value `t` to blend between the distorted `uv` and the `originalUV`
+    vec2 mixedUV = mix(uv, originalUV, t);
+    
+    // 4. Sample Texture
+    // The final UV is mix(vTextureCoord, mixedUV, 1.0000), which forces the use of mixedUV.
+    vec4 color = texture(uTexture, mix(vTextureCoord, mixedUV, 1.0000));
+    
+    fragColor = color;
+}

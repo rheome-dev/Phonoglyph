@@ -1,0 +1,131 @@
+// This is a set of two fragment shaders and one shared vertex shader designed for a Separable Blur effect, often used for fast, high-quality blurring. This specific implementation uses a small 9-tap Exponential/Gaussian kernel centered at the origin.I have formatted the Vertex Shader once and then provided the formatted code for both Fragment Shaders (Pass 0 and Pass 1), which would typically handle the horizontal and vertical blur steps, respectively.1. 
+// Vertex Shader (Shared by both passes)
+// This is the standard pass-through shader.
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Attributes
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+// Uniforms
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uTextureMatrix;
+
+// Outputs
+out vec2 vTextureCoord;
+out vec3 vVertexPosition;
+
+void main() {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = (uTextureMatrix * vec4(aTextureCoord, 0.0, 1.0)).xy;
+}
+
+// 2. Fragment Shaders (Blur Passes)Both fragment shaders share the same logic, only differing in the direction of the blur in the main function.Shared Code Block (Present in both Fragment Shaders)
+// OpenGL Shading Language
+
+#version 300 es
+precision highp float;
+precision highp int;
+
+// Inputs
+in vec3 vVertexPosition;
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform sampler2D uTexture;
+uniform vec2 uResolution;
+
+// Output
+out vec4 fragColor;
+
+// Constants
+const int kernelSize = 9; // Total taps needed for one side (0-8)
+
+// --- Helper Functions ---
+
+// Returns pre-calculated weights for an exponential kernel (approximation of Gaussian)
+// Note: This returns the weight for one side (i=0 is center, i=1 to 8 are positive offsets).
+float getExponentialWeight(int index) {
+    switch(index) {
+        case 0: return 1.0000000000; // Center (0 offset)
+        case 1: return 0.7165313106; // 1st offset
+        case 2: return 0.5134171190;
+        case 3: return 0.3678794412; // E^(-1) (approx)
+        case 4: return 0.2636050919;
+        case 5: return 0.1888756057;
+        case 6: return 0.1353352832;
+        case 7: return 0.0969670595;
+        case 8: return 0.0694877157; // 8th offset
+        default: return 0.0;
+    }
+}
+
+// Applies the Exponential/Gaussian blur in a single direction
+vec4 GaussianBlur(sampler2D tex, vec2 uv, vec2 direction, float amount) {
+    vec4 color = vec4(0.0);
+    float weightSum = 0.0;
+    
+    // 1. Center Tap (Index 0)
+    float centerWeight = getExponentialWeight(0);
+    color += texture(tex, uv) * centerWeight;
+    weightSum += centerWeight;
+    
+    // 2. Off-Center Taps (Indices 1 to kernelSize-1)
+    // The blur is symmetric, so we sample at both +offset and -offset and use the same weight.
+    for (int i = 1; i < kernelSize; i++) {
+        // Calculate the sample offset distance
+        float offset = float(i) * amount * 0.001; 
+        float weight = getExponentialWeight(i);
+        
+        // Sample positive and negative sides
+        color += texture(tex, uv + direction * offset) * weight;
+        color += texture(tex, uv - direction * offset) * weight;
+        
+        // Sum the weights (each off-center weight is counted twice)
+        weightSum += weight * 2.0;
+    }
+    
+    // Normalize the color by the sum of all weights
+    return color / weightSum;
+}
+
+// Fragment Shader 0: Horizontal Pass (dir = 0)
+// OpenGL Shading Language// ... Shared Code Block ...
+
+void main() {
+    vec2 uv = vTextureCoord;
+    
+    // Blur strength is zero (0.0000 * 1.5)
+    float amount = 0.0000 * 1.5; 
+    
+    // dir = 0 % 2 = 0 (Horizontal Pass)
+    int dir = 0 % 2;
+    vec2 direction = dir == 1 ? vec2(0, uResolution.x / uResolution.y) : vec2(1, 0);
+    
+    // Apply blur
+    vec4 color = GaussianBlur(uTexture, uv, direction, amount);
+    fragColor = color;
+}
+
+// Fragment Shader 1: Vertical Pass (dir = 1)
+// OpenGL Shading Language// ... Shared Code Block ...
+
+void main() {
+    vec2 uv = vTextureCoord;
+    
+    // Blur strength is zero (0.0000 * 1.5)
+    float amount = 0.0000 * 1.5; 
+    
+    // dir = 1 % 2 = 1 (Vertical Pass)
+    int dir = 1 % 2;
+    vec2 direction = dir == 1 ? vec2(0, uResolution.x / uResolution.y) : vec2(1, 0);
+    
+    // Apply blur
+    vec4 color = GaussianBlur(uTexture, uv, direction, amount);
+    fragColor = color;
+}
+// ObservationThis shader is set up correctly for a two-pass separable blur, but the blur strength is effectively zero because the amount variable is calculated as:$$amount = 0.0000 \times 1.5 = 0.0$$Therefore, the shader is currently just a pass-through that returns the original texture color.To activate the blur, you would need to change the 0.0000 multiplier in the amount calculation to a positive value (e.g., 10.0 or higher).

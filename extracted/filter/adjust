@@ -1,0 +1,152 @@
+// This shader is an Adjustment Shader designed for post-processing image color. It relies on converting colors from the RGB color space to the HSL (Hue, Saturation, Lightness) color space, applying adjustments, and then converting back to RGB. This allows for clean manipulation of color properties like hue rotation and saturation scaling.Here is the formatted code for both the Vertex and Fragment shaders.1. Vertex ShaderThis is the standard pass-through shader, handling basic transformations and passing UVs.
+// OpenGL Shading Language
+#version 300 es
+precision mediump float;
+
+// Attributes
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+// Uniforms
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uTextureMatrix;
+
+// Outputs
+out vec2 vTextureCoord;
+out vec3 vVertexPosition;
+
+void main() {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = (uTextureMatrix * vec4(aTextureCoord, 0.0, 1.0)).xy;
+}
+
+// 2. Fragment ShaderThis shader performs the color space conversions and applies several color adjustments (Hue, Saturation, Lightness, Contrast, and individual RGB channel tints).
+// OpenGL Shading Language
+#version 300 es
+precision highp float;
+
+// Inputs
+in vec3 vVertexPosition;
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform sampler2D uTexture;
+
+// Output
+out vec4 fragColor;
+
+// --- Helper Functions ---
+
+// Passthrough function (currently performs no filtering, just returns color)
+vec3 getFilteredColor(vec3 color) {
+    return color;
+}
+
+// Helper for HSL to RGB conversion
+float hueToRgb(float p, float q, float t) {
+    if (t < 0.0) t += 1.0;
+    if (t > 1.0) t -= 1.0;
+    if (t < 1.0 / 6.0) return p + (q - p) * 6.0 * t;
+    if (t < 1.0 / 2.0) return q;
+    if (t < 2.0 / 3.0) return p + (q - p) * (2.0 / 3.0 - t) * 6.0;
+    return p;
+}
+
+// Convert HSL (Hue, Saturation, Lightness) vector to RGB vector
+vec3 hslToRgb(vec3 hsl) {
+    float h = hsl.x;
+    float s = hsl.y;
+    float l = hsl.z;
+    vec3 rgb = vec3(l);
+
+    if (s != 0.0) {
+        float q = l < 0.5 ? l * (1.0 + s) : l + s - l * s;
+        float p = 2.0 * l - q;
+        rgb.r = hueToRgb(p, q, h + 1.0 / 3.0);
+        rgb.g = hueToRgb(p, q, h);
+        rgb.b = hueToRgb(p, q, h - 1.0 / 3.0);
+    }
+    return rgb;
+}
+
+// Convert RGB vector to HSL vector
+vec3 rgbToHsl(vec3 rgb) {
+    float max_val = max(max(rgb.r, rgb.g), rgb.b);
+    float min_val = min(min(rgb.r, rgb.g), rgb.b);
+    
+    float h, s;
+    float l = (max_val + min_val) / 2.0;
+
+    if (max_val == min_val) {
+        h = s = 0.0;
+    } else {
+        float d = max_val - min_val;
+        s = l > 0.5 ? d / (2.0 - max_val - min_val) : d / (max_val + min_val);
+        
+        if (max_val == rgb.r) {
+            h = (rgb.g - rgb.b) / d + (rgb.g < rgb.b ? 6.0 : 0.0);
+        } else if (max_val == rgb.g) {
+            h = (rgb.b - rgb.r) / d + 2.0;
+        } else if (max_val == rgb.b) {
+            h = (rgb.r - rgb.g) / d + 4.0;
+        }
+        h /= 6.0;
+    }
+    return vec3(h, s, l);
+}
+
+// --- Main ---
+
+void main() {
+    vec2 uv = vTextureCoord;
+    vec4 color = texture(uTexture, uv);
+
+    // Early exit for transparent pixels
+    if (color.a <= 0.001) {
+        fragColor = vec4(0);
+        return;
+    }
+    
+    // 1. RGB to HSL conversion
+    color.rgb = rgbToHsl(color.rgb);
+    
+    // --- HSL Adjustments (x=Hue, y=Saturation, z=Lightness) ---
+    
+    // Hue Shift: 1.0000 means a full rotation (no change)
+    color.x = fract(color.x + 1.0000); 
+    
+    // Saturation Scale: 1.0000 means no change
+    color.y = clamp(color.y * 1.0000, 0.0, 1.0);
+    
+    // Lightness Offset: 0.0000 means no change
+    color.z = clamp(color.z + 0.0000, 0.0, 1.0);
+    
+    // 2. HSL to RGB conversion
+    color.rgb = hslToRgb(color.rgb);
+    
+    // 3. Post-Conversion Filtering (Passthrough)
+    color.rgb = getFilteredColor(color.rgb);
+    
+    // 4. Contrast Adjustment
+    // 1.0000 * (color.rgb - 0.5) + 0.5 means no contrast change
+    color.rgb = 1.0000 * (color.rgb - 0.5) + 0.5;
+    
+    // 5. Individual Channel Brightness Offsets (Tints/Balance)
+    
+    // Red Tints (0.0000 offsets means no change)
+    color.r = clamp(color.r + 0.0000, 0.0, 1.0);
+    // Blue Tints (0.0000 offsets means no change)
+    color.b = clamp(color.b - 0.0000, 0.0, 1.0); 
+    // Green Tints (0.0000 offsets means no change)
+    color.g = clamp(color.g - 0.0000, 0.0, 1.0);
+    
+    // Secondary Red/Blue Adjustments (0.0000 offsets means no change)
+    color.r = clamp(color.r + 0.0000 * 0.5, 0.0, 1.0);
+    color.b = clamp(color.b + 0.0000 * 0.5, 0.0, 1.0);
+    
+    // 6. Final Clamping and Output
+    color = vec4(clamp(color.rgb, 0.0, 1.0), color.a);
+    fragColor = color;
+}
+// Analysis of AdjustmentsThis shader is structured to allow various color adjustments, but currently, almost all adjustment parameters are set to values that result in no change to the color (e.g., multiplying by 1.0000 or adding/subtracting 0.0000).Here are the key parameters you would modify to apply color grading:ParameterLocationEffectDefault Value (No Change)Hue Shiftcolor.x = fract(color.x + N);Rotates the color wheel.1.0000 (or 0.0000)Saturationcolor.y = clamp(color.y * N, ...);Scales saturation (e.g., 0.0 for grayscale, 2.0 for high sat).1.0000Lightnesscolor.z = clamp(color.z + N, ...);Adjusts brightness (additive offset).0.0000Contrastcolor.rgb = N * (color.rgb - 0.5) + 0.5;Adjusts image contrast.1.0000Red Biascolor.r = clamp(color.r + N, ...);Adds a red tint/brightness offset.0.0000

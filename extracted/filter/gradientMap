@@ -1,0 +1,188 @@
+// This shader implements a sophisticated Gradient Map effect, which remaps the luminance values of an input texture to a new custom color gradient. It includes advanced features like color-space aware mixing (OKLab) and animated cycling of the gradient.
+
+// Here is the formatted code for both the Vertex and Fragment shaders.
+
+// 1. Vertex Shader
+// This is the standard pass-through shader.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Attributes
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+// Uniforms
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+
+// Outputs
+out vec2 vTextureCoord;
+out vec3 vVertexPosition;
+
+void main() {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = aTextureCoord;
+}
+
+// 2. Fragment Shader
+// This shader samples the texture, calculates its luminance, and maps that luminance to a color defined by the gradient stops.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision highp float;
+
+// Inputs
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform sampler2D uTexture;
+uniform float uTime;
+
+// Output
+out vec4 fragColor;
+
+// --- Gradient Definition Functions ---
+
+// Returns the color (in sRGB space) for a given gradient stop index (up to 16 stops)
+vec3 getColor(int index) {
+    switch(index) {
+        case 0: return vec3(0, 0, 0); // Black
+        case 1: return vec3(1, 1, 1); // White
+        // The remaining 14 stops are currently unused (set to Black)
+        default: return vec3(0.0);
+    }
+}
+
+// Returns the luminance position [0.0, 1.0] for a given gradient stop index
+float getStop(int index) {
+    switch(index) {
+        case 0: return 0.0000; // Stop 0: at Luma 0.0
+        case 1: return 1.0000; // Stop 1: at Luma 1.0
+        // The remaining 14 stops are currently unused (set to 0.0)
+        default: return 0.0;
+    }
+}
+
+// --- Color Utility Functions ---
+
+// Calculates the luminance (grayscale) of a color
+float luma(vec3 color) {
+    return dot(color, vec3(0.299, 0.587, 0.114));
+}
+
+// Simple dither/random function
+float rand(vec2 co) {
+    return fract(sin(dot(co.xy, vec2(12.9898, 78.233))) * 43758.5453);
+}
+
+// Converts sRGB color (gamma-encoded) to Linear RGB
+vec3 linear_from_srgb(vec3 rgb) {
+    return pow(rgb, vec3(2.2));
+}
+
+// Converts Linear RGB to sRGB (gamma-encoded)
+vec3 srgb_from_linear(vec3 lin) {
+    return pow(lin, vec3(1.0/2.2));
+}
+
+// --- OKLab Mixing Function ---
+// Performs color-space aware mixing (lerping) in the perceptually uniform OKLab space.
+vec3 oklab_mix(vec3 lin1, vec3 lin2, float a) {
+    const mat3 kCONEtoLMS = mat3(
+        0.4121656120, 0.2118591070, 0.0883097947,
+        0.5362752080, 0.6807189584, 0.2818474174,
+        0.0514575653, 0.1074065790, 0.6302613616);
+        
+    const mat3 kLMStoCONE = mat3(
+        4.0767245293, -1.2681437731, -0.0041119885,
+        -3.3072168827, 2.6093323231, -0.7034763098,
+        0.2307590544, -0.3411344290, 1.7068625689);
+        
+    // Convert Linear RGB to LMS space (which is perceptually related)
+    vec3 lms1 = pow( kCONEtoLMS * lin1, vec3(1.0/3.0) );
+    vec3 lms2 = pow( kCONEtoLMS * lin2, vec3(1.0/3.0) );
+    
+    // Linear interpolation in LMS space
+    vec3 lms = mix( lms1, lms2, a );
+    
+    // Slight chroma correction term
+    lms *= 1.0 + 0.02 * a * (1.0 - a);
+    
+    // Convert back to Linear RGB
+    return kLMStoCONE * (lms * lms * lms);
+}
+
+// --- Gradient Application ---
+
+// Finds the appropriate color on the gradient based on the input 'position' [0.0, 1.0]
+vec3 getGradientColor(float position) {
+    position = clamp(position, 0.0, 1.0);
+    
+    // The loop currently only checks two stops (0 and 1)
+    for (int i = 0; i < 2 - 1; i++) {
+        float colorPosition = getStop(i);
+        float nextColorPosition = getStop(i + 1);
+        
+        if (position <= nextColorPosition) {
+            float mixFactor = (position - colorPosition) / (nextColorPosition - colorPosition);
+            
+            vec3 linStart = linear_from_srgb(getColor(i));
+            vec3 linEnd = linear_from_srgb(getColor(i + 1));
+            
+            // Mix colors using the perceptually uniform OKLab method
+            vec3 mixedLin = oklab_mix(linStart, linEnd, clamp(mixFactor, 0.0, 1.0));
+            
+            // Return the color converted back to sRGB
+            return srgb_from_linear(mixedLin);
+        }
+    }
+    // Return the last color if position is 1.0 or greater
+    return getColor(2 - 1);
+}
+
+// --- Main ---
+
+void main() {
+    vec2 uv = vTextureCoord;
+    vec4 color = texture(uTexture, uv);
+
+    // 1. Calculate base luminance position [0.0, 1.0]
+    // The `smoothstep` adds contrast, and `(0.5000 * 2.)` results in a factor of 1.0.
+    float position = smoothstep(0., 1., luma(color.rgb)) * (0.5000 * 2.);
+
+    // 2. Animate and Cycle the Gradient Position
+    float posOffset = (dot(vec2(0.5, 0.5).x, vec2(0.5, 0.5).y) + 0.0000 + 0.0001) * 2.;
+    
+    // Shift position over time
+    position -= (uTime * 0.01 + posOffset);
+    
+    // Calculate which cycle the position is in
+    float cycle = floor(position);
+    
+    // Check if the cycle requires reversing (1.0000 > 0.5 is true, so it reverses every other cycle)
+    bool reverse = 1.0000 > 0.5 && int(cycle) % 2 == 0;
+    
+    // Apply cycling and optional reversal (bouncing effect)
+    float animatedPos = reverse ? fract(-position) : fract(position);
+    animatedPos = reverse ? fract(-position) : fract(position); // Repeats calculation
+    animatedPos = clamp(animatedPos, 0.0, 1.0);
+    
+    // 3. Get the color from the gradient map
+    vec3 gradientColor = getGradientColor(animatedPos);
+
+    // 4. Apply Dithering
+    // Adds a tiny random value to hide banding artifacts that can occur with gradients.
+    float dither = rand(gl_FragCoord.xy) * 0.005;
+    gradientColor += dither;
+    
+    // 5. Final Mix
+    // The mix factor is 1.0000, meaning the final color is 100% the gradient color.
+    vec3 mixedColor = mix(color.rgb, gradientColor, 1.0000);
+    
+    color.rgb = mixedColor;
+    fragColor = color;
+}

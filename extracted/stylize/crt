@@ -1,0 +1,167 @@
+// This shader implements a Retro CRT Screen effect, specifically focusing on simulating the discrete pixel structure of a low-resolution monitor, likely an aperture grille or shadow mask, with elements of screen curvature, glow, and flicker.
+
+// 1. Vertex Shader (Shared)
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Attributes
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+// Uniforms
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uTextureMatrix;
+
+// Outputs
+out vec2 vTextureCoord;
+out vec3 vVertexPosition;
+
+void main() {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = (uTextureMatrix * vec4(aTextureCoord, 0.0, 1.0)).xy;
+}
+
+// 2. Fragment Shader (CRT Simulation)
+// This pass handles the discretization of the image into "cells" and then renders the internal structure of those cells (like phosphors) with blending, blurring, and flicker effects.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision highp float;
+precision highp int;
+
+// Inputs
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform sampler2D uTexture;
+uniform float uTime;
+uniform vec2 uResolution;
+
+// Output
+out vec4 fragColor;
+
+// --- CRT Style Function ---
+vec3 styleOne(vec2 curvedUV) {
+    // --- Cell Geometry Setup ---
+    
+    // Size calculation: base size (0.028) modulated by a control factor (0.5000)
+    float size = max(3.0 / 1080.0, 0.028 * (1.0 - 0.5000));
+    float aspectRatio = uResolution.x / uResolution.y;
+    float aspectCorrection = mix(aspectRatio, 1. / aspectRatio, 0.5);
+    
+    // Cell size adjusted for aspect ratio
+    vec2 cellSize = vec2(size / aspectRatio, size) * aspectCorrection;
+    
+    // --- Staggered/Shadow Mask Pattern ---
+    
+    vec2 staggeredUV = curvedUV;
+    // Stagger cells on alternate columns (mod(x, 2.0) > 0.5)
+    if (mod(floor(curvedUV.x / cellSize.x), 2.0) > 0.5) {
+        staggeredUV.y += 0.5 * cellSize.y;
+    }
+    
+    // Quantize UV to the nearest cell corner
+    vec2 cellCoords = floor(staggeredUV / cellSize) * cellSize;
+    
+    // Reverse the staggering offset to get the center of the cell for sampling
+    vec2 unstaggerOffset = vec2(0.0);
+    if (mod(floor(curvedUV.x / cellSize.x), 2.0) > 0.5) {
+        unstaggerOffset.y = -0.5 * cellSize.y;
+    }
+    
+    // Sample coordinate is the center of the cell
+    vec2 sampleCoord = cellCoords + 0.5 * cellSize + unstaggerOffset;
+    
+    // --- Color Sampling and Blurring ---
+    
+    // Perform a 3x3 box blur centered around the cell for a "glow" or soft pixel effect
+    vec3 blurColor = vec3(0.0);
+    float blurFactor = 1.0 / 9.0;
+    for (int dx = -1; dx <= 1; dx++) {
+        for (int dy = -1; dy <= 1; dy++) {
+            vec2 offset = vec2(float(dx), dy) * cellSize * 0.5000;
+            blurColor += texture(uTexture, sampleCoord + offset).rgb * blurFactor;
+        }
+    }
+
+    // --- RGB Phosphor Dot Simulation ---
+    
+    vec3 finalColor = vec3(0.0);
+    // Position within the staggered cell (0 to 1)
+    vec2 staggeredCellPos = mod(staggeredUV, cellSize) / cellSize;
+    
+    float segmentWidth = 0.5; // Width of the primary color zone (0.5 means R, G, B are crammed together)
+    float distCoord = staggeredCellPos.x;
+    
+    // Calculate distance from the centers of the R, G, B subpixels (at 0.25, 0.5, 0.75 if segmentWidth was 1.0)
+    float distRed = abs(distCoord - segmentWidth * 0.5);
+    float distGreen = abs(distCoord - segmentWidth * 1.);
+    float distBlue = abs(distCoord - segmentWidth * 1.5);
+    
+    // Reflect distance across 0.5 to handle wrapping
+    distRed = min(distRed, 1.0 - distRed);
+    distGreen = min(distGreen, 1.0 - distGreen);
+    distBlue = min(distBlue, 1.0 - distBlue);
+    
+    // Softness (controls the falloff of the phosphor glow)
+    float softness = 0.75 * segmentWidth;
+    
+    // Subpixel factors using smoothstep to create a gaussian-like glow
+    float redFactor = smoothstep(softness, 0.0, distRed * 1.05);
+    float greenFactor = smoothstep(softness, 0.0, distGreen * 1.1);
+    float blueFactor = smoothstep(softness, 0.0, distBlue * 0.9);
+    
+    // Apply factors to the blurred color (with a 3x intensity boost, reduced by 0.5000)
+    finalColor.r = redFactor * blurColor.r * (3. * 0.5000);
+    finalColor.g = greenFactor * blurColor.g * (3. * 0.5000);
+    finalColor.b = blueFactor * blurColor.b * (3. * 0.5000);
+    
+    // --- Screen Edge / Scanline Darkening ---
+    
+    float edgeWidth = 0.05;
+    vec2 edgeDistance = abs(staggeredCellPos - 0.5);
+    // Darkens the phosphor edges, simulating scanline separation
+    float edgeFactor = smoothstep(0.45 - edgeWidth, 0.5, max(edgeDistance.x, edgeDistance.y));
+    edgeFactor = ((1.0 - edgeFactor) + 0.2); // (1.0 - edgeFactor) is the darkening effect
+    finalColor = finalColor * edgeFactor;
+    
+    // --- Color Depth Reduction (Banding/Quantization) ---
+    
+    // Quantize the final color to 16 levels per channel (floor(x * 16) / 16)
+    finalColor = floor(finalColor * 16.0000) / 16.0000; 
+    
+    // --- Flicker ---
+    
+    // Time-based cosine wave flicker (1.0 + small oscillation)
+    float flicker = 1.0 + 0.03 * cos(sampleCoord.x / 6e1 + uTime * 2e1);
+    finalColor *= mix(1., flicker, 0.5000); // 50% strength flicker
+    
+    return finalColor;
+}
+
+// --- Main Composite ---
+
+void main() {
+    vec3 finalColor;
+    vec4 color = texture(uTexture, vTextureCoord);
+
+    // Alpha Clipping
+    if(color.a <= 0.001) {
+        fragColor = vec4(0);
+        return;
+    }
+
+    // Apply the CRT effect
+    finalColor = styleOne(vTextureCoord);
+    
+    // Get original background color (used only for alpha)
+    vec4 bg = texture(uTexture, vTextureCoord); 
+    
+    // Composite: 100% replacement with the retro effect, preserving the original alpha
+    vec4 col = mix(bg, vec4(finalColor, bg.a), 1.0000);
+    fragColor = col;
+}

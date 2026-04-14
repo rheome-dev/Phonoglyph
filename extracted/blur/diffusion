@@ -1,0 +1,156 @@
+// This shader implements a Diffusion Blur effect, also known as a Random Sampling Blur or Kuwahara Filter approximation due to its use of randomized offsets, often employed for effects like depth of field or heat shimmer. It averages multiple texture samples taken at random positions around the current fragment, weighted by a variable amount.
+
+// I have formatted the single fragment shader and the shared vertex shader below.
+
+// 1. Vertex Shader (Shared)
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Attributes
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+// Uniforms
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uTextureMatrix;
+
+// Outputs
+out vec2 vTextureCoord;
+out vec3 vVertexPosition;
+
+void main() {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = (uTextureMatrix * vec4(aTextureCoord, 0.0, 1.0)).xy;
+}
+
+// 2. Fragment Shader (Diffusion Pass)
+// OpenGL Shading Language
+
+#version 300 es
+precision highp float;
+precision highp int;
+
+// Inputs
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform sampler2D uTexture;
+uniform float uTime;
+uniform vec2 uMousePos;
+uniform vec2 uResolution;
+
+// Constants
+const float MAX_ITERATIONS = 24.;
+const float PI = 3.14159265;
+const float TWOPI = 6.2831853;
+
+// Output
+out vec4 fragColor;
+
+// --- Utility Functions ---
+
+float ease (int easingFunc, float t) {
+    return t; // Currently a linear ease function
+}
+
+// PCG (Permuted Congruential Generator) for random number generation
+uvec2 pcg2d(uvec2 v) {
+    v = v * 1664525u + 1013904223u;
+    v.x += v.y * v.y * 1664525u + 1013904223u;
+    v.y += v.x * v.x * 1664525u + 1013904223u;
+    v ^= v >> 16;
+    v.x += v.y * v.y * 1664525u + 1013904223u;
+    v.y += v.x * v.x * 1664525u + 1013904223u;
+    return v;
+}
+
+// Random float generator using PCG
+float randFibo(vec2 p) {
+    uvec2 v = floatBitsToUint(p);
+    v = pcg2d(v);
+    uint r = v.x ^ v.y;
+    return float(r) / float(0xffffffffu);
+}
+
+void main() {
+    vec2 uv = vTextureCoord;
+    float aspectRatio = uResolution.x / uResolution.y;
+    
+    // Time-based offset for randomization (changes every 20 frames/seconds of uTime)
+    float delta = fract(floor(uTime) / 20.); 
+    
+    // --- Blur Masking and Amount Calculation ---
+    
+    // Initial blur amount
+    float amount = 0.2500 * 2.; 
+    
+    // Mouse position is used for the center of focus (0.0000 disables mouse interaction)
+    vec2 mPos = vec2(0.5, 0.5) + mix(vec2(0), (uMousePos - 0.5), 0.0000);
+
+    // Calculate normalized distance from the focus point (mPos)
+    // The multiplier '4. * (1. - 1.0000)' is zero, making dist effectively max(0., 1. - 0.) = 1.
+    float dist = ease(0, max(0., 1. - distance(uv * vec2(aspectRatio, 1), mPos * vec2(aspectRatio, 1)) * 4. * (1. - 1.0000)));
+
+    // Scale the base amount by the distance (dist=1, so amount is unchanged)
+    amount *= dist; 
+    
+    // --- Diffusion Logic ---
+    
+    vec4 col;
+    if (amount <= 0.001) {
+        // If blur amount is negligible, return the original pixel color
+        col = texture(uTexture, uv);
+    } else {
+        vec4 result = vec4(0);
+        
+        // Threshold for adaptive sampling (0.5000 is likely a uniform for strength/density)
+        float threshold = max(1. - 0.5000, 2. / MAX_ITERATIONS);
+        const float invMaxIterations = 1.0 / float(MAX_ITERATIONS);
+        
+        // Base direction vector for random sampling offsets.
+        // The Y component is scaled by 'aspectRatio' in the sample loop direction adjustment.
+        // Note: The X/Y direction mix (0.5000 / aspectRatio, 1.-0.5000) seems to define an elliptical distribution.
+        vec2 dir = vec2(0.5000 / aspectRatio, 1. - 0.5000) * amount * 0.4;
+        
+        float iterations = 0.0;
+        
+        for (float i = 1.; i <= MAX_ITERATIONS; i++) {
+            float th = i * invMaxIterations;
+            
+            // Adaptive sampling: stop if we exceed the threshold
+            if (th > threshold) break;
+            
+            // Generate three independent random numbers based on current position and iteration
+            float random1 = randFibo(uv + th + delta);
+            float random2 = randFibo(uv + th * 2. + delta);
+            float random3 = randFibo(uv + th * 3. + delta);
+            
+            // Create a random point in a circle/ellipse:
+            // (random1 * 2. - 1.) gives [-1, 1]. This is mixed with random3 to slightly weight towards the center (0.8 mix factor).
+            vec2 ranPoint = vec2(random1 * 2. - 1., random2 * 2. - 1.) * mix(1., random3, 0.8);
+            
+            // Sample the texture using the randomized offset scaled by 'dir'
+            result += texture(uTexture, uv + ranPoint * dir);
+            iterations += 1.0;
+        }
+        
+        // Average the accumulated samples
+        result /= max(1.0, iterations);
+        col = result;
+    }
+    
+    fragColor = col;
+}
+// Summary of Diffusion Technique
+// This shader uses a Monte Carlo approach to blurring. Instead of sampling a fixed, symmetrical Gaussian kernel, it samples up to 24 random points around the current pixel, constrained by the dir vector, and averages them.
+
+// The key features are:
+
+// Randomized Samples: Uses randFibo (a high-quality pseudorandom generator) to pick random offsets.
+
+// Adaptive Iteration: The threshold logic attempts to stop the loop early if the required blur intensity is met, saving performance.
+
+// Non-Locality: The random sampling helps create a smoother, less blocky blur than a standard box filter and is great for reproducing effects like the Bokeh shimmer seen in the previous shader, but in a less structured, more computationally expensive way.

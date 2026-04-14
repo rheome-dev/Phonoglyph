@@ -1,0 +1,178 @@
+// This shader generates a dynamic "Wisps" or "Flowing Smoke" effect using an Additive Voronoi Noise technique. The effect creates glowing, shimmering trails that move across the screen.
+
+// 1. Vertex Shader (Shared)
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Attributes
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+// Uniforms
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uTextureMatrix;
+
+// Outputs
+out vec2 vTextureCoord;
+out vec3 vVertexPosition;
+
+void main() {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = (uTextureMatrix * vec4(aTextureCoord, 0.0, 1.0)).xy;
+}
+
+// 2. Fragment Shader (Additive Voronoi Wisps)
+// This pass generates two layers of additive Voronoi noise that drift over time, which are then blended additively onto the base texture.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision highp float;
+
+// Inputs
+in vec3 vVertexPosition;
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform sampler2D uTexture;
+uniform float uTime;
+uniform vec2 uMousePos;
+uniform vec2 uResolution;
+
+// Output
+out vec4 fragColor;
+
+const float PI = 3.14159265359;
+
+// --- Utility Functions ---
+
+// Additive blend (used for compositing)
+vec3 blend (int blendMode, vec3 src, vec3 dst) {
+    return src + dst;
+}
+
+// 2D Rotation Matrix
+mat2 rot(float a) {
+    return mat2(cos(a), -sin(a), sin(a), cos(a));
+}
+
+// Simple hash function (returns vector in [-1, 1] range)
+vec2 hash(vec2 p) {
+    p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
+    return -1.0 + 2.0 * fract(sin(p) * 43758.5453123);
+}
+
+// Luma (luminance) calculation
+float luma(vec3 color) {
+    return dot(color, vec3(0.299, 0.587, 0.114));
+}
+
+// --- Additive Voronoi Noise Function ---
+// Calculates the sum of contributions from nearby cell centers.
+float voronoi_additive(vec2 st, float radius, vec2 mouse_pos, float scale) {
+    vec2 i_st = floor(st); // Cell index
+    vec2 f_st = fract(st); // Position within cell [0, 1]
+    
+    float wander = 0.0000 * uTime * 0.2; // Cell movement (disabled)
+    float total_contribution = 0.0;
+    
+    // Iterate over surrounding 5x5 cells
+    for (int y = -2; y <= 2; y++) {
+        for (int x = -2; x <= 2; x++) {
+            vec2 neighbor = vec2(float(x), float(y));
+            vec2 cell_id = i_st + neighbor;
+            
+            // 1. Calculate cell center position ('point')
+            vec2 point = hash(cell_id);
+            // Move cell center sinusoidally over time (creating the shimmer/flow)
+            point = 0.5 + 0.5 * sin(5. + wander + 6.2831 * point); 
+            
+            // 2. Apply Mouse Attraction (Disabled)
+            vec2 starAbsPos = cell_id + point;
+            vec2 dirToMouse = mouse_pos - starAbsPos;
+            float distToMouse = length(dirToMouse);
+            float attractStrength = 0.0000 * exp(-distToMouse * mix(2.0 + 0.5000 * 2., 0.5, 0.5000)) * 2.;
+            starAbsPos += dirToMouse * attractStrength;
+            
+            // 3. Calculate distance to the cell center
+            vec2 diff = starAbsPos - st;
+            float dist = length(diff);
+            
+            // 4. Calculate Contribution (Inverse distance function: 1/dist)
+            float contribution = radius / max(dist, radius * 0.1); 
+            
+            // 5. Apply Shimmer/Flicker effect
+            float shimmer_phase = dot(point, vec2(1.0)) * 10. + hash(cell_id).x * 5.0 + uTime * 0.5;
+            float shimmer = mix(1., (sin(shimmer_phase) + 1.), 0.5000);
+            contribution *= shimmer;
+            
+            // 6. Final Contribution Mix (mix between contribution^2 and contribution*2)
+            total_contribution += mix(contribution * contribution, contribution * 2., 0.2500);
+        }
+    }
+    return total_contribution;
+}
+
+// --- Main Wisps Generation ---
+
+vec4 randomStyle() {
+    vec2 uv = vTextureCoord;
+    vec4 bg = texture(uTexture, uv);
+    vec4 color = vec4(0.0);
+    vec2 aspectRatio = vec2(uResolution.x / uResolution.y, 1.0);
+    
+    // 1. Transform UV coordinates
+    vec2 mPos = mix(vec2(0.0), (uMousePos - 0.5), 0.0000); // Mouse offset disabled
+    
+    uv -= vec2(0.5, 0.5);
+    uv *= aspectRatio;
+    uv = uv * rot(0.0000 * 2.0 * PI); // Rotation disabled
+    uv *= 40.0 * 0.5000;              // Scale factor (20.0)
+    uv *= mix(vec2(1.0), vec2(1.0, 0.0), 0.0000); // X-squash disabled
+    uv /= aspectRatio;
+    
+    // 2. Prepare coordinates for two layers
+    
+    // Y-axis drift for flowing motion
+    vec2 movementOffset = vec2(0.0, uTime * 0.5000 * -0.05);
+    
+    vec2 st1 = uv - (mPos * 38.0 * 0.5000);
+    vec2 st2 = uv - (mPos * 48.0 * 0.5000);
+    
+    // Add movement to UV coordinates
+    vec2 mouse1 = st1 + movementOffset;
+    vec2 mouse2 = st2 + vec2(0.0, uTime * 0.5000 * -0.05);
+    
+    float radius1 = 0.5 * 0.5000;
+    float radius2 = 0.5 * 0.5000;
+    
+    // 3. Generate two Voronoi layers
+    // Note: The second layer is offset by vec2(10) to use a different set of Voronoi cells.
+    float pass1 = voronoi_additive(mouse1 * aspectRatio, radius1, mouseGrid1 * aspectRatio, 38.0 * 0.5000);
+    float pass2 = voronoi_additive(mouse2 * aspectRatio + vec2(10), radius2, mouseGrid2 * aspectRatio + vec2(10.0), 48.0 * 0.5000);
+    
+    // 4. Scale contribution and apply color
+    pass1 *= 0.02; // Layer 1 (fine-tuning)
+    pass2 *= 0.04; // Layer 2 (fine-tuning)
+    
+    // Combine layers, colorize (white), and optionally darken by background Luma (disabled)
+    color.rgb = (pass1 + pass2) * vec3(1, 1, 1) * mix(1.0, bg.r, 0.0000);
+    color.rgb = clamp(color.rgb, 0.0, 1.0);
+    
+    // 5. Composite
+    color.rgb = blend(1, bg.rgb, color.rgb); // Additive blend (bg.rgb + color.rgb)
+    
+    // Set alpha based on the maximum of background alpha and the wisp's luma (intensity)
+    color = vec4(color.rgb, max(bg.a, luma(color.rgb)));
+    
+    return color;
+}
+
+void main() {
+    vec4 color;
+    color = randomStyle();
+    fragColor = color;
+}

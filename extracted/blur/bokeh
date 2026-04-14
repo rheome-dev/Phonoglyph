@@ -1,0 +1,153 @@
+// This shader implements a Depth of Field (DoF) Bokeh effect in the final compositing stage, likely after the image has been blurred in a previous pass (uTexture). The effect uses a Blue Noise texture to calculate jittered sampling offsets, simulating the irregular, artistic blur characteristic of Bokeh.
+
+// The provided fragment shader list includes an empty shader at index 0. I will format the primary fragment shader (index 1) and the shared vertex shader.
+
+// 1. Vertex Shader (Shared)
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Attributes
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+// Uniforms
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uTextureMatrix;
+
+// Outputs
+out vec2 vTextureCoord;
+out vec3 vVertexPosition;
+
+void main() {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = (uTextureMatrix * vec4(aTextureCoord, 0.0, 1.0)).xy;
+}
+
+// 2. Fragment Shader (Bokeh Composite Pass)
+// OpenGL Shading Language
+
+#version 300 es
+precision highp float;
+
+// Inputs
+in vec3 vVertexPosition;
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform sampler2D uTexture;     // Input texture (likely the already blurred image)
+uniform sampler2D uBgTexture;   // Background texture (likely the original, sharp image)
+uniform sampler2D uBlueNoise;
+uniform vec2 uMousePos;
+uniform vec2 uResolution;
+
+// Output
+out vec4 fragColor;
+
+// Constants
+const float PI = 3.14159265;
+const float PI2 = 6.28318530718;
+const int SAMPLES = 128; // Not used in this version of the shader
+
+// --- Helper Functions ---
+
+float ease (int easingFunc, float t) {
+    return t; // Currently a linear ease function
+}
+
+// Fetches an angle from the blue noise texture based on UV coordinates and resolution.
+float getBlueNoiseOffset(vec2 st) {
+    ivec2 texSize = ivec2(512, 512);
+    
+    // Calculate noise lookup UV based on screen UV, resolution, and noise texture size
+    vec2 noiseUV = fract(st * (uResolution) / vec2(texSize) * vec2(float(texSize.x)/float(texSize.y), 1.0));
+    
+    // Fetch blue noise value (R channel)
+    vec4 blueNoise = texelFetch(uBlueNoise, ivec2(noiseUV * vec2(texSize)) % texSize, 0);
+    
+    // Map the noise value (0 to 1) to a full rotation angle (0 to 2*PI)
+    return mod((blueNoise.r - 0.5) * PI2, PI2);
+}
+
+// Calculates the strength of the DoF/Bokeh effect at the current pixel.
+float getStrength(vec2 uv) {
+    // Center of the focus area (mouse position is disabled: 0.0000)
+    vec2 mPos = vec2(0.5, 0.5) + mix(vec2(0), (uMousePos-0.5), 0.0000);
+    
+    float aspectRatio = uResolution.x / uResolution.y;
+    
+    // Calculate distance from center, accounting for aspect ratio
+    float dist = distance(uv * vec2(aspectRatio, 1), mPos * vec2(aspectRatio, 1));
+    
+    // Apply "near-distance" multiplier (1. - 1.0000 = 0) which effectively disables DoF masking, 
+    // making 'dist' always equal to 1.0. The effect is uniform across the screen.
+    dist *= 4. * (1. - 1.0000); 
+    
+    // Max(0., 1. - dist) is the falloff. Since dist=0 (if multiplier is 0), dist=1.0.
+    float strength = ease(0, max(0., 1. - dist));
+    
+    // Since the DoF mask is effectively disabled, strength will be 1.0 across the screen.
+    return strength; 
+}
+
+// Composites the blurred image using jittered sampling for the Bokeh effect.
+vec4 composite(vec2 uv) {
+    float strength = getStrength(uv);
+    vec4 bg = texture(uBgTexture, uv);
+
+    // Initial checks (0.5000 is likely a uniform for strength/enabled status)
+    if (0.5000 <= 0.001) {
+        return bg;
+    }
+    if (strength <= 0.001) {
+        return bg;
+    }
+    
+    // 1. Calculate Jittered Offset
+    float blueNoiseOffset = getBlueNoiseOffset(uv);
+    float blueNoiseStrength = 0.005 * 0.5000 * strength;
+    
+    // Offset vector derived from blue noise angle and calculated strength
+    // The offset is clamped to 0.01 (min(blueNoiseStrength, 0.01))
+    vec2 offset = vec2(cos(blueNoiseOffset), sin(blueNoiseOffset)) * min(blueNoiseStrength, 0.01);
+    
+    // 2. Perform Jittered Sampling (5-tap cross pattern)
+    vec2 pixelSize = vec2(1.0) / uResolution;
+
+    // Sample 1: Center + Jittered offset
+    vec4 s1 = texture(uTexture, uv + offset); 
+    
+    // Samples 2-5: Center + Jittered offset + Cross Pattern offsets (pixel wide)
+    vec4 s2 = texture(uTexture, uv + offset + pixelSize);
+    vec4 s3 = texture(uTexture, uv + offset - pixelSize);
+    vec4 s4 = texture(uTexture, uv + offset + vec2(-pixelSize.x, pixelSize.y));
+    vec4 s5 = texture(uTexture, uv + offset + vec2(pixelSize.x, -pixelSize.y));
+    
+    // Average the five samples
+    return (s1 + s2 + s3 + s4 + s5) * 0.2;
+}
+
+vec4 getColor(vec2 uv) {
+    return composite(uv);
+}
+
+void main() {
+    vec2 uv = vTextureCoord;
+    vec4 color = vec4(0);
+    
+    // Check if the effect should be enabled (0.5000 is likely the effect toggle uniform)
+    if (0.5000 == 0.) {
+        color = texture(uTexture, uv);
+        fragColor = color;
+        return;
+    }
+    
+    color = getColor(uv);
+    fragColor = color;
+}
+// Analysis
+// This shader takes an already blurred image (uTexture) and uses a small, five-tap kernel to sample the image. The key feature is that the sampling kernel's position is jittered based on the uBlueNoise texture. This jittering slightly randomizes the final pixel color, which is essential for breaking up smooth blur patterns and creating the characteristic irregular texture of high-quality Bokeh.
+
+// The getStrength function is currently configured to provide a uniform strength of 1.0 across the entire screen (since 4. * (1. - 1.0000) results in a distance multiplier of 0), meaning there is no depth-of-field masking applied right now.

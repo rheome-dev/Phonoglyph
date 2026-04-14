@@ -60,3 +60,5 @@ apps/web/build
 .sidecar-start.sh
 .sidecar-base
 .td-root
+output.mp4
+Archive.zip

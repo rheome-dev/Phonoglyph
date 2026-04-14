@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "codebase-cleanup-tech-debt": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "computedHash": "4b0027dfa510222acf36666c6c4f17de79b1d4cf9432793c504717769cf1540b"
+    }
+  }
+}

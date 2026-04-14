@@ -1,0 +1,234 @@
+// This shader generates a procedural, animated Aurora Borealis (Northern Lights) effect using a technique based on multiple sampled distances to a simple Signed Distance Field (SDF), where the sample points are subjected to complex, time-animated turbulence. The generated aurora is then additively blended onto a background image.
+
+// 1. Vertex Shader (Shared)
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Attributes
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+// Uniforms
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uTextureMatrix;
+
+// Outputs
+out vec2 vTextureCoord;
+out vec3 vVertexPosition;
+
+void main() {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = (uTextureMatrix * vec4(aTextureCoord, 0.0, 1.0)).xy;
+}
+// 2. Fragment Shader (Aurora Generation Pass 0)
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Inputs
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform sampler2D uTexture;       // Background texture
+uniform sampler2D uCustomTexture; // Unused in this logic (checked with conditional)
+uniform float uTime;
+uniform vec2 uMousePos;
+uniform vec2 uResolution;
+
+// Output
+out vec4 fragColor;
+
+// Variables (Set during main execution, but declared globally in source)
+ivec2 customTexSize;
+float customTexAspect;
+
+// Constants
+const float PI = 3.14159265359;
+const float TAU = 6.28318530718;
+const float ITERATIONS = 36.; // Number of samples taken to draw the aurora
+
+// --- Utility Functions ---
+
+// Simple Addition Blend Mode
+vec3 blend (int blendMode, vec3 src, vec3 dst) {
+    return src + dst;
+}
+
+// PCG (Permuted Congruential Generator) for random number generation
+uvec2 pcg2d(uvec2 v) {
+    // ... (PCG2D logic) ...
+    v = v * 1664525u + 1013904223u;
+    v.x += v.y * v.y * 1664525u + 1013904223u;
+    v.y += v.x * v.x * 1664525u + 1013904223u;
+    v ^= v >> 16;
+    v.x += v.y * v.y * 1664525u + 1013904223u;
+    v.y += v.x * v.x * 1664525u + 1013904223u;
+    return v;
+}
+
+// Random float generator
+float randFibo(vec2 p) {
+    uvec2 v = floatBitsToUint(p);
+    v = pcg2d(v);
+    uint r = v.x ^ v.y;
+    return float(r) / float(0xffffffffu);
+}
+
+// Color Palette generator (4-vector smooth sine wave blend)
+vec3 pal( in float t, in vec3 a, in vec3 b, in vec3 c, in vec3 d ) {
+    return a + b * cos( TAU * (c * t + d) );
+}
+
+// Reinhard Tonemapping
+vec3 Tonemap_Reinhard(vec3 x) {
+    x *= 4.;
+    return x / (1.0 + x);
+}
+
+// Signed Distance Field (SDF) for a circle
+float sdCircle(vec2 st, float r) {
+    return length(st) - r;
+}
+
+// Get SDF value (always a circle in this implementation)
+float getSdf(vec2 st, float iter, float md) {
+    return sdCircle(st, 0.2200); // Fixed radius
+}
+
+// Turbulence/Displacement function (iterative rotation and sine wave perturbation)
+vec2 turb(vec2 pos, float t, float it, float md, vec2 mPos) {
+    mat2 rot = mat2(0.6, -0.8, 0.8, 0.6); // Rotation matrix
+    float freq = mix(2., 15., 0.5000);   // Base frequency
+    float amp = (0.5000) * md;           // Base amplitude (modulated by mouse distance 'md')
+    float xp = 1.4;                      // Frequency multiplier per iteration
+    float time = t * 0.1 + 0.0000;       // Time offset
+    
+    for(float i = 0.; i < 4.; i++) {
+        // Calculate sine-wave based displacement
+        vec2 s = sin(freq * ((pos - mPos) * rot) + i * time + it);
+        
+        // Apply displacement
+        pos += amp * rot[0] * s / freq;
+        
+        // Update rotation matrix and multipliers for the next octave
+        rot *= mat2(0.6, -0.8, 0.8, 0.6);
+        amp *= mix(1., max(s.y, s.x), 0.0000); // Amplitude modulation disabled (0.0000)
+        freq *= xp;
+    }
+    return pos;
+}
+
+// Luminance calculation
+float luma(vec3 color) {
+    return dot(color, vec3(0.299, 0.587, 0.114));
+}
+
+// --- Main Function ---
+
+void main() {
+    vec2 uv = vTextureCoord;
+    vec4 bg = texture(uTexture, uv);
+    
+    // Custom Texture setup is skipped (1 == 0)
+    // if(1 == 0) { ... } 
+    
+    vec3 pp = vec3(0.);    // "Pre-pass" accumulation (used for the ribbon structure)
+    vec3 bloom = vec3(0.); // Bloom accumulation
+    
+    float t = uTime * 0.5 + 0.0000; // Time uniform
+    vec2 aspect = vec2(uResolution.x / uResolution.y, 1);
+    vec2 mousePos = mix(vec2(0), uMousePos - 0.5, 0.0000); // Mouse control disabled
+    
+    // Current UV coordinate centered and aspect-corrected
+    vec2 pos = (uv * aspect - vec2(0.5, 0.5) * aspect);
+    
+    // Mouse distance calculation (disabled)
+    float mDist = length(uv * aspect - uMousePos * aspect);
+    float md = mix(1., smoothstep(1., 5., 1. / mDist), 0.0000); // md = 1.0 (no mouse influence)
+    
+    // Rotation is disabled (0.0000)
+    float rotation = 0.0000 * -2.0 * 3.14159265359;
+    mat2 rotMatrix = mat2(cos(rotation), -sin(rotation), sin(rotation), cos(rotation));
+    pos = rotMatrix * pos;
+    
+    // --- 1. Iterative Aurora Construction (The "Ribbon" Effect) ---
+    
+    float bm = 0.05;
+    // Sample a slightly earlier position for previous distance comparison
+    vec2 prevPos = turb(pos, t, 0. - 1. / ITERATIONS, md, mousePos);
+    
+    float spacing = mix(1., TAU, 0.5000);
+    float smoothing = 1.0000;
+
+    // Iterate 36 times to build the aurora ribbon
+    for(float i = 1.; i < ITERATIONS + 1.; i++) {
+        float iter = i / ITERATIONS;
+        
+        // Turbulate the UV for the current step
+        vec2 st = turb(pos, t, iter * spacing, md, mousePos);
+        
+        // Calculate SDF distance to the circle primitive
+        float d = abs(getSdf(st, iter, md));
+        
+        // --- Dynamic Blur/Thickness Calculation ---
+        
+        // pd: Distance between the current turbulated point and the previous one
+        float pd = distance(st, prevPos);
+        prevPos = st;
+        
+        // Dynamic Blur/Thickness: Exponential growth based on pd. Higher pd = more blur.
+        float dynamicBlur = exp2(pd * 2.0 * 1.4426950408889634) - 1.0; // 1.44... is 1/ln(2)
+        
+        // ds: Smoothstep to create the visible ribbon edge. 
+        // Thickness is determined by the fixed blur (0.0000*bm) + dynamic blur.
+        float ds = smoothstep(0., 0.0000 * bm + max(dynamicBlur * smoothing, 0.001), d);
+        
+        // --- Color and Accumulation ---
+        
+        // Color based on iteration index (iter) using a sine palette
+        vec3 color = pal(iter * mix(0.1, 1.9, 0.2500) + 0.5000, 
+                         vec3(0.5), vec3(0.5), vec3(1), vec3(0.56, 0.78, 0));
+        
+        // invd: Inverse distance for bloom calculation
+        float invd = 1. / max(d + dynamicBlur, 0.001);
+        
+        // Accumulate the ribbon structure (ds-1 is negative, resulting in a dark center/light edge)
+        pp += (ds - 1.) * color;
+        
+        // Accumulate bloom (clamped inverse distance)
+        bloom += clamp(invd, 0., 250.) * color;
+    }
+    
+    // --- 2. Final Post-Processing ---
+    
+    pp *= 1. / ITERATIONS;
+    
+    // Tone mapping on the bloom accumulation
+    bloom = bloom / (bloom + 2e4); 
+
+    // Combine: The ribbon structure (-pp) + scaled, toned bloom
+    vec3 color = (-pp + bloom * 3. * 0.7500);
+    color *= 1.2;
+    
+    // Apply dithering
+    color += (randFibo(gl_FragCoord.xy) - 0.5) / 255.0;
+    
+    // Apply final Reinhard Tonemapping
+    color = (Tonemap_Reinhard(color));
+    
+    // --- 3. Composite with Background ---
+    
+    vec4 auroraColor = vec4(color, 1.);
+    
+    // Additive blend the generated aurora onto the background
+    auroraColor.rgb = blend(1, bg.rgb, auroraColor.rgb);
+    
+    // Final mix (mix factor is 1.0000, so it returns the auroraColor)
+    auroraColor = vec4(mix(bg.rgb, auroraColor.rgb, 1.0000), max(bg.a, luma(auroraColor.rgb)));
+    
+    fragColor = auroraColor;
+}

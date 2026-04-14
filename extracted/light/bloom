@@ -1,0 +1,248 @@
+// This shader implementation performs a multi-pass Bloom effect, which involves isolating bright areas, blurring them using a custom exponential kernel, and then compositing the blurred light back onto the original scene. This technique is often referred to as a "multipass downsampled" or "separable blur" bloom pipeline.
+
+// The pipeline structure inferred from the passes is:
+
+// Pass 0 (Threshold): Isolates pixels brighter than a certain threshold.
+
+// Passes 1-6 (Blurring): Applies multiple horizontal/vertical and diagonal blur passes to the thresholded image, typically using downsampling/upsampling between them to generate different bloom sizes/shapes (though not explicit in this code, it's common practice).
+
+// Pass 7 (Final Composite): Adds the accumulated bloom back onto the original background texture.
+
+// 1. Vertex Shader (Shared)
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uTextureMatrix;
+
+out vec2 vTextureCoord;
+out vec3 vVertexPosition;
+
+void main() {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = (uTextureMatrix * vec4(aTextureCoord, 0.0, 1.0)).xy;
+}
+// 2. Utility Functions (Shared Across Multiple Passes)
+// OpenGL Shading Language
+
+// Luminance calculation
+float luma(vec4 color) {
+    return dot(color.rgb, vec3(0.299, 0.587, 0.114));
+}
+
+// Pre-calculated Exponential (Gaussian-like) kernel weights (9 taps: center + 8 offsets)
+float getExponentialWeight(int index) {
+    switch(index) {
+        case 0: return 1.0000000000;
+        case 1: return 0.7165313106;
+        case 2: return 0.5134171190;
+        case 3: return 0.3678794412;
+        case 4: return 0.2636050919;
+        case 5: return 0.1888756057;
+        case 6: return 0.1353352832;
+        case 7: return 0.0969670595;
+        case 8: return 0.0694877157;
+        default: return 0.0;
+    }
+}
+
+// Bloom Threshold Pass (Extracts bright areas)
+vec4 thresholdPass(vec4 color) {
+    // 1. Gamma Correction (approximate)
+    color.rgb = pow(color.rgb, vec3(1.0/2.2));
+    
+    // 2. Contrast adjustment (enhances bright areas)
+    color.rgb = 1.2 * (color.rgb - 0.5) + 0.5;
+    
+    // 3. Smoothstep Threshold
+    // The bloom color is scaled by the smoothstep result based on luminance.
+    // Threshold is hardcoded around 0.5 (0.5000 - 0.1 to 0.5000)
+    vec4 bloom = color * smoothstep(0.5000 - 0.1, 0.5000, luma(color));
+    
+    return vec4(bloom.rgb, color.a);
+}
+
+// Multi-directional Blur function (used in subsequent passes)
+vec4 blur(vec2 uv, bool vertical, float radius, bool diamond) {
+    vec4 color = vec4(0.0);
+    float total_weight = 0.0;
+    float aspectRatio = uResolution.x / uResolution.y;
+    vec2 dir;
+
+    // Set direction based on parameters
+    if (diamond) {
+        // Diagonal directions (used in Passes 1-4)
+        dir = vertical ? vec2(1, 1) : vec2(1, -1);
+    } else {
+        // Axis-aligned directions (used in Passes 5-6)
+        dir = vertical ? vec2(0, 1) : vec2(1, 0);
+    }
+    
+    // Direction scaling (0.5000, 1-0.5000) seems to favor the Y-component
+    dir *= vec2(0.5000, 1. - 0.5000);
+    dir.x /= aspectRatio;
+
+    // Center Sample (Weight 0 is 1.0, so the center contributes heavily)
+    vec4 center = texture(uTexture, uv);
+    float center_weight = getExponentialWeight(0);
+    color += center * center_weight;
+    total_weight += center_weight;
+    
+    radius *= 0.5000; // Radius scaling
+    
+    // Sample Loop (8 pairs of offset taps)
+    for (int i = 1; i <= 8; i++) {
+        float weight = getExponentialWeight(i);
+        // Offset is blended between 0.015 and 0.025, scaled by radius
+        float offset = mix(0.015, 0.025, radius) * float(i) / 8.;
+        
+        vec4 sample1 = texture(uTexture, uv + offset * dir);
+        vec4 sample2 = texture(uTexture, uv - offset * dir);
+        
+        color += (sample1 + sample2) * weight;
+        total_weight += 2.0 * weight;
+    }
+    
+    return color / total_weight; // Normalized color
+}
+// 3. Fragment Passes (The Pipeline)
+// Pass 0: Threshold and Isolation
+// OpenGL Shading Language
+
+// Uniforms: uTexture
+// Output: fragColor (Bloom mask)
+
+vec4 getColor(vec4 color) {
+    return thresholdPass(color);
+}
+
+void main() {
+    vec4 color = texture(uTexture, vTextureCoord);
+    fragColor = getColor(color);
+}
+
+// Pass 1: Diagonal Blur (X+Y)
+// OpenGL Shading Language
+
+// Uniforms: uTexture (Input from Pass 0), uResolution
+// Output: fragColor (First diagonal blur pass)
+
+vec4 blurPass(vec2 uv, bool vertical, float radius, float intensity, bool diamond) {
+    return blur(uv, vertical, radius, diamond);
+}
+
+vec4 getColor(vec4 color) {
+    // vertical=false (dir: 1, -1), radius=40., diamond=true
+    return blurPass(vTextureCoord, false, 40., 1.25, true); 
+}
+// ... (main function applies blur) ...
+// Pass 2: Diagonal Blur (X+Y) & Blend (Large Radius)
+// This pass combines the diagonal blur with a second thresholding of the original background, suggesting an intermediate composite step.
+
+// OpenGL Shading Language
+
+// Uniforms: uTexture (Input from Pass 1), uBgTexture (Original Scene)
+// Output: fragColor (Intermediate composite 1)
+
+vec4 blurCombinePass(vec2 uv, bool vertical, float radius, float intensity, bool diamond) {
+    vec4 blurred = blur(uv, vertical, radius, diamond);
+    
+    // Composite: (Thresholded Original * 0.5) + (Blurred Input * Intensity)
+    return (thresholdPass(texture(uBgTexture, uv)) * 0.5 + blurred * intensity);
+}
+
+vec4 getColor(vec4 color) {
+    // vertical=true (dir: 1, 1), radius=40., diamond=true
+    return blurCombinePass(vTextureCoord, true, 40., 1.25, true);
+}
+// ... (main function applies blur/combine) ...
+// Pass 3: Diagonal Blur (X-Y) (Medium Radius)
+// OpenGL Shading Language
+
+// Uniforms: uTexture (Input from Pass 2), uResolution
+// Output: fragColor (Second diagonal blur pass)
+
+vec4 getColor(vec4 color) {
+    // vertical=false (dir: 1, -1), radius=15., diamond=true
+    return blurPass(vTextureCoord, false, 15., 1.1, true);
+}
+// ... (main function applies blur) ...
+// Pass 4: Diagonal Blur (X+Y) & Blend (Medium Radius)
+// OpenGL Shading Language
+
+// Uniforms: uTexture (Input from Pass 3), uBgTexture (Original Scene)
+// Output: fragColor (Intermediate composite 2)
+
+vec4 getColor(vec4 color) {
+    // vertical=true (dir: 1, 1), radius=15., diamond=true
+    return blurCombinePass(vTextureCoord, true, 15., 1.1, true);
+}
+// ... (main function applies blur/combine) ...
+// Pass 5: Horizontal Blur (Small Radius)
+// OpenGL Shading Language
+
+// Uniforms: uTexture (Input from Pass 4), uResolution
+// Output: fragColor (First axis-aligned blur pass)
+
+vec4 getColor(vec4 color) {
+    // vertical=false (dir: 1, 0), radius=7.5, diamond=false
+    return blurPass(vTextureCoord, false, 7.5, 1., false);
+}
+// ... (main function applies blur) ...
+// Pass 6: Vertical Blur (Small Radius)
+// OpenGL Shading Language
+
+// Uniforms: uTexture (Input from Pass 5), uResolution
+// Output: fragColor (Second axis-aligned blur pass)
+
+vec4 getColor(vec4 color) {
+    // vertical=true (dir: 0, 1), radius=7.5, diamond=false
+    return blurPass(vTextureCoord, true, 7.5, 1., false);
+}
+// ... (main function applies blur) ...
+// Pass 7: Final Composite and Dithering
+// This final pass takes the accumulated, multi-sized bloom (from Pass 6) and adds it back onto the original scene (uBgTexture).
+
+// OpenGL Shading Language
+
+// Uniforms: uTexture (Bloom from Pass 6), uBgTexture (Original Scene)
+// Output: fragColor (Final rendered image)
+
+// Random number generator (for dithering)
+uvec2 pcg2d(uvec2 v) { /* ... */ }
+float randFibo(vec2 p) { /* ... */ }
+
+vec4 finalPass(vec4 bloomColor) {
+    // Dithering
+    float dither = (randFibo(gl_FragCoord.xy) - 0.5) / 255.0;
+    
+    // Color tinting (disabled as vec3 is 1, 1, 1) and dithering
+    bloomColor.rgb *= vec3(1, 1, 1);
+    bloomColor.rgb += dither;
+    
+    // Set bloom alpha to its own luminance (for later blending)
+    bloomColor.a = luma(bloomColor);
+    
+    vec4 sceneColor = texture(uBgTexture, vTextureCoord);
+    
+    // Final Additive Blend: scene + bloom
+    // Mix factor: 0.5000 * 1.75 = 0.875 (strong bloom contribution)
+    vec4 finalColor = mix(sceneColor, sceneColor + bloomColor, 0.5000 * 1.75);
+    
+    return finalColor;
+}
+
+vec4 getColor(vec4 color) {
+    return finalPass(color);
+}
+
+void main() {
+    vec4 color = texture(uTexture, vTextureCoord);
+    fragColor = getColor(color);
+}

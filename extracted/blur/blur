@@ -1,0 +1,309 @@
+// This is a set of four fragment shaders and one shared vertex shader, designed to implement a Separable Gaussian Blur with a large kernel size ($36$ taps). When performed in multiple passes (typically one horizontal and one vertical), a separable blur efficiently achieves a high-quality, circular blur profile.Since the blur requires multiple passes to be complete, I have formatted the Vertex Shader once and then provided the formatted code for all four Fragment Shaders (indexed 0, 1, 2, and 3) as they would be used in a multipass rendering setup.1. Vertex Shader (Shared by all passes)This is the standard pass-through shader.
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Attributes
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+// Uniforms
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uTextureMatrix;
+
+// Outputs
+out vec2 vTextureCoord;
+out vec3 vVertexPosition;
+
+void main() {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = (uTextureMatrix * vec4(aTextureCoord, 0.0, 1.0)).xy;
+}
+// 2. Fragment Shaders (Blur Passes)All four fragment shaders share the same Gaussian kernel weights and the GaussianBlur logic. They differ primarily in how they are indexed (dir calculation) and a slight change in the blur amount calculation based on that index.Shared Definitions (Present in all Fragment Shaders)
+// OpenGL Shading Language
+#version 300 es
+precision highp float;
+precision highp int;
+
+// Inputs
+in vec3 vVertexPosition;
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform sampler2D uTexture;
+uniform vec2 uMousePos;
+uniform vec2 uResolution;
+
+// Output
+out vec4 fragColor;
+
+// Constants
+const int kernelSize = 36;
+
+// --- Helper Functions ---
+
+float ease (int easingFunc, float t) {
+    return t;
+}
+
+// Gaussian Weights for the 36-tap kernel
+float getGaussianWeight(int index) {
+    switch(index) {
+        case 0: return 0.00094768; case 1: return 0.00151965; case 2: return 0.00237008;
+        case 3: return 0.00359517; case 4: return 0.0053041; case 5: return 0.00761097;
+        case 6: return 0.01062197; case 7: return 0.01441804; case 8: return 0.01903459;
+        case 9: return 0.0244409; case 10: return 0.03052299; case 11: return 0.03707432;
+        case 12: return 0.04379813; case 13: return 0.05032389; case 14: return 0.05623791;
+        case 15: return 0.06112521; case 16: return 0.06461716; case 17: return 0.06643724;
+        case 18: return 0.06643724; case 19: return 0.06461716; case 20: return 0.06112521;
+        case 21: return 0.05623791; case 22: return 0.05032389; case 23: return 0.04379813;
+        case 24: return 0.03707432; case 25: return 0.03052299; case 26: return 0.0244409;
+        case 27: return 0.01903459; case 28: return 0.01441804; case 29: return 0.01062197;
+        case 30: return 0.00761097; case 31: return 0.0053041; case 32: return 0.00359517;
+        case 33: return 0.00237008; case 34: return 0.00151965; case 35: return 0.00094768;
+        default: return 0.0;
+    }
+}
+
+// Applies the Gaussian blur in a single direction
+vec4 GaussianBlur(sampler2D tex, vec2 uv, vec2 direction, int passIndex) {
+    vec4 color = vec4(0.0);
+    
+    // Calculate blur amount (strength)
+    // Mouse interaction is disabled (0.0000)
+    vec2 pos = vec2(0.5, 0.5) + mix(vec2(0), (uMousePos - 0.5), 0.0000);
+    float inner = distance(uv, pos);
+    float outer = max(0., 1. - distance(uv, pos));
+    
+    // Conditional logic based on passIndex (0 vs 1) to determine blur scale
+    // Pass 0, 2, 3 uses 11. Pass 1 uses 6.
+    float amt = float(passIndex <= 1 ? 6. : 11.); 
+    
+    // 0.2000 is the base strength. 0.5000 is the mix for the mask (center focus vs edge focus)
+    float amount = (0.2000 * amt) * ease(0, mix(inner, outer, 0.5000));
+    
+    // Add the center tap (0 index)
+    color += texture(tex, uv) * getGaussianWeight(0);
+    
+    // Loop through the kernel taps
+    for (int i = 0; i < kernelSize; i++) {
+        // Calculate sample offset distance
+        float x = float(i - kernelSize / 2) * amount;
+        
+        // Sample texture and add weighted color
+        // Direction is scaled by 0.001 to prevent excessive offset, and by 0.5000, 1.-0.5000 (0.5, 0.5) for a slight skew
+        color += texture(tex, uv + vec2(x * 0.001) * direction * vec2(0.5000, 1. - 0.5000)) * getGaussianWeight(i);
+    }
+    return color;
+}
+
+vec4 blur(vec2 uv, vec2 direction, int passIndex) {
+    // This function must be defined inline within the main shader block for GLSL 300 ES compatibility,
+    // as it calls GaussianBlur which contains the uniform logic.
+    return GaussianBlur(uTexture, uv, direction, passIndex);
+}
+Fragment Shader 0: Horizontal Pass (dir = 0)OpenGL Shading Language// ... Shared Definitions ...
+
+// Overloaded GaussianBlur with passIndex 0
+vec4 GaussianBlur(sampler2D tex, vec2 uv, vec2 direction) {
+    vec4 color = vec4(0.0);
+    vec2 pos = vec2(0.5, 0.5) + mix(vec2(0), (uMousePos-0.5), 0.0000);
+    float inner = distance(uv, pos);
+    float outer = max(0., 1.-distance(uv, pos));
+    float amt = 0 <= 1 ? 6. : 11.; // amt = 6.0
+    float amount = (0.2000 * amt) * ease(0, mix(inner, outer, 0.5000));
+    color += texture(tex, uv) * getGaussianWeight(0);
+    for (int i = 0; i < kernelSize; i++) {
+        float x = float(i - kernelSize / 2) * amount;
+        color += texture(tex, uv + vec2(x * 0.001) * direction * vec2(0.5000, 1. - 0.5000)) * getGaussianWeight(i);
+    }
+    return color;
+}
+
+vec4 blur(vec2 uv, vec2 direction) {
+    return GaussianBlur(uTexture, uv, direction);
+}
+
+void main() {
+    vec2 uv = vTextureCoord;
+    vec4 color = vec4(0);
+    
+    // dir = 0 % 2 = 0 (Horizontal Pass)
+    int dir = 0 % 2;
+    vec2 direction = dir == 1 ? vec2(0, uResolution.x / uResolution.y) : vec2(1, 0);
+    
+    color = blur(uv, direction);
+    fragColor = color;
+}
+// Fragment Shader 1: Vertical Pass (dir = 1)
+// OpenGL Shading Language// ... Shared Definitions ...
+
+// Overloaded GaussianBlur with passIndex 1
+vec4 GaussianBlur(sampler2D tex, vec2 uv, vec2 direction) {
+    vec4 color = vec4(0.0);\
+    vec2 pos = vec2(0.5, 0.5) + mix(vec2(0), (uMousePos-0.5), 0.0000);
+    float inner = distance(uv, pos);
+    float outer = max(0., 1.-distance(uv, pos));
+    float amt = 1 <= 1 ? 6. : 11.; // amt = 6.0
+    float amount = (0.2000 * amt) * ease(0, mix(inner, outer, 0.5000));
+    color += texture(tex, uv) * getGaussianWeight(0);
+    for (int i = 0; i < kernelSize; i++) {
+        float x = float(i - kernelSize / 2) * amount;
+        color += texture(tex, uv + vec2(x * 0.001) * direction * vec2(0.5000, 1. - 0.5000)) * getGaussianWeight(i);
+    }
+    return color;
+}
+
+vec4 blur(vec2 uv, vec2 direction) {
+    return GaussianBlur(uTexture, uv, direction);
+}
+
+void main() {
+    vec2 uv = vTextureCoord;
+    vec4 color = vec4(0);
+    
+    // dir = 1 % 2 = 1 (Vertical Pass)
+    int dir = 1 % 2;
+    vec2 direction = dir == 1 ? vec2(0, uResolution.x / uResolution.y) : vec2(1, 0);
+    
+    color = blur(uv, direction);
+    fragColor = color;
+}
+// Fragment Shader 2: Horizontal Pass (dir = 0) - Higher Blur Amount
+// OpenGL Shading Language// ... Shared Definitions ...
+
+// Overloaded GaussianBlur with passIndex 2
+vec4 GaussianBlur(sampler2D tex, vec2 uv, vec2 direction) {
+    vec4 color = vec4(0.0);\
+    vec2 pos = vec2(0.5, 0.5) + mix(vec2(0), (uMousePos-0.5), 0.0000);
+    float inner = distance(uv, pos);
+    float outer = max(0., 1.-distance(uv, pos));
+    float amt = 2 <= 1 ? 6. : 11.; // amt = 11.0
+    float amount = (0.2000 * amt) * ease(0, mix(inner, outer, 0.5000));
+    color += texture(tex, uv) * getGaussianWeight(0);
+    for (int i = 0; i < kernelSize; i++) {
+        float x = float(i - kernelSize / 2) * amount;
+        color += texture(tex, uv + vec2(x * 0.001) * direction * vec2(0.5000, 1. - 0.5000)) * getGaussianWeight(i);
+    }
+    return color;
+}
+
+vec4 blur(vec2 uv, vec2 direction) {
+    return GaussianBlur(uTexture, uv, direction);
+}
+
+void main() {
+    vec2 uv = vTextureCoord;
+    vec4 color = vec4(0);
+    
+    // dir = 2 % 2 = 0 (Horizontal Pass)
+    int dir = 2 % 2;
+    vec2 direction = dir == 1 ? vec2(0, uResolution.x / uResolution.y) : vec2(1, 0);
+    
+    color = blur(uv, direction);
+    fragColor = color;
+}
+// Fragment Shader 3: Vertical Pass (dir = 1) - Higher Blur Amount + Dithering
+// OpenGL Shading Language
+#version 300 es
+precision highp float;
+precision highp int;
+
+// Inputs
+in vec3 vVertexPosition;
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform sampler2D uTexture;
+uniform vec2 uMousePos;
+uniform vec2 uResolution;
+
+// Output
+out vec4 fragColor;
+
+// Constants
+const int kernelSize = 36;
+
+// --- Helper Functions ---
+
+float ease (int easingFunc, float t) {
+    return t;
+}
+
+// PCG (Permuted Congruential Generator) for high-quality random number generation
+uvec2 pcg2d(uvec2 v) {
+    v = v * 1664525u + 1013904223u;
+    v.x += v.y * v.y * 1664525u + 1013904223u;
+    v.y += v.x * v.x * 1664525u + 1013904223u;
+    v ^= v >> 16;
+    v.x += v.y * v.y * 1664525u + 1013904223u;
+    v.y += v.x * v.x * 1664525u + 1013904223u;
+    return v;
+}
+
+// Random float generator using PCG
+float randFibo(vec2 p) {
+    uvec2 v = floatBitsToUint(p);
+    v = pcg2d(v);
+    uint r = v.x ^ v.y;
+    return float(r) / float(0xffffffffu);
+}
+
+// Gaussian Weights (36-tap kernel)
+float getGaussianWeight(int index) {
+    switch(index) {
+        case 0: return 0.00094768; case 1: return 0.00151965; case 2: return 0.00237008;
+        case 3: return 0.00359517; case 4: return 0.0053041; case 5: return 0.00761097;
+        case 6: return 0.01062197; case 7: return 0.01441804; case 8: return 0.01903459;
+        case 9: return 0.0244409; case 10: return 0.03052299; case 11: return 0.03707432;
+        case 12: return 0.04379813; case 13: return 0.05032389; case 14: return 0.05623791;
+        case 15: return 0.06112521; case 16: return 0.06461716; case 17: return 0.06643724;
+        case 18: return 0.06643724; case 19: return 0.06461716; case 20: return 0.06112521;
+        case 21: return 0.05623791; case 22: return 0.05032389; case 23: return 0.04379813;
+        case 24: return 0.03707432; case 25: return 0.03052299; case 26: return 0.0244409;
+        case 27: return 0.01903459; case 28: return 0.01441804; case 29: return 0.01062197;
+        case 30: return 0.00761097; case 31: return 0.0053041; case 32: return 0.00359517;
+        case 33: return 0.00237008; case 34: return 0.00151965; case 35: return 0.00094768;
+        default: return 0.0;
+    }
+}
+
+// Overloaded GaussianBlur with passIndex 3
+vec4 GaussianBlur(sampler2D tex, vec2 uv, vec2 direction) {
+    vec4 color = vec4(0.0);\
+    vec2 pos = vec2(0.5, 0.5) + mix(vec2(0), (uMousePos-0.5), 0.0000);
+    float inner = distance(uv, pos);
+    float outer = max(0., 1.-distance(uv, pos));
+    float amt = 3 <= 1 ? 6. : 11.; // amt = 11.0
+    float amount = (0.2000 * amt) * ease(0, mix(inner, outer, 0.5000));
+    color += texture(tex, uv) * getGaussianWeight(0);
+    for (int i = 0; i < kernelSize; i++) {
+        float x = float(i - kernelSize / 2) * amount;
+        color += texture(tex, uv + vec2(x * 0.001) * direction * vec2(0.5000, 1. - 0.5000)) * getGaussianWeight(i);
+    }
+    return color;
+}
+
+vec4 blur(vec2 uv, vec2 direction) {
+    return GaussianBlur(uTexture, uv, direction);
+}
+
+void main() {
+    vec2 uv = vTextureCoord;
+    vec4 color = vec4(0);
+    
+    // dir = 3 % 2 = 1 (Vertical Pass)
+    int dir = 3 % 2;
+    vec2 direction = dir == 1 ? vec2(0, uResolution.x / uResolution.y) : vec2(1, 0);
+    
+    color = blur(uv, direction);
+    
+    // Final Dithering (only applied in this final pass)
+    float dither = (randFibo(gl_FragCoord.xy) - 0.5) / 255.0;
+    color.rgb += dither;
+    
+    fragColor = color;
+}
+// Explanation of Blur PassesThis setup implies a two-stage, two-level blurring system:Low Blur (Pass 0 & 1): Performs a standard, full-image Gaussian blur using a lower blur factor (amt = 6.0).Pass 0: Horizontal blur (input is original texture).Pass 1: Vertical blur (input is result of Pass 0).High Blur (Pass 2 & 3): Applies an additional, stronger Gaussian blur using a higher blur factor (amt = 11.0).Pass 2: Horizontal blur (input is result of Pass 1).Pass 3: Vertical blur (input is result of Pass 2) and applies final dithering.When executed sequentially, this technique creates an extremely deep and high-quality blur, potentially used for simulating depth of field or heavy atmospheric haze.

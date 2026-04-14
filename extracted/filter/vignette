@@ -1,0 +1,126 @@
+// This shader implements a Vignette effect, which darkens the edges of the screen in a circular or elliptical pattern, drawing focus to the center. It uses smoothstep to create a smooth transition between the center and the darkened perimeter.
+
+// Here is the formatted code for both the Vertex and Fragment shaders.
+
+// 1. Vertex Shader
+// This is the standard pass-through shader, handling basic transformations and passing UVs.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Attributes
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+// Uniforms
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uTextureMatrix;
+
+// Outputs
+out vec2 vTextureCoord;
+out vec3 vVertexPosition;
+
+void main() {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = (uTextureMatrix * vec4(aTextureCoord, 0.0, 1.0)).xy;
+}
+
+// 2. Fragment Shader
+// This shader calculates the distance from the center, defines a falloff curve, and darkens the texture based on that distance.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision highp float;
+
+// Inputs
+in vec3 vVertexPosition;
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform sampler2D uTexture;
+uniform vec2 uResolution;
+
+// Output
+out vec4 fragColor;
+
+// --- Helper Functions ---
+
+// 2D Rotation matrix
+mat2 rot(float a) {
+    return mat2(cos(a), -sin(a), sin(a), cos(a));
+}
+
+// --- Main ---
+
+void main() {
+    vec2 uv = vTextureCoord;
+    vec4 bg = texture(uTexture, uv);
+
+    // 1. Luma and Displacement (Luma-based distortion is disabled: 0.0000)
+    float luma = dot(bg.rgb, vec3(0.299, 0.587, 0.114));
+    float displacement = (luma - 0.5) * 0.0000 * 0.5;
+
+    // 2. Vignette Setup
+    vec2 aspectRatio = vec2(uResolution.x / uResolution.y, 1.0);
+    
+    // Skewing the effect for elliptical shape (0.5000 means no skew, resulting in an ellipse based on aspect ratio)
+    vec2 skew = vec2(0.5000, 1.0 - 0.5000); 
+    
+    // Half radius of the vignette circle
+    float halfRadius = 0.5000 * 0.5;
+    
+    // Inner edge: Where darkening begins (halfRadius * 0.5 = 25% of the total halfRadius)
+    float innerEdge = halfRadius - 1.0000 * halfRadius * 0.5;
+    
+    // Outer edge: Where darkening is complete (halfRadius * 0.5 = 25% outside the total halfRadius)
+    float outerEdge = halfRadius + 1.0000 * halfRadius * 0.5;
+    
+    // Center position
+    vec2 pos = vec2(0.5, 0.5);
+    
+    const float TWO_PI = 6.28318530718;
+    
+    // 3. Coordinate Transformation
+    // Rotation is disabled (0.0000)
+    vec2 scaledUV = uv * aspectRatio * rot(0.0000 * TWO_PI) * skew;
+    vec2 scaledPos = pos * aspectRatio * rot(0.0000 * TWO_PI) * skew;
+    
+    // 4. Calculate Vignette Falloff
+    float radius = distance(scaledUV, scaledPos);
+    
+    // smoothstep creates a smooth transition from 0 (innerEdge) to 1 (outerEdge)
+    float falloff = smoothstep(innerEdge + displacement, outerEdge + displacement, radius);
+    
+    // 5. Apply Darkening
+    vec3 finalColor;
+    
+    // Darkening mix: mix(bg.rgb, mix(bg.rgb, vec3(0, 0, 0), 1.0000), falloff)
+    // The inner mix is 100% Black, so the whole expression simplifies to:
+    // finalColor = mix(bg.rgb, vec3(0, 0, 0), falloff);
+    finalColor = mix(bg.rgb, mix(bg.rgb, vec3(0, 0, 0), 1.0000), falloff);
+    
+    // 6. Alpha Handling
+    float alpha = max(bg.a, falloff * 1.0000); // Alpha is max of original alpha or falloff value
+    
+    // Final color mix:
+    // The mix factor is 1.0000, so the final color is (finalColor * alpha, alpha).
+    vec4 color = mix(bg * (1. - falloff), vec4(finalColor * alpha, alpha), 1.0000);
+    
+    fragColor = color;
+}
+// Configuration Summary
+// The shader is currently configured for a standard, smooth vignette with the following properties:
+
+// Center: (0.5, 0.5)
+
+// Vignette Color: Black (vec3(0, 0, 0))
+
+// Start Radius (innerEdge): 0.5 * 0.5 - 1.0 * 0.25 = 0.0
+
+// End Radius (outerEdge): 0.5 * 0.5 + 1.0 * 0.25 = 0.5
+
+// The effect starts darkening immediately from the center and reaches full blackness by a radius of 0.5 (half the screen size, adjusted by aspect ratio).

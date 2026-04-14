@@ -1,0 +1,173 @@
+// This shader is designed to create a dynamic Glitter / Sparkle effect, often referred to as a "K-Buffer" or "Star-field" effect, by overlaying stylized, cross-shaped light flares onto a base texture. It uses a Voronoi/Cellular Noise approach to scatter the sparkle centers.
+
+// 1. Vertex Shader (Shared)
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Attributes
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+// Uniforms
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uTextureMatrix;
+
+// Outputs
+out vec2 vTextureCoord;
+out vec3 vVertexPosition;
+
+void main() {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = (uTextureMatrix * vec4(aTextureCoord, 0.0, 1.0)).xy;
+}
+
+// 2. Fragment Shader (Sparkle Generation and Composite)
+// This pass contains the complex logic for generating cellular noise, calculating the sparkle shape (cross and bloom), and integrating it with the input texture.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Inputs
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform sampler2D uTexture;
+uniform float uTime;
+uniform vec2 uMousePos;
+uniform vec2 uResolution;
+
+// Output
+out vec4 fragColor;
+
+const float PI = 3.14159265359;
+
+// --- Utility Functions ---
+
+// Luma (luminance) calculation
+float luma(vec4 color) {
+    return 0.299 * color.r + 0.587 * color.g + 0.114 * color.b;
+}
+
+// Simple hash function for pseudo-random number generation (used for Voronoi offsets)
+vec2 hash(vec2 p) {
+    p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
+    return fract(sin(p) * 18.5453);
+}
+
+// 2D Rotation Matrix
+mat2 rot(float a) {
+    return mat2(cos(a), -sin(a), sin(a), cos(a));
+}
+
+// Color utility to create cyclic hue
+vec3 hue(float h, float angle) {
+    const float PI = 3.14159265358979323846;
+    return vec3(0.5) + 0.5 * cos(h + 2.0 * PI * angle + vec3(0, 2, 4));
+}
+
+// --- Star/Glitter Generation (Voronoi/Cellular Noise) ---
+
+vec4 getStarLayer(vec2 baseUV, float scaleMult, vec2 offset) {
+    // 1. Calculate aspect-corrected UV and scale factors
+    vec2 scaleRatio = vec2(1080) * vec2(uResolution.x / uResolution.y, 1);
+    vec2 pos = vec2(0.5, 0.5) + mix(vec2(0), (uMousePos - 0.5), 0.0000); // Mouse offset disabled
+    
+    // uv is the coordinate system for the Voronoi pattern
+    vec2 uv = (baseUV - pos) * scaleRatio * 0.2500 * scaleMult * 0.01 * rot(0.0000 * PI * 2.) + offset; // Rotation disabled
+    
+    float time = (uTime * 0.001);
+    vec2 i_uv = floor(uv); // Cell index
+    vec2 f_uv = fract(uv); // Position within cell [0, 1]
+    
+    vec3 d = vec3(1e10); // Stores distance squared (d.x = F1, d.y = F2)
+    vec2 closestPoint;
+    vec2 point = vec2(0);
+
+    // 2. Find the two closest cell centers (F1 and F2 Voronoi)
+    for (int y = -1; y <= 1; y++) {
+        for (int x = -1; x <= 1; x++) {
+            vec2 tile_offset = vec2(float(x), float(y));
+            // Calculate random offset (the cell center) + animate over time
+            vec2 o = hash(i_uv + tile_offset + vec2(time * 0.05));
+            
+            // Vector from current fragment to the potential cell center
+            tile_offset += o - f_uv; 
+            
+            float dist = dot(tile_offset, tile_offset); // Distance squared
+            
+            if (dist < d.x) { // Found a new closest point (F1)
+                d.y = d.x;
+                d.x = dist;
+                closestPoint = tile_offset;
+                point = o;
+            } else if (dist < d.y) { // Found a new second closest point (F2)
+                d.y = dist;
+            }
+        }
+    }
+    
+    d = sqrt(d);
+    float r = sqrt(d.x);
+    vec2 toCenter = closestPoint;
+    vec2 toCenterRot45 = toCenter * rot(-PI/4.);
+    
+    // 3. Sample color from the texture at the sparkle center (for color grading)
+    vec2 closestPointOriginal = closestPoint * rot(-abs(0.0000) * PI * 2.) / (0.2500 * scaleMult * 0.01) / scaleRatio + baseUV;
+    vec4 closestPointCol = texture(uTexture, closestPointOriginal);
+    float closestPointR = luma(closestPointCol); // Luma of the sparkle center
+    
+    // Mix threshold based on sparkle center luma
+    float mixThresh = mix(1., closestPointR, 0.5000); 
+    closestPointR = mixThresh;
+    
+    // 4. Calculate Sparkle Shape (Cross and Bloom)
+    
+    float proximityFactor = d.y - d.x; // F2 - F1 distance (controls intensity/size)
+    
+    // Radial Bloom
+    float radialGradient = (1.0 - length(toCenter)) * closestPointR * (0.5000 * 1.5);
+    float flare = 1.0 - smoothstep(-0.5, 1.0, 0.5000); // Flare disabled
+    
+    // Cross Shape (Manhattan distance/Chebyshev distance approximations)
+    float crossShape;
+    crossShape = min(abs(toCenter.x), abs(toCenter.y)); // Square/Diamond pattern
+    // smoothstep creates the sharp cross shape. The edge is softened by proximity and brightness.
+    crossShape = 1.0 - smoothstep(-0.04, 0.04 * (proximityFactor - flare) * closestPointR * closestPointR, crossShape);
+    
+    // Mix the cross with hue/color
+    vec3 cross = mix(vec3(crossShape), vec3(crossShape) * hue(closestPointR, proximityFactor * 5.), 0.2500);
+    
+    // Bloom (soft glow)
+    vec3 bloom = vec3(smoothstep(0., 4., radialGradient * proximityFactor));
+    
+    // 5. Final Color and Composite
+    
+    // Mix between white and the sparkle center color
+    vec3 rgb = mix(vec3(1, 1, 1), mix(vec3(1, 1, 1), closestPointCol.rgb, 0.5), 0.5000);
+    
+    // Final Sparkle Color: (Cross + Bloom) * RGB color * Intensity (10.)
+    // Note: This results in high, unclipped values for a bright sparkle effect.
+    return vec4(rgb * (cross + bloom) * 10., 
+                (cross.r + bloom.r) * 10. * rgb.r); // Alpha calculation based on intensity
+}
+
+void main() {
+    // Generate the glitter layer
+    vec4 stars = getStarLayer(vTextureCoord, 1.0, vec2(0.0));
+    
+    // Sample the base color
+    vec4 color = texture(uTexture, vTextureCoord);
+    
+    // Blend the glitter (additive blend for the RGB channels)
+    color.rgb += stars.rgb;
+    
+    // Max alpha
+    color.a = max(color.a, stars.a);
+    
+    fragColor = color;
+}

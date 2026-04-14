@@ -1,0 +1,112 @@
+// This shader creates a Sinusoidal Wave Distortion effect by displacing the texture coordinates (UVs) during the fragment shader execution. The waves move and are driven by time.
+
+// 1. Vertex Shader (Shared)
+// This is a standard vertex shader, passing the transformed texture coordinates and position data to the fragment shader.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Attributes
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+// Uniforms
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uTextureMatrix;
+
+// Outputs
+out vec2 vTextureCoord;
+out vec3 vVertexPosition;
+
+void main() {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = (uTextureMatrix * vec4(aTextureCoord, 0.0, 1.0)).xy;
+}
+
+// 2. Fragment Shader (Sinusoidal Distortion)
+// This shader calculates two independent sine waves (one for X displacement, one for Y displacement) and adds them to the UV coordinates, resulting in a wobbly, water-like distortion.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Inputs
+in vec2 vTextureCoord;
+in vec3 vVertexPosition;
+
+// Uniforms
+uniform sampler2D uTexture;
+uniform float uTime;
+uniform vec2 uMousePos;
+uniform vec2 uResolution;
+
+out vec4 fragColor;
+
+const float PI = 3.141592;
+
+float ease (int easingFunc, float t) {
+    return t; // Linear ease
+}
+
+void main() {
+    vec2 uv = vTextureCoord;
+    
+    // Convert UV coordinates from [0, 1] to [-1, 1] range
+    vec2 waveCoord = vTextureCoord.xy * 2.0 - 1.0; 
+    
+    // --- Wave Parameters ---
+    float thirdPI = PI * 0.3333; // Phase offset or speed factor
+    float time = uTime * 0.25;
+    float frequency = 20.0 * 0.5000; // Frequency (10.0)
+    float amp = 0.3000 * 0.2;        // Amplitude (0.06)
+
+    // --- 1. Calculate Wave Displacements ---
+    
+    // Wave X (Horizontal displacement) based on vertical position (waveCoord.y)
+    // The wave moves horizontally (along X) but ripples according to Y.
+    // vec2(0.5, 0.5).y ensures the input coordinates are correctly zeroed/scaled.
+    float waveX = sin((waveCoord.y + 0.5) * frequency + (time * thirdPI)) * amp; 
+    
+    // Wave Y (Vertical displacement) based on horizontal position (waveCoord.x)
+    // The wave moves vertically (along Y) but ripples according to X.
+    float waveY = sin((waveCoord.x - 0.5) * frequency + (time * thirdPI)) * amp;
+    
+    // Apply displacement to waveCoord.xy
+    // The mix factors (0.0000) show that this shader is currently configured to apply only
+    // the waveY displacement (vertical displacement) but has the option for both.
+    waveCoord.xy += vec2(
+        mix(waveX, 0., 0.0000), 
+        mix(0., waveY, 0.0000)
+    );
+    
+    // 2. Convert distorted coordinates back to UV range [0, 1]
+    vec2 finalUV = waveCoord * 0.5 + 0.5;
+    
+    // --- 3. Mouse Interaction (Blending) ---
+    
+    float aspectRatio = uResolution.x / uResolution.y;
+    
+    // Mouse position adjusted (Mouse interaction disabled 0.0000)
+    vec2 mPos = vec2(0.5, 0.5) + mix(vec2(0), (uMousePos - 0.5), 0.0000); 
+    
+    // dist: calculated proximity mask for blending
+    // Since 0.0000 is used in the ease calculation, the effect is likely applied globally (dist=1).
+    float dist = ease(0, max(0., 1. - distance(uv * vec2(aspectRatio, 1), mPos * vec2(aspectRatio, 1)) * 4. * (1. - 1.0000)));
+
+    // Second conditional check (disabled: 0 == 1)
+    if (0 == 1) { 
+        dist = max(0., (0.5 - dist));
+    }
+    
+    // Blend between the original UV and the final distorted UV
+    // Since 'dist' is effectively 1 (or close to it), the distortion (finalUV) is primarily used.
+    uv = mix(vTextureCoord, finalUV, dist);
+    
+    // 4. Final Sampling
+    vec4 color = texture(uTexture, uv);
+    fragColor = color;
+}

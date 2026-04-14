@@ -1,0 +1,118 @@
+// This shader implements a Chromatic Aberration (CA) effect, which simulates the optical defect where a lens fails to focus all colors to the same point. In this implementation, the red and blue channels are offset along a specific radial direction, creating a colored fringe.
+
+// 1. Vertex Shader (Shared)
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Attributes
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+// Uniforms
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uTextureMatrix;
+
+// Outputs
+out vec2 vTextureCoord;
+out vec3 vVertexPosition;
+
+void main() {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = (uTextureMatrix * vec4(aTextureCoord, 0.0, 1.0)).xy;
+}
+// 2. Fragment Shader (Chromatic Aberration)
+// This pass calculates the direction and magnitude of the color separation and samples the texture three times to construct the final fringed color.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision highp float;
+
+// Inputs
+in vec3 vVertexPosition;
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform sampler2D uTexture;
+uniform float uTime;
+uniform vec2 uMousePos;
+uniform vec2 uResolution;
+
+// Output
+out vec4 fragColor;
+
+const float PI = 3.1415926;
+
+// Easing function (disabled in this implementation)
+float ease (int easingFunc, float t) {
+    return t;
+}
+
+// Composites the R, G, B channels from the three shifted samples
+vec3 getAbberatedColor(vec3 color, vec3 left, vec3 center, vec3 right) {
+    // Red Channel (R): taken from the 'left' (negative offset) sample
+    // Green Channel (G): taken from the original color, but mixed 0% with center sample (effectively just original color.g)
+    // Blue Channel (B): taken from the 'right' (positive offset) sample
+    return vec3(left.r, mix(color.g, center.g, float(0)), right.b);
+}
+
+void main() {
+    vec2 uv = vTextureCoord;
+    float aspectRatio = uResolution.x / uResolution.y;
+    
+    // Light Position / Center of Aberration (Mouse control disabled with 0.0000)
+    vec2 mPos = vec2(0.5, 0.5) + mix(vec2(0), (uMousePos - 0.5), 0.0000);
+    vec2 pos = vec2(0.5, 0.5); // Fixed center
+    
+    // Rotation Angle (Animated based on uTime, but rotation amount is scaled by 0.0000, so mostly fixed)
+    float angle = ((0.0000 + uTime * 0.05) * 360.0) * PI / 180.0;
+    vec2 rotation = vec2(sin(angle), cos(angle));
+    
+    vec4 color = texture(uTexture, uv);
+    
+    // Mouse Distance Mask (Disabled due to 1.0000 factor in the (1. - 1.0000) part)
+    float mDist = ease(0, max(0., 1. - distance(uv * vec2(aspectRatio, 1.), mPos * vec2(aspectRatio, 1.)) * 4. * (1. - 1.0000)));
+    mDist = 1.0; // Assuming this evaluates to 1.0 or is intended to be full screen
+    
+    vec2 aberrated;
+    
+    // Aberration Vector Calculation:
+    // Scale: 0.2000 * 0.03 = 0.006 (strength)
+    // Direction: `rotation` vector (fixed direction if uTime is disabled)
+    // Falloff: `distance(uv, pos)` (radial distance from center, disabled by 0.0000 mix factor)
+    aberrated = 0.2000 * rotation * 0.03 * mix(1.0, distance(uv, pos) * (1.0 + 0.0000), 0.0000);
+    
+    // Apply mouse mask (mDist is likely 1.0)
+    aberrated *= mDist; 
+    
+    float amt = length(aberrated);
+    
+    // Early Exit if aberration amount is negligible
+    if(amt < 0.001) {
+        fragColor = color;
+        return;
+    }
+    
+    // --- Sample Shifting ---
+    
+    // 1. Left Sample (Red channel): Offset backward
+    vec4 left = texture(uTexture, uv - aberrated);
+    
+    // 2. Right Sample (Blue channel): Offset forward
+    vec4 right = texture(uTexture, uv + aberrated);
+    
+    // 3. Center Sample (Green channel): Not used for color, but needed for alpha
+    vec4 center = vec4(0); // If center is vec4(0), the green channel will fall back to `color.g` in getAbberatedColor
+    
+    // --- Final Composite ---
+    
+    color.rgb = getAbberatedColor(color.rgb, left.rgb, center.rgb, right.rgb);
+    
+    // Max alpha from all three samples to prevent edges from becoming transparent
+    color.a = max(max(left.a, center.a), right.a);
+    
+    fragColor = color;
+}

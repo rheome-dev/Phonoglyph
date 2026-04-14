@@ -1,0 +1,171 @@
+// This shader implements a Halftone screen effect, which simulates the process used in printing presses to reproduce continuous-tone images using a pattern of dots. It specifically uses the CMYK (Cyan, Magenta, Yellow, Key/Black) color model, with each color channel having its own dot screen angle to avoid a visible moiré pattern.
+
+// 1. Vertex Shader (Shared)
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Attributes
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+// Uniforms
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uTextureMatrix;
+
+// Outputs
+out vec2 vTextureCoord;
+out vec3 vVertexPosition;
+
+void main() {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = (uTextureMatrix * vec4(aTextureCoord, 0.0, 1.0)).xy;
+}
+// 2. Fragment Shader (CMYK Halftone Screen)
+// This pass handles color space conversion, anti-aliased dot generation, and composite blending.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Inputs
+in vec3 vVertexPosition;
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform sampler2D uTexture;
+uniform vec2 uResolution;
+
+// Output
+out vec4 fragColor;
+
+// --- Utility Functions ---
+
+// Luminance calculation
+float luma(vec4 color) {
+    return dot(color.rgb, vec3(0.299, 0.587, 0.114));
+}
+
+// CMYK to RGB Conversion
+vec3 CMYKtoRGB (vec4 cmyk) {
+    float c = cmyk.x;
+    float m = cmyk.y;
+    float y = cmyk.z;
+    float k = cmyk.w;
+    
+    float invK = 1.0 - k;
+    float r = 1.0 - min(1.0, c * invK + k);
+    float g = 1.0 - min(1.0, m * invK + k);
+    float b = 1.0 - min(1.0, y * invK + k);
+    
+    return clamp(vec3(r, g, b), 0.0, 1.0);
+}
+
+// RGB to CMYK Conversion
+vec4 RGBtoCMYK (vec3 rgb) {
+    float r = rgb.r;
+    float g = rgb.g;
+    float b = rgb.b;
+    
+    float k = min(1.0 - r, min(1.0 - g, 1.0 - b)); // Key (Black) calculation
+    vec3 cmy = vec3(0.0);
+    float invK = 1.0 - k;
+    
+    // Avoid division by zero when k is near 1.0 (pure black)
+    if (invK != 0.0) {
+        cmy.x = (1.0 - r - k) / invK;
+        cmy.y = (1.0 - g - k) / invK;
+        cmy.z = (1.0 - b - k) / invK;
+    }
+    return clamp(vec4(cmy, k), 0.0, 1.0);
+}
+
+// Anti-aliased step function (smooth transition at the threshold)
+float aastep(float threshold, float value) {
+    // afwidth determines the width of the anti-aliased edge (0.75*200*1/uResolution.x)
+    float afwidth = 0.7500 * 200. * (1. / uResolution.x); 
+    float minval = threshold - afwidth;
+    float maxval = threshold + afwidth;
+    return smoothstep(minval, maxval, value);
+}
+
+// 2D Rotation
+vec2 rotate2D(vec2 st, float degrees) {
+    float c = cos(radians(degrees));
+    float s = sin(radians(degrees));
+    return mat2(c, -s, s, c) * st;
+}
+
+// Generates a single Halftone dot pattern
+float halftone(vec2 st, float col, float angle) {
+    float aspectRatio = uResolution.x / uResolution.y;
+    // Aspect correction factor
+    float aspectCorrection = mix(aspectRatio, 1. / aspectRatio, 0.5);
+    
+    // 1. Center the UV
+    st -= vec2(0.5, 0.5);
+    
+    // 2. Apply aspect ratio correction (stretching based on X)
+    st *= vec2(aspectRatio, 1.);
+    
+    // 3. Rotate and scale the UV space (0.75*200 controls density)
+    vec2 r_st = 0.7500 * 200. * rotate2D(st, angle - 0.0000 * 360.);
+    
+    // 4. Normalize coordinates by the correction factor
+    r_st /= aspectCorrection;
+    
+    // 5. Wrap coordinates to the [-1, 1] cell space (82% size)
+    st = (2. * fract(r_st) - 1.) * 0.82;
+    
+    // 6. Dot Generation: 
+    // The dot radius is proportional to sqrt(color density).
+    // length(st) is the distance from the cell center.
+    // The function returns 1.0 (dot is on) if distance is less than the required radius.
+    return aastep(0.0000, sqrt(col) - length(st));
+}
+
+// --- Main Function ---
+
+void main() {
+    vec4 clipColor = texture(uTexture, vTextureCoord);
+    
+    // Alpha Clipping
+    if(clipColor.a == 0.) {
+        fragColor = vec4(0);
+        return;
+    }
+    
+    vec2 uv = vTextureCoord;
+    vec4 color = texture(uTexture, uv);
+    
+    // 1. Convert RGB to CMYK
+    vec4 cmyk = RGBtoCMYK(color.rgb);
+    float alpha = color.a;
+    
+    // 2. Generate Halftone screens for each CMYK channel
+    // Halftone value (c, m, y, k) is the proportion of the dot that is ON (1.0 or 0.0)
+    // The "col" input controls the dot size (density of the ink).
+    float k = halftone(uv, cmyk.w, 45.);  // Black screen angle: 45°
+    float c = halftone(uv, cmyk.x, 15.);  // Cyan screen angle: 15°
+    float m = halftone(uv, cmyk.y, 75.);  // Magenta screen angle: 75°
+    float y = halftone(uv, cmyk.z, 0.);   // Yellow screen angle: 0°
+    
+    // NOTE: The following lines rC, rM, rY, and g seem to be unused alternatives or debugging code:
+    // float rC = 1. - halftone(uv, 1. - cmyk.x, 15.);
+    // float rM = 1. - halftone(uv, 1. - cmyk.y, 75.);
+    // float rY = 1. - halftone(uv, 1. - cmyk.z, 0.);
+    // float g = 1. - halftone(uv, 1. - luma(color), 0.);
+    
+    // 3. Convert the resulting ON/OFF CMYK dots back to RGB
+    vec4 halftone = vec4(CMYKtoRGB(vec4(c, m, y, k)), 1);
+    
+    // 4. Apply original alpha
+    halftone *= color.a;
+    
+    // 5. Final Composite (100% replacement with halftone image)
+    color = mix(color, halftone, 1.0000);
+    fragColor = color;
+}

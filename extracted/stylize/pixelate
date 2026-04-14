@@ -1,0 +1,117 @@
+// This shader implements a Pixelation effect, which quantizes the UV coordinates to create a blocky, low-resolution appearance. It also includes logic for aspect ratio correction and optional soft edge blending for the resulting "pixels."
+
+// 1. Vertex Shader (Shared)
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Attributes
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+// Uniforms
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uTextureMatrix;
+
+// Outputs
+out vec2 vTextureCoord;
+out vec3 vVertexPosition;
+
+void main() {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = (uTextureMatrix * vec4(aTextureCoord, 0.0, 1.0)).xy;
+}
+
+// 2. Fragment Shader (Pixelation)
+// This pass calculates the coordinates of the center of the "pixel" block corresponding to the current fragment, and samples the texture at that single point to achieve the pixelated look.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Inputs
+in vec3 vVertexPosition;
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform sampler2D uTexture;
+uniform vec2 uMousePos;
+uniform vec2 uResolution;
+
+// Output
+out vec4 fragColor;
+
+void main() {
+    vec2 uv = vTextureCoord;
+    float aspectRatio = uResolution.x / uResolution.y;
+    
+    // Light Position / Center of Effect (Mouse control disabled with 0.0000)
+    vec2 pos = vec2(0.5, 0.5) + mix(vec2(0), (uMousePos - 0.5), 0.0000);
+
+    // --- Grid Size Calculation ---
+    
+    // gridSize = (0.5000 + 0.01) * 0.083 = 0.04243 (small factor)
+    float gridSize = (0.5000 + 0.01) * 0.083; 
+    
+    // baseGrid = 1.0 / gridSize = 23.56 (number of pixel blocks across the screen)
+    float baseGrid = 1.0 / gridSize;
+    
+    // Cell Size calculation: 
+    // The X size is corrected for aspect ratio: 1.0 / (baseGrid * aspectRatio)
+    // The Y size is 1.0 / baseGrid
+    float aspectCorrection = mix(aspectRatio, 1. / aspectRatio, 0.5); // Mixed aspect correction factor
+    vec2 cellSize = vec2(1.0 / (baseGrid * aspectRatio), 1.0 / baseGrid) * aspectCorrection;
+
+    // --- Coordinate Quantization ---
+    
+    // 1. Center UV coordinates around `pos`
+    vec2 offsetUv = uv - pos;
+    
+    // 2. Find the cell index (quantization)
+    vec2 cell = floor(offsetUv / cellSize);
+    
+    // 3. Find the center of that cell (the coordinate to sample the texture at)
+    vec2 cellCenter = (cell + 0.5) * cellSize;
+    
+    // 4. Transform back to final UV coordinate space
+    vec2 pixelatedCoord = cellCenter + pos;
+    
+    // --- Sample Texture ---
+    
+    // The mix factor is vec2(1, 1), so this is pure pixelation.
+    float x = mix(uv.x, pixelatedCoord.x, vec2(1, 1).x);
+    float y = mix(uv.y, pixelatedCoord.y, vec2(1, 1).y);
+    
+    vec4 color = texture(uTexture, vec2(x, y));
+
+    // --- Cell Edge Smoothing (Vignette) ---
+    
+    // 1. Calculate relative position within the current cell ([-0.5, 0.5] range)
+    vec2 relativePos = mod(offsetUv, cellSize) / cellSize - 0.5;
+    
+    // 2. Distance from the center of the cell
+    float dist = length(relativePos);
+    
+    // 3. Edge Smoothing parameters
+    float edgeSmoothing = 0.02;
+    
+    // 4. Alpha Fade: Fades the color out smoothly near the cell edge (1.0000)
+    float alpha = 1.0 - smoothstep(1.0000 - edgeSmoothing, 1.0000, dist);
+    
+    // 5. Composite:
+    if(1 == 1) { 
+        // Mix pixel color with black (0, 0, 0) based on alpha (fades to black at cell edge)
+        color.rgb = mix(vec3(0, 0, 0), color.rgb, alpha);
+    } else {
+        // Alternative path: simply multiplies the color's alpha
+        color.a *= alpha;
+    }
+    
+    // Multiply final color by its alpha (pre-multiplied alpha blend)
+    color *= color.a; 
+    
+    fragColor = color;
+}

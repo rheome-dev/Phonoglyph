@@ -1,0 +1,145 @@
+// 1. Vertex Shader
+
+#version 300 es
+precision mediump float;
+
+// Attributes
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+// Uniforms
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uTextureMatrix;
+
+// Outputs to Fragment Shader
+out vec2 vTextureCoord;
+out vec3 vVertexPosition;
+
+void main() {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = (uTextureMatrix * vec4(aTextureCoord, 0.0, 1.0)).xy;
+}
+
+// Fragment Shader
+
+OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Inputs from Vertex Shader
+in vec3 vVertexPosition;
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform float uTime;
+uniform sampler2D uTexture;
+uniform vec2 uMousePos;
+uniform vec2 uResolution;
+
+// Output
+out vec4 fragColor;
+
+// Constants
+const float PI = 3.14159265;
+
+// --- Helper Functions ---
+
+float ease(int easingFunc, float t) {
+    return t;
+}
+
+mat2 rot(float a) {
+    return mat2(cos(a), -sin(a), sin(a), cos(a));
+}
+
+// --- Liquify Logic ---
+
+vec2 liquify(vec2 st, float dist) {
+    float aspectRatio = uResolution.x / uResolution.y;
+    
+    // Mouse interaction and Drift logic
+    // Note: Several values here are 0.0000, effectively disabling mouse/drift unless changed
+    vec2 pos = vec2(0.5, 0.5) + mix(vec2(0), (uMousePos - 0.5), 0.0000);
+    vec2 drift = vec2(0, 0.0000 * uTime * 0.0125) * rot(0.0000 * -2. * PI);
+    pos += drift;
+    
+    vec2 skew = mix(vec2(1), vec2(1, 0), 0.0000);
+    
+    // Normalize coordinates based on aspect ratio
+    st -= pos;
+    st.x *= aspectRatio;
+    st = st * rot(0.0000 * 2. * PI);
+    st *= skew;
+    
+    // Wave/Distortion Parameters
+    float freq = (5.0 * (0.5000 + 0.1));
+    float t = uTime * 0.025;
+    float amplitude = 0.5000 * mix(0.2, 0.2 / (0.5000 + 0.05), 0.25) * dist;
+    
+    // Iterative Rotation and Sine Wave Application
+    for (float i = 1.0; i <= 5.0; i++) {
+        st = st * rot(i / 5. * PI * 2.);
+        float ff = i * freq;
+        st.x += amplitude * cos(ff * st.y + t);
+        st.y += amplitude * sin(ff * st.x + t);
+    }
+    
+    // Restore coordinates
+    st /= skew;
+    st = st * rot(0.0000 * -2. * PI);
+    st.x /= aspectRatio;
+    st += pos;
+    
+    return st;
+}
+
+// --- Main ---
+
+void main() {
+    vec2 uv = vTextureCoord;
+    float aspectRatio = uResolution.x / uResolution.y;
+    
+    vec2 mPos = vec2(0.5, 0.5) + mix(vec2(0), (uMousePos - 0.5), 0.0000);
+    
+    // Calculate distance mask for the effect
+    float dist = ease(0, max(0., 1. - distance(uv * vec2(aspectRatio, 1), mPos * vec2(aspectRatio, 1)) * 4. * (1. - 1.0000)));
+    
+    // If effect is negligible, return original texture immediately
+    if (dist <= 0.001) {
+        fragColor = texture(uTexture, uv);
+        return;
+    }
+    
+    // Calculate distorted UVs
+    vec2 liquifiedUV = liquify(uv, dist);
+    vec2 normalizedUv = normalize(liquifiedUV - uv);
+    float distanceUv = length(liquifiedUV - uv);
+    
+    // Chromatic Aberration (RGB Split)
+    float chromAbb = 0.2500 * 0.5;
+    vec2 offsetR = liquifiedUV + chromAbb * normalizedUv * distanceUv;
+    vec2 offsetG = liquifiedUV;
+    vec2 offsetB = liquifiedUV - chromAbb * normalizedUv * distanceUv;
+    
+    // Sample texture with offsets
+    vec4 colorR = texture(uTexture, mix(uv, offsetR, 0.5000));
+    vec4 colorG = texture(uTexture, mix(uv, offsetG, 0.5000));
+    vec4 colorB = texture(uTexture, mix(uv, offsetB, 0.5000));
+    
+    // Combine channels
+    vec4 color = vec4(colorR.r, colorG.g, colorB.b, colorR.a * colorG.a * colorB.a);
+    
+    fragColor = color;
+}
+
+
+// A Note on the Logic
+// In the fragment shader (Liquify code), there are several places where values are multiplied by 0.0000 or mixed with 0.0000.
+
+// Example: mix(vec2(0), (uMousePos - 0.5), 0.0000)
+
+// This effectively turns off features like mouse interaction and rotation in its current state. If you want the effect to react to the mouse or animate more noticeably, you will need to change those 0.0000 values to something between 0.0 and 1.0.
+
+// Would you like me to help you adjust those values to make the liquify effect active?

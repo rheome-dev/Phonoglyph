@@ -1,0 +1,125 @@
+// This shader performs a Polar Coordinate Transformation (or polar projection) on the input texture. It maps the texture's vertical axis to the radius and its horizontal axis to the angle, creating a swirling effect centered at a specific point on the screen.
+
+// Here is the formatted code for both the Vertex and Fragment shaders.
+
+// 1. Vertex Shader
+// This is the standard pass-through shader, handling basic transformations and passing UVs.
+
+OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Attributes
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+// Uniforms
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uTextureMatrix;
+
+// Outputs
+out vec2 vTextureCoord;
+out vec3 vVertexPosition;
+
+void main() {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = (uTextureMatrix * vec4(aTextureCoord, 0.0, 1.0)).xy;
+}
+
+
+// 2. Fragment Shader
+// This shader converts Cartesian coordinates to polar coordinates to sample the texture, resulting in the swirling effect. It also includes logic to blend the vertical texture seam.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Inputs
+in vec3 vVertexPosition;
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform sampler2D uTexture;
+uniform float uTime;
+uniform vec2 uMousePos;
+uniform vec2 uResolution;
+
+// Output
+out vec4 fragColor;
+
+// Constants
+const float PI = 3.1415926;
+
+// --- Polar Transformation Function ---
+
+// Converts Cartesian coordinates (uv) relative to a center (pos) into polar UVs.
+vec2 polar(vec2 uv, vec2 pos) {
+    uv -= pos;
+    
+    // Convert to polar coordinates
+    float angle = atan(uv.y, uv.x);
+    float radius = length(uv);
+    
+    // --- Angle (Horizontal Texture Coordinate) ---
+    // angle: maps [-PI, PI] to [0, 2*PI] for a full circle mapping.
+    // + (uTime * 0.05): adds continuous rotation.
+    float xCoord = mod((angle + 0.0000 * 2.0 * PI) + (uTime * 0.05) + PI, 2.0 * PI) / (2.0 * PI);
+    
+    // --- Radius (Vertical Texture Coordinate) ---
+    float yCoordRaw = radius * 1.0000;
+    
+    // Gamma correction/shaping for the radius (currently disabled: pow(2, 0) = 1)
+    float gamma = pow(2.0, (0.5000 - 0.5) * 4.0);
+    float yCoord = pow(fract(yCoordRaw), gamma);
+    
+    // Returns (Radius UV, Angle UV)
+    return fract(vec2(yCoord, xCoord));
+}
+
+// --- Main ---
+
+void main() {
+    vec2 uv = vTextureCoord;
+    
+    // Scale UV by aspect ratio to make the center circular, not elliptical.
+    vec2 aspectRatio = vec2(uResolution.x / uResolution.y, 1);
+    
+    // Center point for the swirl. Mouse interaction is disabled (0.0000).
+    vec2 pos = vec2(0.5, 0.5) + mix(vec2(0), (uMousePos - 0.5), 0.0000);
+    
+    // Calculate the polar UV for sampling
+    vec2 polarCoord = polar(uv * aspectRatio, pos * aspectRatio);
+    
+    // Sample 1: The primary texture coordinate
+    vec4 color1 = texture(uTexture, polarCoord);
+    
+    // --- Seam Blending ---
+    
+    // Calculate the opposite UV for blending at the 0/1 seam of the texture (vertical wrap)
+    // The "opposite" is shifted by 0.5 in the angle direction (y component of polarCoord).
+    vec2 oppositePolar = vec2(polarCoord.x, polarCoord.y > 0.5 ? polarCoord.y - 0.5 : polarCoord.y + 0.5);
+    vec4 color2 = texture(uTexture, oppositePolar);
+    
+    float seamBlend = 0.0;
+    float blendWidth = 0.5000 * 0.1;
+    
+    // Check if the coordinate is near the 0.0 or 1.0 seam (angle wrap)
+    if (polarCoord.y < blendWidth || polarCoord.y > 1.0 - blendWidth) {
+        if (polarCoord.y < blendWidth) {
+            // Near 0.0 seam, blend towards 1.0
+            seamBlend = 1.0 - (polarCoord.y / blendWidth);
+        } else {
+            // Near 1.0 seam, blend towards 0.0
+            seamBlend = (polarCoord.y - (1.0 - blendWidth)) / blendWidth;
+        }
+        seamBlend = smoothstep(0.0, 1.0, seamBlend);
+    }
+    
+    // Blend the primary color with the opposite color near the seam
+    fragColor = mix(color1, color2, seamBlend);
+}
+
+// This code creates an animated, circularly projected image. The continuous rotation is currently active via (uTime * 0.05).

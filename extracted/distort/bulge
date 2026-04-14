@@ -1,0 +1,175 @@
+// This shader is a classic Bulge/Sphere Distortion effect implemented entirely in the Vertex Shader. The Fragment Shader then applies a subtle lighting calculation based on the new distorted geometry (the vertex normal) and dithering.
+
+// 1. Vertex Shader (Bulge Distortion and Normal Calculation)
+// The vertex shader is responsible for displacing the vertices of the mesh (e.g., a screen-filling quad) to create the 3D bulge shape. It also calculates the new surface normal needed for lighting in the fragment shader.
+
+OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Attributes
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+// Uniforms
+uniform sampler2D uCustomTexture;
+uniform vec2 uMousePos;
+uniform vec2 uResolution;
+
+// Outputs
+out vec2 vTextureCoord;
+out vec3 vVertexPosition; // Used to pass the calculated Normal Vector
+out float zPos;
+
+const float PI = 3.14159;
+
+// --- Utility Functions ---
+
+// Easing function (case 3: t < 0.5 ? 2t^2 : -1 + (4-2t)t which is 'ease in/out quad')
+float ease (int easingFunc, float t) {
+    return t < 0.5 ? 2.0 * t * t : -1.0 + (4.0 - 2.0 * t) * t;
+}
+
+// Cubic Bezier-like easing
+float bezier(float t) {
+    return ease(3, t);
+}
+
+// 2D Rotation Matrix
+mat2 rot(float a) {
+    return mat2(cos(a),-sin(a),sin(a),cos(a));
+}
+
+// --- Bulge Displacement Logic ---
+
+vec3 bulge(vec3 pos) {
+    // 1. Setup Coordinates and Transformation
+    
+    // pos.xy is in [-1, 1] range after being passed from aVertexPosition
+    vec2 aspectRatio = vec2(uResolution.x / uResolution.y, 1);
+    
+    // Mouse position adjusted to the range [-1, 1] (Mouse input disabled 0.0000)
+    vec2 mousePosAdjusted = mix((vec2(0.5, 0.5) - 0.5) * 2., (uMousePos - 0.5) * 2., 0.0000);
+    
+    // Skew vector (0.5, 0.5)
+    vec2 skew = vec2(0.5000, 1. - 0.5000);
+    
+    // Rotation matrix (0.4725 * 360 degrees rotation)
+    mat2 rotation = rot(0.4725 * 2. * PI);
+    
+    // 2. Calculate Distance to Center
+    
+    // Calculate distance to the center of the effect (mousePosAdjusted) 
+    // after applying aspect ratio correction, rotation, and skew
+    float dist = distance(pos.xy * aspectRatio * rotation * skew, mousePosAdjusted * aspectRatio * rotation * skew);
+    
+    // 3. Calculate Bulge Magnitude
+    
+    // t: normalized distance from the edge (0.3040 is the radius)
+    float t = max(0., 1. - dist / 0.3040); 
+    
+    // Apply easing to 't' and scale by the max bulge amount (0.75 - 0.5 = 0.25)
+    float bulge = bezier(t) * (0.7500 - 0.5);
+    
+    // Add Luma-based displacement (Disabled: 0.0000)
+    float luma = dot(texture(uCustomTexture, (pos.xy + 1.) * 0.5).rgb, vec3(0.299, 0.587, 0.114));
+    bulge += luma * bezier(t) * 0.0000;
+    
+    bulge = min(1., bulge); // Clamp bulge magnitude
+
+    // 4. Apply Displacement
+    
+    // Radial outward displacement
+    pos.xy += bulge * pos.xy;
+    // Z-axis forward displacement
+    pos.z -= bulge; 
+    
+    return pos;
+}
+
+void main() {
+    // 1. Bulge the current vertex
+    vec3 pos = bulge(aVertexPosition);
+    
+    // 2. Calculate Normal (using finite difference on the displaced mesh)
+    
+    // Displace vertex slightly in X and Y (dx, dy)
+    vec3 pos_dx = bulge(aVertexPosition + vec3(0.01, 0.0, 0.0));
+    vec3 pos_dy = bulge(aVertexPosition + vec3(0.0, 0.01, 0.0));
+    
+    // Calculate vectors on the surface
+    vec3 dx = pos_dx - pos;
+    vec3 dy = pos_dy - pos;
+    
+    // Normal is the cross product of the surface vectors
+    vec3 normal = normalize(cross(dx, dy)); 
+    
+    // 3. Pass Data to Fragment Shader
+    vVertexPosition = normal; // Re-use vTextureCoord to pass the Normal
+    zPos = pos.z;
+    
+    // Final position for screen projection
+    gl_Position = vec4(pos, 1.0);
+    vTextureCoord = aTextureCoord;
+}
+// 2. Fragment Shader (Lighting and Dithering)
+// The fragment shader takes the distorted UV coordinate (which is effectively the original aTextureCoord), samples the texture, and applies a basic directional lighting calculation using the calculated normal vector.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Inputs
+in vec3 vVertexPosition; // Receiving the calculated Normal vector
+in vec2 vTextureCoord;
+in float zPos;
+
+// Uniforms
+uniform sampler2D uTexture;
+
+out vec4 fragColor;
+
+const float PI = 3.14159;
+
+// --- Utility Functions ---
+
+// Simple Pseudo-Random Number Generator for Dithering
+float random(vec2 seed) {
+    return fract(sin(dot(seed.xy, vec2(12.9898, 78.233))) * 43758.5453);
+}
+
+// --- Main Function ---
+
+void main() {
+    vec2 uv = vTextureCoord;
+    vec4 color = texture(uTexture, uv);
+    
+    // --- 1. Lighting Calculation ---
+    
+    float intensity = 0.7500 * 0.5; // Final light intensity (0.375)
+    
+    // Rotated light position in the XY plane (0.5000 - 0.25) * -2 * PI = -0.5 * PI
+    float rad = (0.5000 - 0.25) * -2. * PI; 
+    vec2 rotatedLightPosition = vec2(cos(rad), sin(rad));
+    
+    // Light Position: (X, Y in [-2, 2], Z=1)
+    vec3 lightPosition = vec3(vec2(0.5) * rotatedLightPosition * 2., 1.0);
+    
+    // Diffuse lighting: max(N dot L, 0)
+    // N is vVertexPosition (the normal vector)
+    float diff = max(dot(normalize(vVertexPosition), lightPosition), 0.0);
+    
+    // Apply lighting: add (diff * intensity - intensity) to RGB
+    // This scales the color towards black where light is absent (diff=0)
+    color.rgb += (diff * intensity - intensity); 
+
+    // --- 2. Dithering (Noise) ---
+    
+    // Add random noise for smoothing color bands (dithering)
+    float dither = (random(gl_FragCoord.xy) - 0.5) / 255.0;
+    color.rgb += dither;
+    
+    fragColor = color;
+}

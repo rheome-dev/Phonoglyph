@@ -1,0 +1,156 @@
+// This shader implements a dynamic Single Line/Beam effect, typically used as a post-processing pass to draw an animated, glowing, or scanning line over an existing scene.
+
+// The effect uses vector projection and smooth stepping to create a bright, fading line with an inner core, and an animated traveling "phase" along its length.
+
+// 1. Vertex Shader (Shared)
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Attributes
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+// Uniforms
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uTextureMatrix;
+
+// Outputs
+out vec2 vTextureCoord;
+out vec3 vVertexPosition;
+
+void main() {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = (uTextureMatrix * vec4(aTextureCoord, 0.0, 1.0)).xy;
+}
+
+// 2. Fragment Shader (Beam Effect Pass 0)
+// OpenGL Shading Language
+
+#version 300 es
+precision highp float;
+precision highp int;
+
+// Inputs
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform sampler2D uTexture;
+uniform float uTime;
+uniform vec2 uMousePos;
+
+// Output
+out vec4 fragColor;
+
+// Constants
+const float PI = 3.14159265359;
+const float TWO_PI = 2.0 * PI;
+
+// --- Utility Functions ---
+
+// Simple Addition Blend Mode (src + dst)
+vec3 blend (int blendMode, vec3 src, vec3 dst) {
+    // In this specific implementation, blendMode 1 results in:
+    return src + dst;
+}
+
+// PCG (Permuted Congruential Generator) for random number generation
+uvec2 pcg2d(uvec2 v) {
+    v = v * 1664525u + 1013904223u;
+    v.x += v.y * v.y * 1664525u + 1013904223u;
+    v.y += v.x * v.x * 1664525u + 1013904223u;
+    v ^= v >> 16;
+    v.x += v.y * v.y * 1664525u + 1013904223u;
+    v.y += v.x * v.x * 1664525u + 1013904223u;
+    return v;
+}
+
+// Random float generator
+float randFibo(vec2 p) {
+    uvec2 v = floatBitsToUint(p);
+    v = pcg2d(v);
+    uint r = v.x ^ v.y;
+    return float(r) / float(0xffffffffu);
+}
+
+// Hyperbolic Tangent Tonemapping (compresses high values)
+vec3 Tonemap_tanh(vec3 x) {
+    x = clamp(x, -40.0, 40.0);
+    return (exp(x) - exp(-x)) / (exp(x) + exp(-x));
+}
+
+// Luminance calculation for setting alpha
+float luma(vec3 color) {
+    return dot(color, vec3(0.299, 0.587, 0.114));
+}
+
+// --- Main Beam Logic ---
+
+vec3 drawLine(vec2 uv, vec2 center, float scale, float angle) {
+    // 1. Setup Direction and Animation Phase
+    float radAngle = -angle * TWO_PI; // Convert normalized angle (0 to 1) to radians
+    
+    // Calculate animated phase offset along the line
+    // Time (uTime * 0.01) + speed (0.5000) creates the traveling effect.
+    float phase = fract(uTime * 0.01 + 0.5000) * (3. * max(1., scale)) - (1.5 * max(1., scale));
+    
+    vec2 direction = vec2(cos(radAngle), sin(radAngle)); // Normalized line direction
+    
+    vec2 centerToPoint = uv - center;
+    
+    // 2. Projection (Distance along the line) and Distance to Line
+    
+    // Projection: distance from the center point along the line's axis
+    float projection = dot(centerToPoint, direction);
+    
+    // Distance to Line: shortest distance from the pixel to the line segment's axis
+    float distToLine = length(centerToPoint - projection * direction);
+
+    // 3. Create Line Profile (Width)
+    
+    float lineRadius = 0.5000 * 0.25;
+    
+    // Brightness decreases sharply as distance to line increases
+    float brightness = lineRadius / (1. - smoothstep(0.4, 0., distToLine + 0.02));
+    
+    // 4. Create Glow (Traveling Phase)
+    
+    float glowRadius = scale;
+    // Glow is max at `projection == phase` and fades out based on `glowRadius`
+    float glow = smoothstep(glowRadius, 0.0, abs(projection - phase));
+
+    // Final color calculation: (Width Profile) * (Fading Line Core) * (Color) * (Traveling Glow)
+    return brightness * (1. - distToLine) * (1. - distToLine) * vec3(0.4, 0.1, 1) * glow;
+}
+
+vec3 getBeam(vec2 uv) {
+    // Focus point is fixed at center (0.5, 0.5), mouse control disabled (0.0000)
+    vec2 pos = vec2(0.5, 0.5) + mix(vec2(0), (uMousePos - 0.5), 0.0000);
+    
+    // Draw the line (scale=0.5000, angle=0.0000)
+    return drawLine(uv, pos, 0.5000, 0.0000);
+}
+
+void main() {
+    vec2 uv = vTextureCoord;
+    vec4 bg = texture(uTexture, uv); // Existing scene color
+    
+    vec3 beam = getBeam(uv); // Generated beam color
+    
+    // Dithering (adds small noise to reduce banding, mostly visible in low-bit-depth output)
+    float dither = (randFibo(gl_FragCoord.xy) - 0.5) / 255.0;
+    
+    // Blending: Tonemap the generated beam, then add it to the background color (blendMode 1 is addition)
+    vec3 blended = blend(1, Tonemap_tanh(beam), bg.rgb);
+    
+    // Final result mix (mix factor is 1.0000, so it always uses the blended color)
+    vec3 result = mix(bg.rgb, blended, 1.0000);
+    
+    result += dither;
+    
+    // Set color and calculate alpha: alpha is the max of the existing alpha and the beam's luminance
+    vec4 color = vec4(result, max(bg.a, luma(beam)));
+    fragColor = color;
+}

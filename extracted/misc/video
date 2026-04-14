@@ -1,0 +1,136 @@
+// This shader is designed to render a Video Texture (uVideoTexture) onto the screen, handling complex spatial transformations like scaling, centering, and rotation, while maintaining the correct aspect ratio relative to the screen and the video source. It effectively allows the video to be embedded within the scene, potentially with control over its framing.
+
+// 1. Vertex Shader (Shared)
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Attributes
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+// Uniforms
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uTextureMatrix;
+
+// Outputs
+out vec2 vTextureCoord;
+out vec3 vVertexPosition;
+
+void main() {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = (uTextureMatrix * vec4(aTextureCoord, 0.0, 1.0)).xy;
+}
+
+// 2. Fragment Shader (Video Framing and Composite)
+// This pass calculates the transformed UV coordinates needed to correctly sample the video texture, incorporating rotation and scaling.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Inputs
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform sampler2D uTexture;     // Background / scene texture
+uniform sampler2D uVideoTexture; // The video source texture
+uniform vec2 uMousePos;
+uniform vec2 uResolution;
+
+// Output
+out vec4 fragColor;
+
+const float PI = 3.14159265359;
+
+// --- Utility Functions ---
+
+// Simple blend function (currently only returns the source color)
+vec3 blend (int blendMode, vec3 src, vec3 dst) {
+    return src;
+}
+
+// 2D Rotation Matrix
+mat2 rot(float a) {
+    return mat2(cos(a), -sin(a), sin(a), cos(a));
+}
+
+// --- Main Logic ---
+
+void main() {
+    vec2 uv = vTextureCoord;
+    vec4 bg = texture(uTexture, uv);
+    
+    // Get Video Texture Dimensions and Aspect Ratio
+    ivec2 texSize = textureSize(uVideoTexture, 0);
+    float texWidth = float(texSize.x);
+    float texHeight = float(texSize.y);
+    float videoAspect = texWidth / texHeight;
+    
+    // Get Screen Aspect Ratio
+    float screenAspect = (uResolution.x / uResolution.y);
+    
+    vec2 centeredUV = uv;
+    
+    // --- Video Framing Modes ---
+    
+    // Mode 1: Aspect Ratio Correction (Letterboxing/Pillarboxing) - (Disabled: 0 == 1)
+    if (0 == 1) { 
+        // This block contains logic for fit-to-screen aspect correction.
+        // It's commented out/disabled in the provided code.
+    } 
+    // Mode 2: Rotated/Scaled/Framed Video (Active)
+    else {
+        // Center of transformation (Mouse control disabled with 0.0000)
+        vec2 pos = vec2(0.5, 0.5) + mix(vec2(0), (uMousePos - 0.5), 0.0000);
+        
+        // 1. Center the UV coordinates relative to the target position
+        centeredUV = centeredUV - pos;
+        
+        // 2. Adjust for screen aspect ratio (normalized to square coordinates)
+        centeredUV.x *= screenAspect;
+        
+        // 3. Scale down the entire image by a factor (Zoom out / increase content area)
+        centeredUV = (centeredUV) / 0.6380;
+        
+        // 4. Apply rotation (0.0027 * 2 * PI is a tiny rotation)
+        centeredUV = centeredUV * rot(0.0027 * 2.0 * PI);
+        
+        // 5. Correct for the video's aspect ratio (stretches X back to video proportions)
+        centeredUV.x /= videoAspect;
+        
+        // 6. Shift back to [0, 1] range
+        centeredUV += 0.5;
+        
+        // 7. Small color-based offset (Disabled with 0.0000)
+        centeredUV += (bg.rg * 2.0 - 1.0) * 0.0000;
+        
+        // --- Clip check: Discard fragments outside the video's [0, 1] UV range ---
+        if(centeredUV.x < 0.0 || centeredUV.x > 1.0 || centeredUV.y < 0.0 || centeredUV.y > 1.0) {
+            fragColor = bg; // Output the background color
+            return;
+        }
+    }
+    
+    // Sample the video texture at the transformed coordinates
+    vec4 color = texture(uVideoTexture, centeredUV);
+    
+    // --- Compositing ---
+    
+    // Blend mode (Disabled: 0 > 0 is false)
+    if(0 > 0) {
+        color.rgb = blend(0, bg.rgb, color.rgb);
+    }
+    
+    // Final Mix: Blend the video color (color.rgb) with the background (bg.rgb).
+    // The result is multiplied by the video's alpha (color.a), meaning the video uses pre-multiplied alpha.
+    color.rgb = mix(bg.rgb, color.rgb, 1.0000) * color.a;
+    
+    // Final Alpha: The output alpha is the maximum of the background alpha and the video alpha
+    color.a = max(bg.a, color.a * 1.0000);
+    
+    fragColor = color;
+}

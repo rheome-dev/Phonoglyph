@@ -1,0 +1,280 @@
+// This is a collection of four fragment shaders (Passes 0, 1, 2, 3) and a final composite shader (Pass 4), all sharing a single vertex shader. Together, they implement a Progressive Directional Gaussian Blur effect, where the blur strength varies across the screen, creating a sense of depth or motion.
+
+// 1. Vertex Shader (Shared by all passes)
+// This is the standard pass-through shader.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Attributes
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+// Uniforms
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uTextureMatrix;
+
+// Outputs
+out vec2 vTextureCoord;
+out vec3 vVertexPosition;
+
+void main() {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = (uTextureMatrix * vec4(aTextureCoord, 0.0, 1.0)).xy;
+}
+
+// 2. Fragment Shaders (Blur and Composite Passes)
+// All blur passes share the same set of helper functions for randomness, rotation, easing, and Gaussian weights.
+
+// Shared Helper Functions Block
+// OpenGL Shading Language
+
+#version 300 es
+precision highp float;
+precision highp int;
+
+// Inputs
+in vec3 vVertexPosition;
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform sampler2D uTexture;
+uniform vec2 uMousePos;
+uniform vec2 uResolution;
+// Note: Pass 4 uses an additional uniform: uniform sampler2D uBgTexture;
+
+// Output
+out vec4 fragColor;
+
+// Constants
+const float PI = 3.141592;
+const int kernelSize = 36;
+
+// --- Utility Functions ---
+
+// PCG (Permuted Congruential Generator) for high-quality random number generation
+uvec2 pcg2d(uvec2 v) {
+    v = v * 1664525u + 1013904223u;
+    v.x += v.y * v.y * 1664525u + 1013904223u;
+    v.y += v.x * v.x * 1664525u + 1013904223u;
+    v ^= v >> 16;
+    v.x += v.y * v.y * 1664525u + 1013904223u;
+    v.y += v.x * v.x * 1664525u + 1013904223u;
+    return v;
+}
+
+// Random float generator using PCG
+float randFibo(vec2 p) {
+    uvec2 v = floatBitsToUint(p);
+    v = pcg2d(v);
+    uint r = v.x ^ v.y;
+    return float(r) / float(0xffffffffu);
+}
+
+// 2D Rotation Matrix
+mat2 rot(float a) {
+    return mat2(cos(a), -sin(a), sin(a), cos(a));
+}
+
+// Quadratic Easing function (smooth acceleration and deceleration)
+float easeInOutQuad(float t) {
+    return t < 0.5 ? 2.0 * t * t : -1.0 + (4.0 - 2.0 * t) * t;
+}
+
+// Gaussian Weights for the 36-tap kernel (pre-calculated)
+float getGaussianWeight(int index) {
+    switch(index) {
+        // ... (36 cases defining weights from index 0 to 35) ...
+        case 0: return 0.00094768; case 1: return 0.00151965; case 2: return 0.00237008;
+        // ... weights for 3 to 32 ...
+        case 33: return 0.00237008; case 34: return 0.00151965; case 35: return 0.00094768;
+        default: return 0.0;
+    }
+}
+// Directional Blur Core Function (Used in Passes 0-2)
+// This function applies a 1D blur whose strength is determined by the pixel's Y-coordinate relative to the center (pos.y), creating a progressive blur from top to bottom (or vice versa).
+
+// OpenGL Shading Language
+
+vec4 directionalBlur(vec2 uv, bool isVertical) {
+    vec4 color = vec4(0.0);
+    
+    // 1. Calculate Blur Amount
+    vec2 pos = vec2(0.5, 0.5) + mix(vec2(0), (uMousePos-0.5), 0.0000); // Mouse offset disabled
+    vec2 st = uv * rot(0.0000 * 2. * PI); // Rotation disabled
+    pos *= rot(0.0000 * 2. * PI); // Rotation disabled
+    
+    // Calculate distance from UV.y to Center.y, smoothed by easeInOutQuad
+    float dist = easeInOutQuad(pos.y - st.y);
+    
+    // Check if UV.y is less than Center.y (top half of the screen)
+    float jawn = st.y < pos.y ? 1. : 0.; 
+    
+    // The blur amount is proportional to 'dist' and is only applied if jawn=1 (top half)
+    float amount = 0.2000 * 6. * dist * jawn; 
+
+    if (amount < 0.0001) {
+        return texture(uTexture, uv); // Skip blur if amount is near zero
+    }
+    
+    // 2. Sample and Sum
+    color += texture(uTexture, uv) * 0.00094768; // Center weight for the 36-tap kernel
+    
+    vec2 direction = isVertical ? vec2(0, uResolution.x / uResolution.y) : vec2(1, 0);
+
+    for (int i = 0; i < kernelSize; i++) {
+        float x = float(i - kernelSize / 2) * amount;
+        vec2 offset = vec2(x * 0.001) * direction;
+        color += texture(uTexture, uv + offset) * getGaussianWeight(i);
+    }
+    
+    // 3. Apply Dithering
+    float dither = (randFibo(gl_FragCoord.xy) - 0.5) / 255.0;
+    color.rgb += dither;
+    
+    return color;
+}
+// Fragment Shader 0 & 1: Horizontal Blur Pass (Same code, likely used for the first horizontal pass)
+// OpenGL Shading Language
+
+// // ... Shared Definitions and directionalBlur function ...
+
+vec4 getColor(vec2 uv) {
+    return directionalBlur(uv, false); // false = Horizontal Direction
+}
+
+void main() {
+    vec2 uv = vTextureCoord;
+    vec4 color = getColor(uv);
+    fragColor = color;
+}
+Fragment Shader 2: Vertical Blur Pass
+OpenGL Shading Language
+
+// ... Shared Definitions and directionalBlur function ...
+
+vec4 getColor(vec2 uv) {
+    return directionalBlur(uv, true); // true = Vertical Direction
+}
+
+void main() {
+    vec2 uv = vTextureCoord;
+    vec4 color = getColor(uv);
+    fragColor = color;
+}
+
+// Fragment Shader 3: Final Combined Blur Pass
+// This pass applies a stronger, combined directional blur (horizontal and vertical in one pass).
+
+// OpenGL Shading Language
+
+// ... Shared Definitions ...
+
+vec4 finalBlur(vec2 uv) {
+    vec4 color = vec4(0.0);
+    
+    // 1. Calculate Blur Amount (Stronger: 11. vs 6.)
+    vec2 pos = vec2(0.5, 0.5) + mix(vec2(0), (uMousePos-0.5), 0.0000);
+    vec2 st = uv * rot(0.0000 * 2. * PI);
+    pos *= rot(0.0000 * 2. * PI);
+    float dist = easeInOutQuad(pos.y - st.y);
+    float jawn = st.y < pos.y ? 1. : 0.;
+    float amount = 0.2000 * 11. * dist * jawn; // Increased strength (11.)
+
+    if (amount < 0.0001) {
+        return texture(uTexture, uv);
+    }
+    
+    // 2. Sample and Sum (Combined Directional Blur)
+    color += texture(uTexture, uv) * 0.00094768;
+
+    for (int i = 0; i < kernelSize; i++) {
+        float x = float(i - kernelSize / 2) * amount;
+        
+        // Horizontal sample (weighted 0.5)
+        color += texture(uTexture, uv + vec2(x * 0.001, 0)) * getGaussianWeight(i) * 0.5;
+        
+        // Vertical sample, adjusted for aspect ratio (weighted 0.5)
+        vec2 verticalDirection = vec2(0, uResolution.x / uResolution.y);
+        color += texture(uTexture, uv + vec2(0, x * 0.001) * verticalDirection) * getGaussianWeight(i) * 0.5;
+    }
+    return color;
+}
+
+vec4 getColor(vec2 uv) {
+    return finalBlur(uv);
+}
+
+void main() {
+    vec2 uv = vTextureCoord;
+    vec4 color = getColor(uv);
+    fragColor = color;
+}
+
+// Fragment Shader 4: Final Composite Pass
+// This pass blends the newly blurred image (from uTexture) with an original background texture (uBgTexture).
+
+// OpenGL Shading Language
+
+#version 300 es
+precision highp float;
+precision highp int;
+
+// Inputs
+in vec3 vVertexPosition;
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform sampler2D uTexture;    // Input from the last blur pass
+uniform sampler2D uBgTexture;  // Original, sharp texture
+uniform vec2 uMousePos;
+
+// Output
+out vec4 fragColor;
+
+// ... Utility Functions (PCG, randFibo, rot, easeInOutQuad) ...
+
+const int kernelSize = 36; // Only needed for context, not used here
+
+vec4 composite(vec2 uv) {
+    vec4 bg = texture(uBgTexture, uv); // Original Image
+    vec4 fg = texture(uTexture, uv);   // Blurred Image
+
+    // 1. Apply Final Dithering to the Foreground (Blurred Image)
+    float dither = (randFibo(gl_FragCoord.xy) - 0.5) / 255.0;
+    fg.rgb += dither;
+
+    // 2. Recalculate Masking Value (m)
+    vec2 pos = vec2(0.5, 0.5) + mix(vec2(0), (uMousePos-0.5), 0.0000);
+    vec2 st = uv * rot(0.0000 * 2. * PI);
+    pos *= rot(0.0000 * 2. * PI);
+    float dist = easeInOutQuad(pos.y - st.y);
+    float jawn = st.y < pos.y ? 1. : 0.;
+    
+    // m represents the blur amount / effect strength (same calculation as Pass 3)
+    float m = 0.2000 * 11. * dist * jawn; 
+    
+    // 3. Final Mix
+    // We mix the Blurred Image (fg) with the Original Image (bg).
+    // The mixing factor is smoothstep(0., 1.0, 1. - m).
+    // - Where m is high (high blur), (1 - m) is low, and smoothstep is near 0. -> Result is mostly fg (blurred).
+    // - Where m is low (low blur), (1 - m) is high, and smoothstep is near 1. -> Result is mostly bg (sharp).
+    return mix(fg, bg, smoothstep(0., 1.0, 1. - m));
+}
+
+vec4 getColor(vec2 uv) {
+    return composite(uv);
+}
+
+void main() {
+    vec2 uv = vTextureCoord;
+    vec4 color = getColor(uv);
+    fragColor = color;
+}
+// Progressive Blur Summary
+// This pipeline applies a directional blur (strongest at the top of the image) over multiple passes and then uses the blur mask (m) to blend the blurred result back with the original, sharp image. The progressive nature of the blur is controlled entirely by the dist and jawn variables which measure the distance from the center Y-coordinate.
+
+// Would you like to adjust the direction of the blur (e.g., make it strongest at the bottom or sides) or increase the maximum blur strength (the 11. multiplier in Pass 3 and 4)?

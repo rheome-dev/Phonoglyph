@@ -1,0 +1,238 @@
+// This set of shaders implements a multi-pass Rotational Blur (often mislabeled as "radial blur," which typically means zoom blur). Instead of blurring away from a center point, this effect samples points along a circle centered on the focus point, creating a swirl or rotation effect.
+
+// The structure is similar to the Zoom Blur, with three identical blur passes (0, 1, 2) that apply the effect and a final pass (3) that composites the result.
+
+// 1. Vertex Shader (Shared)
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Attributes
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+// Uniforms
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uTextureMatrix;
+
+// Outputs
+out vec2 vTextureCoord;
+out vec3 vVertexPosition;
+
+void main() {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = (uTextureMatrix * vec4(aTextureCoord, 0.0, 1.0)).xy;
+}
+
+// 2. Fragment Shaders (Rotational Blur Passes 0, 1, 2)
+// The core logic (RadialBlur) implements a weighted, 17-tap (Center + 8 positive + 8 negative) exponential blur along the circumference of a circle centered on the focus point.
+
+// Shared Helper Functions
+// OpenGL Shading Language
+
+// --- Shared Utility Functions ---
+
+// Linear ease (currently t=t)
+float ease (int easingFunc, float t) {
+    return t;
+}
+
+// PCG (Permuted Congruential Generator) for random number generation
+uvec2 pcg2d(uvec2 v) {
+    v = v * 1664525u + 1013904223u;
+    v.x += v.y * v.y * 1664525u + 1013904223u;
+    v.y += v.x * v.x * 1664525u + 1013904223u;
+    v ^= v >> 16;
+    v.x += v.y * v.y * 1664525u + 1013904223u;
+    v.y += v.x * v.x * 1664525u + 1013904223u;
+    return v;
+}
+
+// Random float generator using PCG
+float randFibo(vec2 p) {
+    uvec2 v = floatBitsToUint(p);
+    v = pcg2d(v);
+    uint r = v.x ^ v.y;
+    return float(r) / float(0xffffffffu);
+}
+
+// Exponential Weights for 1D kernel (0 is center, 1-8 are offsets)
+float getExponentialWeight(int index) {
+    switch(index) {
+        case 0: return 1.0000000000;
+        case 1: return 0.7165313106;
+        case 2: return 0.5134171190;
+        case 3: return 0.3678794412;
+        case 4: return 0.2636050919;
+        case 5: return 0.1888756057;
+        case 6: return 0.1353352832;
+        case 7: return 0.0969670595;
+        case 8: return 0.0694877157;
+        default: return 0.0;
+    }
+}
+// Rotational Blur Function (RadialBlur)
+// OpenGL Shading Language
+
+vec4 RadialBlur(sampler2D tex, vec2 uv) {
+    // Check if effect is enabled/strong enough (0.2000 is likely a uniform)
+    if (0.2000 == 0.0) {
+        return texture(tex, uv);
+    }
+
+    // 1. Determine Focus Point and Blur Strength
+    vec2 pos = vec2(0.5, 0.5) + mix(vec2(0), (uMousePos - 0.5), 0.0000); // Focus center (mouse control disabled)
+    float aspectRatio = uResolution.x / uResolution.y;
+    
+    // Calculate distance (masking is disabled as 1. - 1.0000 = 0)
+    float dist = distance(uv * vec2(aspectRatio, 1), pos * vec2(aspectRatio, 1));
+    dist = ease(0, max(0., 1. - dist * 4. * (1. - 1.0000)));
+
+    // Optional masking logic (disabled: 0 == 1)
+    // if (0 == 1) { dist = max(0., (0.5 - dist)); }
+
+    // Final blur amount, based on a base value (0.2000 + 0.2) and the 'dist' mask
+    float amount = (0.2000 + 0.2) * dist * 0.04;
+
+    // Pass-specific amount scaling logic (only one branch can be active per pass)
+    // Pass 0: No scale
+    // Pass 1: amount *= 0.5;
+    // Pass 2: amount *= 0.25; 
+
+    if (amount < 0.0001) {
+        return texture(tex, uv);
+    }
+    
+    // 2. Prepare for Rotational Sampling
+    vec4 color = vec4(0.0);
+    float total_weight = 0.0;
+    
+    // Center Sample (Index 0)
+    vec4 center = texture(tex, uv);
+    float center_weight = getExponentialWeight(0);
+    color += center * center_weight;
+    total_weight += center_weight;
+
+    // Calculate UV coordinates relative to the focus point ('pos')
+    vec2 toUv = uv - pos;
+    // Scale X by aspect ratio for correct angular calculation (working in "aspect-corrected" space)
+    vec2 toUvAR = vec2(toUv.x * aspectRatio, toUv.y);
+    
+    float radius = length(toUvAR);
+    float baseAngle = atan(toUvAR.y, toUvAR.x);
+    float angleStep = amount; // The blur amount is used as the base angle step
+
+    // 3. Symmetric Rotational Sampling (16 taps)
+    for (int i = 1; i <= 8; i++) {
+        float weight = getExponentialWeight(i);
+        float step = float(i) * angleStep;
+        
+        // Sample 1: Rotate forward
+        float a1 = baseAngle + step;
+        vec2 rot1AR = radius * vec2(cos(a1), sin(a1));
+        // Rotate back to UV space and add focus point offset
+        vec2 rot1 = vec2(rot1AR.x / aspectRatio, rot1AR.y) + pos; 
+
+        // Sample 2: Rotate backward
+        float a2 = baseAngle - step;
+        vec2 rot2AR = radius * vec2(cos(a2), sin(a2));
+        vec2 rot2 = vec2(rot2AR.x / aspectRatio, rot2AR.y) + pos;
+        
+        vec4 sample1 = texture(tex, rot1);
+        vec4 sample2 = texture(tex, rot2);
+        
+        color += (sample1 + sample2) * weight;
+        total_weight += 2.0 * weight;
+    }
+
+    // Normalize
+    color = color / total_weight;
+
+    // Optional Dithering (disabled: 0/1/2 == 3)
+    // if (0 == 3) { ... dither logic ... }
+    
+    return color;
+}
+// Fragment Shader 0 (Example Pass 0 Structure)
+// OpenGL Shading Language
+
+#version 300 es
+precision highp float;
+// ... (Includes vTextureCoord, uniforms, and helper functions) ...
+
+// ... (RadialBlur function) ...
+
+vec4 getPassColor(vec2 uv) {
+    return RadialBlur(uTexture, uv);
+}
+
+void main() {
+    vec2 uv = vTextureCoord;
+    vec4 color = getPassColor(uv);
+    fragColor = color;
+}
+
+// 3. Fragment Shader (Final Blending Pass 3)
+// This pass blends the blurred result (uTexture) with the original sharp image (uBgTexture) based on the calculated distance mask.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision highp float;
+
+// Inputs
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform sampler2D uTexture;     // Blurred result
+uniform sampler2D uBgTexture;   // Original/sharp texture
+uniform vec2 uMousePos;
+uniform vec2 uResolution;
+
+// Output
+out vec4 fragColor;
+
+float ease (int easingFunc, float t) {
+    return t;
+}
+
+vec4 finalPass(vec2 uv) {
+    // Check if effect is enabled (0.2000 is likely a uniform)
+    if (0.2000 == 0.00) {
+        return texture(uBgTexture, uv);
+    }
+
+    vec4 blurredColor = texture(uTexture, uv);
+    vec4 originalColor = texture(uBgTexture, uv);
+    
+    // 1. Calculate Mask Strength (same logic as RadialBlur)
+    vec2 pos = vec2(0.5, 0.5) + mix(vec2(0), (uMousePos - 0.5), 0.0000);
+    float aspectRatio = uResolution.x / uResolution.y;
+    
+    float dist = distance(uv * vec2(aspectRatio, 1), pos * vec2(aspectRatio, 1));
+    dist = ease(0, max(0., 1. - dist * 4. * (1. - 1.0000)));
+
+    // Optional masking logic (disabled: 0 == 1)
+    // if (0 == 1) { dist = max(0., (0.5 - dist)); }
+
+    // 2. Determine Mix Factor
+    // Check if the overall amount (0.2000 * dist) is above a minimal threshold
+    float mix_factor = (0.2000 * dist > 0.001) ? 1.0 : 0.0;
+    
+    // Mix: 
+    // mix_factor = 1.0 means blurredColor is returned.
+    // mix_factor = 0.0 means originalColor is returned.
+    return mix(originalColor, blurredColor, mix_factor);
+}
+
+vec4 getPassColor(vec2 uv) {
+    return finalPass(uv);
+}
+
+void main() {
+    vec2 uv = vTextureCoord;
+    vec4 color = getPassColor(uv);
+    fragColor = color;
+}

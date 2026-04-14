@@ -1,0 +1,123 @@
+// This shader implements a classic Ripple or Wave distortion effect, often called a sine-wave displacement. The effect radiates outwards from a central point, creating concentric waves that travel over time.
+
+// Here is the formatted code for both the Vertex and Fragment shaders.
+
+// 1. Vertex Shader
+// This is the standard pass-through shader, handling basic transformations and passing UVs.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Attributes
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+// Uniforms
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uTextureMatrix;
+
+// Outputs
+out vec2 vTextureCoord;
+out vec3 vVertexPosition;
+
+void main() {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = (uTextureMatrix * vec4(aTextureCoord, 0.0, 1.0)).xy;
+}
+
+// 2. Fragment Shader
+// This shader calculates the distance from the center point and uses a time-animated sine wave to displace the UV coordinates radially.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision highp float;
+
+// Inputs
+in vec3 vVertexPosition;
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform sampler2D uTexture;
+uniform float uTime;
+uniform vec2 uMousePos;
+uniform vec2 uResolution;
+
+// Output
+out vec4 fragColor;
+
+// Constants
+const float PI = 3.1415926;
+
+// --- Helper Functions ---
+
+float ease(int easingFunc, float t) {
+    return t;
+}
+
+// --- Main ---
+
+void main() {
+    vec2 uv = vTextureCoord;
+    vec2 aspectRatio = vec2(uResolution.x / uResolution.y, 1);
+    
+    // 1. Calculate Center Position
+    // Mouse position influence is disabled (0.0000), so pos is locked to (0.5, 0.5)
+    vec2 pos = vec2(0.5, 0.5) + mix(vec2(0), uMousePos - 0.5, 0.0000);
+    
+    // 2. Adjust Coordinates for Aspect Ratio
+    // Center coordinates around (0,0) and scale by aspect ratio for a circular (not elliptical) effect
+    vec2 adjustedPos = (pos - 0.5) * aspectRatio;
+    vec2 adjustedUv = (uv - 0.5) * aspectRatio;
+    
+    float dist;
+    vec2 direction;
+    float easingDist;
+    
+    // 3. Calculate Distance and Direction
+    dist = length(adjustedUv - adjustedPos);
+    direction = normalize(adjustedUv - adjustedPos);
+    
+    // Handle the center point where distance is zero
+    if (length(direction) < 0.0001) {
+        direction = vec2(0.0, 1.0);
+    }
+    
+    // --- Easing/Masking ---
+    
+    easingDist = dist;
+    
+    // Calculate the distance mask value (1. - 1.0000) makes the effective radius check zero,
+    // so easeDistValue is max(0, 1 - dist), which creates a full-screen effect that fades out from the center.
+    float easeDistValue = max(0., 1. - easingDist - (1. - 1.0000)); 
+    
+    // This condition is disabled (0 != 1)
+    if (0 == 1) {
+        easeDistValue = max(0., (1.0000 - easingDist));
+    }
+    
+    float easeFactor = ease(0, easeDistValue);
+    
+    // --- Wave Calculation ---
+    
+    // Frequency: 0.5000 * 50. (25 waves). `mix` factor is 0.0000, so frequency is constant.
+    float freq = 0.5000 * 50. * mix(1., (1. - abs(dist)), 0.0000);
+    
+    // Strength: 0.5000 * 0.2 * easeFactor (scaled by the mask)
+    float strength = 0.5000 * 0.2 * easeFactor;
+    
+    // The ripple wave: `sin(distance * frequency - time)`
+    float wave = sin(dist * freq - uTime * 0.05) * strength;
+    
+    // 4. Apply Displacement
+    // Offset UVs radially outwards (direction vector) by the wave height
+    uv += direction * wave;
+    
+    // 5. Sample Texture
+    vec4 color = texture(uTexture, uv);
+    fragColor = color;
+}
+// This shader is set up to create a ripple effect that starts at the center of the screen (pos = 0.5, 0.5) and spreads outwards, gradually fading in strength the further it gets from the center (due to easeDistValue being 1. - easingDist).

@@ -1,0 +1,26 @@
+{
+  "output": {
+    "filePath": "slideshow-lambda-debug-pack.md",
+    "style": "markdown",
+    "showLineNumbers": true
+  },
+  "include": [
+    "apps/web/src/lib/visualizer/effects/ImageSlideshowEffect.ts",
+    "apps/web/src/remotion/RayboxComposition.tsx",
+    "apps/web/src/remotion/Root.tsx",
+    "apps/web/src/remotion/RemotionOverlayRenderer.tsx",
+    "apps/web/src/remotion/index.ts",
+    "apps/web/remotion.config.ts",
+    "apps/web/src/lib/visualizer/effects/EffectRegistry.ts",
+    "apps/web/src/lib/visualizer/effects/EffectDefinitions.ts",
+    "apps/web/src/lib/visualizer/effects/BaseShaderEffect.ts",
+    "apps/web/src/lib/visualizer/core/VisualizerManager.ts",
+    "apps/web/src/lib/visualizer/core/MultiLayerCompositor.ts",
+    "apps/web/src/lib/visualizer/core/MediaLayerManager.ts",
+    "apps/web/src/lib/visualizer/core/AudioTextureManager.ts",
+    "apps/api/src/routers/render.ts",
+    "apps/web/src/lib/export-utils.ts",
+    "apps/web/src/types/audio-analysis-data.ts",
+    "apps/web/src/types/video-composition.ts"
+  ]
+}

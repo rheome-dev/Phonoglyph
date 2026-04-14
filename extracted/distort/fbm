@@ -1,0 +1,174 @@
+// 1. Vertex Shader
+// Standard pass-through shader handling position and texture coordinates.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Attributes
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+// Uniforms
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uTextureMatrix;
+
+// Outputs
+out vec2 vTextureCoord;
+out vec3 vVertexPosition;
+
+void main() {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = (uTextureMatrix * vec4(aTextureCoord, 0.0, 1.0)).xy;
+}
+
+// 2. Fragment Shader
+// This shader uses Domain Warping. It calculates Perlin noise, then feeds that noise back into the FBM function to create a fluid, marble-like distortion effect.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision highp float;
+
+// Inputs
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform sampler2D uTexture;
+uniform float uTime;
+uniform vec2 uMousePos;
+uniform vec2 uResolution;
+
+// Output
+out vec4 fragColor;
+
+// --- Helper Functions ---
+
+float ease(int easingFunc, float t) {
+    return t;
+}
+
+// Random Number Generator for Noise
+vec3 hash33(vec3 p3) {
+    p3 = fract(p3 * vec3(0.1031, 0.11369, 0.13787));
+    p3 += dot(p3, p3.yxz + 19.19);
+    return -1.0 + 2.0 * fract(vec3(
+        (p3.x + p3.y) * p3.z,
+        (p3.x + p3.z) * p3.y,
+        (p3.y + p3.z) * p3.x
+    ));
+}
+
+// 3D Perlin Noise
+float perlin_noise(vec3 p) {
+    vec3 pi = floor(p);
+    vec3 pf = p - pi;
+    
+    // Quintic interpolation curve
+    vec3 w = pf * pf * (3.0 - 2.0 * pf);
+    
+    // Gradients
+    float n000 = dot(pf - vec3(0.0, 0.0, 0.0), hash33(pi + vec3(0.0, 0.0, 0.0)));
+    float n100 = dot(pf - vec3(1.0, 0.0, 0.0), hash33(pi + vec3(1.0, 0.0, 0.0)));
+    float n010 = dot(pf - vec3(0.0, 1.0, 0.0), hash33(pi + vec3(0.0, 1.0, 0.0)));
+    float n110 = dot(pf - vec3(1.0, 1.0, 0.0), hash33(pi + vec3(1.0, 1.0, 0.0)));
+    float n001 = dot(pf - vec3(0.0, 0.0, 1.0), hash33(pi + vec3(0.0, 0.0, 1.0)));
+    float n101 = dot(pf - vec3(1.0, 0.0, 1.0), hash33(pi + vec3(1.0, 0.0, 1.0)));
+    float n011 = dot(pf - vec3(0.0, 1.0, 1.0), hash33(pi + vec3(0.0, 1.0, 1.0)));
+    float n111 = dot(pf - vec3(1.0, 1.0, 1.0), hash33(pi + vec3(1.0, 1.0, 1.0)));
+    
+    // Interpolation (Trilinear)
+    float nx00 = mix(n000, n100, w.x);
+    float nx01 = mix(n001, n101, w.x);
+    float nx10 = mix(n010, n110, w.x);
+    float nx11 = mix(n011, n111, w.x);
+    
+    float nxy0 = mix(nx00, nx10, w.y);
+    float nxy1 = mix(nx01, nx11, w.y);
+    
+    float nxyz = mix(nxy0, nxy1, w.z);
+    
+    return nxyz;
+}
+
+const float PI = 3.14159265359;
+
+mat2 rot(float a) {
+    return mat2(cos(a), -sin(a), sin(a), cos(a));
+}
+
+mat2 rotHalf = mat2(
+     cos(0.5), sin(0.5),
+    -sin(0.5), cos(0.5)
+);
+
+// Fractal Brownian Motion
+float fbm(in vec3 st) {
+    float value = 0.0;
+    float amp = .25;
+    float frequency = 0.;
+    float aM = (0.1 + 0.9200 * .65);
+    vec2 shift = vec2(100.0);
+    
+    // Iterate 3 octaves
+    for (int i = 0; i < 3; i++) {
+        value += amp * perlin_noise(st);
+        st.xy *= rotHalf * 2.5;
+        st.xy += shift;
+        amp *= aM;
+    }
+    return value;
+}
+
+// --- Main ---
+
+void main() {
+    vec2 uv = vTextureCoord;
+    float aspectRatio = uResolution.x / uResolution.y;
+    float multiplier = 6.0 * (0.4000 / ((aspectRatio + 1.) / 2.));
+    
+    // Mouse Interaction
+    vec2 mPos = vec2(0.5, 0.5) + mix(vec2(0), (uMousePos - 0.5), 0.0000);
+    vec2 pos = mix(vec2(0.5, 0.5), mPos, floor(1.0000));
+    
+    // Effect Mask (Distance from mouse/center)
+    float mDist = ease(0, max(0., 1. - distance(uv * vec2(aspectRatio, 1), mPos * vec2(aspectRatio, 1)) * 4. * (1. - 1.0000)));
+    
+    // Coordinate Setup
+    vec2 skew = mix(vec2(1), vec2(1, 0), 0.0000);
+    vec2 st = ((uv - pos) * vec2(aspectRatio, 1)) * multiplier * aspectRatio;
+    st = rot(0.0000 * -2. * PI) * st * skew;
+    
+    vec2 drift = vec2(0, uTime * 0.005) * (0.5000 * 2.);
+    float time = uTime * 0.025;
+    
+    // --- Domain Warping Logic ---
+    // 1. Calculate base noise vector `r`
+    vec2 r = vec2(
+        fbm(vec3(st - drift + vec2(1.7, 9.2), 0.0000 * 25. + time)),
+        fbm(vec3(st - drift + vec2(8.2, 1.3), 0.0000 * 25. + time))
+    );
+    
+    // 2. Calculate secondary noise `f` using `r` to distort the domain
+    float f = fbm(vec3(st + r - drift, 0.0000 * 25. + time)) * 0.5000;
+    
+    // 3. Create final offset
+    vec2 offset = (f * 2. + (r * 0.5000));
+    
+    // Apply texture with offset masked by mDist
+    vec4 color = texture(uTexture, uv + offset * mDist);
+    
+    fragColor = color;
+}
+// Analysis
+// Just like the Liquify shader, this code has several parameters set to 0.0000 which disable specific features:
+
+// Mouse Influence: mix(vec2(0), (uMousePos-0.5), 0.0000) prevents the mouse from moving the center of the distortion.
+
+// 3D Noise Slice: Inside the FBM calls, the Z-axis is 0.0000 * 25. + time. This means it only slices through the noise based on time, not depth/intensity.
+
+// Rotation/Skew: These are also multiplied by 0.
+
+// If you want the effect to follow your mouse, you will need to change the 0.0000 in the mPos calculation to 1.0 (or a value between 0 and 1).

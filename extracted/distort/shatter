@@ -1,0 +1,159 @@
+// 1. Vertex Shader
+// This is the standard pass-through shader, handling basic transformations and passing UVs.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Attributes
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+// Uniforms
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uTextureMatrix;
+
+// Outputs
+out vec2 vTextureCoord;
+out vec3 vVertexPosition;
+
+void main() {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = (uTextureMatrix * vec4(aTextureCoord, 0.0, 1.0)).xy;
+}
+
+// 2. Fragment Shader
+// This implements the Voronoi noise with FBM to generate a fragmented distortion field, which is then used to offset the texture coordinates.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Inputs
+in vec3 vVertexPosition;
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform sampler2D uTexture;
+uniform float uTime;
+uniform vec2 uMousePos;
+uniform vec2 uResolution;
+
+// Output
+out vec4 fragColor;
+
+// Constants
+const float PI = 3.14159265359;
+
+// --- Helper Functions ---
+
+float ease(int easingFunc, float t) {
+    return t;
+}
+
+// 2D Random function using dot product for texture coordinates
+vec2 random2( vec2 p ) {
+    return fract(sin(vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3))))*43758.5453);
+}
+
+// 2D Rotation matrix
+mat2 rot(float a) {
+    return mat2(cos(a), -sin(a), sin(a), cos(a));
+}
+
+// --- Noise Functions ---
+
+// Calculates the position of the nearest Voronoi cell center
+vec2 voronoidNoise(vec2 st) {
+    vec2 i_st = floor(st);
+    vec2 f_st = fract(st);
+    
+    float m_dist = 15.;
+    vec2 m_point;
+    vec2 d;
+    
+    // Check 9 surrounding cells
+    for (int j = -1; j <= 1; j++ ) {
+        for (int i = -1; i <= 1; i++ ) {
+            vec2 neighbor = vec2(float(i), float(j));
+            
+            // Random point in the cell, animated by uTime
+            vec2 point = random2(i_st + neighbor);
+            point = 0.5 + 0.5 * sin(5. + uTime * 0.2 + 6.2831 * point);
+            
+            vec2 diff = neighbor + point - f_st;
+            float dist = length(diff);
+            
+            // Find the minimum distance and the corresponding point
+            if( dist < m_dist ) {
+                m_dist = dist;
+                m_point = point;
+                d = diff;
+            }
+        }
+    }
+    // Returns the position of the nearest cell center (relative to cell corner)
+    return m_point;
+}
+
+// Fractal Brownian Motion applied to Voronoi noise (multi-octave Voronoi)
+vec2 voronoiFBM(vec2 st) {
+    vec2 value = vec2(0.0);
+    vec2 shift = vec2(100.0);
+    float xp = sqrt(2.);
+    mat2 r = rot(0.5);
+    
+    // 2 octaves of FBM
+    for (int i = 0; i < 2; i++) {
+        value += voronoidNoise(st);
+        st = st * xp + shift;
+        st = r * st;
+    }
+    
+    // Average the result
+    return value / float(2);
+}
+
+// --- Main ---
+
+void main() {
+    vec2 uv = vTextureCoord;
+    float aspectRatio = uResolution.x / uResolution.y;
+    
+    // Skew is disabled (0.0000)
+    vec2 skew = mix(vec2(1), vec2(1, 0), 0.0000);
+    
+    // Scale and adjust UV coordinates for the noise space
+    vec2 st = (uv - vec2(0.5, 0.5)) * vec2(aspectRatio, 1.) * 50. * 0.2120;
+    
+    // Rotate and Skew noise space
+    st = st * rot(0.1134 * 2. * PI) * skew;
+    
+    // Get the FBM Voronoi point position
+    vec2 m_point = voronoiFBM(st);
+    
+    // Calculate the UV offset vector from the Voronoi point
+    vec2 offset = (m_point * 0.2 * 0.2500 * 2.) - (0.2500 * 0.2);
+    
+    // --- Effect Masking ---
+    
+    // Mouse position (disabled: 0.0000)
+    vec2 mPos = vec2(0.5, 0.5) + mix(vec2(0), (uMousePos - 0.5), 0.0000);
+    vec2 pos = mix(vec2(0.5, 0.5), mPos, floor(1.0000));
+    
+    // Distance Mask: The calculation results in dist = 1.0 everywhere,
+    // causing a full-screen effect (similar to previous shaders).
+    float dist = ease(0, max(0., 1. - distance(uv * vec2(aspectRatio, 1), mPos * vec2(aspectRatio, 1)) * 4. * (1. - 1.0000)));
+    
+    // Sample texture with the noise offset scaled by the distance mask
+    vec4 color = texture(uTexture, uv + offset * dist);
+    
+    fragColor = color;
+}
+// Observation
+// This shader creates a cell-based distortion that animates over time. Due to the distance mask calculation resulting in dist = 1.0 (as discussed in the previous shader), the shatter effect is applied uniformly across the entire screen, rather than being localized around the mouse or center.
+
+// If you want the shatter effect to be concentrated in a specific area, you need to adjust the dist calculation.

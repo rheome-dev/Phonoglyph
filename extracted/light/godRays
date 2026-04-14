@@ -1,0 +1,181 @@
+// This set of shaders implements a classic Volumetric God Rays (Crepuscular Rays) effect using a two-pass post-processing pipeline:
+
+// Pass 0 (Threshold): Isolates the brightest areas of the scene (the light sources).
+
+// Pass 1 (Raymarch & Composite): Performs a radial blur (raymarching) originating from a single light source position, then blends the resulting rays back onto the original scene.
+
+// 1. Vertex Shader (Shared)
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Attributes
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+// Uniforms
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uTextureMatrix;
+
+// Outputs
+out vec2 vTextureCoord;
+out vec3 vVertexPosition;
+
+void main() {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = (uTextureMatrix * vec4(aTextureCoord, 0.0, 1.0)).xy;
+}
+
+// 2. Fragment Shader 0 (Threshold Pass)
+// This pass identifies and extracts the parts of the input scene (uTexture) that are bright enough to cast rays.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision highp float;
+precision highp int;
+
+// Inputs
+in vec3 vVertexPosition;
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform sampler2D uTexture;
+
+// Output
+out vec4 fragColor;
+
+const float PI2 = 6.28318530718;
+
+// Luminance calculation
+float luma(vec4 color) {
+    return dot(color.rgb, vec3(0.299, 0.587, 0.114));
+}
+
+vec4 getBrightAreas(vec2 uv) {
+    vec4 color = texture(uTexture, uv);
+    float lum = luma(color);
+    
+    // Thresholding: Scales the color by a smoothstep function.
+    // Only areas with luminance > 0.4 (0.5000 - 0.1) will contribute to the rays.
+    color = color * smoothstep(0.5000 - 0.1, 0.5000, lum);
+    return color;
+}
+
+vec4 getColor(vec2 uv) {
+    return getBrightAreas(uv);
+}
+
+void main() {
+    vec2 uv = vTextureCoord;
+    vec4 color = getColor(uv);
+    
+    // The conditional block is trivial (0==1 is false, 1==1 is true)
+    fragColor = color;
+}
+
+// 3. Fragment Shader 1 (Raymarch & Composite Pass)
+// This pass takes the isolated bright areas (from Pass 0, now in uTexture) and smears them radially outward from the light source position.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision highp float;
+precision highp int;
+
+// Inputs
+in vec3 vVertexPosition;
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform sampler2D uTexture;    // Bright areas (Input from Pass 0)
+uniform sampler2D uBgTexture;  // Original scene
+uniform vec2 uMousePos;
+uniform vec2 uResolution;
+
+// Output
+out vec4 fragColor;
+
+const float PI2 = 6.28318530718;
+
+// Interleaved Gradient Noise (used to slightly jitter the sample starting position)
+float interleavedGradientNoise(vec2 st) {
+    return fract(52.9829189 * fract(0.06711056 * st.x + 0.00583715 * st.y));
+}
+
+// Raymarching (Radial Blur) function
+vec4 godRays(vec2 st) {
+    vec3 color = vec3(0);
+    // Decay factor (controls how quickly the rays fade)
+    float decay = mix(0.92, 0.965, 0.5000);
+    
+    // Light source position (fixed at 0.5, 0.5, mouse control disabled with 0.0000)
+    vec2 pos = vec2(0.5, 0.5) - mix(vec2(0), (vec2(1. - uMousePos.x, 1. - uMousePos.y) - 0.5), 0.0000);
+    
+    float weight = 1.0;
+    // float distanceInfo = 0.0; // Not used
+    float MAX_ITERATIONS = 32.;
+    
+    // Step Direction: vector from pixel (st) toward light source (pos)
+    vec2 stepDir = (pos - st) / MAX_ITERATIONS * (0.25 + min(1., 0.5000)) * 0.75;
+    
+    float noise = interleavedGradientNoise(st * uResolution);
+    
+    // Initial sample UV: Jittered start position using noise
+    vec2 sampleUv = st + stepDir * noise;
+    
+    // Perpendicular direction (used for a slight wave/ripple effect in the rays)
+    vec2 perpDir = vec2(-stepDir.y, stepDir.x);
+    
+    for (float i = 0.0; i < MAX_ITERATIONS; i++) {
+        // Sample UV step: Move toward the light source and apply subtle perpendicular distortion
+        sampleUv += stepDir + (perpDir * sin((noise * 0.25) * (1.0 + i / MAX_ITERATIONS) * 50.0)) * 0.2500 * 0.2;
+        
+        // Accumulate color: Sample the bright areas texture and apply weighted decay
+        color += texture(uTexture, sampleUv).rgb * weight;
+        
+        // distanceInfo += i * weight; // Not used
+        weight *= decay;
+        
+        // Early exit optimization
+        if(weight < 0.05) break;
+    }
+    
+    // Return: Accumulated color (normalized by MAX_ITERATIONS) and the distance to the last sample point (in alpha)
+    return vec4(color / MAX_ITERATIONS, distance(st, sampleUv));
+}
+
+vec4 getGodRays(vec2 uv) {
+    vec4 bg = texture(uBgTexture, uv);
+    
+    // Intensity check: if ray intensity is near zero (0.5000 <= 0.01), return background
+    if(0.5000 <= 0.01) {
+        return bg;
+    }
+    
+    vec4 rays = godRays(uv);
+    rays.rgb *= vec3(1, 1, 1); // No color tinting applied
+    
+    vec4 color;
+    
+    // Composite: Add the rays to the background, scaled by an intensity factor
+    color.rgb = bg.rgb + (rays.rgb * 2.5 * 0.5000);
+    
+    // Alpha: Background alpha + red channel of rays (rough measure of ray density)
+    color.a = bg.a + rays.r; 
+    return color;
+}
+
+vec4 getColor(vec2 uv) {
+    return getGodRays(uv);
+}
+
+void main() {
+    vec2 uv = vTextureCoord;
+    vec4 color = getColor(uv);
+    
+    // The conditional block is trivial (1==1 is true)
+    fragColor = color;
+}

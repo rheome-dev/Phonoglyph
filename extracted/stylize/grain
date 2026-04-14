@@ -1,0 +1,120 @@
+// This shader implements a basic Filmic Grain or Noise effect, which adds random high-frequency fluctuations to the image to simulate the appearance of film grain or video noise. The effect uses a high-quality pseudorandom number generator (PCG hash) sampled per pixel.
+
+// 1. Vertex Shader (Shared)
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Attributes
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+// Uniforms
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uTextureMatrix;
+
+// Outputs
+out vec2 vTextureCoord;
+out vec3 vVertexPosition;
+
+void main() {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = (uTextureMatrix * vec4(aTextureCoord, 0.0, 1.0)).xy;
+}
+// 2. Fragment Shader (Noise Generation and Blend)
+// This pass generates screen-space noise that is slightly animated over time and blends it additively with the original scene color.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision highp float;
+precision highp int;
+
+// Inputs
+in vec3 vVertexPosition;
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform sampler2D uTexture;
+uniform float uTime;
+uniform vec2 uResolution;
+
+// Output
+out vec4 fragColor;
+
+// --- Utility Functions ---
+
+// Simple Addition Blend Mode
+vec3 blend (int blendMode, vec3 src, vec3 dst) {
+    // blendMode 1: Addition (src + dst)
+    return src + dst;
+}
+
+// PCG 2D Hash (used for pseudorandom number generation)
+uvec2 pcg2d(uvec2 v) {
+    v = v * 1664525u + 1013904223u;
+    v.x += v.y * v.y * 1664525u + 1013904223u;
+    v.y += v.x * v.x * 1664525u + 1013904223u;
+    v ^= v >> 16;
+    v.x += v.y * v.y * 1664525u + 1013904223u;
+    v.y += v.x * v.x * 1664525u + 1013904223u;
+    return v;
+}
+
+// Float random number generator using the PCG hash (results in [0, 1])
+float randFibo(vec2 p) {
+    uvec2 v = floatBitsToUint(p);
+    v = pcg2d(v);
+    uint r = v.x ^ v.y;
+    return float(r) / float(0xffffffffu);
+}
+
+// --- Main Function ---
+
+void main() {
+    vec2 uv = vTextureCoord;
+    vec4 color = texture(uTexture, uv);
+
+    // Alpha Clipping
+    if(color.a <= 0.001) {
+        fragColor = vec4(0);
+        return;
+    }
+    
+    vec2 st = uv;
+    vec3 grainRGB = vec3(0);
+
+    // Scale UV coordinates to screen pixels (to get consistent grain size)
+    st *= uResolution;
+
+    // Time delta for grain animation (changes every 20 seconds, or cycles smoothly over 20s)
+    float delta = fract((floor(uTime) / 20.)); 
+    
+    // Noise Generation: 
+    // The conditional path is disabled (0==1 is false).
+    if(0 == 1) { 
+        // Generates three independent random values for R, G, B (often looks like colored grain)
+        grainRGB = vec3(
+            randFibo(st + vec2(1, 2) + delta),
+            randFibo(st + vec2(2, 3) + delta),
+            randFibo(st + vec2(3, 4) + delta)
+        );
+    } else {
+        // Generates one random value and applies it to R, G, B (monochromatic grain)
+        // The seed uses pixel coordinates (`st`) plus a small time offset (`delta`).
+        grainRGB = vec3(randFibo(st + vec2(delta)));
+    }
+    
+    // --- Compositing ---
+    
+    // 1. Additive Blend: grainRGB + color.rgb (blends are clamped to [0, 1] by the GPU pipeline)
+    vec3 blended = blend(1, grainRGB, color.rgb);
+    
+    // 2. Mix: Interpolate between original color and the blended color
+    // A mix factor of 0.5000 is used, resulting in an average: (color.rgb + blended) / 2
+    color.rgb = mix(color.rgb, blended, 0.5000);
+    
+    fragColor = color;
+}

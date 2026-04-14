@@ -1,0 +1,185 @@
+// This is a very interesting setup! The Vertex Shader is doing the heavy lifting by calculating Perlin noise to deform the mesh (a "noise field" or "wave") and then adjusting the texture coordinates, while the Fragment Shader is extremely minimal, only mirroring the UVs and sampling the texture.
+
+// Here is the formatted code for your "noisefield" shader.
+
+// 1. Fragment Shader
+// This shader is primarily responsible for sampling the texture after the vertex shader has calculated the position and UV distortion.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Inputs
+in vec3 vVertexPosition;
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform sampler2D uTexture;
+
+// Output
+out vec4 fragColor;
+
+void main() {
+    vec2 uv = vTextureCoord;
+    
+    // Mirror UVs on both axes
+    uv = vec2(
+        1. - uv.x,
+        1. - uv.y
+    );
+    
+    vec4 color = texture(uTexture, uv);
+    fragColor = color;
+}
+
+// 2. Vertex Shader
+// This shader implements 3D Perlin noise to calculate a wave-like deformation on the mesh (likely a quad or plane) and also warps the texture coordinates.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Attributes
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+// Uniforms
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform float uTime;
+uniform vec2 uResolution;
+
+// Outputs
+out vec3 vVertexPosition;
+out vec2 vTextureCoord;
+
+// --- Helper Functions (Noise) ---
+
+// Hashing function for Perlin Noise
+vec3 hash33(vec3 p3) {
+    p3 = fract(p3 * vec3(0.1031, 0.11369, 0.13787));
+    p3 += dot(p3, p3.yxz + 19.19);
+    return -1.0 + 2.0 * fract(vec3(
+        (p3.x + p3.y) * p3.z,
+        (p3.x + p3.z) * p3.y,
+        (p3.y + p3.z) * p3.x
+    ));
+}
+
+// 3D Perlin Noise function
+float perlin_noise(vec3 p) {
+    vec3 pi = floor(p);
+    vec3 pf = p - pi;
+    
+    // Quintic interpolation curve
+    vec3 w = pf * pf * (3.0 - 2.0 * pf);
+    
+    // Gradients (8 corners)
+    float n000 = dot(pf - vec3(0.0, 0.0, 0.0), hash33(pi + vec3(0.0, 0.0, 0.0)));
+    float n100 = dot(pf - vec3(1.0, 0.0, 0.0), hash33(pi + vec3(1.0, 0.0, 0.0)));
+    float n010 = dot(pf - vec3(0.0, 1.0, 0.0), hash33(pi + vec3(0.0, 1.0, 0.0)));
+    float n110 = dot(pf - vec3(1.0, 1.0, 0.0), hash33(pi + vec3(1.0, 1.0, 0.0)));
+    float n001 = dot(pf - vec3(0.0, 0.0, 1.0), hash33(pi + vec3(0.0, 0.0, 1.0)));
+    float n101 = dot(pf - vec3(1.0, 0.0, 1.0), hash33(pi + vec3(1.0, 0.0, 1.0)));
+    float n011 = dot(pf - vec3(0.0, 1.0, 1.0), hash33(pi + vec3(0.0, 1.0, 1.0)));
+    float n111 = dot(pf - vec3(1.0, 1.0, 1.0), hash33(pi + vec3(1.0, 1.0, 1.0)));
+    
+    // Interpolation (Trilinear)
+    float nx00 = mix(n000, n100, w.x);
+    float nx01 = mix(n001, n101, w.x);
+    float nx10 = mix(n010, n110, w.x);
+    float nx11 = mix(n011, n111, w.x);
+    
+    float nxy0 = mix(nx00, nx10, w.y);
+    float nxy1 = mix(nx01, nx11, w.y);
+    
+    float nxyz = mix(nxy0, nxy1, w.z);
+    
+    return nxyz;
+}
+
+// Rotation matrix for model-view-projection
+mat4 rotation(float angle) {
+    return mat4(
+        vec4( cos(angle), -sin(angle), 0.0, 0.0 ),
+        vec4( sin(angle),  cos(angle), 0.0, 0.0 ),
+        vec4( 0.0, 0.0, 1.0, 0.0 ),
+        vec4( 0.0, 0.0, 0.0, 1.0 ) 
+    );
+}
+
+// --- Main ---
+
+void main() {
+    vec3 vertexPosition = aVertexPosition;
+    vec3 waveCoord = aVertexPosition;
+    
+    // This value is not used in the final computation but was likely part of a cumulative sum
+    // float cumval = 0.; 
+    
+    // Calculate noise properties
+    float spr = (0.7960 + 1.) / ((uResolution.x/uResolution.y + 1.) * 0.5) * 10.;
+    float time = 0.0000 * 10. + uTime * 0.05;
+    
+    // Calculate the noise value
+    float value = perlin_noise(vec3(
+        ((waveCoord.xy * 0.7960 * 10.) + (vec2(0.5, 0.5) - 0.5) * 20. * 0.7960) * (vec2(0.2, 1.)), 
+        time
+    )) * 0.1600;
+    
+    // --- Apply Deformation to Mesh ---
+    
+    waveCoord.z = 0.; // Explicitly setting Z to zero before displacement
+    
+    // Displace Y-coordinate
+    // The distortion function is: mix(value, smoothstep(-1., 0., value) - 1., 0.5000)
+    waveCoord.y += mix(value, smoothstep(-1., 0., value) - 1., 0.5000);
+    
+    // Displace X-coordinate (very slight)
+    waveCoord.x += value * 0.02;
+    
+    // Boundary Conditions: Prevents distortion at the mesh edges (x=-1, x=1, y=-1, y=1)
+    // This pins the corners of the mesh to their original positions.
+    if(vertexPosition.x == 1.) {
+        waveCoord.x = 1.;
+    }
+    if(vertexPosition.x == -1.) {
+        waveCoord.x = -1.;
+    }
+    if(vertexPosition.y == 1.) {
+        waveCoord.y = 1.;
+    }
+    if(vertexPosition.y == -1.) {
+        waveCoord.y = -1.;
+    }
+    
+    // Set final position after deformation
+    // Note the rotation of 180 degrees is applied here
+    gl_Position = uPMatrix * uMVMatrix * rotation(radians(180.0)) * vec4(waveCoord, 1.);
+    
+    // --- Apply Distortion to Texture UVs ---
+    
+    // Texture coordinates are also displaced, which counteracts the vertex movement
+    vTextureCoord = aTextureCoord - vec2(0., mix(value, smoothstep(-1., 0., value) - 1., 0.5000));
+    
+    // Pass original position to fragment shader
+    vVertexPosition = vertexPosition;
+}
+// Summary of the Effect
+// The Vertex Shader is creating an animated, undulating wave effect that primarily deforms the mesh along the Y-axis. The noise is 3D, with the Z-axis being driven by uTime to create continuous movement.
+
+// The most unique part is the boundary clamping, which ensures the edges of the mesh remain straight, anchoring the wave effect within the quad.
+
+// The Fragment Shader simply mirrors the texture, so the final output will be a wavy, animated texture that is flipped horizontally and vertically.
+
+// This setup would typically be used for effects like:
+
+// A wavy flag or banner.
+
+// A stylized water surface.
+
+// A procedural, animated cloth simulation.
+
+// If you are seeing an issue with the final rendered image, you might try removing the rotation(radians(180.0)) in the gl_Position calculation, as it forces the entire scene to be upside down and mirrored, which might be unintended.

@@ -1,0 +1,255 @@
+// This set of shaders implements a Screen-Space Spotlight/Point Light effect using a three-pass structure: two passes for a Separable Gaussian Blur, and a final pass for the lighting calculation and composite.
+
+// Pass 0 (Fragment Shader 0): Horizontal Gaussian Blur.
+
+// Pass 1 (Fragment Shader 1): Vertical Gaussian Blur.
+
+// Pass 2 (Fragment Shader 2): Point Light calculation, which uses the input texture (uTexture, the result of the blur passes) to determine surface normals (via luminance difference) for diffuse and specular lighting, and composites the result onto the background (uBgTexture).
+
+// 1. Vertex Shader (Shared)
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Attributes
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+// Uniforms
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uTextureMatrix;
+
+// Outputs
+out vec2 vTextureCoord;
+out vec3 vVertexPosition;
+
+void main() {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = (uTextureMatrix * vec4(aTextureCoord, 0.0, 1.0)).xy;
+}
+// 2. Fragment Shaders 0 & 1 (Separable Gaussian Blur)
+// These passes apply a high-quality separable Gaussian blur, often used to extract a bright/bloom map or to soften the light source itself. They include a clipping mechanism based on the input texture's alpha channel.
+
+// Shared Functions and Weights
+// OpenGL Shading Language
+
+// --- Shared Gaussian Blur Functions ---
+
+const int kernelSize = 36;
+
+// Pre-calculated Gaussian kernel weights (36 samples for the positive side + center)
+float getGaussianWeight(int index) {
+    switch(index) {
+        case 0: return 0.00094768; // (Central weight is missing in the logic, see below)
+        // ... (weights 1-35 are defined) ...
+        case 35: return 0.00094768;
+        default: return 0.0;
+    }
+}
+
+vec4 GaussianBlur(sampler2D tex, vec2 uv, vec2 direction) {
+    vec4 color = vec4(0.0);
+    // float weightSum = 0.0; // Not used
+    
+    // Blur amount calculation
+    float amount = (0.5000 + 0.1) * 2.; 
+    float aspectRatio = uResolution.x / uResolution.y;
+    
+    // Aspect ratio correction is applied only to the x component of the direction vector
+    direction.x /= aspectRatio;
+
+    // Center Sample (uses weight[0] which is 0.00094768, usually this should be the central/largest weight)
+    color += texture(tex, uv) * getGaussianWeight(0);
+    
+    // Loop through kernel taps (18 samples to the left, 18 to the right, plus the center tap)
+    for (int i = 0; i < kernelSize; i++) {
+        // x calculates the sample position from the center
+        float x = float(i - kernelSize / 2) * amount;
+        
+        // Sample texture with offset * normalized direction
+        color += texture(tex, uv + vec2(x / 1000.) * direction) * getGaussianWeight(i);
+    }
+    return color;
+}
+
+// Fragment Shader 0 (Horizontal Blur)
+// OpenGL Shading Language
+
+// ... (Includes shared functions and constants) ...
+
+vec4 getColor(vec2 uv) {
+    return GaussianBlur(uTexture, uv, vec2(1, 0)); // Direction X
+}
+
+void main() {
+    // Clip: if the input texture has zero alpha, output black and discard
+    vec4 clipColor = texture(uTexture, vTextureCoord);
+    if(clipColor.a == 0.) {
+        fragColor = vec4(0);
+        return;
+    }
+    
+    vec2 uv = vTextureCoord;
+    vec4 color = getColor(uv);
+    fragColor = color;
+}
+
+// Fragment Shader 1 (Vertical Blur)
+// OpenGL Shading Language
+
+// ... (Includes shared functions and constants) ...
+
+vec4 getColor(vec2 uv) {
+    return GaussianBlur(uTexture, uv, vec2(0, 1)); // Direction Y
+}
+
+void main() {
+    // Clip: if the input texture has zero alpha, output black and discard
+    vec4 clipColor = texture(uTexture, vTextureCoord);
+    if(clipColor.a == 0.) {
+        fragColor = vec4(0);
+        return;
+    }
+    
+    vec2 uv = vTextureCoord;
+    vec4 color = getColor(uv);
+    fragColor = color;
+}
+
+// 3. Fragment Shader 2 (Point Light Composite)
+// This is the final lighting pass. It uses the blurred input texture (uTexture) to generate normals based on luminance differences (a cheap form of screen-space bump mapping).
+
+// OpenGL Shading Language
+
+#version 300 es
+precision highp float;
+precision highp int;
+
+// Inputs
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform sampler2D uTexture;     // Blurred texture (from Pass 1)
+uniform sampler2D uBgTexture;   // Original background/scene
+uniform vec2 uMousePos;
+uniform vec2 uResolution;
+
+// Output
+out vec4 fragColor;
+
+// --- Utility Functions ---
+
+// Random number generator
+uvec2 pcg2d(uvec2 v) { /* ... */ }
+float randFibo(vec2 p) { /* ... */ }
+
+// Luminance calculation
+float luma(vec3 color) {
+    return dot(color, vec3(0.299, 0.587, 0.114));
+}
+
+// Get height/depth map (luminance of the blurred texture)
+float getHeight(vec2 uv) {
+    vec4 col = texture(uTexture, uv);
+    return luma(col.rgb);
+}
+
+// Compute screen-space normal vector (and height/depth)
+vec4 computeNoise(vec2 uv) {
+    vec2 ste = (1. / uResolution); // Screen-space step size
+    float height = getHeight(uv);
+    
+    // Calculate difference (dxy) in height for X and Y directions
+    vec2 dxy = height - vec2(getHeight(uv + vec2(ste.x, 0.)),
+                           getHeight(uv + vec2(0., ste.y)));
+                           
+    // Normal: [dxy * scale, 2.0 (arbitrary Z component)]. Height is stored in w.
+    return vec4(normalize(vec3(dxy * (0.02 + 0.04 * 0.5000) / ste, 2.)), height);
+}
+
+// Hyperbolic Tangent Tonemapping
+vec3 Tonemap_tanh(vec3 x) {
+    x = clamp(x, -40.0, 40.0);
+    return (exp(x) - exp(-x)) / (exp(x) + exp(-x));
+}
+
+// Specular lighting calculation
+float light(vec3 p, vec3 normal, vec3 lightPos) {
+    vec3 direction = normalize(lightPos - p);
+    // Rough reflection model (using reflection vector and direction)
+    float specular = 0.5 * pow(max(dot(direction, reflect(-direction, normal)), 0.0), 2.0);
+    // Diffuse component
+    return max(0.1, dot(normal, direction) * 1.2 - specular); 
+}
+
+// --- Main Pointlight Calculation ---
+
+vec4 getPointlight(vec2 uv) {
+    // Light position (fixed at center, mouse control disabled)
+    vec2 pos = vec2(0.5, 0.5) + mix(vec2(0), (uMousePos - 0.5), 0.0000);
+    vec2 aspectRatio = vec2(uResolution.x / uResolution.y, 1);
+    
+    vec4 color = texture(uBgTexture, uv); // Original background color
+    float lum = luma(color.rgb);
+    
+    // Distance to light (normalized by radius)
+    float dist = distance(uv * aspectRatio, pos * aspectRatio) / (0.5000 + 0.5);
+    float hightlighDist = dist / 2.0; 
+    
+    // Spotlight falloff (squared inverse distance)
+    float spot = max(0., max(0., (1. - dist)) * max(0., (1. - dist)));
+    float highlightSpot = max(0., max(0., (1. - hightlighDist)) * max(0., (1. - hightlighDist)));
+
+    // Get screen-space normal from the blurred texture's luminance
+    vec3 normal = computeNoise(uv).rgb * lum;
+    
+    // Calculate light direction in screen-space
+    vec2 lightDir = pos * aspectRatio - uv * aspectRatio;
+    // float lightDistance = 1.-length(lightDir); // Not used directly in lighting
+    lightDir = normalize(lightDir);
+    
+    // Diffuse component (Dot product of normal and light direction + small Z component)
+    vec3 diff = vec3(max(dot(normal, vec3(lightDir, 0.5)), 0.0));
+    
+    // Specular highlight calculation (using helper function `light`)
+    float specular = light(vec3(uv, 1.), normal, vec3(pos, 1.));
+    specular = smoothstep(0., 1., specular) * 2.;
+
+    float intensity = 0.5000 * 3.;
+    vec3 lightColor = vec3(0.98, 0.12, 0.89); // Pink/Purple light color
+
+    // 1. Base Ambient/Background
+    vec3 base = color.rgb * lightColor * max(0., spot) * intensity;
+    
+    // 2. Diffuse Lighting: Blend light onto the original color
+    color.rgb = color.rgb * 0.5000 + base * diff * lightColor * max(0., spot) * intensity;
+    
+    // 3. Specular Highlight
+    color.rgb += specular * lightColor * max(0., spot * 4.) * 0.2500;
+    
+    // 4. Tonemapping and Dithering
+    color.rgb = Tonemap_tanh(color.rgb);
+    float dither = (randFibo(gl_FragCoord.xy) - 0.5) / 255.0;
+    color.rgb += dither;
+    
+    return color;
+}
+
+vec4 getColor(vec2 uv) {
+    return getPointlight(uv);
+}
+
+void main() {
+    // Clip based on input texture alpha (same as blur passes)
+    vec4 clipColor = texture(uTexture, vTextureCoord);
+    if(clipColor.a == 0.) {
+        fragColor = vec4(0);
+        return;
+    }
+    
+    vec2 uv = vTextureCoord;
+    vec4 color = getColor(uv);
+    fragColor = color;
+}

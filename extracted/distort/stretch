@@ -1,0 +1,137 @@
+// This shader creates a Directional Stretch/Compression effect, similar to an anisotropic lens or motion blur, by manipulating the texture coordinates in the fragment shader based on position relative to a center point.
+
+// 1. Vertex Shader (Shared)
+// This is a standard vertex shader, transforming the mesh vertices and texture coordinates.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Attributes
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+// Uniforms
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uTextureMatrix;
+
+// Outputs
+out vec2 vTextureCoord;
+out vec3 vVertexPosition;
+
+void main() {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = (uTextureMatrix * vec4(aTextureCoord, 0.0, 1.0)).xy;
+}
+
+// 2. Fragment Shader (Stretch Distortion and Chromatic Aberration)
+// The fragment shader defines a distortion vector based on the position and a chosen axis, effectively compressing coordinates closer to the center, which makes the sampled texture appear stretched outward.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Inputs
+in vec3 vVertexPosition;
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform sampler2D uTexture;
+uniform vec2 uMousePos;
+uniform vec2 uResolution;
+
+out vec4 fragColor;
+
+const float PI = 3.14159265359;
+const float TWO_PI = 6.28318530718;
+
+// --- Utility Functions ---
+
+float ease (int easingFunc, float t) {
+    return t; // Linear ease
+}
+
+// 2D Rotation
+vec2 rotate(vec2 v, float angle) {
+    float c = cos(angle);
+    float s = sin(angle);
+    return vec2(v.x * c - v.y * s, v.x * s + v.y * c);
+}
+
+// Chromatic Aberration (R sampled left, B sampled right)
+vec3 chromatic_aberration(vec3 color, vec2 uv, float amount) {
+    // Calculate offset direction (normalized vector from center to current UV)
+    vec2 offset = normalize(vTextureCoord - 0.5) * amount / vec2(uResolution.x / uResolution.y, 1);
+    
+    vec4 left = texture(uTexture, uv - offset);
+    vec4 right = texture(uTexture, uv + offset);
+    
+    color.r = left.r;
+    color.b = right.b;
+    return color;
+}
+
+// --- Main Distortion Logic ---
+
+void main() {
+    vec2 uv = vTextureCoord;
+    
+    // 1. Setup Parameters
+    
+    // Rotation Angle: (-0.1188 - 0.25) * -TWO_PI = 2.316 * PI (approx)
+    float angle = (-0.1188 - 0.25) * -TWO_PI; 
+    
+    // Stretch Intensity: 4. * 0.7560 = 3.024
+    float stretchX = 4. * 0.7560;
+    float stretchY = 4. * 0.7560;
+
+    // Center of distortion (Mouse interaction disabled 0.0000, defaults to (0.5, 0.5))
+    vec2 pos = vec2(0.5, 0.5) + (uMousePos - 0.5) * 0.0000;
+    
+    // Vector from center to current UV
+    vec2 offset = uv - pos;
+    
+    // 2. Rotate to the Axis of Stretch
+    
+    vec2 rotatedOffset = rotate(offset, -angle);
+    vec2 stretchedOffset = rotatedOffset;
+    
+    // 3. Apply Stretch/Compression
+    
+    // Conditional check `if (1 == 1)`: always true, runs the first block.
+    if (1 == 1) { 
+        // Checks only the positive X side of the rotated axis
+        if (rotatedOffset.x > 0.0) {
+            float stretchIntensity = rotatedOffset.x;
+            float easedIntensity = ease(0, stretchIntensity);
+            
+            // X-axis compression/stretch: Coords closer to center (small offset.x) are compressed less
+            stretchedOffset.x = rotatedOffset.x / (1.0 + stretchX * easedIntensity);
+            
+            // Y-axis compression: quadratic falloff
+            stretchedOffset.y = rotatedOffset.y / (1.0 + stretchY * easedIntensity * easedIntensity);
+        }
+    }
+    // The `else if (1 == 2)` block (full two-sided stretch) is skipped.
+    
+    // 4. Rotate Back to Original Orientation
+    
+    vec2 finalOffset = rotate(stretchedOffset, angle);
+    
+    // 5. Final UV for Sampling
+    
+    vec2 st = pos + finalOffset;
+    
+    // 6. Sample Texture
+    vec4 color = texture(uTexture, st);
+    
+    // 7. Apply Chromatic Aberration (Disabled 0.0000)
+    
+    // Aberration amount is based on the displacement distance (length(st - uv))
+    color.rgb = chromatic_aberration(color.rgb, st, length(st - uv) * 0.05 * 0.0000);
+    
+    fragColor = color;
+}

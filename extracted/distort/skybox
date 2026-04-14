@@ -1,0 +1,179 @@
+// This shader implements a Spherical Projection or Skybox rendering technique, often used for displaying 360-degree panoramic textures (equirectangular maps). The camera's direction and field of view (FOV) are calculated from the screen coordinates and mouse input, and then used to sample the texture.
+
+// Here is the formatted code for both the Vertex and Fragment shaders.
+
+// 1. Vertex Shader
+// This is the standard pass-through shader, handling basic transformations and passing UVs.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Attributes
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+// Uniforms
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uTextureMatrix;
+
+// Outputs
+out vec2 vTextureCoord;
+out vec3 vVertexPosition;
+
+void main() {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = (uTextureMatrix * vec4(aTextureCoord, 0.0, 1.0)).xy;
+}
+
+// 2. Fragment Shader
+// This shader calculates a viewing ray for each pixel, rotates the ray based on mouse input, and then maps that ray direction to texture coordinates on an equirectangular image.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision highp float;
+
+// Inputs
+in vec3 vVertexPosition;
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform sampler2D uTexture;
+uniform float uTime;
+uniform vec2 uMousePos;
+
+// Output
+out vec4 fragColor;
+
+// Constants
+const float PI = 3.14159265;
+
+// --- Projection and Ray Casting ---
+
+// Calculates the direction vector (rayDir) from the camera through the pixel (uv)
+// This also incorporates camera rotation based on mouse position.
+vec3 getRayDirection(vec2 uv, vec2 mousePos, float aspect) {
+    // 1. Transform UV to normalized screen coordinates (-1 to 1)
+    vec2 screenPos = (uv - 0.5) * 2.0;
+    screenPos.x *= aspect;
+    screenPos.y *= -1.0; // Flip Y-axis
+    
+    // 2. Calculate FOV
+    float minFOV = radians(20.0);
+    float maxFOV = radians(120.0);
+    float fov = mix(minFOV, maxFOV, 1.0000); // FOV is maxFOV (120 degrees)
+    
+    // 3. Calculate initial ray direction (in camera space)
+    vec3 rayDir = normalize(vec3(
+        screenPos.x * tan(fov / 2.0),
+        screenPos.y * tan(fov / 2.0),
+        -1.0
+    ));
+    
+    // 4. Calculate camera rotation from mouse
+    float rotX = (mousePos.y - 0.5) * PI; // Vertical rotation
+    float rotY = (mousePos.x - 0.5) * PI * 2.0; // Horizontal rotation
+    
+    // Rotation matrices
+    mat3 rotateY = mat3(
+        cos(rotY), 0.0, -sin(rotY),
+        0.0, 1.0, 0.0,
+        sin(rotY), 0.0, cos(rotY)
+    );
+    mat3 rotateX = mat3(
+        1.0, 0.0, 0.0,
+        0.0, cos(rotX), sin(rotX),
+        0.0, -sin(rotX), cos(rotX)
+    );
+    
+    // Apply rotations
+    return normalize(rotateX * rotateY * rayDir);
+}
+
+// Maps a 3D direction vector to 2D equirectangular UV coordinates (Longitude/Latitude)
+vec2 directionToUVHorizontal(vec3 dir) {
+    // Longitude is angle around Y-axis (X-Z plane)
+    float longitude = atan(dir.z, dir.x);
+    // Latitude is angle from pole (Y-axis)
+    float latitude = acos(dir.y);
+    
+    vec2 uv;
+    uv.x = longitude / (2.0 * PI) + 0.5; // Map [-PI, PI] to [0, 1]
+    uv.y = latitude / PI; // Map [0, PI] to [0, 1]
+    uv.x += 0.25; // Additional rotation/offset
+    return uv;
+}
+
+// Alternative mapping, potentially for a different projection axis
+vec2 directionToUVVertical(vec3 dir) {
+    float longitude = atan(dir.z, dir.y);
+    float latitude = acos(dir.x);
+    
+    vec2 uv;
+    uv.y = longitude / PI * -1.;
+    uv.x = (latitude / (2.0 * PI) + 0.5) * -1.;
+    uv.x = fract(uv.x + 0.25);
+    return uv;
+}
+
+// --- Texture Sampling ---
+
+// Samples the texture, handling horizontal wrapping and optional blending
+vec4 getRepeatHorizontalUV(vec2 uv) {
+    vec2 finalUV = vec2(fract(uv.x), uv.y);
+    vec4 col = texture(uTexture, finalUV);
+    
+    // Optional blending is disabled (0.0000 > 0.0 is false)
+    if (0.0000 > 0.0) {
+        // ... Blending logic omitted for brevity ...
+    }
+    
+    return col;
+}
+
+vec4 getRepeatUV(vec2 uv) {
+    return getRepeatHorizontalUV(uv);
+}
+
+// --- Main ---
+
+void main() {
+    // Aspect ratio used for ray projection (hardcoded to 2.0)
+    float aspect = 2.; 
+    
+    // Mouse position is used to control camera rotation (1.0000 * 0.5 = 0.5 influence)
+    vec2 mPos = vec2(0.5, 0.5) + mix(vec2(0), (uMousePos - 0.5), 1.0000 * 0.5);
+    
+    // Calculate the 3D ray direction for the current pixel
+    vec3 rayDir = getRayDirection(vTextureCoord, mPos, aspect);
+    
+    // Map the ray to horizontal and vertical projection UVs
+    vec2 uvHorizontal = directionToUVHorizontal(rayDir);
+    vec2 uvVertical = directionToUVVertical(rayDir);
+    
+    // Mix between the two projections (0.4000 mix factor)
+    vec2 sphereUV = mix(uvHorizontal, uvVertical, 0.4000);
+    
+    // FOV scaling compensation
+    float minFOV = radians(20.0);
+    float maxFOV = radians(120.0);
+    float currentFOV = mix(minFOV, maxFOV, 1.0000); // Current FOV is 120 deg
+    float fovCompensation = tan(currentFOV / 2.0);
+    
+    // Scaling and Zoom (mix(-0.1, 0.4, 0.6060) * 12.0 + 2.0)
+    float compensatedScale = (mix(-0.1, 0.4, 0.6060) * 12.0 + 2.0) * (1.0 / fovCompensation);
+    
+    // Apply zoom/scale
+    sphereUV = (sphereUV - 0.5) * compensatedScale + 0.5;
+    
+    // Apply time-based panoramic drift (slow horizontal scroll)
+    sphereUV += vec2(0.5, 0) * uTime * 0.005;
+    
+    // Sample the texture
+    vec4 col = getRepeatUV(sphereUV);
+    
+    fragColor = col;
+}

@@ -1,0 +1,140 @@
+// This shader implements a highly unusual distortion effect. Based on the logic, it seems intended to create a form of Linear Stretching or Shearing focused around an intersection point derived from two distinct lines, one defined by the screen center and one by the current UV coordinate.
+
+// However, the final logic is highly simplified and appears to blend the UV coordinate either towards the center of the stretch (offset) or perpendicular to the stretch direction, only if the pixel is within a specific, poorly defined "stretch zone." The resulting effect would likely be a sharp, linear discontinuity or a highly localized shift.
+
+// 1. Vertex Shader (Shared)
+// This is a standard vertex shader, transforming the mesh vertices and texture coordinates.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Attributes
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+// Uniforms
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uTextureMatrix;
+
+// Outputs
+out vec2 vTextureCoord;
+out vec3 vVertexPosition;
+
+void main() {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = (uTextureMatrix * vec4(aTextureCoord, 0.0, 1.0)).xy;
+}
+
+// 2. Fragment Shader (Intersection-Based Stretch/Shift)
+// The core logic involves calculating the intersection point of two arbitrary lines and using that point as the reference for a highly localized texture coordinate shift.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Inputs
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform sampler2D uTexture;
+uniform vec2 uResolution;
+
+out vec4 fragColor;
+
+const float PI = 3.1415926;
+
+// --- Utility Function ---
+
+// Determines which side of a line segment (A to B) a point P lies.
+// Returns a positive, negative, or zero value.
+float pointLineSide(vec2 A, vec2 B, vec2 P) {
+    vec2 d = B - A;  // Vector AB
+    vec2 AP = P - A; // Vector AP
+    // Cross product (2D equivalent)
+    return d.y * AP.x - d.x * AP.y; 
+}
+
+// --- Main Distortion Logic ---
+
+void main() {
+    vec2 uv = vTextureCoord;
+    
+    // 1. Setup Parameters and Rotation Angles
+    
+    // Rotations based on 0.0027, resulting in angles near PI/2 or PI
+    float radians = (0.0027 - 0.25) * PI * 2.; // ~ -0.4946 PI
+    float rot1 = radians;
+    float rot2 = (0.0027 - 0.5) * PI * 2.;   // ~ -0.9946 PI
+    
+    float scale = 0.5000 * 0.25; // Stretch magnitude (0.125)
+    float aspectRatio = uResolution.x / uResolution.y;
+    
+    // Aspect correction logic (only applied if aspectRatio < 1.0)
+    vec2 aspectCorrection = vec2(aspectRatio - 1., 0.);
+    vec2 pos = vec2(0.5, 0.5) + aspectCorrection * (aspectRatio < 1. ? 0.1 : 0.05);
+
+    // 2. Define Two Lines (A-B and C-D)
+    
+    // Line 1 (A-B): Defined near the center 'pos'
+    // This line determines the orientation/axis of the stretch.
+    vec2 pointA = pos + vec2(0.1 * sin(rot1), 0.1 * cos(rot1));
+    vec2 pointB = pos - vec2(0.1 * sin(rot1), 0.1 * cos(rot1));
+
+    // Line 2 (C-D): Defined around the current UV coordinate 'uv'
+    // This line ensures the intersection point calculation is unique for every pixel.
+    vec2 pointC = uv + vec2(0.1 * sin(rot2), 0.1 * cos(rot2));
+    vec2 pointD = uv - vec2(0.1 * sin(rot2), 0.1 * cos(rot2));
+
+    // 3. Calculate Line Intersection Point (`offset`)
+    
+    // Line 1: y = m1*x + c1
+    float m1 = (pointB.y - pointA.y) / (pointB.x - pointA.x + 0.0000001); // Slope 1
+    float c1 = pointA.y - m1 * pointA.x;                                   // Y-intercept 1
+    
+    // Line 2: y = m2*x + c2
+    float m2 = (pointD.y - pointC.y) / (pointD.x - pointC.x + 0.0000001); // Slope 2
+    float c2 = pointC.y - m2 * pointC.x;                                   // Y-intercept 2
+    
+    // Intersection formula (solved for X)
+    float intersectX = (c1 - c2) / (m2 - m1);
+    // Intersection formula (solved for Y)
+    float intersectY = intersectX * m1 + c1;
+    
+    vec2 offset = vec2(intersectX, intersectY); // The calculated intersection point
+
+    // 4. Define Stretch Direction
+    
+    // The stretch direction is perpendicular to Line 2 (C-D), determined by rot2
+    vec2 stretchDir = vec2(cos(-rot2), sin(-rot2));
+    // The perpendicular direction (used for the actual UV shift)
+    vec2 perpStretchDir = vec2(-stretchDir.y, stretchDir.x);
+
+    // 5. Apply Localized Shift/Stretch
+    
+    // Distance check: `distToLine` is inversely related to the distance between UV and the intersection `offset`
+    float distToLine = 1. - distance(uv, offset);
+    
+    // `insideStretch` is 1 only if the distance check is true (i.e., UV is close to `offset`)
+    // The condition `distToLine > (1.-scale)` means `distance(uv, offset) < scale`
+    // Therefore, the distortion only happens within a radius of `scale` (0.125) around `offset`.
+    float insideStretch = distToLine > (1. - scale) ? 1. : 0.;
+
+    // Determine side of the axis Line 1 (A-B)
+    float stretchOffsetDir = pointLineSide(pointA, pointB, uv) > 0. ? -1. : 1.;
+    
+    // Shift UV perpendicular to the Line 2 stretch axis
+    // This shift is disabled (`mix(..., vec2(0), insideStretch)`) when `insideStretch` is 1
+    uv += mix(perpStretchDir * scale * stretchOffsetDir, vec2(0), insideStretch);
+    
+    // If inside the stretch zone (`insideStretch` = 1), set the UV to the intersection point `offset`.
+    // If outside the stretch zone (`insideStretch` = 0), keep the UV from the previous step (which is close to the original UV).
+    uv = mix(uv, offset, insideStretch);
+    
+    // 6. Sample Texture
+    vec4 color = texture(uTexture, uv);
+    fragColor = color;
+}

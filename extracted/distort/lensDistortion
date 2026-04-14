@@ -1,0 +1,287 @@
+// This shader implements a powerful Lens Distortion effect within a circular region, featuring multiple distortion algorithms (Spherical, Disc, Fisheye) and a detailed Chromatic Aberration effect.
+
+// Here is the formatted code for both the Vertex and Fragment shaders.
+
+// 1. Vertex Shader
+// This is the standard pass-through shader, handling basic transformations and passing UVs.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Attributes
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+// Uniforms
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uTextureMatrix;
+
+// Outputs
+out vec2 vTextureCoord;
+out vec3 vVertexPosition;
+
+void main() {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = (uTextureMatrix * vec4(aTextureCoord, 0.0, 1.0)).xy;
+}
+
+// 2. Fragment Shader
+// This shader contains the logic for the lens effect, including distortion and chromatic aberration, applied within a masked circular area.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision highp float;
+
+// Inputs
+in vec3 vVertexPosition;
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform sampler2D uTexture;
+uniform vec2 uMousePos;
+uniform vec2 uResolution;
+
+// Output
+out vec4 fragColor;
+
+// Constants
+const float STEPS = 16.0;
+const float PI = 3.1415926;
+
+// --- Easing Functions ---
+
+float circularIn(float t) {
+    return 1.0 - sqrt(1.0 - t * t);
+}
+
+// --- Effects ---
+
+vec3 chromaticAbberation(vec2 st, float angle, float amount, float blend) {
+    float aspectRatio = uResolution.x / uResolution.y;
+    float rotation = angle * 360.0 * PI / 180.0;
+    
+    // Calculate the aberration vector, scaled by distance from center
+    vec2 aberrated = amount * vec2(0.1 * sin(rotation) * aspectRatio, 0.1 * cos(rotation));
+    aberrated *= distance(st, vec2(0.5)) * 2.0;
+    
+    vec4 red = vec4(0);
+    vec4 blue = vec4(0);
+    vec4 green = vec4(0);
+    
+    float invSteps = 1.0 / STEPS;
+    
+    // Sample for RED channel (offset in one direction)
+    for(float i = 1.0; i <= STEPS; i++) {
+        vec2 offset = aberrated * (i * invSteps);
+        red += texture(uTexture, st - offset) * invSteps;
+    }
+    
+    // Sample for BLUE channel (offset in opposite direction)
+    for (float i = 1.0; i <= STEPS; i++) {
+        vec2 offset = aberrated * (i * invSteps);
+        blue += texture(uTexture, st + offset) * invSteps;
+    }
+    
+    // Sample for GREEN channel (less offset, centered)
+    for (float i = 0.0; i <= STEPS; i++) {
+        vec2 offset = aberrated * ((i * invSteps) - 0.5);
+        green += texture(uTexture, st + offset) * invSteps;
+    }
+    
+    return vec3(red.r, green.g, blue.b);
+}
+
+// --- Distortion Transformations ---
+
+// 1. Spherical Distortion
+vec2 sphericalTransformation(
+    float u,
+    float v,
+    float uCenter,
+    float vCenter,
+    float lensRadius,
+    float tau)
+{
+    float aspectRatio = uResolution.x / uResolution.y;
+    u -= uCenter;
+    v -= vCenter;
+    
+    float s = sqrt(u * u + v * v);
+    if (s > lensRadius)
+        return vec2(u + uCenter, v + vCenter);
+
+    float z = sqrt(lensRadius * lensRadius - s * s);
+    
+    float uAlpha = (1.0 - (1.0 / tau)) * asin(u / lensRadius);
+    float vAlpha = (1.0 - (1.0 / tau)) * asin(v / lensRadius);
+    
+    u = uCenter + z * sin(uAlpha);
+    v = vCenter + z * sin(vAlpha);
+    
+    return vec2(u / aspectRatio, v);
+}
+
+// 2. Fisheye Distortion
+vec2 fisheyeTransformation(
+    float u,
+    float v,
+    float uCenter,
+    float vCenter,
+    float lensRadius,
+    float distortionScale
+) {
+    float aspectRatio = uResolution.x / uResolution.y;
+    vec2 dir = vec2(u - uCenter, v - vCenter);
+    
+    dir.x /= lensRadius;
+    dir.y /= lensRadius;
+    
+    float dist = length(dir) * 0.15;
+    
+    if (dist < 1.0) {
+        float theta = atan(dir.y, dir.x);
+        float r = dist * 2.0 * PI;
+        float z = sqrt(1.0 - r * r) + 0.25;
+        
+        // Fisheye projection formula
+        float rDist = atan(r, z) / PI;
+        float newDist = mix(dist, rDist, 5.);
+        
+        dir.x = newDist * cos(theta);
+        dir.y = newDist * sin(theta);
+    }
+    
+    dir.x *= lensRadius;
+    dir.y *= lensRadius;
+    
+    return mix(vec2(u / aspectRatio, v), vec2(uCenter / aspectRatio, vCenter) + dir, 0.4400);
+}
+
+// 3. Disc Distortion
+vec2 discTransformation(
+    float u,
+    float v,
+    float uCenter,
+    float vCenter,
+    float lensRadius,
+    float distortionScale)
+{
+    float aspectRatio = uResolution.x / uResolution.y;
+    u -= uCenter;
+    v -= vCenter;
+    
+    float s = sqrt(u * u + v * v);
+    if (s > lensRadius)
+        return vec2(u + uCenter, v + vCenter);
+        
+    float r = sqrt(u * u + v * v) / lensRadius;
+    if(r == 0.0)
+        return vec2(uCenter, vCenter);
+        
+    r = pow(r, distortionScale);
+    float theta = atan(r);
+    float rad = theta / r;
+    
+    u = rad * u + uCenter;
+    v = rad * v + vCenter;
+    
+    return vec2(u / aspectRatio, v);
+}
+
+// --- Main ---
+
+void main() {
+    vec2 uv = vTextureCoord;
+    vec4 color = texture(uTexture, uv);
+    float aspectRatio = uResolution.x / uResolution.y;
+    
+    // Scale UV coordinates by aspect ratio (to make coordinates square/circular)
+    uv.x = uv.x * aspectRatio;
+    vec2 sphereCoords = uv;
+    
+    // Position of the lens center
+    // Initial position is hardcoded, mouse interaction is disabled (0.0000)
+    vec2 pos = vec2(0.3413098236775819, 0.45969773299748107) + mix(vec2(0), (uMousePos - 0.5), 0.0000);
+    pos.x *= aspectRatio;
+    
+    // Calculate radius in UV space, clamped by resolution
+    float radius = 0.8440 * uResolution.x / max(uResolution.x, uResolution.y);
+    
+    // --- Distortion Selector ---
+    
+    // The conditional structure determines which distortion to apply.
+    // The current setting is '0 == 0', which selects 'sphericalTransformation'.
+    if(0 == 0) {
+        sphereCoords = sphericalTransformation(
+            mix(sphereCoords.x, 1. - sphereCoords.x, 0.0000), // Mix X-flip (disabled)
+            mix(sphereCoords.y, 1. - sphereCoords.y, 0.0000), // Mix Y-flip (disabled)
+            mix(pos.x, 1. - pos.x, 0.0000),                   // Center X-flip (disabled)
+            mix(pos.y, 1. - pos.y, 0.0000),                   // Center Y-flip (disabled)
+            radius / 2.,
+            1. + 0.4400 * 9.
+        );
+    } else if(0 == 1) {
+        sphereCoords = discTransformation(
+            mix(sphereCoords.x, 1. - sphereCoords.x, 0.0000), 
+            mix(sphereCoords.y, 1. - sphereCoords.y, 0.0000),
+            mix(pos.x, 1. - pos.x, 0.0000),
+            mix(pos.y, 1. - pos.y, 0.0000),
+            radius / 2.,
+            1. + 0.4400 * 9.
+        );
+    } else if(0 == 2) {
+        sphereCoords = fisheyeTransformation(
+            mix(sphereCoords.x, 1. - sphereCoords.x, 0.0000),
+            mix(sphereCoords.y, 1. - sphereCoords.y, 0.0000),
+            mix(pos.x, 1. - pos.x, 0.0000),
+            mix(pos.y, 1. - pos.y, 0.0000),
+            radius / 2.,
+            1. + 0.4400 * 9.
+        );
+    }
+    
+    vec2 scaledCoords = (sphereCoords - 0.5) + 0.5;
+    
+    // Sample the distorted texture
+    vec4 sphere = texture(uTexture, clamp(scaledCoords, 0.0, 1.0));
+    
+    // --- Masking and Blending ---
+    
+    float distFromPos = distance(uv, pos);
+    float edgeSmooth = 0.001;
+    
+    // Mask to blend the distorted sphere with the background (0 to 1)
+    float insideSphere = 1.0 - smoothstep(radius / 2.0 - edgeSmooth, radius / 2.0, distFromPos);
+    
+    // Mask for alpha channel (slightly larger area)
+    float insideSphereAlpha = 1.0 - smoothstep(radius / 2.0 + 0.002 - edgeSmooth, radius / 2.0 + 0.002, distFromPos);
+    
+    // Apply Chromatic Aberration to the distorted area
+    sphere.rgb = chromaticAbberation(scaledCoords, atan(scaledCoords.y, scaledCoords.x), distFromPos * 0.5200, 1.0);
+    
+    // Mix the distorted sphere with the original color
+    color = mix(color, sphere, insideSphere);
+    
+    // Add a color tint/adjustment effect
+    color.rgb += vec3((0.2100 - 0.5) * 2.) * mix(0., circularIn(smoothstep(0., radius, distFromPos)), insideSphere);
+    
+    // Conditional Alpha/Masking (currently disabled as 0 != 1)
+    if(0 == 1) {
+        color.a = insideSphereAlpha;
+        color.rgb = mix(vec3(0), color.rgb, insideSphereAlpha);
+    }
+    
+    fragColor = color;
+}
+// To Activate Different Distortion Types:
+// The choice of distortion is determined by the if/else if chain near the end of the main function.
+
+// Current (Spherical): if(0 == 0)
+
+// To use Disc Distortion: Change the condition to if(0 == 1)
+
+// To use Fisheye Distortion: Change the condition to if(0 == 2)

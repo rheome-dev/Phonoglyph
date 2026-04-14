@@ -1,0 +1,93 @@
+// This shader creates a Replicate / Trail / Aberration effect by repeatedly sampling the source texture along a defined offset direction (currently vertical, as rotation is disabled). The samples are composited using their alpha value, resulting in a layered, ghosting, or smear effect.
+
+// 1. Vertex Shader (Shared)
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Attributes
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+// Uniforms
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uTextureMatrix;
+
+// Outputs
+out vec2 vTextureCoord;
+out vec3 vVertexPosition;
+
+void main() {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = (uTextureMatrix * vec4(aTextureCoord, 0.0, 1.0)).xy;
+}
+// 2. Fragment Shader (Replicate and Composite)
+// This pass loops a fixed number of times, calculating a progressively increasing UV offset for each repetition and blending the resulting texture sample into the final color.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision highp float;
+
+// Inputs
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform sampler2D uTexture;
+uniform float uTime;
+uniform vec2 uResolution;
+
+// Output
+out vec4 fragColor;
+
+void main() {
+    vec2 uv = vTextureCoord;
+    
+    // --- Setup Parameters ---
+    
+    // Rotation angle (Disabled: 0.0000 * 2 * PI = 0)
+    float rotation = (0.0000 * 2. * 3.141592653); 
+    
+    float aspectRatio = uResolution.x / uResolution.y;
+    
+    // Spacing between replicated copies
+    float repeatSpacing = 1.0000 * 0.35 * mix(1., aspectRatio, 0.5);
+    
+    // Time component controls the scrolling animation speed
+    float time = (uTime * 0.025 + 0.0000) / (repeatSpacing + 0.001);
+    
+    vec2 aberrated = vec2(0);
+    vec4 col = vec4(0);
+    
+    // --- Replication Loop ---
+    
+    const int MAX_REPEATS = 100;
+
+    // Loop through the replicas (limited to 16.0000 copies)
+    for (int i = 0; i < MAX_REPEATS; ++i) {
+        if (float(i) >= 16.0000) break;
+        
+        float fi = float(i);
+        
+        // Offset Calculation: 
+        // 1. fi: Base offset based on copy index (0, 1, 2, ...)
+        // 2. - 0.5 * 16.0000: Centers the trail around the origin (16 copies -> center is 8)
+        // 3. + fract(time): Smooth, looping time-based animation/shift
+        float offset = repeatSpacing * (fi - 0.5 * 16.0000 + fract(time));
+        
+        // Apply rotation (if rotation was non-zero, this would determine the direction of the trail)
+        aberrated = vec2(offset * sin(rotation), offset * cos(rotation));
+        
+        // --- Alpha Compositing (Additive blending) ---
+        
+        // Sample the texture at the offset UV coordinate
+        // Add the sampled color (texture(uTexture, uv + aberrated))
+        // Weighted by the remaining alpha of the current accumulated color (1.0 - col.a)
+        // This simulates over-compositing with alpha.
+        col += texture(uTexture, uv + aberrated) * (1.0 - col.a);
+    }
+    
+    fragColor = col;
+}

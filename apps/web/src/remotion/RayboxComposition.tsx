@@ -233,8 +233,13 @@ function getFeatureValueFromCached(
 
   const getTimeSeriesValue = (arr: any) => {
     if (!arr || arr.length === 0) return 0;
-    const times = analysisData.frameTimes as number[];
-    if (!times || times.length === 0) return 0;
+    let times = analysisData.frameTimes as number[];
+    if (!times || times.length === 0) {
+      // Generate synthetic linear frameTimes based on array length and duration mapping!
+      // This is crucial for compressed API payloads that omit frameTimes.
+      const duration = (analysisData as any).analysisDuration || analysis?.metadata?.duration || 30;
+      times = Array.from({ length: arr.length }, (_, i) => (i / arr.length) * duration);
+    }
 
     let lo = 0,
       hi = times.length - 1;

@@ -4,6 +4,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
 import { TexturePass } from 'three/examples/jsm/postprocessing/TexturePass.js';
+import { getRemotionEnvironment } from 'remotion';
 
 export interface LayerRenderTarget {
   id: string;
@@ -41,6 +42,10 @@ export class MultiLayerCompositor {
   private quadGeometry: THREE.PlaneGeometry;
   private quadCamera: THREE.OrthographicCamera;
   
+  // Single mesh and scene for compositor rendering to prevent WebGLRenderer object accumulation
+  private blendScene: THREE.Scene;
+  private blendMesh: THREE.Mesh;
+  
   // Blend mode shaders
   private blendShaders: Map<string, string> = new Map();
 
@@ -72,6 +77,12 @@ export class MultiLayerCompositor {
     // Create shared geometry and camera
     this.quadGeometry = new THREE.PlaneGeometry(2, 2);
     this.quadCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    
+    // Create shared scene and mesh for compositor
+    this.blendMesh = new THREE.Mesh(this.quadGeometry);
+    this.blendScene = new THREE.Scene();
+    this.blendScene.background = null;
+    this.blendScene.add(this.blendMesh);
     
     // Initialize blend mode shaders
     this.initializeBlendShaders();
@@ -115,6 +126,18 @@ export class MultiLayerCompositor {
    */
   private createRenderTarget(): THREE.WebGLRenderTarget {
     const RTClass: any = THREE.WebGLRenderTarget;
+    
+    // Disable MSAA in Lambda renders to save ~430MB of memory
+    // Software WebGL (swangle) struggles with multi-sampled framebuffers at scale
+    // and FXAA is used as a post-processing pass anyway.
+    let samples = this.config.enableAntialiasing !== false ? 4 : 0;
+    try {
+      const { isRendering } = getRemotionEnvironment();
+      if (isRendering) samples = 0;
+    } catch(e) {
+      // Ignored outside Next/Remotion
+    }
+    
     return new RTClass(
       this.config.width,
       this.config.height,
@@ -124,7 +147,7 @@ export class MultiLayerCompositor {
         minFilter: THREE.LinearFilter,
         magFilter: THREE.LinearFilter,
         generateMipmaps: false,
-        samples: this.config.enableAntialiasing !== false ? 4 : 0
+        samples
       }
     );
   }
@@ -266,16 +289,10 @@ export class MultiLayerCompositor {
     material.uniforms.opacity.value  = layer.opacity;
     material.needsUpdate = false;
 
-    const mesh = new THREE.Mesh(this.quadGeometry, material);
-    const scene = new THREE.Scene();
-    scene.background = null;
-    scene.add(mesh);
-
-    this.renderer.render(scene, this.quadCamera);
-
-    // Do NOT dispose material — it is owned by blendMaterials cache, disposed in dispose()
-    // Only detach the mesh to release the scene reference
-    scene.remove(mesh);
+    // Use shared scene and mesh, avoiding new THREE.Mesh/THREE.Scene per frame
+    // which leaks memory in WebGLRenderer caches across Lambda chunk invocations
+    this.blendMesh.material = material;
+    this.renderer.render(this.blendScene, this.quadCamera);
   }
   
   // Initialize post-processing chain

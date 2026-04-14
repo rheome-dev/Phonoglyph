@@ -1,0 +1,85 @@
+// This shader implements a basic Duotone color effect, which forces the colors of an image to be represented by interpolating between two user-defined colors based on the image's luminance (grayscale value).
+
+// Here is the formatted code for both the Vertex and Fragment shaders.
+
+// 1. Vertex Shader
+// This is the standard pass-through shader, handling basic transformations and passing UVs.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Attributes
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+// Uniforms
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+uniform mat4 uTextureMatrix;
+
+// Outputs
+out vec2 vTextureCoord;
+out vec3 vVertexPosition;
+
+void main() {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = (uTextureMatrix * vec4(aTextureCoord, 0.0, 1.0)).xy;
+}
+
+// 2. Fragment Shader
+// This shader converts the image to grayscale and uses that value as a mixing factor between two colors: one for the shadows and one for the highlights.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision highp float;
+
+// Inputs
+in vec3 vVertexPosition;
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform sampler2D uTexture;
+
+// Output
+out vec4 fragColor;
+
+void main() {
+    vec2 uv = vTextureCoord;
+    vec4 color = texture(uTexture, uv);
+
+    // 1. Calculate Luminance (Grayscale Value)
+    // The standard NTSC/PAL coefficients for conversion:
+    float gray = dot(color.rgb, vec3(0.299, 0.587, 0.114));
+
+    // 2. Define Duotone Colors
+    // Shadows Color (0% gray): vec3(0, 0, 0) - Black
+    // Highlights Color (100% gray): vec3(1, 0, 1) - Magenta
+    
+    // Mix the two colors based on the grayscale value (gray is the mixing factor)
+    vec3 duotoneColor = mix(
+        vec3(0, 0, 0),       // Color 1: Used for shadows (gray = 0)
+        vec3(1, 0, 1),       // Color 2: Used for highlights (gray = 1)
+        gray                 // Interpolation factor
+    );
+
+    // 3. Blend the Duotone Effect onto the original color
+    // The mix factor is 1.0000, meaning the final color is 100% the duotone color.
+    color = vec4(mix(color.rgb, duotoneColor, 1.0000), color.a);
+    
+    fragColor = color;
+}
+// Observation
+// The shader is currently set to transform the image into a blend between Black (shadows) and Magenta (highlights). Since the mix factor is 1.0000, the resulting image is purely the duotone effect, completely replacing the original color information.
+
+// To change the duotone colors, you would modify the two vec3 values in the mix function:
+
+// OpenGL Shading Language
+
+//     vec3 duotoneColor = mix(
+//         vec3(0.1, 0.2, 0.5),   // Custom Shadows Color (e.g., dark blue)
+//         vec3(0.8, 0.9, 0.1),   // Custom Highlights Color (e.g., bright yellow-green)
+//         gray
+//     );

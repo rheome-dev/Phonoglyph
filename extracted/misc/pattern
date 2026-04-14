@@ -1,0 +1,209 @@
+// This shader is designed to apply one of several procedural geometric patterns onto a base texture using Signed Distance Functions (SDFs). It supports various tileable patterns like grids, stripes, circles, and hexagons.
+
+// 1. Vertex Shader (Shared)
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Attributes
+in vec3 aVertexPosition;
+in vec2 aTextureCoord;
+
+// Uniforms
+uniform mat4 uMVMatrix;
+uniform mat4 uPMatrix;
+
+// Outputs
+out vec2 vTextureCoord;
+out vec3 vVertexPosition;
+
+void main() {
+    gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+    vTextureCoord = aTextureCoord;
+}
+
+// 2. Fragment Shader (Pattern Generation via SDFs)
+// This pass defines multiple SDFs to create the patterns, selects one, and uses it to mask and blend a color over the base texture.
+
+// OpenGL Shading Language
+
+#version 300 es
+precision mediump float;
+
+// Inputs
+in vec3 vVertexPosition;
+in vec2 vTextureCoord;
+
+// Uniforms
+uniform sampler2D uTexture;
+uniform float uTime;
+uniform vec2 uResolution;
+
+// Output
+out vec4 fragColor;
+
+// --- Utility Functions ---
+
+mat2 rotate2d(float _angle){
+    return mat2(cos(_angle),-sin(_angle),
+                sin(_angle),cos(_angle));
+}
+
+// --- Signed Distance Functions (SDFs) ---
+// Note: SDFs return the shortest distance from the current point 'st' to the shape's boundary.
+// Negative values are inside, positive are outside.
+
+// Grid Pattern SDF (Distance to the closest cell edge)
+float gridSDF(vec2 st, float tile) {
+    vec2 grid = fract(st);
+    vec2 distToEdge = min(grid, 1.0 - grid); // Distance to cell boundaries [0, 1]
+    float minDist = min(distToEdge.x, distToEdge.y);
+    return minDist - tile * 0.5;
+}
+
+// Stripe Pattern SDF (Distance to the closest vertical line)
+float stripeSDF(vec2 st, float tile) {
+    float x = fract(st.x - uTime * 0.05); // Animated horizontal position
+    return abs(x - 0.5) - tile * 0.5;
+}
+
+// Arrows Pattern SDF
+float arrowsSDF(vec2 st, float tile) {
+    vec2 grid = floor(st);
+    vec2 cell = fract(st);
+    float checker = mod(grid.x + grid.y, 2.0);
+    // Alternate between using X and Y distance based on checkerboard pattern
+    float arrow = checker > 0.5 ? cell.x : cell.y;
+    return abs(arrow - 0.5) - tile * 0.5;
+}
+
+// Concentric Circle Pattern SDF
+float concentricCircleSDF(vec2 st, float tile) {
+    float r = length(st); // Distance from the center (0, 0)
+    return abs(fract(r) - 0.5) - tile * 0.5; // Distance to the closest periodic radius
+}
+
+// Circle Array SDF (Distance to the center of the current cell)
+float circleSDF(vec2 st, float tile) {
+    vec2 cell = fract(st) - 0.5; // Center of current cell is (0, 0)
+    float dist = length(cell);
+    return dist - tile * 0.5;
+}
+
+// Checkerboard SDF (Binary function, not a true distance field)
+float checkerboardSDF(vec2 st, float tile) {
+    vec2 grid = floor(st);
+    float checker = mod(grid.x + grid.y, 2.0);
+    return checker > 0.5 ? -1.0 : 1.0; // Returns -1 (inside) or 1 (outside)
+}
+
+// Wavy Lines SDF (Horizontal lines modulated by a sine wave)
+float wavyLinesSDF(vec2 st, float tile) {
+    float wave = sin(st.x * 6.28318 + st.y * 10.0) * 0.5 + 0.5;
+    return abs(wave - 0.5) - tile * 0.5;
+}
+
+// Hexagonal Grid SDF (Approximation)
+float hexagonalSDF(vec2 st, float tile) {
+    const float sqrt3 = 1.732050808;
+    st = abs(st);
+    // Project onto one axis of the hexagon
+    float d = dot(st, normalize(vec2(1.0, sqrt3))); 
+    return max(d, st.x) - tile; // Max operation defines the corners/edges
+}
+
+// Diamond Array SDF
+float diamondSDF(vec2 st, float tile) {
+    vec2 cell = fract(st) - 0.5;
+    float d = abs(cell.x) + abs(cell.y); // Manhattan distance from cell center
+    return d - tile * 0.5;
+}
+
+// Spiral Pattern SDF
+float spiralSDF(vec2 st, float tile) {
+    float r = length(st);
+    float theta = atan(st.y, st.x);
+    // Creates a spiral by mapping angular and radial distance to a periodic function
+    float spiral = fract((theta + r * 5.0) / 6.28318);
+    return abs(spiral - 0.5) - tile * 0.5;
+}
+
+// --- Pattern Selector ---
+
+float getPatternSDF(vec2 st, float tile) {
+    st.y -= uTime * 0.05; // Global vertical scroll
+    
+    // Selects the pattern using the switch statement
+    switch(0) { // Currently selecting case 0: gridSDF
+        case 0: return gridSDF(st, tile);
+        case 1: return stripeSDF(st, tile);
+        case 2: return circleSDF(st, tile);
+        case 3: return concentricCircleSDF(st, tile);
+        case 4: return arrowsSDF(st, tile);
+        case 5: return checkerboardSDF(st, tile);
+        case 6: return wavyLinesSDF(st, tile);
+        case 7: return hexagonalSDF(st, tile);
+        case 8: return diamondSDF(st, tile);
+        case 9: return spiralSDF(st, tile);
+        default: return gridSDF(st, tile);
+    }
+}
+
+// --- Main Function ---
+
+void main() {
+    vec2 uv = vTextureCoord;
+    vec4 bg = texture(uTexture, uv);
+    
+    // Skip if input is transparent
+    if(bg.a == 0.) {
+        fragColor = vec4(0);
+        return;
+    }
+    
+    // Color of the pattern (Magenta/Purple)
+    vec4 color = vec4(vec3(0.98, 0.12, 0.89), 1.);
+    
+    // --- Scale and Tile Calculation ---
+    
+    float aspectRatio = uResolution.x / uResolution.y;
+    float res = max(uResolution.x, uResolution.y);
+    float px = (1. / res); // Normalized pixel size (based on max resolution)
+    float py = px / aspectRatio;
+    float scl = (40. * 0.5000); // Scale factor (20.0)
+    float minpx = min(px, py);
+    
+    // Tile size calculation (normalized)
+    float tile = (minpx + 0.1000 / scl) * scl;
+    tile = round(tile / minpx) * minpx;
+    
+    // --- Coordinate Transformation ---
+    
+    // 1. Center UV
+    vec2 st = (uv - vec2(0.5, 0.5)) * scl;
+    // 2. Aspect correction
+    st *= vec2(aspectRatio, 1);
+    // 3. Rotation (Disabled: 0.0000)
+    st = st * rotate2d(0.0000 * 360. * 3.1415926 / 180.); 
+    
+    // --- Pattern Generation ---
+    
+    float sdf = getPatternSDF(st, tile);
+    
+    // Define the radius for smoothing (based on pixel size and scale)
+    float smoothRadius = minpx * scl;
+    
+    // Generate the pattern mask using smoothstep (0.0=outside, 1.0=inside)
+    // -sdf because we want the inside (negative SDF) to be 1.0
+    float pattern = 1.0 - smoothstep(-smoothRadius, smoothRadius, sdf);
+    
+    // Apply the pattern mask to the color
+    color.rgb *= pattern;
+    color.a *= pattern; // Also affect alpha
+    
+    // --- Final Blend ---
+    
+    // Mix the background (bg) with the patterned color (color)
+    fragColor = mix(bg, color, color.a * 1.0000);
+}

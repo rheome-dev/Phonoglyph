@@ -1,0 +1,19 @@
+{
+  "output": {
+    "filePath": "repomix-overlay-render.md"
+  },
+  "include": [
+    "src/remotion/**/*.ts",
+    "src/remotion/**/*.tsx",
+    "src/components/hud/**/*.ts",
+    "src/components/hud/**/*.tsx",
+    "src/lib/visualizer/core/**/*.ts"
+  ],
+  "ignore": {
+    "patterns": [
+      "node_modules/**",
+      "dist/**",
+      ".next/**"
+    ]
+  }
+}
