@@ -27,25 +27,29 @@ const LandingPage = React.forwardRef<HTMLDivElement, LandingPageProps>(
         title: "Audio Analysis",
         description: "Real-time tempo, frequency bands, amplitude dynamics, and onset detection. Your music drives every visual.",
         icon: Activity,
-        gradient: "from-purple-500 to-indigo-500"
+        bgColor: "bg-amber-500/20",
+        iconColor: "text-amber-400"
       },
       {
         title: "Generative Engine",
         description: "Procedural Three.js + GLSL shaders create rich, layered visuals that feel alive and unique to your sound.",
         icon: Sparkles,
-        gradient: "from-indigo-500 to-blue-500"
+        bgColor: "bg-stone-500/20",
+        iconColor: "text-stone-400"
       },
       {
         title: "Creative Controls",
         description: "Palettes, camera motion, modulation depth, timing curves, layer blending. Make visuals that are distinctly yours.",
         icon: Palette,
-        gradient: "from-blue-500 to-cyan-500"
+        bgColor: "bg-teal-500/20",
+        iconColor: "text-teal-400"
       },
       {
         title: "Beat-Synced Export",
         description: "Export rhythm-aligned videos in 9:16, 1:1, or 16:9. Ready for TikTok, Instagram, and YouTube.",
         icon: Film,
-        gradient: "from-pink-500 to-purple-500"
+        bgColor: "bg-orange-500/20",
+        iconColor: "text-orange-400"
       }
     ]
 
@@ -98,7 +102,7 @@ const LandingPage = React.forwardRef<HTMLDivElement, LandingPageProps>(
 
           {/* Ambient glow overlay */}
           <div className="absolute inset-0 overflow-hidden pointer-events-none z-[1]">
-            <div className="absolute top-1/4 left-0 w-[400px] h-[400px] bg-purple-500/10 rounded-full blur-[120px]" />
+            <div className="absolute top-1/4 left-0 w-[400px] h-[400px] bg-amber-500/10 rounded-full blur-[120px]" />
           </div>
 
           {/* Hero Content - Left Aligned */}
@@ -128,7 +132,7 @@ const LandingPage = React.forwardRef<HTMLDivElement, LandingPageProps>(
               >
                 Music to Motion.
                 <br />
-                <span className="text-gradient">Your Sound, Visualized.</span>
+                <span className="text-stone-300">Your Sound, Visualized.</span>
               </motion.h1>
 
               <motion.p
@@ -203,8 +207,8 @@ const LandingPage = React.forwardRef<HTMLDivElement, LandingPageProps>(
                   transition={{ duration: 0.6, delay: index * 0.1 }}
                   viewport={{ once: true }}
                 >
-                  <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${feature.gradient} flex items-center justify-center mb-4`}>
-                    <feature.icon className="w-6 h-6 text-white" />
+                  <div className={`w-12 h-12 rounded-xl ${feature.bgColor} flex items-center justify-center mb-4`}>
+                    <feature.icon className={`w-6 h-6 ${feature.iconColor}`} />
                   </div>
                   <h3 className="text-xl font-display font-bold text-white mb-2">
                     {feature.title}
@@ -247,7 +251,7 @@ const LandingPage = React.forwardRef<HTMLDivElement, LandingPageProps>(
                   viewport={{ once: true }}
                 >
                   <div className="w-14 h-14 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-4">
-                    <type.icon className="w-7 h-7 text-purple-400" />
+                    <type.icon className="w-7 h-7 text-amber-400" />
                   </div>
                   <h3 className="text-lg font-display font-bold text-white mb-2">
                     {type.title}
