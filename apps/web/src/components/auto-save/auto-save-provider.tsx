@@ -123,6 +123,8 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
   const [error, setError] = React.useState<string | null>(null)
   const [isHydrating, setIsHydrating] = React.useState(false)
   const [hasHydrated, setHasHydrated] = React.useState(false)
+  // Ref for synchronous access in store subscriptions - avoids closure staleness
+  const isHydratingRef = useRef(false)
 
   const autoSave = useAutoSave(projectId)
 
@@ -175,7 +177,8 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
 
   // Save current state
   const saveCurrentState = useCallback(async () => {
-    if (isHydrating) {
+    // Use ref for synchronous check to avoid stale closure
+    if (isHydratingRef.current) {
       console.log('💾 AUTOSAVE: Skipping save - hydrating in progress')
       return
     }
@@ -193,7 +196,7 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
       setError(errorMessage)
       debugLog.error('Auto-save error:', err)
     }
-  }, [autoSave, captureCurrentState, isHydrating])
+  }, [autoSave, captureCurrentState])
 
   // Restore state
   const handleRestoreState = useCallback(async (stateId: string): Promise<EditState> => {
@@ -358,7 +361,7 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
           zoom: state.zoom
         })
         prevTimelineState = state
-        if (isHydrating) {
+        if (isHydratingRef.current) {
           console.log('💾 AUTOSAVE: Change during hydration - queuing')
           pendingChangesRef.current = { hasChanges: true, changeTime: Date.now() }
         } else {
@@ -378,7 +381,7 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
       if (hasChanges) {
         console.log('💾 AUTOSAVE: Settings changes detected')
         prevSettingsState = state
-        if (isHydrating) {
+        if (isHydratingRef.current) {
           pendingChangesRef.current = { hasChanges: true, changeTime: Date.now() }
         } else {
           debouncedSave()
@@ -406,7 +409,7 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
           effectCount: state.selectedEffects?.length
         })
         prevVisualizerState = state
-        if (isHydrating) {
+        if (isHydratingRef.current) {
           pendingChangesRef.current = { hasChanges: true, changeTime: Date.now() }
         } else {
           debouncedSave()
@@ -423,7 +426,7 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
       unsubVisualizer()
       debouncedSave.cancel()
     }
-  }, [autoSave.config.enabled, debouncedSave, isHydrating])
+  }, [autoSave.config.enabled, debouncedSave])
 
   // Load saved state on mount (hydration)
   useEffect(() => {
@@ -471,6 +474,7 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
 
       try {
         setIsHydrating(true)
+        isHydratingRef.current = true
         const savedState = await autoSave.getCurrentState()
 
         console.log('🔄 AUTOSAVE: Response received:', savedState ? 'HAS DATA' : 'NULL')
@@ -574,6 +578,7 @@ export function AutoSaveProvider({ projectId, children, className }: AutoSavePro
         console.error('❌ AUTOSAVE: Failed to load saved state:', err)
       } finally {
         setIsHydrating(false)
+        isHydratingRef.current = false
         setHasHydrated(true)
 
         // Check for pending changes that occurred during hydration
