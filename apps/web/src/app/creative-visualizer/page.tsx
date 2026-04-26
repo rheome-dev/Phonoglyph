@@ -2606,7 +2606,13 @@ function CreativeVisualizerPage() {
     try {
       const d = getCurrentDuration();
       if (typeof d === 'number' && isFinite(d) && d > 0) {
-        setDuration(d);
+        // When stems aren't loaded we fall back to the MIDI file duration (often 10s).
+        // Never let that fallback truncate clips that were already hydrated from auto-save
+        // with a longer duration — only apply it if it won't shrink the timeline.
+        const usingFallback = !hasStems || !stemAudio.duration || stemAudio.duration <= 0;
+        if (!usingFallback || d >= useTimelineStore.getState().duration) {
+          setDuration(d);
+        }
       }
     } catch { }
   }, [hasStems, stemAudio.duration, midiData, sampleMidiData, setDuration]);
